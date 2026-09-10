@@ -1,0 +1,30 @@
+# CI for internal-package-contract itself: type-check the contract definition and
+# check config authored files are formatted/linted. The standard this package
+# defines is exercised by its consumers (env-cap, data-cap, ...), each of which
+# runs `npm run contract` in their own CI -- see template/contract.yml for the
+# workflow `internal-package-contract init` writes into a consuming package.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  self-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npx eslint .
+      - run: npx prettier --check "**/*.{ts,mjs,cjs,json,jsonc,md,yml}"

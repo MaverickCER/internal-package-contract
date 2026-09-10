@@ -1,0 +1,23 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/index.ts!",
+    "src/index.tsx!",
+    "src/main.ts!",
+    "src/cli/index.ts!",
+    "src/cli.ts!",
+    "src/bin/**/*.ts!",
+    "bin/**/*.{js,mjs,cjs,ts}!"
+  ],
+  "project": ["src/**/*.{ts,tsx,js,mjs,cjs}!"],
+  "ignore": [
+    "**/*.d.ts",
+    "dist/**",
+    "coverage/**",
+    "reports/**",
+    "examples/**",
+    "benchmark/**",
+    "benchmarks/**",
+    ".stryker-tmp/**"
+  ]
+}

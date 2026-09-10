@@ -1,0 +1,14 @@
+{
+  // Type-checks this package's own authored files (the contract definition and
+  // the exported config baselines). Not part of the published surface -- it is
+  // excluded from `files` in package.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "verbatimModuleSyntax": false,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["contract.ts", "eslint.config.ts", "prettier.config.ts", "checks/**/*.ts"]
+}

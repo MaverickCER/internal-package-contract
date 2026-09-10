@@ -1,0 +1,8 @@
+# <type>(<scope>): <subject>   -- max ~50 chars, imperative, lowercase, no period
+#
+# <body>   -- what & why, wrap at 72
+#
+# <footer>   -- BREAKING CHANGE: ... / Refs: #123
+#
+# type:  feat fix docs style refactor perf test build ci chore revert
+# A `!` after type/scope, or a `BREAKING CHANGE:` footer, marks a major bump.

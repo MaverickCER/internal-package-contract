@@ -1,0 +1,15 @@
+{
+  // Baseline markdownlint rules -- the default the DocsMarkdown check uses when a
+  // consumer has no .markdownlint-cli2.jsonc of its own. Correctness/rendering
+  // rules only; pure style preferences (list marker, heading vs. emphasis) and
+  // rules READMEs legitimately break (line length, inline HTML, leading badges)
+  // are turned off so the check flags real problems, not taste.
+  "default": true,
+  "MD013": false, // line length
+  "MD033": false, // inline HTML -- badges, <details>, <sub>
+  "MD041": false, // first line must be a heading -- badge blocks come first
+  "MD024": { "siblings_only": true }, // duplicate headings ok across sections
+  "MD029": { "style": "ordered" },
+  "MD004": false, // unordered-list marker style -- preference, not correctness
+  "MD036": false, // emphasis-as-heading -- false-positives on legitimate lead-in bold
+}
