@@ -1,0 +1,76 @@
+{
+  "name": "internal-package-contract",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The engineering standard every publishable @maverickcer/* package must continuously satisfy, expressed once as a repo-contract contract. Not published to npm; consumed as a devDependency.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "internal-package-contract": "./bin/contract.mjs"
+  },
+  "exports": {
+    ".": "./contract.ts",
+    "./contract": "./contract.ts",
+    "./eslint": "./eslint.config.ts",
+    "./prettier": "./prettier.config.ts",
+    "./tsconfig": "./tsconfig.json",
+    "./config/dependency-cruiser": "./config/dependency-cruiser.cjs",
+    "./config/knip": "./config/knip.json",
+    "./config/stryker": "./config/stryker.config.mjs",
+    "./config/commitlint": "./config/commitlint.config.mjs",
+    "./config/secretlint": "./config/secretlint.config.json",
+    "./config/markdownlint": "./config/markdownlint.jsonc",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "checks",
+    "config",
+    "hooks",
+    "scripts",
+    "template",
+    "contract.ts",
+    "eslint.config.ts",
+    "prettier.config.ts",
+    "tsconfig.json"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.self.json"
+  },
+  "dependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@danibram/crap4ts": "^0.6.0",
+    "@eslint/js": "^10.0.1",
+    "@secretlint/secretlint-rule-preset-recommend": "^9.0.0",
+    "@stryker-mutator/core": "^9.2.0",
+    "@stryker-mutator/vitest-runner": "^9.2.0",
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^20.19.43",
+    "@vitest/coverage-v8": "^3.2.7",
+    "cross-spawn": "^7.0.6",
+    "dependency-cruiser": "^18.2.0",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^10.1.8",
+    "github-actionlint": "^1.7.12",
+    "globals": "^17.11.0",
+    "jiti": "^2.7.0",
+    "jscpd": "^5.0.16",
+    "knip": "^6.32.3",
+    "licensee": "^11.1.1",
+    "linkinator": "^8.0.4",
+    "markdownlint-cli2": "^0.23.2",
+    "prettier": "^3.9.6",
+    "publint": "^0.3.24",
+    "repo-contract": "^0.4.0",
+    "secretlint": "^9.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^3.2.7"
+  }
+}

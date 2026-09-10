@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+lib/
+*.tsbuildinfo
+
+# Test / analysis artifacts
+coverage/
+reports/
+.stryker-tmp/
+.nyc_output/
+
+# Docs generation output (commit the source, not the render)
+api-docs/
+docs/api/
+
+# Packaging
+*.tgz
+
+# Logs & runtime
+*.log
+npm-debug.log*
+.DS_Store
+
+# Editor
+.idea/
+*.swp
+
+# Env
+.env
+.env.*
+!.env.example

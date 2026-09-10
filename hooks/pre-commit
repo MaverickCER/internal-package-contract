@@ -1,0 +1,5 @@
+#!/bin/sh
+# internal-package-contract managed hook. Fast checks only -- Format + Lint.
+# Skip once with `git commit --no-verify`; disable with `git config --unset core.hooksPath`.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$DIR/../bin/contract.mjs" --checks Format,Lint

@@ -1,0 +1,4 @@
+#!/bin/sh
+# internal-package-contract managed hook. Conventional Commits check on the message.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$DIR/run-commitlint.mjs" "$1"

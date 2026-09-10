@@ -1,0 +1,6 @@
+#!/bin/sh
+# internal-package-contract managed hook. Medium gate before publishing history --
+# everything except the slow analyses (Coverage, Crap, Mutation), which CI runs.
+# Skip once with `git push --no-verify`.
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$DIR/../bin/contract.mjs" --checks Format,Lint,Typecheck,Tests,Build,Packaging,TypeResolution,Architecture,Licenses,SecurityDeps,SecuritySecrets,DeadCode,Duplication,GitHygiene

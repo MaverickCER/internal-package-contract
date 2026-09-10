@@ -1,0 +1,50 @@
+{
+  // The organization's baseline TypeScript configuration for a publishable
+  // package. Deliberately the strictest configuration that is still practical:
+  // every flag here rules out a whole class of error rather than a single bug.
+  //
+  // Consumers EXTEND it, they do not copy it:
+  //   { "extends": "internal-package-contract/tsconfig", "include": ["src"] }
+  //
+  // Inheriting rather than copying is the point -- the baseline can then evolve
+  // in one place. There is deliberately no "include": choosing what to compile is
+  // the consuming package's decision.
+  "compilerOptions": {
+    // --- Output / module semantics ---
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+
+    // --- Type-safety strictness (each rules out an error class) ---
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "useUnknownInCatchVariables": true,
+
+    // --- Dead / unreachable code ---
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+
+    // --- Consistency / hygiene ---
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    // --- Emit (consumers that build with tsc get correct, mapped output) ---
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": true
+  }
+}
