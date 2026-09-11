@@ -54,6 +54,7 @@
     "@danibram/crap4ts": "^0.6.0",
     "@eslint/js": "^10.0.1",
     "@secretlint/secretlint-rule-preset-recommend": "^9.0.0",
+    "@socketsecurity/cli": "^1.1.169",
     "@stryker-mutator/api": "^9.2.0",
     "@stryker-mutator/core": "^9.2.0",
     "@stryker-mutator/vitest-runner": "^9.2.0",

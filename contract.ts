@@ -53,6 +53,7 @@ import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
 import { npmScriptCheck } from "./checks/npm-script.js"
 import { securitySecrets } from "./checks/security-secrets.js"
+import { securitySocket } from "./checks/security-socket.js"
 import { tests } from "./checks/tests.js"
 
 export default defineRepoContract({
@@ -109,6 +110,7 @@ export default defineRepoContract({
     Accessibility: accessibility,
     SecurityDeps: securityDeps,
     SecuritySecrets: securitySecrets(),
+    SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
     Commits: commits(),
     Mutation: { ...mutation(), isolated: true },
