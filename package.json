@@ -38,15 +38,23 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "tsc --noEmit -p tsconfig.self.json"
+    "check": "tsc --noEmit -p tsconfig.self.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "contract": "node scripts/run-contract.mjs"
   },
   "dependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@commitlint/cli": "^21.2.2",
     "@commitlint/config-conventional": "^21.2.2",
+    "@commitlint/types": "^21.2.0",
     "@danibram/crap4ts": "^0.6.0",
     "@eslint/js": "^10.0.1",
     "@secretlint/secretlint-rule-preset-recommend": "^9.0.0",
+    "@stryker-mutator/api": "^9.2.0",
     "@stryker-mutator/core": "^9.2.0",
     "@stryker-mutator/vitest-runner": "^9.2.0",
     "@types/cross-spawn": "^6.0.6",
@@ -64,6 +72,7 @@
     "licensee": "^11.1.1",
     "linkinator": "^8.0.4",
     "markdownlint-cli2": "^0.23.2",
+    "pa11y": "^9.1.1",
     "prettier": "^3.9.6",
     "publint": "^0.3.24",
     "repo-contract": "^0.4.0",
@@ -72,5 +81,14 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "tar": "^7.5.22",
+    "qs": "^6.16.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "puppeteer@24.43.1": true
   }
 }

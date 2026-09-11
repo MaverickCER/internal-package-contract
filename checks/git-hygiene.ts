@@ -52,6 +52,54 @@ const GITIGNORE_ESSENTIALS = ["node_modules", "dist", "coverage", ".stryker-tmp"
 
 const scriptPath = path.join(packageRoot, "scripts", "git-hygiene.mjs")
 
+/** Issues that block a publish outright: something that must never be committed, or a `package.json` gap an unscoped publish would ship as-is. */
+function collectBlockingIssues(ev: GitHygieneEvidence): string[] {
+  const blocking: string[] = []
+
+  if (ev.gitignore === undefined) {
+    blocking.push("no .gitignore -- run `internal-package-contract init`")
+  }
+
+  const badTracked = ev.tracked.filter((f) => MUST_IGNORE_TRACKED.some((re) => re.test(f)))
+  if (badTracked.length > 0) {
+    blocking.push(
+      `${String(badTracked.length)} tracked file(s) that must not be committed: ${badTracked
+        .slice(0, 10)
+        .join(", ")}${badTracked.length > 10 ? " …" : ""}`,
+    )
+  }
+
+  if (ev.conflictFiles.length > 0) {
+    blocking.push(`unresolved merge-conflict marker(s) in: ${ev.conflictFiles.join(", ")}`)
+  }
+
+  if (!ev.pkg.private && !ev.pkg.hasFiles) {
+    blocking.push('package.json has no "files" array -- an unscoped publish ships the whole tree')
+  }
+
+  return blocking
+}
+
+/** Non-blocking suggestions: a present-but-incomplete `.gitignore`, missing `package.json` niceties, missing repo scaffolding files. */
+function collectWarnings(ev: GitHygieneEvidence): string[] {
+  const warnings: string[] = []
+
+  if (ev.gitignore !== undefined) {
+    const missing = GITIGNORE_ESSENTIALS.filter((e) => !ev.gitignore?.includes(e))
+    if (missing.length > 0) warnings.push(`.gitignore does not mention: ${missing.join(", ")}`)
+  }
+
+  if (!ev.pkg.hasLicense) warnings.push('package.json has no "license"')
+  if (!ev.pkg.private && !ev.pkg.hasRepository) warnings.push('package.json has no "repository"')
+  if (!ev.pkg.hasEnginesNode) warnings.push('package.json has no "engines.node"')
+  if (!ev.pkg.hasType) warnings.push('package.json has no "type" ("module" or "commonjs")')
+  if (!ev.gitattributesPresent) warnings.push("no .gitattributes")
+  if (!ev.editorconfigPresent) warnings.push("no .editorconfig")
+  if (!ev.nvmrcPresent) warnings.push("no .nvmrc")
+
+  return warnings
+}
+
 export const gitHygiene: CheckDefinitionConfig = {
   run: ["node", scriptPath],
   output: { format: "json" },
@@ -75,41 +123,8 @@ export const gitHygiene: CheckDefinitionConfig = {
       return { outcome: "fail", rationale: "Git hygiene: not a git repository. Run `git init`." }
     }
 
-    const blocking: string[] = []
-    const warnings: string[] = []
-
-    const gitignore = ev.gitignore
-    if (gitignore === undefined) {
-      blocking.push("no .gitignore -- run `internal-package-contract init`")
-    } else {
-      const missing = GITIGNORE_ESSENTIALS.filter((e) => !gitignore.includes(e))
-      if (missing.length > 0) warnings.push(`.gitignore does not mention: ${missing.join(", ")}`)
-    }
-
-    const badTracked = ev.tracked.filter((f) => MUST_IGNORE_TRACKED.some((re) => re.test(f)))
-    if (badTracked.length > 0) {
-      blocking.push(
-        `${String(badTracked.length)} tracked file(s) that must not be committed: ${badTracked
-          .slice(0, 10)
-          .join(", ")}${badTracked.length > 10 ? " …" : ""}`,
-      )
-    }
-
-    if (ev.conflictFiles.length > 0) {
-      blocking.push(`unresolved merge-conflict marker(s) in: ${ev.conflictFiles.join(", ")}`)
-    }
-
-    if (!ev.pkg.private && !ev.pkg.hasFiles) {
-      blocking.push('package.json has no "files" array -- an unscoped publish ships the whole tree')
-    }
-
-    if (!ev.pkg.hasLicense) warnings.push('package.json has no "license"')
-    if (!ev.pkg.private && !ev.pkg.hasRepository) warnings.push('package.json has no "repository"')
-    if (!ev.pkg.hasEnginesNode) warnings.push('package.json has no "engines.node"')
-    if (!ev.pkg.hasType) warnings.push('package.json has no "type" ("module" or "commonjs")')
-    if (!ev.gitattributesPresent) warnings.push("no .gitattributes")
-    if (!ev.editorconfigPresent) warnings.push("no .editorconfig")
-    if (!ev.nvmrcPresent) warnings.push("no .nvmrc")
+    const blocking = collectBlockingIssues(ev)
+    const warnings = collectWarnings(ev)
 
     if (blocking.length > 0) {
       return {

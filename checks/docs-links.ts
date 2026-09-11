@@ -1,15 +1,21 @@
 /**
- * Broken-link detection for the docs reachable from `README.md`, via linkinator.
+ * Broken-link detection across a consumer's docs, via linkinator -- both the
+ * Markdown link graph reachable from `README.md`, and a second, HTML-mode
+ * crawl over `docs/` (the site itself, and `docs/api/**` once generated).
+ * Both crawls run through the bundled `scripts/check-docs-links.mjs` (see its
+ * own doc comment for exactly why two separate crawls, not one).
  *
  * Differences from the `brokenLinks` preset, all forced by linkinator quirks:
- *   - starts at `README.md` and `--recurse`s the relative-link graph -- its
- *     directory-recurse mode only follows `index.html`, never loose `.md` files;
- *   - `--markdown` -- linkinator silently stops parsing markdown when `--format
- *     json` is set unless this is explicit;
- *   - external (`http(s)://`) links are filtered in the policy, not via
+ *   - the Markdown crawl starts at `README.md` and `--recurse`s the relative-
+ *     link graph -- its directory-recurse mode only follows `index.html`,
+ *     never loose `.md` files -- with `--markdown` explicit (linkinator
+ *     silently stops parsing markdown when `--format json` is set otherwise);
+ *   - the HTML crawl starts at `docs` and `--recurse`s the same way, with no
+ *     `--markdown` flag;
+ *   - external (`http(s)://`) links are filtered in this policy, not via
  *     linkinator's `--skip` (whose regex handling zeroes the whole crawl for
- *     several common patterns). External link rot is best-effort, not a release
- *     gate; a broken *local* link is always blocking.
+ *     several common patterns). External link rot is best-effort, not a
+ *     release gate; a broken *local* link is always blocking.
  *   - a local link that resolves to an existing file OR directory on disk is
  *     not counted broken -- linkinator 404s a bare directory link (`specs/`)
  *     that a git host (GitHub, GitLab) renders fine.
@@ -17,7 +23,9 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { abnormalTermination, combinedOutput, firstExisting } from "./shared.js"
+import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
+
+const docsLinksScript = path.join(packageRoot, "scripts", "check-docs-links.mjs")
 
 interface LinkinatorLink {
   readonly url: string
@@ -28,19 +36,24 @@ interface LinkinatorLink {
 interface LinkinatorReport {
   readonly links?: readonly LinkinatorLink[]
 }
+type ToolResult<T> =
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string }
 
 export const docsLinks: CheckDefinitionConfig = {
-  run: ["linkinator", "README.md", "--recurse", "--markdown", "--format", "json"],
+  run: ["node", docsLinksScript],
   output: { format: "json" },
   policy: ({ result }): PolicyResult => {
-    if (!firstExisting(["README.md"])) {
-      return { outcome: "pass", rationale: "Docs (links): no README.md." }
+    const hasReadme = existsSync(path.join(process.cwd(), "README.md"))
+    const hasDocsSite = existsSync(path.join(process.cwd(), "docs", "index.html"))
+    if (!hasReadme && !hasDocsSite) {
+      return { outcome: "pass", rationale: "Docs (links): no README.md or docs/index.html." }
     }
 
     const terminated = abnormalTermination(result, "linkinator")
     if (terminated) return { outcome: "fail", rationale: terminated }
 
-    if (!result.output?.success) {
+    const parsed: unknown = result.output?.success ? result.output.value : undefined
+    if (!parsed || typeof parsed !== "object" || !("ok" in parsed)) {
       const printed = combinedOutput(result)
       return {
         outcome: "fail",
@@ -48,7 +61,15 @@ export const docsLinks: CheckDefinitionConfig = {
       }
     }
 
-    const value = result.output.value as LinkinatorReport | null
+    const evidence = parsed as ToolResult<LinkinatorReport>
+    if (!evidence.ok) {
+      return {
+        outcome: "fail",
+        rationale: `Docs (links): linkinator could not be evaluated: ${evidence.error}`,
+      }
+    }
+
+    const value = evidence.value
     if (!value || !Array.isArray(value.links)) {
       return { outcome: "fail", rationale: "Docs (links): linkinator produced invalid JSON." }
     }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "bin/**/*.mjs!",
+    "scripts/**/*.mjs!",
+    "contract.ts!",
+    "repo-contract.config.ts!",
+    "eslint.config.ts!",
+    "prettier.config.ts!",
+    "vitest.config.ts!",
+    "stryker.config.mjs!",
+    ".dependency-cruiser.cjs!"
+  ],
+  "project": ["checks/**/*.ts", "bin/**/*.mjs", "scripts/**/*.mjs"],
+  "ignore": ["template/**", "coverage/**", "reports/**", ".stryker-tmp/**"],
+  "ignoreDependencies": [
+    "@arethetypeswrong/cli",
+    "@commitlint/cli",
+    "@commitlint/config-conventional",
+    "@danibram/crap4ts",
+    "@secretlint/secretlint-rule-preset-recommend",
+    "github-actionlint",
+    "jscpd",
+    "licensee",
+    "linkinator",
+    "markdownlint-cli2",
+    "publint",
+    "secretlint"
+  ]
+}

@@ -1,0 +1,19 @@
+# Normalize line endings -- the repo stores LF, checkout is native.
+* text=auto eol=lf
+
+# Explicitly binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.woff binary
+*.woff2 binary
+*.tgz binary
+
+# Lockfiles: keep diffs collapsed in review, still merge textually
+package-lock.json -diff
+pnpm-lock.yaml -diff
+yarn.lock -diff
+
+# Generated -- collapse in review
+CHANGELOG.md -diff
+schemas/*.json linguist-generated=true
