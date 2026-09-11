@@ -91,7 +91,7 @@
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"
 import type {
   ExceptionPolicy,
   ExceptionPolicyConfig,
@@ -257,6 +257,141 @@ const CLASSIFICATION = [{ group: "mutation", category: "waived" }] as const
 
 const SURVIVED_LIKE = new Set(["Survived", "NoCoverage"])
 
+/** Reads and parses Stryker's own JSON report, or the fail result to return verbatim when it produced none. */
+async function readMutationReport(
+  result: CheckEvidence,
+): Promise<
+  | { readonly ok: true; readonly report: MutationReport }
+  | { readonly ok: false; readonly result: PolicyResult }
+> {
+  try {
+    const raw = await readFile(path.join(process.cwd(), "reports/mutation/mutation.json"), "utf8")
+    return { ok: true, report: JSON.parse(raw) as MutationReport }
+  } catch {
+    const tail = combinedOutput(result).slice(-3000)
+    return {
+      ok: false,
+      result: {
+        outcome: "fail",
+        rationale: `Mutation: Stryker did not produce reports/mutation/mutation.json.${tail ? `\n${tail}` : ""}`,
+      },
+    }
+  }
+}
+
+/** One registry record's outcome against the current report: which mutants it suppresses, or why it doesn't apply. */
+interface RecordOutcome {
+  readonly stale?: string
+  readonly insufficient?: string
+  readonly suppressed: readonly ResolvedMutant[]
+}
+
+/**
+ * Resolves a single exception record against this run's mutants -- stale (matches nothing at all),
+ * insufficient/forbidden per policy, or the `SURVIVED_LIKE` mutants it suppresses. See this module's
+ * own doc comment for why staleness is "matches nothing," never "isn't currently Survived."
+ */
+function resolveRecordOutcome(
+  record: MutationExceptionRecord,
+  mutants: readonly ResolvedMutant[],
+): RecordOutcome {
+  const matches = mutants.filter((m) => matchesRecord(m, record))
+  if (matches.length === 0) {
+    return {
+      stale: `${record.id} -- ${record.file} [${record.mutator}] "${record.original}" -> "${record.replacement}" no longer matches any mutant in the report; the surrounding code likely changed.`,
+      suppressed: [],
+    }
+  }
+
+  const determinant = evaluateExceptionRecord({
+    record,
+    classifications: CLASSIFICATION,
+    config: EXCEPTION_POLICY_CONFIG,
+    globalDefault: GLOBAL_DEFAULT,
+    fieldValue,
+  })
+  if (determinant.verdict === "insufficient") {
+    return {
+      insufficient: `${record.id} -- missing: ${determinant.missing.join(", ")}. Fill those fields in ${REGISTRY_RELATIVE_PATH}.`,
+      suppressed: [],
+    }
+  }
+  if (determinant.verdict === "forbidden") {
+    return {
+      insufficient: `${record.id} -- policy forbids waiving this mutant.`,
+      suppressed: [],
+    }
+  }
+
+  return { suppressed: matches.filter((m) => SURVIVED_LIKE.has(m.status)) }
+}
+
+/** Applies every registry record to this run's mutants, aggregating staleness/policy problems and the resulting suppression set. */
+function applyExceptionRegistry(
+  mutants: readonly ResolvedMutant[],
+  records: readonly MutationExceptionRecord[],
+): {
+  readonly stale: readonly string[]
+  readonly insufficient: readonly string[]
+  readonly suppressed: ReadonlySet<ResolvedMutant>
+} {
+  const stale: string[] = []
+  const insufficient: string[] = []
+  const suppressed = new Set<ResolvedMutant>()
+  for (const record of records) {
+    const outcome = resolveRecordOutcome(record, mutants)
+    if (outcome.stale !== undefined) stale.push(outcome.stale)
+    if (outcome.insufficient !== undefined) insufficient.push(outcome.insufficient)
+    for (const m of outcome.suppressed) suppressed.add(m)
+  }
+  return { stale, insufficient, suppressed }
+}
+
+/** The final score/verdict once every valid mutant has been counted, suppressions applied. */
+function summarizeMutationScore(
+  mutants: readonly ResolvedMutant[],
+  suppressed: ReadonlySet<ResolvedMutant>,
+): PolicyResult {
+  const counts: Record<string, number> = {}
+  for (const mutant of mutants) {
+    if (suppressed.has(mutant)) continue
+    counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
+  }
+
+  const killed = counts["Killed"] ?? 0
+  const timeout = counts["Timeout"] ?? 0
+  const survived = counts["Survived"] ?? 0
+  const noCoverage = counts["NoCoverage"] ?? 0
+  const detected = killed + timeout
+  const valid = detected + survived + noCoverage
+
+  // Reachable only when every single mutant in the report was excluded by a
+  // registry record (`mutants.length > 0` was already confirmed by the
+  // caller) -- a genuinely empty Stryker report is caught there instead.
+  // `detected / 0` would be `NaN`; there is nothing left to score, and that
+  // is success, not the "Stryker never even ran" failure above.
+  if (valid === 0) {
+    return {
+      outcome: "pass",
+      rationale: `Mutation: every mutant in the report (${String(mutants.length)}) was excluded by a known Stryker false positive, see ${REGISTRY_RELATIVE_PATH}.`,
+    }
+  }
+
+  const score = (detected / valid) * 100
+  const suppressedNote =
+    suppressed.size > 0
+      ? ` (${String(suppressed.size)} known Stryker false positive${suppressed.size === 1 ? "" : "s"} excluded, see ${REGISTRY_RELATIVE_PATH})`
+      : ""
+  const summary = `score ${score.toFixed(2)}% (killed ${String(killed)}, timeout ${String(timeout)}, survived ${String(survived)}, no-coverage ${String(noCoverage)})${suppressedNote}`
+
+  return score < MUTATION_THRESHOLD
+    ? {
+        outcome: "fail",
+        rationale: `Mutation: ${summary} < ${String(MUTATION_THRESHOLD)}% required.`,
+      }
+    : { outcome: "pass", rationale: `Mutation: ${summary} >= ${String(MUTATION_THRESHOLD)}%.` }
+}
+
 /** @returns the `Mutation` check. */
 export function mutation(): CheckDefinitionConfig {
   return {
@@ -265,20 +400,8 @@ export function mutation(): CheckDefinitionConfig {
       const terminated = abnormalTermination(result, "Stryker")
       if (terminated) return { outcome: "fail", rationale: terminated }
 
-      let report: MutationReport
-      try {
-        const raw = await readFile(
-          path.join(process.cwd(), "reports/mutation/mutation.json"),
-          "utf8",
-        )
-        report = JSON.parse(raw) as MutationReport
-      } catch {
-        const tail = combinedOutput(result).slice(-3000)
-        return {
-          outcome: "fail",
-          rationale: `Mutation: Stryker did not produce reports/mutation/mutation.json.${tail ? `\n${tail}` : ""}`,
-        }
-      }
+      const reportResult = await readMutationReport(result)
+      if (!reportResult.ok) return reportResult.result
 
       const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
       const loaded = await loadExceptionRegistry({
@@ -306,48 +429,17 @@ export function mutation(): CheckDefinitionConfig {
         }
       }
 
-      const mutants = resolveMutants(report)
+      const mutants = resolveMutants(reportResult.report)
+      if (mutants.length === 0) {
+        return { outcome: "fail", rationale: "Mutation: Stryker report contains 0 valid mutants." }
+      }
 
       // A record is stale -- and must be removed -- only when it matches
       // NOTHING in the current report, meaning the surrounding code actually
       // changed. It is deliberately NOT stale just because it currently
       // matches only Killed/Timeout mutants -- see this module's own doc
       // comment for why (Stryker's own non-determinism, not this check's).
-      const stale: string[] = []
-      const insufficient: string[] = []
-      const suppressed = new Set<ResolvedMutant>()
-      for (const record of loaded.records) {
-        const matches = mutants.filter((m) => matchesRecord(m, record))
-        if (matches.length === 0) {
-          stale.push(
-            `${record.id} -- ${record.file} [${record.mutator}] "${record.original}" -> "${record.replacement}" no longer matches any mutant in the report; the surrounding code likely changed.`,
-          )
-          continue
-        }
-
-        const determinant = evaluateExceptionRecord({
-          record,
-          classifications: CLASSIFICATION,
-          config: EXCEPTION_POLICY_CONFIG,
-          globalDefault: GLOBAL_DEFAULT,
-          fieldValue,
-        })
-        if (determinant.verdict === "insufficient") {
-          insufficient.push(
-            `${record.id} -- missing: ${determinant.missing.join(", ")}. Fill those fields in ${REGISTRY_RELATIVE_PATH}.`,
-          )
-          continue
-        }
-        if (determinant.verdict === "forbidden") {
-          insufficient.push(`${record.id} -- policy forbids waiving this mutant.`)
-          continue
-        }
-
-        for (const m of matches) {
-          if (SURVIVED_LIKE.has(m.status)) suppressed.add(m)
-        }
-      }
-
+      const { stale, insufficient, suppressed } = applyExceptionRegistry(mutants, loaded.records)
       if (stale.length > 0 || insufficient.length > 0) {
         return {
           outcome: "fail",
@@ -359,41 +451,7 @@ export function mutation(): CheckDefinitionConfig {
         }
       }
 
-      const counts: Record<string, number> = {}
-      for (const mutant of mutants) {
-        if (suppressed.has(mutant)) continue
-        counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
-      }
-
-      const killed = counts["Killed"] ?? 0
-      const timeout = counts["Timeout"] ?? 0
-      const survived = counts["Survived"] ?? 0
-      const noCoverage = counts["NoCoverage"] ?? 0
-      const detected = killed + timeout
-      const valid = detected + survived + noCoverage
-
-      if (valid === 0) {
-        return { outcome: "fail", rationale: "Mutation: Stryker report contains 0 valid mutants." }
-      }
-
-      const score = (detected / valid) * 100
-      const suppressedNote =
-        suppressed.size > 0
-          ? ` (${String(suppressed.size)} known Stryker false positive${suppressed.size === 1 ? "" : "s"} excluded, see ${REGISTRY_RELATIVE_PATH})`
-          : ""
-      const summary = `score ${score.toFixed(2)}% (killed ${String(killed)}, timeout ${String(timeout)}, survived ${String(survived)}, no-coverage ${String(noCoverage)})${suppressedNote}`
-
-      if (score < MUTATION_THRESHOLD) {
-        return {
-          outcome: "fail",
-          rationale: `Mutation: ${summary} < ${String(MUTATION_THRESHOLD)}% required.`,
-        }
-      }
-
-      return {
-        outcome: "pass",
-        rationale: `Mutation: ${summary} >= ${String(MUTATION_THRESHOLD)}%.`,
-      }
+      return summarizeMutationScore(mutants, suppressed)
     },
   }
 }

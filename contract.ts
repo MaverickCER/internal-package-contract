@@ -25,11 +25,20 @@
  *
  * Not cloned (encode repo-contract's own design, not a general standard):
  * `suppression-governance`, `api-contract`, `security-network`, `adr-governance`,
- * `accessibility`, and the `test-unit/integration/property/e2e` split.
+ * and the `test-unit/integration/property/e2e` split.
+ *
+ * `accessibility` *was* on that list until it wasn't: repo-contract's own
+ * `docs/index.html` website rebuild (and the matching one for env-cap/
+ * data-cap) made a real, mechanically-checked accessibility pass worth
+ * having generically, not just for repo-contract's own site -- see
+ * `checks/accessibility.ts`. `docsLinks` grew the matching HTML-mode
+ * linkinator crawl over `docs/` at the same time (previously Markdown-only,
+ * via `README.md` -- see that check's own doc comment).
  */
 import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import { format, license, lint, publint, securityDeps, typecheck } from "repo-contract/presets"
+import { accessibility } from "./checks/accessibility.js"
 import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
 import { commits } from "./checks/commits.js"
@@ -93,6 +102,11 @@ export default defineRepoContract({
     Licenses: license,
     DocsMarkdown: docsMarkdown(),
     DocsLinks: docsLinks,
+    // No explicit dependsOn needed: declaration-order phasing (writers,
+    // including ApiDocs, then the Build barrier, then readers) already
+    // guarantees docs/api/ is freshly generated before this reader runs --
+    // matches repo-contract's own plain `accessibility,` registration.
+    Accessibility: accessibility,
     SecurityDeps: securityDeps,
     SecuritySecrets: securitySecrets(),
     DeadCode: deadCode(),

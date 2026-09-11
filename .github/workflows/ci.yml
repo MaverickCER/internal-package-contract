@@ -1,8 +1,9 @@
-# CI for internal-package-contract itself: type-check the contract definition and
-# check config authored files are formatted/linted. The standard this package
-# defines is exercised by its consumers (env-cap, data-cap, ...), each of which
-# runs `npm run contract` in their own CI -- see template/contract.yml for the
-# workflow `internal-package-contract init` writes into a consuming package.
+# CI for internal-package-contract itself: runs its own self-hosting contract
+# (repo-contract.config.ts, via `npm run contract` -> scripts/run-contract.mjs)
+# -- this package governing itself using itself, the same way a consumer
+# (env-cap, data-cap, ...) runs `npm run contract` in their own CI. See
+# template/contract.yml for the workflow `internal-package-contract init`
+# writes into a consuming package.
 name: CI
 
 on:
@@ -20,11 +21,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24.x
           cache: npm
       - run: npm ci
-      - run: npm run check
-      - run: npx eslint .
-      - run: npx prettier --check "**/*.{ts,mjs,cjs,json,jsonc,md,yml}"
+      - run: npm run contract

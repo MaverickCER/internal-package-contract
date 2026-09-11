@@ -10,5 +10,13 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["contract.ts", "eslint.config.ts", "prettier.config.ts", "checks/**/*.ts"]
+  "include": [
+    "contract.ts",
+    "repo-contract.config.ts",
+    "eslint.config.ts",
+    "prettier.config.ts",
+    "vitest.config.ts",
+    "checks/**/*.ts",
+    "test/**/*.ts"
+  ]
 }

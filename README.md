@@ -3,11 +3,11 @@
 The engineering standard every publishable `@maverickcer/*` package must
 **continuously satisfy** — and the configs, git wiring, and one-command setup to
 adopt it. A clone of repo-contract's own
-[`repo-contract.config.ts`](../repo-contract/repo-contract.config.ts), adapted to
-govern a _consuming_ package.
+[`repo-contract.config.ts`](https://github.com/MaverickCER/repo-contract/blob/main/repo-contract.config.ts),
+adapted to govern a _consuming_ package.
 
 It is the "package" row of the layered governance model
-([repo-contract ADR 0010](../repo-contract/specs/decisions/0010-review-driven-contracts-and-shared-internal-system-contracts.md)):
+([repo-contract ADR 0010](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0010-review-driven-contracts-and-shared-internal-system-contracts.md)):
 
 | Layer                           | Owns                                       | Answers                                         |
 | ------------------------------- | ------------------------------------------ | ----------------------------------------------- |
