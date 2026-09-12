@@ -27,13 +27,33 @@ describe("accessibility", () => {
     })
   })
 
-  it("fails when the scan script itself reported ok: false", async () => {
+  it("fails when the scan script itself reported an unrecognized ok: false error", async () => {
     const result = accessibility.policy(
-      makeContext(makeJsonResult({ ok: false, error: "pa11y is not installed" })),
+      makeContext(
+        makeJsonResult({ ok: false, error: "docs/api/ exists but its landing page does not" }),
+      ),
     )
     expect(await result).toEqual({
       outcome: "fail",
-      rationale: "Accessibility: pa11y could not be evaluated: pa11y is not installed",
+      rationale:
+        "Accessibility: pa11y could not be evaluated: docs/api/ exists but its landing page does not",
+    })
+  })
+
+  it("warns (not fails) when no system Chrome/Chromium executable was found", async () => {
+    const result = accessibility.policy(
+      makeContext(
+        makeJsonResult({
+          ok: false,
+          error:
+            "no system Chrome/Chromium executable found. Install one, or set PUPPETEER_EXECUTABLE_PATH.",
+        }),
+      ),
+    )
+    expect(await result).toEqual({
+      outcome: "warn",
+      rationale:
+        "Accessibility: no system Chrome/Chromium executable found. Install one, or set PUPPETEER_EXECUTABLE_PATH.",
     })
   })
 
