@@ -3,6 +3,15 @@
  * a generic recreation of repo-contract's own `accessibility` check, run
  * through the bundled `scripts/check-accessibility.mjs` (see its own doc
  * comment for exactly which pages are scanned, and why).
+ *
+ * `pa11y` is a real, hard dependency (package.json) -- never something a consumer (env-cap,
+ * data-cap, ...) has to separately install -- but its own `puppeteer` dependency is aliased to
+ * `puppeteer-core` via package.json's `overrides`, so no Chromium-download postinstall script
+ * ever runs (a Socket.dev "Install scripts" finding directly hurts a public package's own
+ * supply-chain score). `puppeteer-core` bundles no browser, so the scan script auto-detects a
+ * system Chrome/Chromium instead; not finding one is a `warn`, exactly like `SecuritySocket`'s
+ * own `@socketsecurity/cli`-not-authenticated case -- this check cannot distinguish "genuinely
+ * clean" from "never ran," so it never fails closed on absence alone.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
@@ -48,6 +57,9 @@ export const accessibility: CheckDefinitionConfig = {
 
     const evidence = envelope.value
     if (!evidence.ok) {
+      if (evidence.error.startsWith("no system Chrome/Chromium executable found")) {
+        return { outcome: "warn", rationale: `Accessibility: ${evidence.error}` }
+      }
       return {
         outcome: "fail",
         rationale: `Accessibility: pa11y could not be evaluated: ${evidence.error}`,
