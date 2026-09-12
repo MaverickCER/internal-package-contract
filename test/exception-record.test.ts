@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 import type { ExceptionRecordCore } from "repo-contract/helpers"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import {
+  EXCEPTION_TYPES,
+  validateExceptionRegistry,
+  validateSecurityExceptionFields,
+} from "../checks/exception-record.js"
 import type { ExceptionRegistrySchema } from "../checks/exception-record.js"
 
 interface TestRecord {
@@ -204,5 +208,124 @@ describe("validateExceptionRegistry", () => {
         "exceptions[1].name must be a non-empty string.",
       ],
     })
+  })
+})
+
+describe("validateSecurityExceptionFields", () => {
+  function blank(overrides: Record<string, unknown> = {}) {
+    return { alternatives: "", remediation: "", method: "", exceptionType: "", ...overrides }
+  }
+
+  it("accepts an all-blank stub (completeness is the policy's concern, not the validator's)", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(blank(), 0, EXCEPTION_TYPES, errors)
+    expect(result).toEqual({ alternatives: "", remediation: "", method: "", exceptionType: "" })
+    expect(errors).toEqual([])
+  })
+
+  it("accepts a fully-filled, well-formed record", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({
+        alternatives: "None available.",
+        remediation: "Tracked in issue #1.",
+        method: "independent-human-review",
+        exceptionType: "accepted-risk",
+      }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toEqual({
+      alternatives: "None available.",
+      remediation: "Tracked in issue #1.",
+      method: "independent-human-review",
+      exceptionType: "accepted-risk",
+    })
+    expect(errors).toEqual([])
+  })
+
+  it("rejects a non-string alternatives", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ alternatives: 1 }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toBeUndefined()
+    expect(errors).toContain("exceptions[0].alternatives must be a string.")
+  })
+
+  it("rejects a non-string remediation", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ remediation: 1 }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toBeUndefined()
+    expect(errors).toContain("exceptions[0].remediation must be a string.")
+  })
+
+  it("rejects an unrecognized method", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ method: "guessing" }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toBeUndefined()
+    expect(errors[0]).toContain("exceptions[0].method must be")
+  })
+
+  it("rejects an exceptionType outside the caller's own allowed subset", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ exceptionType: "accepted-risk" }),
+      0,
+      ["tooling-limitation"],
+      errors,
+    )
+    expect(result).toBeUndefined()
+    expect(errors[0]).toContain("exceptions[0].exceptionType must be")
+  })
+
+  it("rejects validated-false-positive paired with any method other than mechanical-reverification", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ exceptionType: "validated-false-positive", method: "independent-human-review" }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toBeUndefined()
+    expect(errors[0]).toContain('requires method "mechanical-reverification"')
+  })
+
+  it("accepts validated-false-positive paired with mechanical-reverification", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ exceptionType: "validated-false-positive", method: "mechanical-reverification" }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toMatchObject({ exceptionType: "validated-false-positive" })
+    expect(errors).toEqual([])
+  })
+
+  it("accepts validated-false-positive with method still blank (not yet filled in)", () => {
+    const errors: string[] = []
+    const result = validateSecurityExceptionFields(
+      blank({ exceptionType: "validated-false-positive" }),
+      0,
+      EXCEPTION_TYPES,
+      errors,
+    )
+    expect(result).toMatchObject({ exceptionType: "validated-false-positive", method: "" })
+    expect(errors).toEqual([])
   })
 })
