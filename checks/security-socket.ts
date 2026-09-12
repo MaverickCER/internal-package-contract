@@ -59,17 +59,23 @@ import type {
   ExceptionRecordCore,
   StandardSchemaV1,
 } from "repo-contract/helpers"
-import {
-  evaluateExceptionRecord,
-  loadExceptionRegistry,
-  reconcileExceptions,
-  validateExceptionPolicyConfig,
-  writeExceptionRegistry,
-} from "repo-contract/helpers"
-import { mkdir } from "node:fs/promises"
+import { loadExceptionRegistry, validateExceptionPolicyConfig } from "repo-contract/helpers"
 import path from "node:path"
-import { validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema } from "./exception-record.js"
+import {
+  EXCEPTION_TYPES,
+  SECURITY_EXCEPTION_FIELD_KEYS,
+  evaluateFindingVerdict,
+  isValidNonEmptyStringField,
+  reconcileAndPersistExceptionRegistry,
+  validateExceptionRegistry,
+  validateSecurityExceptionFields,
+} from "./exception-record.js"
+import type {
+  ExceptionRegistrySchema,
+  ExceptionMethod,
+  ExceptionType,
+  PersistedExceptionRegistry,
+} from "./exception-record.js"
 import { abnormalTermination } from "./shared.js"
 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/socket.json"
@@ -88,22 +94,7 @@ interface NormalizedSocketAlert {
   readonly severity: "critical" | "high" | "middle" | "low" | "unknown"
 }
 
-/** The small, closed vocabulary of *why* a Socket alert is deliberately tolerated -- see repo-contract's own `scripts/shared/exception-record.ts` for the full per-value rationale this mirrors. */
-const EXCEPTION_TYPES = [
-  "validated-false-positive",
-  "accepted-risk",
-  "compensating-control",
-  "tooling-limitation",
-  "scheduled-remediation",
-  "platform-or-vendor-constraint",
-] as const
-type ExceptionType = (typeof EXCEPTION_TYPES)[number]
-
-/** How an exception's claim was substantiated -- required on every record. */
-const EXCEPTION_METHODS = ["mechanical-reverification", "independent-human-review"] as const
-type ExceptionMethod = (typeof EXCEPTION_METHODS)[number]
-
-/** One `.repo-contract/exceptions/socket.json` record: the shared core plus this registry's own identity and justification fields. */
+/** One `.repo-contract/exceptions/socket.json` record: the shared security-family fields (`./exception-record.js`) plus this registry's own identity fields. */
 interface SocketExceptionRecord {
   readonly id: string
   readonly version: 1
@@ -144,21 +135,7 @@ function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExcep
   }
 }
 
-/** `value` is a string -- pushes a `"<at> must be a string."` message onto `errors` otherwise. */
-function isValidStringField(value: unknown, at: string, errors: string[]): value is string {
-  const valid = typeof value === "string"
-  if (!valid) errors.push(`${at} must be a string.`)
-  return valid
-}
-
-/** `value` is a non-empty string -- pushes a `"<at> must be a non-empty string."` message onto `errors` otherwise. */
-function isValidNonEmptyStringField(value: unknown, at: string, errors: string[]): value is string {
-  const valid = typeof value === "string" && value.length > 0
-  if (!valid) errors.push(`${at} must be a non-empty string.`)
-  return valid
-}
-
-/** `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise. Shared shape behind `method`'s and `exceptionType`'s own validation. */
+/** `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise. */
 function isValidOptionalEnumField(
   value: unknown,
   at: string,
@@ -174,117 +151,29 @@ function isValidOptionalEnumField(
   return valid
 }
 
-/** Every `SocketExceptionRecord` field beyond the shared `id`/`version`/`justification` core, already confirmed individually valid -- see {@link validateRecordFields}. */
-interface ValidatedSocketFields {
-  readonly alternatives: string
-  readonly remediation: string
-  readonly method: SocketExceptionRecord["method"]
-  readonly exceptionType: SocketExceptionRecord["exceptionType"]
-  readonly package: string
-  readonly packageVersion: string
-  readonly type: string
-  readonly severity: SocketExceptionRecord["severity"]
-}
-
-/** Validates every one of `raw`'s registry-specific fields independently (so one bad field never short-circuits reporting the rest), pushing one message per problem onto `errors`. */
-function validateRecordFields(
-  raw: Readonly<Record<string, unknown>>,
-  at: string,
-  errors: string[],
-): ValidatedSocketFields | undefined {
-  const {
-    alternatives,
-    remediation,
-    method,
-    exceptionType,
-    package: pkg,
-    packageVersion,
-    type,
-    severity,
-  } = raw
-
-  const alternativesValid = isValidStringField(alternatives, `${at}.alternatives`, errors)
-  const remediationValid = isValidStringField(remediation, `${at}.remediation`, errors)
-  const methodValid = isValidOptionalEnumField(method, `${at}.method`, EXCEPTION_METHODS, errors)
-  const exceptionTypeValid = isValidOptionalEnumField(
-    exceptionType,
-    `${at}.exceptionType`,
-    EXCEPTION_TYPES,
-    errors,
-  )
-  const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
-  const versionValid = isValidNonEmptyStringField(packageVersion, `${at}.packageVersion`, errors)
-  const typeValid = isValidNonEmptyStringField(type, `${at}.type`, errors)
-  const severityValid = isValidOptionalEnumField(
-    severity,
-    `${at}.severity`,
-    [...RECORD_SEVERITY_VALUES],
-    errors,
-  )
-
-  if (
-    !alternativesValid ||
-    !remediationValid ||
-    !methodValid ||
-    !exceptionTypeValid ||
-    !pkgValid ||
-    !versionValid ||
-    !typeValid ||
-    !severityValid
-  ) {
-    return undefined
-  }
-
-  return {
-    alternatives,
-    remediation,
-    method: method as SocketExceptionRecord["method"],
-    exceptionType: exceptionType as SocketExceptionRecord["exceptionType"],
-    package: pkg,
-    packageVersion,
-    type,
-    severity: severity as SocketExceptionRecord["severity"],
-  }
-}
-
-/** A `"validated-false-positive"` claim rests on a re-run, never opinion -- `method` must be `mechanical-reverification` once it's filled in at all. */
-function violatesFalsePositiveMethodRule(fields: ValidatedSocketFields): boolean {
-  return (
-    fields.exceptionType === "validated-false-positive" &&
-    fields.method !== "" &&
-    fields.method !== "mechanical-reverification"
-  )
-}
-
 const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = {
   namespace: "socket:",
-  metadataKeys: [
-    "alternatives",
-    "remediation",
-    "method",
-    "exceptionType",
-    "package",
-    "packageVersion",
-    "type",
-    "severity",
-  ],
+  metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "packageVersion", "type", "severity"],
   validateRecord(core: ExceptionRecordCore, raw, index, errors) {
     const at = `exceptions[${String(index)}]`
-    const fields = validateRecordFields(raw, at, errors)
-    if (fields === undefined) return undefined
+    const security = validateSecurityExceptionFields(raw, index, EXCEPTION_TYPES, errors)
 
-    if (violatesFalsePositiveMethodRule(fields)) {
-      errors.push(
-        `${at}: exceptionType "validated-false-positive" requires method "mechanical-reverification"; got method ${JSON.stringify(fields.method)}.`,
-      )
+    const { package: pkg, packageVersion, type, severity } = raw
+    const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
+    const versionValid = isValidNonEmptyStringField(packageVersion, `${at}.packageVersion`, errors)
+    const typeValid = isValidNonEmptyStringField(type, `${at}.type`, errors)
+    const severityValid = isValidOptionalEnumField(
+      severity,
+      `${at}.severity`,
+      [...RECORD_SEVERITY_VALUES],
+      errors,
+    )
+
+    if (security === undefined || !pkgValid || !versionValid || !typeValid || !severityValid) {
       return undefined
     }
 
-    const identity = {
-      package: fields.package,
-      packageVersion: fields.packageVersion,
-      type: fields.type,
-    }
+    const identity = { package: pkg, packageVersion, type }
     const derived = deriveSocketExceptionId(identity)
     if (derived !== core.id) {
       errors.push(
@@ -297,12 +186,9 @@ const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = 
       id: core.id,
       version: 1,
       justification: core.justification,
-      alternatives: fields.alternatives,
-      remediation: fields.remediation,
-      method: fields.method,
-      exceptionType: fields.exceptionType,
+      ...security,
       ...identity,
-      severity: fields.severity,
+      severity: severity as SocketExceptionRecord["severity"],
     }
   },
 }
@@ -388,18 +274,6 @@ function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
   }
 }
 
-/** Widens typed records to the flat shape `writeExceptionRegistry` (`repo-contract/helpers`) accepts -- TypeScript will not infer the implicit index signature through an `interface`. */
-function asFlatExceptionRecords(
-  records: readonly SocketExceptionRecord[],
-): readonly (Record<string, unknown> & { readonly id: string })[] {
-  return records as unknown as readonly (Record<string, unknown> & { readonly id: string })[]
-}
-
-function socketFieldValue(record: SocketExceptionRecord, requirement: string): string {
-  const value = (record as unknown as Record<string, unknown>)[requirement]
-  return typeof value === "string" ? value : ""
-}
-
 function evaluateAlert(
   alert: NormalizedSocketAlert,
   record: SocketExceptionRecord | undefined,
@@ -407,18 +281,15 @@ function evaluateAlert(
   readonly verdict: "forbidden" | "insufficient" | "permitted" | "unmatched"
   readonly missing: readonly string[]
 } {
-  if (record === undefined) return { verdict: "unmatched", missing: [] }
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "socket", category: alert.severity },
   ]
-  const determinant = evaluateExceptionRecord({
+  return evaluateFindingVerdict(
     record,
     classifications,
-    config: SOCKET_POLICY,
-    globalDefault: SOCKET_GLOBAL_DEFAULT_POLICY,
-    fieldValue: socketFieldValue,
-  })
-  return { verdict: determinant.verdict, missing: determinant.missing }
+    SOCKET_POLICY,
+    SOCKET_GLOBAL_DEFAULT_POLICY,
+  )
 }
 
 const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]> = {
@@ -521,59 +392,10 @@ function interpretSocketRun(result: CheckEvidence, existingRecordCount: number):
   return { kind: "ok", alerts: normalized as NormalizedSocketAlert[] }
 }
 
-/** The registry state a batch of alerts reconciled against, once persisted back to disk. */
-interface PersistedRegistry {
-  readonly activeRecords: readonly SocketExceptionRecord[]
-  readonly staleRecords: readonly SocketExceptionRecord[]
-  readonly newStubIds: readonly string[]
-}
-
-/** Reconciles `alerts` against `existing` records and writes the result back to `registryPath` -- the one place this check ever mutates the consumer's own tree. */
-async function reconcileAndPersistRegistry(
-  registryPath: string,
-  existing: readonly SocketExceptionRecord[],
-  alerts: readonly NormalizedSocketAlert[],
-): Promise<
-  | { readonly ok: true; readonly registry: PersistedRegistry }
-  | { readonly ok: false; readonly rationale: string }
-> {
-  const reconciled = reconcileExceptions<NormalizedSocketAlert, SocketExceptionRecord>({
-    existing,
-    findings: alerts,
-    deriveId: (alert) => alert.id,
-    createStub: createSocketStub,
-  })
-  if (!reconciled.ok) {
-    return {
-      ok: false,
-      rationale: `${REGISTRY_RELATIVE_PATH} could not be reconciled: ${reconciled.error}`,
-    }
-  }
-  const { activeRecords, staleRecords, newStubIds } = reconciled.reconciliation
-
-  try {
-    await mkdir(path.dirname(registryPath), { recursive: true })
-    const write = await writeExceptionRegistry({
-      path: registryPath,
-      records: asFlatExceptionRecords([...activeRecords, ...staleRecords]),
-    })
-    if (!write.ok) {
-      return { ok: false, rationale: `Writing ${REGISTRY_RELATIVE_PATH} failed: ${write.error}` }
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      rationale: `Could not write ${REGISTRY_RELATIVE_PATH}: ${(error as Error).message}`,
-    }
-  }
-
-  return { ok: true, registry: { activeRecords, staleRecords, newStubIds } }
-}
-
 /** The final pass/fail composition, once every alert has a reconciled (possibly freshly-scaffolded) record to evaluate against. */
 function evaluateFinalVerdict(
   alerts: readonly NormalizedSocketAlert[],
-  registry: PersistedRegistry,
+  registry: PersistedExceptionRegistry<SocketExceptionRecord>,
 ): PolicyResult {
   const configErrors = validateExceptionPolicyConfig(SOCKET_POLICY, VALID_SOCKET_REQUIREMENTS)
   if (configErrors.length > 0) {
@@ -647,7 +469,13 @@ export function securitySocket(): CheckDefinitionConfig {
         }
       }
 
-      const persisted = await reconcileAndPersistRegistry(registryPath, loaded.records, run.alerts)
+      const persisted = await reconcileAndPersistExceptionRegistry(
+        registryPath,
+        REGISTRY_RELATIVE_PATH,
+        loaded.records,
+        run.alerts,
+        createSocketStub,
+      )
       if (!persisted.ok) return { outcome: "fail", rationale: persisted.rationale }
 
       return evaluateFinalVerdict(run.alerts, persisted.registry)
