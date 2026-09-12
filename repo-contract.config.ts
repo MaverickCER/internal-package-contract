@@ -46,7 +46,7 @@
 import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import type { CheckDefinitionConfig, PolicyContext } from "repo-contract"
-import { format, license, lint, securityDeps, typecheck } from "repo-contract/presets"
+import { format, license, lint, typecheck } from "repo-contract/presets"
 import { architecture } from "./checks/architecture.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
@@ -59,6 +59,7 @@ import { docsMarkdown } from "./checks/docs-markdown.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
+import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
 import { tests } from "./checks/tests.js"
@@ -68,91 +69,6 @@ function withScanTarget(check: CheckDefinitionConfig, target: string): CheckDefi
   const run = [...(check.run as readonly string[])]
   run[1] = target
   return { ...check, run }
-}
-
-/**
- * `npm audit` findings reviewed and accepted for this package's own tree --
- * keyed by the top-level package name `npm audit --json`'s own
- * `vulnerabilities` object groups each finding under (matching how
- * `SecurityDeps`'s underlying preset itself counts and reports them). Every
- * remaining fix requires either a breaking major-version downgrade/upgrade of
- * a tool this package's own checks are load-bearing on, or has no fix at all
- * -- and none of the three groups below are reachable through what this
- * package's own checks actually exercise. `tar`/`qs` (the two genuinely safe,
- * non-breaking fixes available at review time) are pinned via package.json's
- * `overrides` instead of listed here -- see that field's own inline comment.
- *
- * Reviewed 2026-09-10. Revisit whenever any of these three tools ships a
- * patched release in its current major line:
- * - `licensee@11.1.1`'s own dependency-resolution internals (npm's
- *   arborist/pacote/sigstore stack, needed for REGISTRY package-fetch/verify
- *   operations) -- this check's actual use of licensee only reads local
- *   `node_modules` license metadata already on disk; that code path never
- *   runs. Fix requires `licensee@8.2.0` (`npm audit fix --force`), an
- *   unverified major downgrade whose CLI behavior could differ again (this
- *   session already hit one licensee docopt/flag-parsing bug -- see
- *   `Licenses`' own override comment).
- * - `vitest@3.2.7`/`@vitest/coverage-v8`/`@vitest/mocker` -- fix requires
- *   `vitest@5.0.0`, a major bump this package's own `vitest.config.ts` and
- *   Stryker's `@stryker-mutator/vitest-runner` integration are not yet
- *   verified against.
- * - `markdownlint-cli2`'s own transitive TOML parser (`smol-toml`) -- fix
- *   requires downgrading `markdownlint-cli2` to `0.21.0`, older than this
- *   package's current `^0.23.2`.
- * - `adm-zip` (via `github-actionlint`) and `github-actionlint` itself have
- *   no fix available at any version.
- */
-const ACCEPTED_SECURITY_DEPS_EXCEPTIONS: ReadonlySet<string> = new Set([
-  "@npmcli/arborist",
-  "@npmcli/metavuln-calculator",
-  "@sigstore/core",
-  "@sigstore/sign",
-  "@sigstore/verify",
-  "licensee",
-  "pacote",
-  "sigstore",
-  "@vitest/coverage-v8",
-  "@vitest/mocker",
-  "vitest",
-  "markdownlint-cli2",
-  "smol-toml",
-  "adm-zip",
-  "github-actionlint",
-])
-
-interface NpmAuditVulnerability {
-  readonly severity?: string
-}
-interface NpmAuditReport {
-  readonly vulnerabilities?: Record<string, NpmAuditVulnerability>
-  readonly metadata?: { readonly vulnerabilities?: Record<string, number> }
-}
-
-/** Drops every {@link ACCEPTED_SECURITY_DEPS_EXCEPTIONS} entry from an `npm audit --json` report and recomputes `metadata.vulnerabilities`'s per-severity counts from what remains, so a genuinely NEW, unreviewed finding still fails the check. */
-function withoutAcceptedVulnerabilities(value: unknown): unknown {
-  if (typeof value !== "object" || value === null) return value
-  const report = value as NpmAuditReport
-  if (!report.vulnerabilities || typeof report.vulnerabilities !== "object") return value
-
-  const kept: Record<string, NpmAuditVulnerability> = {}
-  const counts: Record<string, number> = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 }
-  for (const [name, vulnerability] of Object.entries(report.vulnerabilities)) {
-    if (ACCEPTED_SECURITY_DEPS_EXCEPTIONS.has(name)) continue
-    kept[name] = vulnerability
-    const severity = vulnerability.severity
-    if (typeof severity === "string" && severity in counts) {
-      counts[severity] = (counts[severity] ?? 0) + 1
-    }
-  }
-
-  return {
-    ...report,
-    vulnerabilities: kept,
-    metadata: {
-      ...report.metadata,
-      vulnerabilities: { ...counts, total: Object.values(counts).reduce((a, b) => a + b, 0) },
-    },
-  }
 }
 
 export default defineRepoContract({
@@ -229,29 +145,9 @@ export default defineRepoContract({
     DocsMarkdown: docsMarkdown(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
-    // Filters `npm audit`'s report down to what's NOT in
-    // `ACCEPTED_SECURITY_DEPS_EXCEPTIONS` before delegating to the published
-    // preset's own policy -- same "filter, then delegate to the real
-    // interpretation" technique `contract.ts`'s own `TypeResolution` override
-    // uses for attw's `node10` problems. A genuinely new, unreviewed
-    // vulnerability (in a package not already named above) still fails.
-    SecurityDeps: {
-      ...securityDeps,
-      policy: async (ctx: PolicyContext) => {
-        if (!ctx.result.output?.success) return securityDeps.policy(ctx)
-        return securityDeps.policy({
-          ...ctx,
-          result: {
-            ...ctx.result,
-            output: {
-              format: "json",
-              success: true,
-              value: withoutAcceptedVulnerabilities(ctx.result.output.value),
-            },
-          },
-        })
-      },
-    },
+    // Same reviewed-exceptions filter contract.ts's own SecurityDeps uses (see
+    // checks/security-deps.ts) -- dogfooded here rather than duplicated.
+    SecurityDeps: securityDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
