@@ -37,7 +37,7 @@
  */
 import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
-import { format, license, lint, publint, securityDeps, typecheck } from "repo-contract/presets"
+import { format, license, lint, publint, typecheck } from "repo-contract/presets"
 import { accessibility } from "./checks/accessibility.js"
 import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
@@ -53,6 +53,7 @@ import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
 import { npmScriptCheck } from "./checks/npm-script.js"
+import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
 import { tests } from "./checks/tests.js"
@@ -110,7 +111,7 @@ export default defineRepoContract({
     // guarantees docs/api/ is freshly generated before this reader runs --
     // matches repo-contract's own plain `accessibility,` registration.
     Accessibility: accessibility,
-    SecurityDeps: securityDeps,
+    SecurityDeps: securityDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
