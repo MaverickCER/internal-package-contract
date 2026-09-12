@@ -6,7 +6,7 @@
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
+import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const accessibilityScript = path.join(packageRoot, "scripts", "check-accessibility.mjs")
 
@@ -39,19 +39,14 @@ export const accessibility: CheckDefinitionConfig = {
   run: ["node", accessibilityScript],
   output: { format: "json" },
   policy: ({ result }): PolicyResult => {
-    const terminated = abnormalTermination(result, "pa11y")
-    if (terminated) return { outcome: "fail", rationale: terminated }
+    const envelope = parseToolEnvelope<ToolResult<readonly Pa11yFinding[]>>(
+      result,
+      "pa11y",
+      "Accessibility: pa11y",
+    )
+    if (!envelope.ok) return envelope.result
 
-    const value: unknown = result.output?.success ? result.output.value : undefined
-    if (!value || typeof value !== "object" || !("ok" in value)) {
-      const printed = combinedOutput(result)
-      return {
-        outcome: "fail",
-        rationale: `Accessibility: pa11y output could not be parsed as JSON.${printed ? `\n${printed}` : ""}`,
-      }
-    }
-
-    const evidence = value as ToolResult<readonly Pa11yFinding[]>
+    const evidence = envelope.value
     if (!evidence.ok) {
       return {
         outcome: "fail",

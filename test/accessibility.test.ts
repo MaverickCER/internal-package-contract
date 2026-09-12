@@ -1,0 +1,127 @@
+import { describe, expect, it } from "vitest"
+import { accessibility } from "../checks/accessibility.js"
+import { makeContext, makeJsonResult, makeResult } from "./support.js"
+
+function makeFindingsResult(findings: readonly Record<string, unknown>[]) {
+  return makeJsonResult({ ok: true, value: findings })
+}
+
+describe("accessibility", () => {
+  it("fails when pa11y terminated abnormally", async () => {
+    const result = accessibility.policy(makeContext(makeResult({ status: "timed_out" })))
+    expect((await result).outcome).toBe("fail")
+  })
+
+  it("fails, appending printed output, when the scan script's own output could not be parsed as JSON", async () => {
+    const result = accessibility.policy(
+      makeContext(
+        makeResult({
+          output: { format: "json", success: false, error: "bad" },
+          stdout: "raw pa11y output",
+        }),
+      ),
+    )
+    expect(await result).toEqual({
+      outcome: "fail",
+      rationale: "Accessibility: pa11y output could not be parsed as JSON.\nraw pa11y output",
+    })
+  })
+
+  it("fails when the scan script itself reported ok: false", async () => {
+    const result = accessibility.policy(
+      makeContext(makeJsonResult({ ok: false, error: "pa11y is not installed" })),
+    )
+    expect(await result).toEqual({
+      outcome: "fail",
+      rationale: "Accessibility: pa11y could not be evaluated: pa11y is not installed",
+    })
+  })
+
+  it("passes with 0 findings", async () => {
+    const result = accessibility.policy(makeContext(makeFindingsResult([])))
+    expect(await result).toEqual({
+      outcome: "pass",
+      rationale:
+        "Accessibility: pa11y reported 0 WCAG2AA issues across the scanned pages (0 finding(s) total, all informational).",
+    })
+  })
+
+  it("passes, noting the total, when every finding is informational (notice)", async () => {
+    const result = accessibility.policy(
+      makeContext(
+        makeFindingsResult([
+          { code: "c1", type: "notice", message: "m", context: null, selector: "s", page: "p" },
+        ]),
+      ),
+    )
+    expect(await result).toEqual({
+      outcome: "pass",
+      rationale:
+        "Accessibility: pa11y reported 0 WCAG2AA issues across the scanned pages (1 finding(s) total, all informational).",
+    })
+  })
+
+  it("warns (not fails) on a warning-type finding, dropping notices from the rationale", async () => {
+    const result = accessibility.policy(
+      makeContext(
+        makeFindingsResult([
+          {
+            code: "c1",
+            type: "warning",
+            message: "contrast too low",
+            context: null,
+            selector: "h1",
+            page: "docs/index.html",
+          },
+          {
+            code: "c2",
+            type: "notice",
+            message: "ignored",
+            context: null,
+            selector: "p",
+            page: "docs/index.html",
+          },
+        ]),
+      ),
+    )
+    expect(await result).toEqual({
+      outcome: "warn",
+      rationale: [
+        "Accessibility: pa11y reported 0 errors, but 1 warning(s):",
+        "- docs/index.html -- h1 [c1]: contrast too low",
+      ].join("\n"),
+    })
+  })
+
+  it("fails, formatting each error and never surfacing a coexisting warning line", async () => {
+    const result = accessibility.policy(
+      makeContext(
+        makeFindingsResult([
+          {
+            code: "c1",
+            type: "error",
+            message: "missing alt text",
+            context: null,
+            selector: "img",
+            page: "docs/index.html",
+          },
+          {
+            code: "c2",
+            type: "warning",
+            message: "ignored",
+            context: null,
+            selector: "p",
+            page: "docs/index.html",
+          },
+        ]),
+      ),
+    )
+    expect(await result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "Accessibility: pa11y reported 1 WCAG2AA error(s) across the scanned pages:",
+        "- docs/index.html -- img [c1]: missing alt text",
+      ].join("\n"),
+    })
+  })
+})

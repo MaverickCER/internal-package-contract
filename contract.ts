@@ -46,6 +46,7 @@ import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
 import { duplication } from "./checks/duplication.js"
+import { docsFragments } from "./checks/docs-fragments.js"
 import { docsLinks } from "./checks/docs-links.js"
 import { docsMarkdown } from "./checks/docs-markdown.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
@@ -103,6 +104,7 @@ export default defineRepoContract({
     Licenses: license,
     DocsMarkdown: docsMarkdown(),
     DocsLinks: docsLinks,
+    DocsFragments: docsFragments,
     // No explicit dependsOn needed: declaration-order phasing (writers,
     // including ApiDocs, then the Build barrier, then readers) already
     // guarantees docs/api/ is freshly generated before this reader runs --

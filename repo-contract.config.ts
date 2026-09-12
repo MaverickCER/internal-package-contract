@@ -53,12 +53,14 @@ import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
 import { duplication } from "./checks/duplication.js"
+import { docsFragments } from "./checks/docs-fragments.js"
 import { docsLinks } from "./checks/docs-links.js"
 import { docsMarkdown } from "./checks/docs-markdown.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
 import { securitySecrets } from "./checks/security-secrets.js"
+import { securitySocket } from "./checks/security-socket.js"
 import { tests } from "./checks/tests.js"
 
 /** Replaces the scan-path positional (always index 1: `[tool, path, ...flags]`) a `run` array hardcodes, for a check whose default scan target (`"src"`) does not exist in this repository. */
@@ -159,7 +161,7 @@ export default defineRepoContract({
   killProcessTree: crossSpawnSync,
   checks: {
     Lint: lint(),
-    Format,
+    Format: { ...format, run: ["prettier", "--check", "."] },
     Typecheck: { ...typecheck, run: ["tsc", "--noEmit", "-p", "tsconfig.self.json"] },
     // `isolated` -- the single heaviest check (Vitest with V8 coverage
     // instrumentation), same reasoning as `contract.ts`'s own `Tests`.
@@ -226,6 +228,7 @@ export default defineRepoContract({
     },
     DocsMarkdown: docsMarkdown(),
     DocsLinks: docsLinks,
+    DocsFragments: docsFragments,
     // Filters `npm audit`'s report down to what's NOT in
     // `ACCEPTED_SECURITY_DEPS_EXCEPTIONS` before delegating to the published
     // preset's own policy -- same "filter, then delegate to the real
@@ -250,6 +253,7 @@ export default defineRepoContract({
       },
     },
     SecuritySecrets: securitySecrets(),
+    SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
     Commits: commits(),
     Mutation: { ...mutation(), isolated: true },

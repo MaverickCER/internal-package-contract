@@ -51,7 +51,7 @@
  * is reported stale -- exactly repo-contract's own approach, via the same
  * `reconcileExceptions`/`writeExceptionRegistry` (`repo-contract/helpers`) primitives.
  */
-import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"
 import type {
   ExceptionClassification,
   ExceptionPolicy,
@@ -144,6 +144,118 @@ function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExcep
   }
 }
 
+/** `value` is a string -- pushes a `"<at> must be a string."` message onto `errors` otherwise. */
+function isValidStringField(value: unknown, at: string, errors: string[]): value is string {
+  const valid = typeof value === "string"
+  if (!valid) errors.push(`${at} must be a string.`)
+  return valid
+}
+
+/** `value` is a non-empty string -- pushes a `"<at> must be a non-empty string."` message onto `errors` otherwise. */
+function isValidNonEmptyStringField(value: unknown, at: string, errors: string[]): value is string {
+  const valid = typeof value === "string" && value.length > 0
+  if (!valid) errors.push(`${at} must be a non-empty string.`)
+  return valid
+}
+
+/** `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise. Shared shape behind `method`'s and `exceptionType`'s own validation. */
+function isValidOptionalEnumField(
+  value: unknown,
+  at: string,
+  allowed: readonly string[],
+  errors: string[],
+): boolean {
+  const valid = value === "" || (typeof value === "string" && allowed.includes(value))
+  if (!valid) {
+    errors.push(
+      `${at} must be "" or one of ${allowed.map((v) => JSON.stringify(v)).join(", ")} (got ${JSON.stringify(value)}).`,
+    )
+  }
+  return valid
+}
+
+/** Every `SocketExceptionRecord` field beyond the shared `id`/`version`/`justification` core, already confirmed individually valid -- see {@link validateRecordFields}. */
+interface ValidatedSocketFields {
+  readonly alternatives: string
+  readonly remediation: string
+  readonly method: SocketExceptionRecord["method"]
+  readonly exceptionType: SocketExceptionRecord["exceptionType"]
+  readonly package: string
+  readonly packageVersion: string
+  readonly type: string
+  readonly severity: SocketExceptionRecord["severity"]
+}
+
+/** Validates every one of `raw`'s registry-specific fields independently (so one bad field never short-circuits reporting the rest), pushing one message per problem onto `errors`. */
+function validateRecordFields(
+  raw: Readonly<Record<string, unknown>>,
+  at: string,
+  errors: string[],
+): ValidatedSocketFields | undefined {
+  const {
+    alternatives,
+    remediation,
+    method,
+    exceptionType,
+    package: pkg,
+    packageVersion,
+    type,
+    severity,
+  } = raw
+
+  const alternativesValid = isValidStringField(alternatives, `${at}.alternatives`, errors)
+  const remediationValid = isValidStringField(remediation, `${at}.remediation`, errors)
+  const methodValid = isValidOptionalEnumField(method, `${at}.method`, EXCEPTION_METHODS, errors)
+  const exceptionTypeValid = isValidOptionalEnumField(
+    exceptionType,
+    `${at}.exceptionType`,
+    EXCEPTION_TYPES,
+    errors,
+  )
+  const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
+  const versionValid = isValidNonEmptyStringField(packageVersion, `${at}.packageVersion`, errors)
+  const typeValid = isValidNonEmptyStringField(type, `${at}.type`, errors)
+  const severityValid = isValidOptionalEnumField(
+    severity,
+    `${at}.severity`,
+    [...RECORD_SEVERITY_VALUES],
+    errors,
+  )
+
+  if (
+    !alternativesValid ||
+    !remediationValid ||
+    !methodValid ||
+    !exceptionTypeValid ||
+    !pkgValid ||
+    !versionValid ||
+    !typeValid ||
+    !severityValid
+  ) {
+    return undefined
+  }
+
+  return {
+    alternatives,
+    remediation,
+    method: method as SocketExceptionRecord["method"],
+    exceptionType: exceptionType as SocketExceptionRecord["exceptionType"],
+    package: pkg,
+    packageVersion,
+    type,
+    severity: severity as SocketExceptionRecord["severity"],
+  }
+}
+
+/** A `"validated-false-positive"` claim rests on a re-run, never opinion -- `method` must be `mechanical-reverification` once it's filled in at all. */
+function violatesFalsePositiveMethodRule(fields: ValidatedSocketFields): boolean {
+  return (
+    fields.exceptionType === "validated-false-positive" &&
+    fields.method !== "" &&
+    fields.method !== "mechanical-reverification"
+  )
+}
+
 const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = {
   namespace: "socket:",
   metadataKeys: [
@@ -158,76 +270,21 @@ const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = 
   ],
   validateRecord(core: ExceptionRecordCore, raw, index, errors) {
     const at = `exceptions[${String(index)}]`
-    const {
-      alternatives,
-      remediation,
-      method,
-      exceptionType,
-      package: pkg,
-      packageVersion,
-      type,
-      severity,
-    } = raw
+    const fields = validateRecordFields(raw, at, errors)
+    if (fields === undefined) return undefined
 
-    const alternativesValid = typeof alternatives === "string"
-    if (!alternativesValid) errors.push(`${at}.alternatives must be a string.`)
-    const remediationValid = typeof remediation === "string"
-    if (!remediationValid) errors.push(`${at}.remediation must be a string.`)
-    const methodValid =
-      method === "" ||
-      (typeof method === "string" && (EXCEPTION_METHODS as readonly string[]).includes(method))
-    if (!methodValid) {
+    if (violatesFalsePositiveMethodRule(fields)) {
       errors.push(
-        `${at}.method must be "" or one of ${EXCEPTION_METHODS.map((m) => JSON.stringify(m)).join(", ")} (got ${JSON.stringify(method)}).`,
-      )
-    }
-    const exceptionTypeValid =
-      exceptionType === "" ||
-      (typeof exceptionType === "string" &&
-        (EXCEPTION_TYPES as readonly string[]).includes(exceptionType))
-    if (!exceptionTypeValid) {
-      errors.push(
-        `${at}.exceptionType must be "" or one of ${EXCEPTION_TYPES.map((t) => JSON.stringify(t)).join(", ")} (got ${JSON.stringify(exceptionType)}).`,
-      )
-    }
-    const pkgValid = typeof pkg === "string" && pkg.length > 0
-    if (!pkgValid) errors.push(`${at}.package must be a non-empty string.`)
-    const versionValid = typeof packageVersion === "string" && packageVersion.length > 0
-    if (!versionValid) errors.push(`${at}.packageVersion must be a non-empty string.`)
-    const typeValid = typeof type === "string" && type.length > 0
-    if (!typeValid) errors.push(`${at}.type must be a non-empty string.`)
-    const severityValid = typeof severity === "string" && RECORD_SEVERITY_VALUES.has(severity)
-    if (!severityValid) {
-      errors.push(
-        `${at}.severity must be one of ${[...RECORD_SEVERITY_VALUES].map((s) => JSON.stringify(s)).join(", ")} (got ${JSON.stringify(severity)}).`,
-      )
-    }
-
-    if (
-      !alternativesValid ||
-      !remediationValid ||
-      !methodValid ||
-      !exceptionTypeValid ||
-      !pkgValid ||
-      !versionValid ||
-      !typeValid ||
-      !severityValid
-    ) {
-      return undefined
-    }
-
-    if (
-      exceptionType === "validated-false-positive" &&
-      method !== "" &&
-      method !== "mechanical-reverification"
-    ) {
-      errors.push(
-        `${at}: exceptionType "validated-false-positive" requires method "mechanical-reverification"; got method ${JSON.stringify(method)}.`,
+        `${at}: exceptionType "validated-false-positive" requires method "mechanical-reverification"; got method ${JSON.stringify(fields.method)}.`,
       )
       return undefined
     }
 
-    const identity = { package: pkg, packageVersion, type }
+    const identity = {
+      package: fields.package,
+      packageVersion: fields.packageVersion,
+      type: fields.type,
+    }
     const derived = deriveSocketExceptionId(identity)
     if (derived !== core.id) {
       errors.push(
@@ -240,12 +297,12 @@ const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = 
       id: core.id,
       version: 1,
       justification: core.justification,
-      alternatives,
-      remediation,
-      method: method as SocketExceptionRecord["method"],
-      exceptionType: exceptionType as SocketExceptionRecord["exceptionType"],
+      alternatives: fields.alternatives,
+      remediation: fields.remediation,
+      method: fields.method,
+      exceptionType: fields.exceptionType,
       ...identity,
-      severity: severity as SocketExceptionRecord["severity"],
+      severity: fields.severity,
     }
   },
 }
@@ -378,84 +435,207 @@ const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]
 }
 
 /** @returns the `SecuritySocket` check. */
+/** The outcome of running and interpreting `socket ci --json` itself, before any registry work. */
+type SocketRunOutcome =
+  | { readonly kind: "warn" | "fail"; readonly rationale: string }
+  | { readonly kind: "ok"; readonly alerts: readonly NormalizedSocketAlert[] }
+
+/**
+ * Runs and interprets the socket CLI's own raw evidence -- every recognized non-alert state
+ * (not installed, not authenticated, unreachable, malformed output) short-circuits to `warn`/
+ * `fail` here; only a genuine, well-formed alert list reaches the caller's registry work.
+ * @param existingRecordCount - the exception registry's current record count, for the
+ * not-authenticated rationale's "N records validated but not reconciled" note (`0` if the
+ * registry itself failed to load -- matches how a load failure is reported separately, never
+ * folded into this note).
+ */
+function interpretSocketRun(result: CheckEvidence, existingRecordCount: number): SocketRunOutcome {
+  if (result.status === "spawn_error" && result.spawnErrorCode === "ENOENT") {
+    return {
+      kind: "warn",
+      rationale:
+        "security-socket did not run (cli-not-installed) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
+    }
+  }
+  const terminated = abnormalTermination(result, "socket")
+  if (terminated) return { kind: "fail", rationale: terminated }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.stdout.trim())
+  } catch {
+    parsed = undefined
+  }
+
+  if (isAuthError(parsed)) {
+    const note =
+      existingRecordCount > 0
+        ? ` ${String(existingRecordCount)} exception record(s) in ${REGISTRY_RELATIVE_PATH} were validated but not reconciled (the CLI produced no alert list this run).`
+        : ""
+    return {
+      kind: "warn",
+      rationale: `security-socket did not run (not-authenticated) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.${note}`,
+    }
+  }
+  if (isNetworkUnreachable(result.stderr, parsed)) {
+    return {
+      kind: "warn",
+      rationale: "security-socket did not run (network-unreachable) -- alerts were not evaluated.",
+    }
+  }
+  if (parsed === undefined) {
+    return {
+      kind: "fail",
+      rationale: `\`socket ci --json\` produced no parseable JSON output (exit code ${String(result.exitCode)}).`,
+    }
+  }
+  if (!isPlainObject(parsed) || typeof parsed["ok"] !== "boolean") {
+    return {
+      kind: "fail",
+      rationale: '`socket ci --json` produced JSON with no recognized "ok" boolean field.',
+    }
+  }
+  if (!parsed["ok"]) {
+    const message = parsed["message"]
+    const detail =
+      typeof message === "string" ? message : "socket ci reported an unrecognized failure."
+    return { kind: "fail", rationale: `security-socket scan failed: ${detail}` }
+  }
+
+  const data = parsed["data"]
+  const rawAlerts = (isPlainObject(data) ? data["alerts"] : undefined) ?? parsed["alerts"] ?? []
+  if (!Array.isArray(rawAlerts)) {
+    return {
+      kind: "fail",
+      rationale: '`socket ci --json` reported `ok: true` with a non-array "alerts" field.',
+    }
+  }
+  const normalized = rawAlerts.map((raw) => normalizeAlert(raw))
+  const malformedIndex = normalized.findIndex((alert) => alert === undefined)
+  if (malformedIndex !== -1) {
+    return {
+      kind: "fail",
+      rationale: `\`socket ci --json\` reported an alert entry (index ${String(malformedIndex)}) missing a required field (package/version/type).`,
+    }
+  }
+  return { kind: "ok", alerts: normalized as NormalizedSocketAlert[] }
+}
+
+/** The registry state a batch of alerts reconciled against, once persisted back to disk. */
+interface PersistedRegistry {
+  readonly activeRecords: readonly SocketExceptionRecord[]
+  readonly staleRecords: readonly SocketExceptionRecord[]
+  readonly newStubIds: readonly string[]
+}
+
+/** Reconciles `alerts` against `existing` records and writes the result back to `registryPath` -- the one place this check ever mutates the consumer's own tree. */
+async function reconcileAndPersistRegistry(
+  registryPath: string,
+  existing: readonly SocketExceptionRecord[],
+  alerts: readonly NormalizedSocketAlert[],
+): Promise<
+  | { readonly ok: true; readonly registry: PersistedRegistry }
+  | { readonly ok: false; readonly rationale: string }
+> {
+  const reconciled = reconcileExceptions<NormalizedSocketAlert, SocketExceptionRecord>({
+    existing,
+    findings: alerts,
+    deriveId: (alert) => alert.id,
+    createStub: createSocketStub,
+  })
+  if (!reconciled.ok) {
+    return {
+      ok: false,
+      rationale: `${REGISTRY_RELATIVE_PATH} could not be reconciled: ${reconciled.error}`,
+    }
+  }
+  const { activeRecords, staleRecords, newStubIds } = reconciled.reconciliation
+
+  try {
+    await mkdir(path.dirname(registryPath), { recursive: true })
+    const write = await writeExceptionRegistry({
+      path: registryPath,
+      records: asFlatExceptionRecords([...activeRecords, ...staleRecords]),
+    })
+    if (!write.ok) {
+      return { ok: false, rationale: `Writing ${REGISTRY_RELATIVE_PATH} failed: ${write.error}` }
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      rationale: `Could not write ${REGISTRY_RELATIVE_PATH}: ${(error as Error).message}`,
+    }
+  }
+
+  return { ok: true, registry: { activeRecords, staleRecords, newStubIds } }
+}
+
+/** The final pass/fail composition, once every alert has a reconciled (possibly freshly-scaffolded) record to evaluate against. */
+function evaluateFinalVerdict(
+  alerts: readonly NormalizedSocketAlert[],
+  registry: PersistedRegistry,
+): PolicyResult {
+  const configErrors = validateExceptionPolicyConfig(SOCKET_POLICY, VALID_SOCKET_REQUIREMENTS)
+  if (configErrors.length > 0) {
+    return {
+      outcome: "fail",
+      rationale: ["SOCKET_POLICY is misconfigured:", ...configErrors.map((e) => `- ${e}`)].join(
+        "\n",
+      ),
+    }
+  }
+
+  const activeById = new Map(registry.activeRecords.map((r) => [r.id, r]))
+  const staleLines = registry.staleRecords.map(
+    (record) =>
+      `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- Socket no longer raises this alert; delete this entry.`,
+  )
+  const determinants = alerts.map((alert) => ({
+    alert,
+    ...evaluateAlert(alert, activeById.get(alert.id)),
+  }))
+  const offenders = determinants.filter((d) => d.verdict !== "permitted")
+
+  if (offenders.length === 0 && staleLines.length === 0) {
+    const suffix =
+      registry.newStubIds.length > 0
+        ? ` (${String(registry.newStubIds.length)} new record(s) scaffolded blank in ${REGISTRY_RELATIVE_PATH})`
+        : ""
+    return {
+      outcome: "pass",
+      rationale: `${String(alerts.length)} Socket alert(s) evaluated: all permitted by a complete exception record.${suffix}`,
+    }
+  }
+
+  const offenderLines = offenders.map((d) => {
+    const detail =
+      d.verdict === "forbidden"
+        ? "forbidden by policy (above medium severity)"
+        : d.verdict === "unmatched"
+          ? "no reconciled exception record (registry integrity failure)"
+          : `exception incomplete (missing: ${d.missing.join(", ")})`
+    return `- ${d.alert.id} [${d.alert.severity}]: ${detail}`
+  })
+
+  return {
+    outcome: "fail",
+    rationale: [
+      `${String(offenders.length + registry.staleRecords.length)} Socket alert(s) or stale record(s) need attention:`,
+      ...offenderLines,
+      ...staleLines,
+    ].join("\n"),
+  }
+}
+
 export function securitySocket(): CheckDefinitionConfig {
   return {
     run: ["socket", "ci", "--json", "--no-banner", "--no-spinner"],
     policy: async ({ result }): Promise<PolicyResult> => {
-      if (result.status === "spawn_error" && result.spawnErrorCode === "ENOENT") {
-        return {
-          outcome: "warn",
-          rationale:
-            "security-socket did not run (cli-not-installed) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
-        }
-      }
-      const terminated = abnormalTermination(result, "socket")
-      if (terminated) return { outcome: "fail", rationale: terminated }
-
       const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
       const loaded = await loadExceptionRegistry({ path: registryPath, schema: registrySchema })
 
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(result.stdout.trim())
-      } catch {
-        parsed = undefined
-      }
-
-      if (isAuthError(parsed)) {
-        const note = loaded.ok
-          ? loaded.records.length > 0
-            ? ` ${String(loaded.records.length)} exception record(s) in ${REGISTRY_RELATIVE_PATH} were validated but not reconciled (the CLI produced no alert list this run).`
-            : ""
-          : ""
-        return {
-          outcome: "warn",
-          rationale: `security-socket did not run (not-authenticated) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.${note}`,
-        }
-      }
-      if (isNetworkUnreachable(result.stderr, parsed)) {
-        return {
-          outcome: "warn",
-          rationale:
-            "security-socket did not run (network-unreachable) -- alerts were not evaluated.",
-        }
-      }
-      if (parsed === undefined) {
-        return {
-          outcome: "fail",
-          rationale: `\`socket ci --json\` produced no parseable JSON output (exit code ${String(result.exitCode)}).`,
-        }
-      }
-      if (!isPlainObject(parsed) || typeof parsed["ok"] !== "boolean") {
-        return {
-          outcome: "fail",
-          rationale: '`socket ci --json` produced JSON with no recognized "ok" boolean field.',
-        }
-      }
-      if (!parsed["ok"]) {
-        const message = parsed["message"]
-        const detail =
-          typeof message === "string" ? message : "socket ci reported an unrecognized failure."
-        return { outcome: "fail", rationale: `security-socket scan failed: ${detail}` }
-      }
-
-      const data = parsed["data"]
-      const rawAlerts = (isPlainObject(data) ? data["alerts"] : undefined) ?? parsed["alerts"] ?? []
-      if (!Array.isArray(rawAlerts)) {
-        return {
-          outcome: "fail",
-          rationale: '`socket ci --json` reported `ok: true` with a non-array "alerts" field.',
-        }
-      }
-      const normalized = rawAlerts.map((raw) => normalizeAlert(raw))
-      const malformedIndex = normalized.findIndex((alert) => alert === undefined)
-      if (malformedIndex !== -1) {
-        return {
-          outcome: "fail",
-          rationale: `\`socket ci --json\` reported an alert entry (index ${String(malformedIndex)}) missing a required field (package/version/type).`,
-        }
-      }
-      const alerts = normalized as NormalizedSocketAlert[]
+      const run = interpretSocketRun(result, loaded.ok ? loaded.records.length : 0)
+      if (run.kind !== "ok") return { outcome: run.kind, rationale: run.rationale }
 
       if (!loaded.ok) {
         return {
@@ -467,89 +647,10 @@ export function securitySocket(): CheckDefinitionConfig {
         }
       }
 
-      const reconciled = reconcileExceptions<NormalizedSocketAlert, SocketExceptionRecord>({
-        existing: loaded.records,
-        findings: alerts,
-        deriveId: (alert) => alert.id,
-        createStub: createSocketStub,
-      })
-      if (!reconciled.ok) {
-        return {
-          outcome: "fail",
-          rationale: `${REGISTRY_RELATIVE_PATH} could not be reconciled: ${reconciled.error}`,
-        }
-      }
-      const { activeRecords, staleRecords, newStubIds } = reconciled.reconciliation
+      const persisted = await reconcileAndPersistRegistry(registryPath, loaded.records, run.alerts)
+      if (!persisted.ok) return { outcome: "fail", rationale: persisted.rationale }
 
-      try {
-        await mkdir(path.dirname(registryPath), { recursive: true })
-        const write = await writeExceptionRegistry({
-          path: registryPath,
-          records: asFlatExceptionRecords([...activeRecords, ...staleRecords]),
-        })
-        if (!write.ok) {
-          return {
-            outcome: "fail",
-            rationale: `Writing ${REGISTRY_RELATIVE_PATH} failed: ${write.error}`,
-          }
-        }
-      } catch (error) {
-        return {
-          outcome: "fail",
-          rationale: `Could not write ${REGISTRY_RELATIVE_PATH}: ${(error as Error).message}`,
-        }
-      }
-
-      const configErrors = validateExceptionPolicyConfig(SOCKET_POLICY, VALID_SOCKET_REQUIREMENTS)
-      if (configErrors.length > 0) {
-        return {
-          outcome: "fail",
-          rationale: ["SOCKET_POLICY is misconfigured:", ...configErrors.map((e) => `- ${e}`)].join(
-            "\n",
-          ),
-        }
-      }
-
-      const activeById = new Map(activeRecords.map((r) => [r.id, r]))
-      const staleLines = staleRecords.map(
-        (record) =>
-          `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- Socket no longer raises this alert; delete this entry.`,
-      )
-      const determinants = alerts.map((alert) => ({
-        alert,
-        ...evaluateAlert(alert, activeById.get(alert.id)),
-      }))
-      const offenders = determinants.filter((d) => d.verdict !== "permitted")
-
-      if (offenders.length === 0 && staleLines.length === 0) {
-        const suffix =
-          newStubIds.length > 0
-            ? ` (${String(newStubIds.length)} new record(s) scaffolded blank in ${REGISTRY_RELATIVE_PATH})`
-            : ""
-        return {
-          outcome: alerts.length === 0 ? "pass" : "pass",
-          rationale: `${String(alerts.length)} Socket alert(s) evaluated: all permitted by a complete exception record.${suffix}`,
-        }
-      }
-
-      const offenderLines = offenders.map((d) => {
-        const detail =
-          d.verdict === "forbidden"
-            ? "forbidden by policy (above medium severity)"
-            : d.verdict === "unmatched"
-              ? "no reconciled exception record (registry integrity failure)"
-              : `exception incomplete (missing: ${d.missing.join(", ")})`
-        return `- ${d.alert.id} [${d.alert.severity}]: ${detail}`
-      })
-
-      return {
-        outcome: "fail",
-        rationale: [
-          `${String(offenders.length + staleRecords.length)} Socket alert(s) or stale record(s) need attention:`,
-          ...offenderLines,
-          ...staleLines,
-        ].join("\n"),
-      }
+      return evaluateFinalVerdict(run.alerts, persisted.registry)
     },
   }
 }
