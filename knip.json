@@ -19,6 +19,7 @@
     "@commitlint/config-conventional",
     "@danibram/crap4ts",
     "@secretlint/secretlint-rule-preset-recommend",
+    "@socketsecurity/cli",
     "github-actionlint",
     "jscpd",
     "licensee",

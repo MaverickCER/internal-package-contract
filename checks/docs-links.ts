@@ -23,7 +23,7 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
+import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const docsLinksScript = path.join(packageRoot, "scripts", "check-docs-links.mjs")
 
@@ -49,19 +49,14 @@ export const docsLinks: CheckDefinitionConfig = {
       return { outcome: "pass", rationale: "Docs (links): no README.md or docs/index.html." }
     }
 
-    const terminated = abnormalTermination(result, "linkinator")
-    if (terminated) return { outcome: "fail", rationale: terminated }
+    const envelope = parseToolEnvelope<ToolResult<LinkinatorReport>>(
+      result,
+      "linkinator",
+      "Docs (links): linkinator",
+    )
+    if (!envelope.ok) return envelope.result
 
-    const parsed: unknown = result.output?.success ? result.output.value : undefined
-    if (!parsed || typeof parsed !== "object" || !("ok" in parsed)) {
-      const printed = combinedOutput(result)
-      return {
-        outcome: "fail",
-        rationale: `Docs (links): linkinator output could not be parsed as JSON.${printed ? `\n${printed}` : ""}`,
-      }
-    }
-
-    const evidence = parsed as ToolResult<LinkinatorReport>
+    const evidence = envelope.value
     if (!evidence.ok) {
       return {
         outcome: "fail",

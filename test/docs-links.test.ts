@@ -17,10 +17,18 @@ afterEach(() => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
+/** The scan script's own combined-crawl envelope (see scripts/check-docs-links.mjs) -- `docsLinks.policy` reads `{ ok: true, value: { links } }`, never a bare `{ links }`. */
+function makeLinksResult(links: readonly Record<string, unknown>[]) {
+  return makeJsonResult({ ok: true, value: { links } })
+}
+
 describe("docsLinks", () => {
-  it("passes when there is no README.md", async () => {
+  it("passes when there is no README.md and no docs/index.html", async () => {
     const result = await docsLinks.policy(makeContext(makeResult()))
-    expect(result).toEqual({ outcome: "pass", rationale: "Docs (links): no README.md." })
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Docs (links): no README.md or docs/index.html.",
+    })
   })
 
   it("fails when linkinator terminated abnormally", async () => {
@@ -29,7 +37,7 @@ describe("docsLinks", () => {
     expect(result.outcome).toBe("fail")
   })
 
-  it("fails, appending printed output, when linkinator output could not be parsed as JSON", async () => {
+  it("fails, appending printed output, when the scan script's own output could not be parsed as JSON", async () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
@@ -46,10 +54,21 @@ describe("docsLinks", () => {
     })
   })
 
+  it("fails when the scan script itself reported ok: false", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    const result = await docsLinks.policy(
+      makeContext(makeJsonResult({ ok: false, error: "linkinator is not installed" })),
+    )
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "Docs (links): linkinator could not be evaluated: linkinator is not installed",
+    })
+  })
+
   it("passes with 0 broken links, with the exact stock rationale and no external note", async () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
-      makeContext(makeJsonResult({ links: [{ url: "./a.md", state: "OK" }] })),
+      makeContext(makeLinksResult([{ url: "./a.md", state: "OK" }])),
     )
     expect(result).toEqual({
       outcome: "pass",
@@ -61,9 +80,7 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [{ url: "#section", state: "BROKEN", status: 404, parent: "README.md" }],
-        }),
+        makeLinksResult([{ url: "#section", state: "BROKEN", status: 404, parent: "README.md" }]),
       ),
     )
     expect(result.outcome).toBe("fail")
@@ -74,9 +91,7 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [{ url: "http://example.com/gone", state: "BROKEN", status: 404 }],
-        }),
+        makeLinksResult([{ url: "http://example.com/gone", state: "BROKEN", status: 404 }]),
       ),
     )
     expect(result.outcome).toBe("warn")
@@ -86,16 +101,14 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [
-            {
-              url: "./redirect?to=https://example.com",
-              state: "BROKEN",
-              status: 404,
-              parent: "README.md",
-            },
-          ],
-        }),
+        makeLinksResult([
+          {
+            url: "./redirect?to=https://example.com",
+            state: "BROKEN",
+            status: 404,
+            parent: "README.md",
+          },
+        ]),
       ),
     )
     expect(result.outcome).toBe("fail")
@@ -107,9 +120,7 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "guide.md"), "# guide")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [{ url: "./guide.md#a-long-section-name", state: "BROKEN", status: 404 }],
-        }),
+        makeLinksResult([{ url: "./guide.md#a-long-section-name", state: "BROKEN", status: 404 }]),
       ),
     )
     expect(result.outcome).toBe("pass")
@@ -119,12 +130,10 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [
-            { url: "./missing.md", state: "BROKEN", status: 404, parent: "README.md" },
-            { url: "https://example.com/gone", state: "BROKEN", status: 404 },
-          ],
-        }),
+        makeLinksResult([
+          { url: "./missing.md", state: "BROKEN", status: 404, parent: "README.md" },
+          { url: "https://example.com/gone", state: "BROKEN", status: 404 },
+        ]),
       ),
     )
     expect(result).toEqual({
@@ -140,7 +149,7 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     mkdirSync(path.join(cwd, "specs"), { recursive: true })
     const result = await docsLinks.policy(
-      makeContext(makeJsonResult({ links: [{ url: "./specs", state: "BROKEN", status: 404 }] })),
+      makeContext(makeLinksResult([{ url: "./specs", state: "BROKEN", status: 404 }])),
     )
     expect(result.outcome).toBe("pass")
   })
@@ -149,9 +158,7 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [{ url: "https://example.com/gone", state: "BROKEN", status: 404 }],
-        }),
+        makeLinksResult([{ url: "https://example.com/gone", state: "BROKEN", status: 404 }]),
       ),
     )
     expect(result).toEqual({
@@ -165,18 +172,18 @@ describe("docsLinks", () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(
       makeContext(
-        makeJsonResult({
-          links: [{ url: "./missing.md", state: "BROKEN", status: 404, parent: "README.md" }],
-        }),
+        makeLinksResult([
+          { url: "./missing.md", state: "BROKEN", status: 404, parent: "README.md" },
+        ]),
       ),
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("./missing.md (from README.md) -- HTTP 404")
   })
 
-  it("fails when linkinator produced invalid JSON (no links array)", async () => {
+  it("fails when the scan script reported ok: true with no links array", async () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
-    const result = await docsLinks.policy(makeContext(makeJsonResult({ notLinks: [] })))
+    const result = await docsLinks.policy(makeContext(makeJsonResult({ ok: true, value: {} })))
     expect(result).toEqual({
       outcome: "fail",
       rationale: "Docs (links): linkinator produced invalid JSON.",

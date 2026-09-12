@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { CheckEvidence } from "repo-contract"
+import type { CheckEvidence, PolicyResult } from "repo-contract"
 
 /** This package's own root, from `checks/shared.ts` -> `..`. */
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -68,4 +68,38 @@ export function hasScript(name: string): boolean {
 /** First existing path (relative to `process.cwd()`) from `candidates`, or `undefined`. */
 export function firstExisting(candidates: readonly string[]): string | undefined {
   return candidates.find((candidate) => existsSync(path.join(process.cwd(), candidate)))
+}
+
+/**
+ * Interprets a check's raw evidence as a `{ ok: boolean, ... }`-shaped JSON envelope emitted by
+ * its own small wrapper script (`docsLinks`'s and `docsFragments`'s shared shape) -- fails closed
+ * on abnormal termination or unparseable output before the caller ever sees a value, so both
+ * checks' own `policy` reduces to interpreting an already-well-formed envelope.
+ * @param result - the check's raw execution evidence.
+ * @param tool - the underlying tool name, for `abnormalTermination`'s own "is it installed?" rationale.
+ * @param rationalePrefix - everything before "output could not be parsed as JSON." in the unparseable-output rationale (e.g. `"Docs (links): linkinator"` or `"Docs (fragments):"`).
+ * @returns the parsed envelope, or the `fail` `PolicyResult` the caller should return verbatim.
+ */
+export function parseToolEnvelope<T extends { readonly ok: boolean }>(
+  result: CheckEvidence,
+  tool: string,
+  rationalePrefix: string,
+):
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: PolicyResult } {
+  const terminated = abnormalTermination(result, tool)
+  if (terminated) return { ok: false, result: { outcome: "fail", rationale: terminated } }
+
+  const parsed: unknown = result.output?.success ? result.output.value : undefined
+  if (!parsed || typeof parsed !== "object" || !("ok" in parsed)) {
+    const printed = combinedOutput(result)
+    return {
+      ok: false,
+      result: {
+        outcome: "fail",
+        rationale: `${rationalePrefix} output could not be parsed as JSON.${printed ? `\n${printed}` : ""}`,
+      },
+    }
+  }
+
+  return { ok: true, value: parsed as T }
 }
