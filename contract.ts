@@ -62,6 +62,7 @@ import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
 import { npmScriptCheck } from "./checks/npm-script.js"
+import { presetCommands } from "./checks/preset-commands.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
@@ -130,6 +131,7 @@ export default defineRepoContract({
     SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
     Commits: commits(),
+    PresetCommands: presetCommands,
     Mutation: { ...mutation(), isolated: true },
   },
 })

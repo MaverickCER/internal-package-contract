@@ -26,13 +26,17 @@ const CONFIG_CANDIDATES = [
 export function docsMarkdown(): CheckDefinitionConfig {
   const config = resolveConfig(CONFIG_CANDIDATES, "markdownlint.jsonc")
   // A consumer config drives its own globs; the bundled config has none, so pass
-  // explicit safe globs when falling back.
-  const run = config.isBundled
-    ? ["markdownlint-cli2", "--config", config.path, "*.md", "docs/**/*.md"]
-    : ["markdownlint-cli2", "*.md", "docs/**/*.md"]
-
+  // explicit safe globs when falling back. One array literal with the `--config` pair spread in
+  // the middle (not a `config.isBundled ? [...] : [...]` ternary between two full arrays, and not
+  // a `const run = ...; return { run, ... }` shorthand) so the command itself stays a statically-
+  // literal first element the preset-commands scan (checks/preset-commands.ts) can see.
   return {
-    run,
+    run: [
+      "markdownlint-cli2",
+      ...(config.isBundled ? ["--config", config.path] : []),
+      "*.md",
+      "docs/**/*.md",
+    ],
     policy: ({ result }): PolicyResult => {
       const terminated = abnormalTermination(result, "markdownlint-cli2")
       if (terminated) return { outcome: "fail", rationale: terminated }

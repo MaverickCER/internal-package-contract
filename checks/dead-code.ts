@@ -28,7 +28,16 @@ export function deadCode(
   const preset = deadCodePreset(options)
   const config = resolveConfig(CONFIG_CANDIDATES, "knip.json")
 
-  return config.isBundled
-    ? { ...preset, run: [...(preset.run as string[]), "--config", config.path] }
-    : preset
+  // `knip` hoisted out as a literal first element (rather than spreading `preset.run` at
+  // position 0) so the preset-commands scan (checks/preset-commands.ts) sees a
+  // statically-resolvable command; `preset.run`'s own remaining elements still come through
+  // dynamically via `.slice(1)`.
+  return {
+    ...preset,
+    run: [
+      "knip",
+      ...(preset.run as string[]).slice(1),
+      ...(config.isBundled ? ["--config", config.path] : []),
+    ],
+  }
 }

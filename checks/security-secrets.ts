@@ -29,15 +29,20 @@ export function securitySecrets(): CheckDefinitionConfig {
 
   // presetRun ends with the "**/*" positional; insert flags before it.
   const positional = presetRun.at(-1)
-  const head = presetRun.slice(0, -1)
+  // `secretlint` hoisted out as a literal first element (rather than spreading `head`, which
+  // starts with it, at position 0) so the preset-commands scan (checks/preset-commands.ts) sees a
+  // statically-resolvable command; `head`'s own remaining elements still come through dynamically.
+  const head = presetRun.slice(1, -1)
 
-  const run = [
-    ...head,
-    "--secretlintignore",
-    bundledConfig("secretlintignore"),
-    ...(rc.isBundled ? ["--secretlintrc", rc.path] : []),
-    ...(positional ? [positional] : []),
-  ]
-
-  return { ...securitySecretsPreset, run }
+  return {
+    ...securitySecretsPreset,
+    run: [
+      "secretlint",
+      ...head,
+      "--secretlintignore",
+      bundledConfig("secretlintignore"),
+      ...(rc.isBundled ? ["--secretlintrc", rc.path] : []),
+      ...(positional ? [positional] : []),
+    ],
+  }
 }

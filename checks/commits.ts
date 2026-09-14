@@ -49,13 +49,17 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
   const preset = commitlintPreset({ from })
   const presetPolicy = preset.policy
 
-  const run = config.isBundled
-    ? [...(preset.run as string[]), "--config", config.path]
-    : (preset.run as string[])
-
+  // `commitlint` hoisted out as a literal first element (rather than spreading
+  // `preset.run` at position 0) so the preset-commands scan (checks/preset-commands.ts) sees a
+  // statically-resolvable command; `preset.run`'s own remaining elements (`--from`/`--to` and
+  // their values) still come through dynamically via `.slice(1)`.
   return {
     ...preset,
-    run,
+    run: [
+      "commitlint",
+      ...(preset.run as string[]).slice(1),
+      ...(config.isBundled ? ["--config", config.path] : []),
+    ],
     policy: (ctx): PolicyResult | Promise<PolicyResult> => {
       const printed = combinedOutput(ctx.result)
       if (
