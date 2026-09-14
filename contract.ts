@@ -24,8 +24,17 @@
  *     `IPC_MUTATION=1` (it is minutes-to-tens-of-minutes on a large `src/`).
  *
  * Not cloned (encode repo-contract's own design, not a general standard):
- * `suppression-governance`, `api-contract`, `security-network`, `adr-governance`,
- * and the `test-unit/integration/property/e2e` split.
+ * `api-contract`, `security-network`, `adr-governance`, and the
+ * `test-unit/integration/property/e2e` split.
+ *
+ * `suppression-governance` *was* on that list until it wasn't, for the same reason
+ * `accessibility` moved off it: a real gap worth closing generically, not a
+ * repo-contract-specific design choice. Every `eslint-disable`/`@ts-expect-error`/
+ * `Stryker disable` comment in *any* consumer now needs a justified,
+ * `.repo-contract/exceptions/suppressions.json` registry entry -- see
+ * `checks/suppression-governance.ts` and its own `scripts/check-suppressions.mjs`
+ * (ported from repo-contract's own scanner, pure logic with no repo-contract-specific
+ * dependencies).
  *
  * `accessibility` *was* on that list until it wasn't: repo-contract's own
  * `docs/index.html` website rebuild (and the matching one for env-cap/
@@ -56,6 +65,7 @@ import { npmScriptCheck } from "./checks/npm-script.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
+import { suppressionGovernance } from "./checks/suppression-governance.js"
 import { tests } from "./checks/tests.js"
 
 export default defineRepoContract({
@@ -71,6 +81,10 @@ export default defineRepoContract({
   checks: {
     // -- Writers --
     ApiDocs: npmScriptCheck({ script: "docs:api", label: "API docs" }),
+    // Reconciles `.repo-contract/exceptions/suppressions.json` as a side effect of running --
+    // same writer-phase placement as repo-contract's own `suppression-governance` (a reader
+    // that concurrently scanned/lint the same files must never race that write).
+    SuppressionGovernance: suppressionGovernance,
     Lint: lint(),
     Format: { ...format, run: ["prettier", "--check", "."] },
     Schema: npmScriptCheck({ script: "schema", label: "Schema", mustNotChange: ["schemas"] }),
