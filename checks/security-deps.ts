@@ -30,16 +30,15 @@ import type {
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
 } from "repo-contract/helpers"
-import { loadExceptionRegistry, validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  buildRegistrySchema,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
-  reconcileAndPersistExceptionRegistry,
-  validateExceptionRegistry,
+  reconcileRegistry,
+  summarizeReconciliation,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
 import type { ExceptionRegistrySchema, ExceptionMethod, ExceptionType } from "./exception-record.js"
@@ -182,18 +181,7 @@ function evaluateFinding(
   )
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly SecurityDepsExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SECURITY_DEPS_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = buildRegistrySchema(SECURITY_DEPS_EXCEPTION_SCHEMA)
 
 /** Normalizes `npm audit --json`'s own `vulnerabilities` object into one finding per package. */
 function normalizeFindings(report: NpmAuditReport): readonly NormalizedDepFinding[] {
@@ -238,79 +226,27 @@ export function securityDeps(): CheckDefinitionConfig {
       const findings = normalizeFindings(parsed as NpmAuditReport)
 
       const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
-      const loaded = await loadExceptionRegistry({ path: registryPath, schema: registrySchema })
-      if (!loaded.ok) {
-        return {
-          outcome: "fail",
-          rationale: [
-            `${REGISTRY_RELATIVE_PATH} failed to load and was left unchanged:`,
-            ...loaded.errors.map((e) => `- ${e}`),
-          ].join("\n"),
-        }
-      }
-
-      const persisted = await reconcileAndPersistExceptionRegistry(
+      const reconciled = await reconcileRegistry(
         registryPath,
         REGISTRY_RELATIVE_PATH,
-        loaded.records,
+        registrySchema,
         findings,
         createSecurityDepsStub,
-      )
-      if (!persisted.ok) return { outcome: "fail", rationale: persisted.rationale }
-      const { activeRecords, staleRecords, newStubIds } = persisted.registry
-
-      const configErrors = validateExceptionPolicyConfig(
+        "SECURITY_DEPS_POLICY",
         SECURITY_DEPS_POLICY,
         VALID_SECURITY_DEPS_REQUIREMENTS,
       )
-      if (configErrors.length > 0) {
-        return {
-          outcome: "fail",
-          rationale: [
-            "SECURITY_DEPS_POLICY is misconfigured:",
-            ...configErrors.map((e) => `- ${e}`),
-          ].join("\n"),
-        }
-      }
+      if (!reconciled.ok) return reconciled.result
 
-      const activeById = new Map(activeRecords.map((r) => [r.id, r]))
-      const staleLines = staleRecords.map(
-        (record) =>
-          `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- npm audit no longer reports this vulnerability; delete this entry.`,
+      return summarizeReconciliation(
+        findings,
+        reconciled.registry,
+        REGISTRY_RELATIVE_PATH,
+        "npm audit finding(s)",
+        evaluateFinding,
+        (finding) => `${finding.id} [${finding.severity}]`,
+        () => "npm audit no longer reports this vulnerability; delete this entry.",
       )
-      const determinants = findings.map((finding) => ({
-        finding,
-        ...evaluateFinding(finding, activeById.get(finding.id)),
-      }))
-      const offenders = determinants.filter((d) => d.verdict !== "permitted")
-
-      if (offenders.length === 0 && staleLines.length === 0) {
-        const suffix =
-          newStubIds.length > 0
-            ? ` (${String(newStubIds.length)} new record(s) scaffolded blank in ${REGISTRY_RELATIVE_PATH})`
-            : ""
-        return {
-          outcome: "pass",
-          rationale: `${String(findings.length)} npm audit finding(s) evaluated: all permitted by a complete exception record.${suffix}`,
-        }
-      }
-
-      const offenderLines = offenders.map((d) => {
-        const detail =
-          d.verdict === "unmatched"
-            ? "no reconciled exception record (registry integrity failure)"
-            : `exception incomplete (missing: ${d.missing.join(", ")})`
-        return `- ${d.finding.id} [${d.finding.severity}]: ${detail}`
-      })
-
-      return {
-        outcome: "fail",
-        rationale: [
-          `${String(offenders.length + staleRecords.length)} npm audit finding(s) or stale record(s) need attention:`,
-          ...offenderLines,
-          ...staleLines,
-        ].join("\n"),
-      }
     },
   }
 }

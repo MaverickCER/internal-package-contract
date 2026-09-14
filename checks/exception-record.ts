@@ -17,13 +17,17 @@ import {
   reconcileExceptions,
   writeExceptionRegistry,
   evaluateExceptionRecord,
+  loadExceptionRegistry,
+  validateExceptionPolicyConfig,
 } from "repo-contract/helpers"
 import type {
   ExceptionClassification,
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
+  StandardSchemaV1,
 } from "repo-contract/helpers"
+import type { PolicyResult } from "repo-contract"
 
 /**
  * A per-registry validator plugged into {@link validateExceptionRegistry} -- it owns everything
@@ -390,4 +394,207 @@ export async function reconcileAndPersistExceptionRegistry<
   }
 
   return { ok: true, registry: { activeRecords, staleRecords, newStubIds } }
+}
+
+/**
+ * Builds the `StandardSchemaV1` wrapper `loadExceptionRegistry` (`repo-contract/helpers`) expects
+ * -- identical boilerplate every registry-model check in this package (`SecurityDeps`,
+ * `SecuritySocket`, `SuppressionGovernance`) previously re-wrote around its own
+ * `validateExceptionRegistry` call.
+ * @param schema - The check's own per-registry schema.
+ */
+export function buildRegistrySchema<TRecord extends { readonly id: string }>(
+  schema: ExceptionRegistrySchema<TRecord>,
+): StandardSchemaV1<unknown, readonly TRecord[]> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "internal-package-contract",
+      validate: (value: unknown) => {
+        const result = validateExceptionRegistry(value, schema)
+        return result.ok
+          ? { value: result.records }
+          : { issues: result.errors.map((message) => ({ message })) }
+      },
+    },
+  }
+}
+
+/** The `PolicyResult` every registry-model check returns when `loadExceptionRegistry` itself fails -- identical formatting each previously re-wrote around its own `REGISTRY_RELATIVE_PATH`. */
+export function formatRegistryLoadFailure(
+  registryRelativePath: string,
+  errors: readonly string[],
+): PolicyResult {
+  return {
+    outcome: "fail",
+    rationale: [
+      `${registryRelativePath} failed to load and was left unchanged:`,
+      ...errors.map((e) => `- ${e}`),
+    ].join("\n"),
+  }
+}
+
+/**
+ * `loadExceptionRegistry` plus its own immediate failure formatting -- the "load, and bail with a
+ * `PolicyResult` on failure" half of {@link reconcileRegistry}, factored out as its own function
+ * only for readability. `SecuritySocket` cannot call either: it needs the raw (possibly-failed)
+ * load result to compute `run.kind` before deciding whether a load failure even matters yet, so it
+ * still calls `loadExceptionRegistry` (`repo-contract/helpers`) directly.
+ * @param registryPath - The registry's absolute on-disk path.
+ * @param registryRelativePath - The registry's own repo-relative path, for error messages only.
+ * @param schema - The check's own `StandardSchemaV1` (see {@link buildRegistrySchema}).
+ */
+async function loadRegistryOrFail<TRecord extends { readonly id: string }>(
+  registryPath: string,
+  registryRelativePath: string,
+  schema: StandardSchemaV1<unknown, readonly TRecord[]>,
+): Promise<
+  | { readonly ok: true; readonly records: readonly TRecord[] }
+  | { readonly ok: false; readonly result: PolicyResult }
+> {
+  const loaded = await loadExceptionRegistry({ path: registryPath, schema })
+  if (!loaded.ok) {
+    return { ok: false, result: formatRegistryLoadFailure(registryRelativePath, loaded.errors) }
+  }
+  return { ok: true, records: loaded.records }
+}
+
+/**
+ * The full "load the registry, reconcile+persist it against this run's findings, then confirm the
+ * check's own policy config isn't misconfigured" sequence -- every registry-model check that
+ * doesn't need to inspect the raw evidence before deciding (unlike `SecuritySocket`) repeats this
+ * identically apart from its own finding/stub/policy types, so it lives here once rather than
+ * three times.
+ * @param registryPath - The registry's absolute on-disk path.
+ * @param registryRelativePath - The registry's own repo-relative path, for error messages only.
+ * @param schema - The check's own `StandardSchemaV1` (see {@link buildRegistrySchema}).
+ * @param findings - This run's raw findings to reconcile the registry against.
+ * @param createStub - Builds a fresh, blank record for a finding with no matching record yet.
+ * @param policyName - The check's own policy config constant name, for the misconfiguration rationale (e.g. `"SECURITY_DEPS_POLICY"`).
+ * @param policyConfig - The check's own `ExceptionPolicyConfig`.
+ * @param validRequirements - Every field name `policyConfig` may require.
+ */
+export async function reconcileRegistry<
+  TFinding extends { readonly id: string },
+  TRecord extends { readonly id: string },
+>(
+  registryPath: string,
+  registryRelativePath: string,
+  schema: StandardSchemaV1<unknown, readonly TRecord[]>,
+  findings: readonly TFinding[],
+  createStub: (finding: TFinding, id: string) => TRecord,
+  policyName: string,
+  policyConfig: ExceptionPolicyConfig,
+  validRequirements: readonly string[],
+): Promise<
+  | { readonly ok: true; readonly registry: PersistedExceptionRegistry<TRecord> }
+  | { readonly ok: false; readonly result: PolicyResult }
+> {
+  const loaded = await loadRegistryOrFail(registryPath, registryRelativePath, schema)
+  if (!loaded.ok) return loaded
+
+  const persisted = await reconcileAndPersistExceptionRegistry(
+    registryPath,
+    registryRelativePath,
+    loaded.records,
+    findings,
+    createStub,
+  )
+  if (!persisted.ok)
+    return { ok: false, result: { outcome: "fail", rationale: persisted.rationale } }
+
+  const configErrors = validateExceptionPolicyConfig(policyConfig, validRequirements)
+  if (configErrors.length > 0) {
+    return {
+      ok: false,
+      result: {
+        outcome: "fail",
+        rationale: [`${policyName} is misconfigured:`, ...configErrors.map((e) => `- ${e}`)].join(
+          "\n",
+        ),
+      },
+    }
+  }
+
+  return { ok: true, registry: persisted.registry }
+}
+
+/** One finding, evaluated against its reconciled record -- the shape {@link summarizeReconciliation} groups by verdict. */
+interface EvaluatedFinding<TFinding> {
+  readonly finding: TFinding
+  readonly verdict: "forbidden" | "insufficient" | "permitted" | "unmatched"
+  readonly missing: readonly string[]
+}
+
+/**
+ * Builds the final pass/fail `PolicyResult` from a {@link reconcileRegistry} result -- the
+ * "evaluate every finding, report a clean pass or every offender plus every stale record" shape
+ * every registry-model check that evaluates one classification per finding (`SecurityDeps`,
+ * `SuppressionGovernance`) ends on identically, differing only in wording and how one finding
+ * prints as a label.
+ * @param findings - This run's raw findings.
+ * @param registry - The reconciled registry ({@link reconcileRegistry}'s own success value).
+ * @param registryRelativePath - The registry's own repo-relative path, shown in both the scaffold-count suffix and every stale-record line.
+ * @param noun - This check's own finding noun phrase, e.g. `"npm audit finding(s)"` or `"suppression(s)"` -- used in both the pass and fail summary lines.
+ * @param evaluateFinding - Evaluates one finding against its reconciled record (or `undefined`).
+ * @param formatFindingLabel - Renders one finding as the label prefix of its offender line (before `": <detail>"`).
+ * @param staleReason - This check's own explanation for why a stale record's directive/finding is gone (the clause after `" -- "`).
+ */
+export function summarizeReconciliation<
+  TFinding extends { readonly id: string },
+  TRecord extends { readonly id: string },
+>(
+  findings: readonly TFinding[],
+  registry: PersistedExceptionRegistry<TRecord>,
+  registryRelativePath: string,
+  noun: string,
+  evaluateFinding: (
+    finding: TFinding,
+    record: TRecord | undefined,
+  ) => {
+    readonly verdict: EvaluatedFinding<TFinding>["verdict"]
+    readonly missing: readonly string[]
+  },
+  formatFindingLabel: (finding: TFinding) => string,
+  staleReason: (record: TRecord) => string,
+): PolicyResult {
+  const { activeRecords, staleRecords, newStubIds } = registry
+  const activeById = new Map(activeRecords.map((r) => [r.id, r]))
+  const staleLines = staleRecords.map(
+    (record) =>
+      `- Stale exception in ${registryRelativePath}: ${JSON.stringify(record.id)} -- ${staleReason(record)}`,
+  )
+  const determinants: EvaluatedFinding<TFinding>[] = findings.map((finding) => ({
+    finding,
+    ...evaluateFinding(finding, activeById.get(finding.id)),
+  }))
+  const offenders = determinants.filter((d) => d.verdict !== "permitted")
+
+  if (offenders.length === 0 && staleLines.length === 0) {
+    const suffix =
+      newStubIds.length > 0
+        ? ` (${String(newStubIds.length)} new record(s) scaffolded blank in ${registryRelativePath})`
+        : ""
+    return {
+      outcome: "pass",
+      rationale: `${String(findings.length)} ${noun} evaluated: all permitted by a complete exception record.${suffix}`,
+    }
+  }
+
+  const offenderLines = offenders.map((d) => {
+    const detail =
+      d.verdict === "unmatched"
+        ? "no reconciled exception record (registry integrity failure)"
+        : `exception incomplete (missing: ${d.missing.join(", ")})`
+    return `- ${formatFindingLabel(d.finding)}: ${detail}`
+  })
+
+  return {
+    outcome: "fail",
+    rationale: [
+      `${String(offenders.length + staleRecords.length)} ${noun} or stale record(s) need attention:`,
+      ...offenderLines,
+      ...staleLines,
+    ].join("\n"),
+  }
 }

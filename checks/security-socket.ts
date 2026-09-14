@@ -57,17 +57,17 @@ import type {
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
 } from "repo-contract/helpers"
 import { loadExceptionRegistry, validateExceptionPolicyConfig } from "repo-contract/helpers"
 import path from "node:path"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  buildRegistrySchema,
   evaluateFindingVerdict,
+  formatRegistryLoadFailure,
   isValidNonEmptyStringField,
   reconcileAndPersistExceptionRegistry,
-  validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
 import type {
@@ -292,18 +292,7 @@ function evaluateAlert(
   )
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SOCKET_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = buildRegistrySchema(SOCKET_EXCEPTION_SCHEMA)
 
 /** @returns the `SecuritySocket` check. */
 /** The outcome of running and interpreting `socket ci --json` itself, before any registry work. */
@@ -460,13 +449,7 @@ export function securitySocket(): CheckDefinitionConfig {
       if (run.kind !== "ok") return { outcome: run.kind, rationale: run.rationale }
 
       if (!loaded.ok) {
-        return {
-          outcome: "fail",
-          rationale: [
-            `${REGISTRY_RELATIVE_PATH} failed to load and was left unchanged:`,
-            ...loaded.errors.map((e) => `- ${e}`),
-          ].join("\n"),
-        }
+        return formatRegistryLoadFailure(REGISTRY_RELATIVE_PATH, loaded.errors)
       }
 
       const persisted = await reconcileAndPersistExceptionRegistry(
