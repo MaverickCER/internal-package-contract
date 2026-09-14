@@ -31,7 +31,8 @@ npm run contract
 `init` is non-destructive (`--force` to overwrite). It:
 
 - writes `.gitignore`, `.gitattributes`, `.editorconfig`, `.gitmessage`,
-  `.nvmrc`, `.github/workflows/contract.yml` (only the ones you're missing);
+  `.nvmrc`, `.github/workflows/contract.yml`,
+  `.github/workflows/release.yml` (only the ones you're missing);
 - sets `package.json` `scripts.contract`;
 - sets `git config core.hooksPath` → the bundled hooks and
   `commit.template` → `.gitmessage`.
@@ -131,6 +132,23 @@ IPC_MUTATION=1 npx internal-package-contract --checks Mutation
 
 `init` writes [`.github/workflows/contract.yml`](template/contract.yml) — `npm ci`
 then `npm run contract`, with `fetch-depth: 0` so `Commits` has the base branch.
+
+## Release
+
+`init` also writes [`.github/workflows/release.yml`](template/release.yml) — a thin
+caller that invokes this package's own
+[`release-npm-changesets.yml`](.github/workflows/release-npm-changesets.yml) reusable
+workflow (Changesets + npm OIDC trusted publishing, matching every current
+consumer's own `RELEASING.md`). The real logic lives in that one reusable workflow,
+not the caller: a fix or improvement there (a `changesets/action` version bump, a new
+publish flag) reaches every consumer's next push to `main` with zero per-repo edits,
+the same reason checks live in `checks/` rather than each consumer's own config.
+Requires the consumer to already have Changesets set up (`npm run version` /
+`npm run release` scripts, `.changeset/config.json`) and its own npm trusted
+publisher registered on npmjs.com — `init` does not set either of those up. Pass
+`roll-floating-major-tag: false` in the caller's `with:` (see the reusable
+workflow's own input doc comment) for an npm-only consumer with no composite GitHub
+Action to version.
 
 ## Evolving the standard
 
