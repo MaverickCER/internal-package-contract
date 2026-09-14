@@ -2,5 +2,33 @@
 # internal-package-contract managed hook. Medium gate before publishing history --
 # everything except the slow analyses (Coverage, Crap, Mutation), which CI runs.
 # Skip once with `git push --no-verify`.
+#
+# This same hooks/ directory does double duty: `internal-package-contract init`
+# installs it verbatim into a CONSUMER's repo (env-cap, data-cap, ...) via
+# node_modules/internal-package-contract/hooks, *and* this repository's own
+# self-hosting setup points core.hooksPath at this exact copy of itself. The two
+# contexts need different commands: a consumer is validated through
+# bin/contract.mjs, the published CLI, against contract.ts's consumer-facing
+# checks (Build/Packaging/TypeResolution and friends assume a consumer's own
+# `src/` layout and build step). This repository has neither -- flat
+# `checks/`/`bin/`/`scripts/`/`template/`, no build step -- and validates itself
+# instead through scripts/run-contract.mjs against repo-contract.config.ts, this
+# repo's own self-hosting entrypoint (see that file's own doc comment).
+#
+# Detected by whether repo-contract.config.ts sits next to this hooks/ directory:
+# it is part of this repository's own git history but deliberately excluded from
+# package.json's `files` allowlist, so it exists here in a real checkout of this
+# repo but never inside a consumer's installed node_modules copy.
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec node "$DIR/../bin/contract.mjs" --checks Format,Lint,Typecheck,Tests,Build,Packaging,TypeResolution,Architecture,Licenses,SecurityDeps,SecuritySecrets,DeadCode,Duplication,GitHygiene
+if [ -f "$DIR/../repo-contract.config.ts" ]; then
+  # `npm run`, not a bare `node scripts/run-contract.mjs`: repo-contract.config.ts's
+  # own checks (unlike bin/contract.mjs's, which resolve each binary explicitly)
+  # spawn plain command names (`eslint`, `vitest`, ...) that only resolve via PATH,
+  # and only `npm run` -- not a bare `node` invocation, and not a git hook's own
+  # inherited shell PATH -- prepends node_modules/.bin to PATH. Confirmed: a bare
+  # `node scripts/run-contract.mjs` fails every spawned check with ENOENT even
+  # though `npm run contract` (this same command) passes clean.
+  exec npm --prefix "$DIR/.." run contract -- --checks Lint,Format,Typecheck,Tests,Architecture,GithubActions,GitHygiene,Duplication,Licenses,DocsMarkdown,DocsLinks,DocsFragments,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
+else
+  exec node "$DIR/../bin/contract.mjs" --checks Format,Lint,Typecheck,Tests,Build,Packaging,TypeResolution,Architecture,Licenses,SecurityDeps,SecuritySecrets,DeadCode,Duplication,GitHygiene
+fi
