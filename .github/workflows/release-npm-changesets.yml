@@ -1,0 +1,78 @@
+# Reusable release workflow for internal-package-contract consumers using Changesets +
+# npm OIDC trusted publishing. Centralizes the release logic previously duplicated
+# verbatim across every consumer's own .github/workflows/release.yml (env-cap,
+# data-cap, ...) -- see template/release.yml for the thin per-repo caller this
+# expects `internal-package-contract init` to scaffold. A change here (a
+# changesets/action version bump, a new publish flag, ...) reaches every consumer on
+# their next push to main, with zero per-repo edits.
+#
+# `on: workflow_call` (not `workflow_dispatch`/`push`) is what makes this reusable --
+# it has no trigger of its own and only ever runs invoked from a caller's own `uses:`
+# job, per https://docs.github.com/actions/using-workflows/reusing-workflows.
+name: Release (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      roll-floating-major-tag:
+        description: >-
+          Force the floating `v1` git tag forward to the release commit on every
+          successful publish (for a consumer whose README/action.yml documents a
+          `uses: owner/repo@v1`-style floating major tag, e.g. a composite GitHub
+          Action). Defaults to true since every current consumer needs it; a future
+          npm-only consumer with no composite Action should pass false.
+        type: boolean
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # Enables npm's OIDC trusted publishing (GA since July 2025) -- no NPM_TOKEN
+      # secret exists or is needed. npm verifies this exact workflow/repo against a
+      # trusted-publisher registration made once, manually, on npmjs.com (see each
+      # consumer's own RELEASING.md/CONTRIBUTING.md). The caller workflow's own job
+      # must also grant this same permission -- GitHub caps a called workflow's
+      # effective permissions at the intersection of what the caller grants and what
+      # this file declares.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - run: npm ci
+
+      # OIDC trusted publishing requires npm CLI >=11.5.1 and Node >=22.14 -- don't
+      # rely on whatever version happens to be bundled.
+      - run: npm install -g npm@latest
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@ce079ea084e08a340947ed4d6ecedb2433c8f293 # v1
+        with:
+          publish: npm run release
+          version: npm run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Rolls the floating `v1` tag documented in a composite Action's own
+      # README/action.yml example (standard GitHub Actions convention, e.g.
+      # `actions/checkout@v4`) forward to this commit. This versions the composite
+      # Action's own interface (action.yml's inputs/outputs), independent of the npm
+      # package's own pre-1.0 semver -- it only needs to move when action.yml itself
+      # has a breaking change, which every successful publish unconditionally
+      # assumes has not happened (see `roll-floating-major-tag`'s own description
+      # above for the opt-out a future npm-only consumer would use instead).
+      - name: Roll floating v1 Action tag
+        if: steps.changesets.outputs.published == 'true' && inputs.roll-floating-major-tag
+        run: |
+          git tag -f v1
+          git push origin v1 --force
