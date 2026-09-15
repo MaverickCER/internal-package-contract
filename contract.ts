@@ -52,6 +52,7 @@ import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
+import { coderabbitai } from "./checks/coderabbitai.js"
 import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
 import { duplication } from "./checks/duplication.js"
@@ -132,6 +133,7 @@ export default defineRepoContract({
     DeadCode: deadCode(),
     Commits: commits(),
     PresetCommands: presetCommands,
+    Coderabbitai: coderabbitai,
     Mutation: { ...mutation(), isolated: true },
   },
 })
