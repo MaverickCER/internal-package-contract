@@ -1,6 +1,10 @@
 {
-  // Type-checks this package's own authored files (the contract definition and
-  // the exported config baselines). Not part of the published surface -- it is
+  // Type-checks this package's own authored TypeScript files (the contract
+  // definition, its checks, and its own dogfooded repo-contract config).
+  // `eslint.config.mjs`/`prettier.config.mjs` are deliberately plain
+  // JavaScript, not TypeScript -- see either file's own doc comment for why
+  // -- so they aren't included here; `@type` JSDoc comments there provide
+  // editor support instead. Not part of the published surface -- it is
   // excluded from `files` in package.json.
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -13,8 +17,6 @@
   "include": [
     "contract.ts",
     "repo-contract.config.ts",
-    "eslint.config.ts",
-    "prettier.config.ts",
     "vitest.config.ts",
     "checks/**/*.ts",
     "test/**/*.ts"

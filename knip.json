@@ -5,8 +5,8 @@
     "scripts/**/*.mjs!",
     "contract.ts!",
     "repo-contract.config.ts!",
-    "eslint.config.ts!",
-    "prettier.config.ts!",
+    "eslint.config.mjs!",
+    "prettier.config.mjs!",
     "vitest.config.ts!",
     "stryker.config.mjs!",
     ".dependency-cruiser.cjs!"
