@@ -11,8 +11,8 @@
   "exports": {
     ".": "./contract.ts",
     "./contract": "./contract.ts",
-    "./eslint": "./eslint.config.ts",
-    "./prettier": "./prettier.config.ts",
+    "./eslint": "./eslint.config.mjs",
+    "./prettier": "./prettier.config.mjs",
     "./tsconfig": "./tsconfig.json",
     "./config/dependency-cruiser": "./config/dependency-cruiser.cjs",
     "./config/knip": "./config/knip.json",
@@ -30,8 +30,8 @@
     "scripts",
     "template",
     "contract.ts",
-    "eslint.config.ts",
-    "prettier.config.ts",
+    "eslint.config.mjs",
+    "prettier.config.mjs",
     "tsconfig.json"
   ],
   "engines": {
