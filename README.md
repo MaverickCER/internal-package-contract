@@ -45,7 +45,7 @@ npm run contract
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 24 checks
+## The 29 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -57,12 +57,13 @@ Three declaration-order phases (repo-contract ADR 0002):
 
 ### 1 — Writers
 
-| Check     | How                             | Blocks on                                               |
-| --------- | ------------------------------- | ------------------------------------------------------- |
-| `ApiDocs` | `npm run docs:api` \*           | the API-docs build failing                              |
-| `Lint`    | `eslint . --format json`        | any ESLint **error** (warnings warn)                    |
-| `Format`  | `prettier --check .`            | any unformatted file                                    |
-| `Schema`  | `npm run schema` \* + hash diff | the script failing **or** regenerating a committed file |
+| Check                   | How                                      | Blocks on                                                                                   |
+| ----------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `ApiDocs`               | `npm run docs:api` \*                    | the API-docs build failing                                                                  |
+| `SuppressionGovernance` | TS-compiler-scanned suppression comments | any `eslint-disable`/`@ts-expect-error`/`Stryker disable` with no reviewed exception record |
+| `Lint`                  | `eslint . --format json`                 | any ESLint **error** (warnings warn)                                                        |
+| `Format`                | `prettier --check .`                     | any unformatted file                                                                        |
+| `Schema`                | `npm run schema` \* + hash diff          | the script failing **or** regenerating a committed file                                     |
 
 ### 2 — Build barrier
 
@@ -87,19 +88,24 @@ the packaging checks see a fresh `dist/`.
 | `Licenses`        | `licensee --production --osi`                                                     | any shipped dep without an OSI license                                                               |
 | `DocsMarkdown`    | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                         | any markdown issue                                                                                   |
 | `DocsLinks`       | `linkinator` from `README.md`, recursive                                          | any broken **local** link (external rot warns)                                                       |
-| `SecurityDeps`    | `npm audit --omit=dev`                                                            | any low/moderate/high/critical advisory (info warns)                                                 |
+| `DocsFragments`   | heading-fragment resolution across hand-authored Markdown                         | any `#fragment`/`file.md#fragment` link matching no real heading                                     |
+| `Accessibility`   | `pa11y` against `docs/**/*.html`                                                  | any WCAG2AA issue                                                                                    |
+| `SecurityDeps`    | `npm audit --omit=dev` — reviewed exception registry                              | any advisory with no complete, reviewed exception record                                             |
 | `SecuritySecrets` | `secretlint` — bundled `config/secretlint.config.json`                            | any detected secret                                                                                  |
+| `SecuritySocket`  | `socket ci` (Socket.dev) — reviewed exception registry                            | any alert with no complete, reviewed exception record (not installed/authenticated → warn)           |
 | `DeadCode`        | `knip` — bundled `config/knip.json`                                               | any unused file/export/dep, unlisted import                                                          |
 | `Commits`         | `commitlint origin/main..HEAD` — bundled config                                   | any non-Conventional-Commit (no base branch → warn)                                                  |
+| `PresetCommands`  | TS-AST-scanned `run:` properties in `checks/*.ts` — reviewed exception registry   | any spawned command with no reviewed record, or a non-literal `run:` (never registry-waivable)       |
 | `Mutation`        | Stryker vs. `MUTATION_THRESHOLD` (80%), `isolated`                                | score below threshold — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns** |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
 ### Not cloned from `repo-contract.config.ts`
 
-`suppression-governance`, `api-contract`, `security-network`, `adr-governance`,
-`accessibility`, and the `test-unit/integration/property/e2e` split — each
-encodes repo-contract's own design rather than a general package standard.
+`api-contract`, `security-network`, `adr-governance`, and the
+`test-unit/integration/property/e2e` split — each is keyed to repo-contract's
+own `src/`-layout/semver-publishing conventions rather than a general package
+standard.
 
 ## Overriding a bundled config
 

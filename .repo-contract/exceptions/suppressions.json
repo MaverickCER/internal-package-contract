@@ -1,0 +1,15 @@
+{
+  "exceptions": [
+    {
+      "id": "suppression:eslint:@typescript-eslint/no-require-imports:.dependency-cruiser.cjs:15",
+      "version": 1,
+      "justification": "dependency-cruiser only loads a CommonJS config file (no ESM support as of the version this package pins) -- this file must stay `.cjs` and use `require()` to load the bundled baseline it extends, which `no-require-imports` (an ESM-preferring rule) would otherwise flag.",
+      "category": "rule-not-applicable",
+      "domain": "eslint",
+      "file": ".dependency-cruiser.cjs",
+      "line": 15,
+      "rule": ["@typescript-eslint/no-require-imports"],
+      "verificationMethod": "static-reasoning"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "exceptions": [
+    {
+      "id": "preset-command:commitlint",
+      "version": 1,
+      "justification": "Lints commit messages against Conventional Commits (via @commitlint/cli, a real dependency) using only a read-only `git log` range -- never writes to the consumer's repo.",
+      "command": "commitlint"
+    },
+    {
+      "id": "preset-command:crap4ts",
+      "version": 1,
+      "justification": "Reads the merged coverage artifact this package's own Tests/Coverage checks already produced and reports CRAP (complexity x uncovered-risk) per function -- a real dependency, read-only, no network access.",
+      "command": "crap4ts"
+    },
+    {
+      "id": "preset-command:depcruise",
+      "version": 1,
+      "justification": "dependency-cruiser statically analyzes the consumer's own import graph against the bundled/consumer-supplied rule config -- a real dependency, read-only, no network access.",
+      "command": "depcruise"
+    },
+    {
+      "id": "preset-command:github-actionlint",
+      "version": 1,
+      "justification": "Lints the consumer's own .github/workflows/*.yml for correctness/security issues -- a real dependency (github-actionlint), read-only, no network access.",
+      "command": "github-actionlint"
+    },
+    {
+      "id": "preset-command:jscpd",
+      "version": 1,
+      "justification": "jscpd detects copy-pasted code blocks in the consumer's own src/ -- a real dependency, read-only, no network access.",
+      "command": "jscpd"
+    },
+    {
+      "id": "preset-command:knip",
+      "version": 1,
+      "justification": "knip finds unused files/exports/dependencies via static analysis of the consumer's own source and package.json -- a real dependency, read-only (does not modify package.json itself), no network access.",
+      "command": "knip"
+    },
+    {
+      "id": "preset-command:markdownlint-cli2",
+      "version": 1,
+      "justification": "Lints the consumer's own root and docs/ Markdown against the bundled/consumer-supplied rule config -- a real dependency, read-only, no network access.",
+      "command": "markdownlint-cli2"
+    },
+    {
+      "id": "preset-command:node",
+      "version": 1,
+      "justification": "Spawns this package's own bundled scripts/*.mjs (e.g. run-generated.mjs, check-suppressions.mjs) via the Node binary already running the contract itself -- not a third-party tool; every script it can spawn ships in this package's own `files` allowlist and is reviewed as ordinary source, not as an external command.",
+      "command": "node"
+    },
+    {
+      "id": "preset-command:npm",
+      "version": 1,
+      "justification": "Runs one of the consumer's own package.json scripts (npm run <script>) -- npm itself ships with Node, and the script it invokes is the consumer's own, already-reviewed code, not a third-party command this package introduces.",
+      "command": "npm"
+    },
+    {
+      "id": "preset-command:secretlint",
+      "version": 1,
+      "justification": "secretlint scans the consumer's own tracked files for accidentally-committed secrets against the bundled/consumer-supplied rule config -- a real dependency, read-only, no network access.",
+      "command": "secretlint"
+    },
+    {
+      "id": "preset-command:socket",
+      "version": 1,
+      "justification": "Socket.dev's own CLI (@socketsecurity/cli, a real dependency) scans the consumer's dependency tree for supply-chain risk; only runs (and only ever makes network calls) when the consumer has installed and authenticated it themselves -- SecuritySocket's own policy already treats an unauthenticated/not-installed environment as a warn, never a silent skip.",
+      "command": "socket"
+    },
+    {
+      "id": "preset-command:vitest",
+      "version": 1,
+      "justification": "Runs the consumer's own test suite -- a real dependency, the standard way every check in this package (and every consumer) already runs tests; no network access beyond whatever the consumer's own tests themselves make.",
+      "command": "vitest"
+    }
+  ]
+}

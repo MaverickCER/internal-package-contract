@@ -16,7 +16,7 @@
  */
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import type { CheckDefinitionConfig, PolicyContext, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput, hasScript } from "./shared.js"
 
 const runGeneratedScript = path.join(
@@ -62,71 +62,73 @@ export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionC
   const { script, label, whenMissing = "skip", mustNotChange } = options
   const watchesArtifacts = Boolean(mustNotChange && mustNotChange.length > 0)
 
-  const run = watchesArtifacts
-    ? ["node", runGeneratedScript, script, ...(mustNotChange ?? [])]
-    : ["npm", "--loglevel=silent", "run", script]
-
-  return {
-    run,
-    policy: ({ result }): PolicyResult => {
-      if (!hasScript(script)) {
-        return whenMissing === "fail"
-          ? {
-              outcome: "fail",
-              rationale: `${label}: the consumer defines no \`${script}\` npm script. Add one so this can be verified.`,
-            }
-          : {
-              outcome: "pass",
-              rationale: `${label}: no \`${script}\` npm script -- not applicable to this package.`,
-            }
-      }
-
-      const terminated = abnormalTermination(result, `\`npm run ${script}\``)
-      if (terminated) return { outcome: "fail", rationale: terminated }
-
-      if (!watchesArtifacts) {
-        if (result.exitCode !== 0) {
-          const tail = combinedOutput(result).slice(-4000)
-          return {
+  // Two genuinely different commands (`node <wrapper>` vs `npm run <script>`), not one command
+  // with a config tweak -- kept as two full object literals (each with its own inline, statically-
+  // literal `run:` array) rather than a single `run: watchesArtifacts ? [...] : [...]` ternary or a
+  // `const run = ...; return { run, ... }` shorthand, both of which the preset-commands scan
+  // (checks/preset-commands.ts) cannot see through.
+  const policy = ({ result }: PolicyContext): PolicyResult => {
+    if (!hasScript(script)) {
+      return whenMissing === "fail"
+        ? {
             outcome: "fail",
-            rationale: `${label}: \`npm run ${script}\` exited ${String(result.exitCode)}.${tail ? `\n${tail}` : ""}`,
+            rationale: `${label}: the consumer defines no \`${script}\` npm script. Add one so this can be verified.`,
           }
-        }
-        return { outcome: "pass", rationale: `${label}: \`npm run ${script}\` succeeded.` }
-      }
+        : {
+            outcome: "pass",
+            rationale: `${label}: no \`${script}\` npm script -- not applicable to this package.`,
+          }
+    }
 
-      let parsed: GeneratedResult
-      try {
-        const lastLine = result.stdout.trim().split("\n").at(-1) ?? ""
-        parsed = JSON.parse(lastLine) as GeneratedResult
-      } catch {
+    const terminated = abnormalTermination(result, `\`npm run ${script}\``)
+    if (terminated) return { outcome: "fail", rationale: terminated }
+
+    if (!watchesArtifacts) {
+      if (result.exitCode !== 0) {
+        const tail = combinedOutput(result).slice(-4000)
         return {
           outcome: "fail",
-          rationale: `${label}: could not read the regeneration result.\n${combinedOutput(result).slice(-3000)}`,
+          rationale: `${label}: \`npm run ${script}\` exited ${String(result.exitCode)}.${tail ? `\n${tail}` : ""}`,
         }
       }
+      return { outcome: "pass", rationale: `${label}: \`npm run ${script}\` succeeded.` }
+    }
 
-      if (parsed.exitCode !== 0) {
-        return {
-          outcome: "fail",
-          rationale: `${label}: \`npm run ${script}\` exited ${String(parsed.exitCode)}.\n${combinedOutput(result).slice(-3000)}`,
-        }
-      }
-
-      if (parsed.changed.length > 0) {
-        return {
-          outcome: "fail",
-          rationale: [
-            `${label}: \`npm run ${script}\` regenerated ${String(parsed.changed.length)} file(s) -- the committed output is stale. Run it locally and commit:`,
-            ...parsed.changed.map((p) => `- ${p}`),
-          ].join("\n"),
-        }
-      }
-
+    let parsed: GeneratedResult
+    try {
+      const lastLine = result.stdout.trim().split("\n").at(-1) ?? ""
+      parsed = JSON.parse(lastLine) as GeneratedResult
+    } catch {
       return {
-        outcome: "pass",
-        rationale: `${label}: \`npm run ${script}\` succeeded and regenerated nothing.`,
+        outcome: "fail",
+        rationale: `${label}: could not read the regeneration result.\n${combinedOutput(result).slice(-3000)}`,
       }
-    },
+    }
+
+    if (parsed.exitCode !== 0) {
+      return {
+        outcome: "fail",
+        rationale: `${label}: \`npm run ${script}\` exited ${String(parsed.exitCode)}.\n${combinedOutput(result).slice(-3000)}`,
+      }
+    }
+
+    if (parsed.changed.length > 0) {
+      return {
+        outcome: "fail",
+        rationale: [
+          `${label}: \`npm run ${script}\` regenerated ${String(parsed.changed.length)} file(s) -- the committed output is stale. Run it locally and commit:`,
+          ...parsed.changed.map((p) => `- ${p}`),
+        ].join("\n"),
+      }
+    }
+
+    return {
+      outcome: "pass",
+      rationale: `${label}: \`npm run ${script}\` succeeded and regenerated nothing.`,
+    }
   }
+
+  return watchesArtifacts
+    ? { run: ["node", runGeneratedScript, script, ...(mustNotChange ?? [])], policy }
+    : { run: ["npm", "--loglevel=silent", "run", script], policy }
 }

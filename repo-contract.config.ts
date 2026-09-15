@@ -50,6 +50,7 @@ import { format, license, lint, typecheck } from "repo-contract/presets"
 import { architecture } from "./checks/architecture.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
+import { coderabbitai } from "./checks/coderabbitai.js"
 import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
 import { duplication } from "./checks/duplication.js"
@@ -59,9 +60,11 @@ import { docsMarkdown } from "./checks/docs-markdown.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
+import { presetCommands } from "./checks/preset-commands.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
+import { suppressionGovernance } from "./checks/suppression-governance.js"
 import { tests } from "./checks/tests.js"
 
 /** Replaces the scan-path positional (always index 1: `[tool, path, ...flags]`) a `run` array hardcodes, for a check whose default scan target (`"src"`) does not exist in this repository. */
@@ -76,6 +79,9 @@ export default defineRepoContract({
   env: process.env,
   killProcessTree: crossSpawnSync,
   checks: {
+    // Reconciles `.repo-contract/exceptions/suppressions.json` as a side effect of running --
+    // declared first so nothing reads/lints the same files concurrently with that write.
+    SuppressionGovernance: suppressionGovernance,
     Lint: lint(),
     Format: { ...format, run: ["prettier", "--check", "."] },
     Typecheck: { ...typecheck, run: ["tsc", "--noEmit", "-p", "tsconfig.self.json"] },
@@ -152,6 +158,8 @@ export default defineRepoContract({
     SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
     Commits: commits(),
+    PresetCommands: presetCommands,
+    Coderabbitai: coderabbitai,
     Mutation: { ...mutation(), isolated: true },
   },
 })
