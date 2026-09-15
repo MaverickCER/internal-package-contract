@@ -5,3 +5,4 @@ reports/
 .stryker-tmp/
 *.log
 .DS_Store
+.eslintcache

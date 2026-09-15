@@ -45,7 +45,7 @@ npm run contract
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 24 checks
+## The 27 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -71,27 +71,30 @@ the packaging checks see a fresh `dist/`.
 
 ### 3 — Readers (concurrent)
 
-| Check             | How                                                                               | Blocks on                                                                                            |
-| ----------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `Typecheck`       | `tsc --noEmit -p tsconfig.json`                                                   | any type error                                                                                       |
-| `Tests`           | `vitest run` **with** V8 coverage, once                                           | any failing / errored test                                                                           |
-| `Architecture`    | `depcruise src` — bundled `config/dependency-cruiser.cjs`                         | any error-severity violation (circular deps, etc.)                                                   |
-| `GithubActions`   | `actionlint`                                                                      | any workflow finding (no workflows → pass)                                                           |
-| `GitHygiene`      | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files` | a repo-maintenance defect                                                                            |
-| `Coverage`        | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                            | any metric below threshold                                                                           |
-| `Crap`            | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                 | any function over either ceiling                                                                     |
-| `Size`            | `npm run size` \*                                                                 | the consumer's size script failing                                                                   |
-| `Duplication`     | `jscpd src`                                                                       | any copy-pasted block in `src/`                                                                      |
-| `Packaging`       | `publint`                                                                         | any packaging **error** (warnings warn)                                                              |
-| `TypeResolution`  | `attw` on the packed tarball (`./schema` excluded)                                | any packaged type-resolution problem                                                                 |
-| `Licenses`        | `licensee --production --osi`                                                     | any shipped dep without an OSI license                                                               |
-| `DocsMarkdown`    | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                         | any markdown issue                                                                                   |
-| `DocsLinks`       | `linkinator` from `README.md`, recursive                                          | any broken **local** link (external rot warns)                                                       |
-| `SecurityDeps`    | `npm audit --omit=dev`                                                            | any low/moderate/high/critical advisory (info warns)                                                 |
-| `SecuritySecrets` | `secretlint` — bundled `config/secretlint.config.json`                            | any detected secret                                                                                  |
-| `DeadCode`        | `knip` — bundled `config/knip.json`                                               | any unused file/export/dep, unlisted import                                                          |
-| `Commits`         | `commitlint origin/main..HEAD` — bundled config                                   | any non-Conventional-Commit (no base branch → warn)                                                  |
-| `Mutation`        | Stryker vs. `MUTATION_THRESHOLD` (80%), `isolated`                                | score below threshold — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns** |
+| Check             | How                                                                               | Blocks on                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Typecheck`       | `tsc --noEmit -p tsconfig.json`                                                   | any type error                                                                                                          |
+| `Tests`           | `vitest run` **with** V8 coverage, once                                           | any failing / errored test                                                                                              |
+| `Architecture`    | `depcruise src` — bundled `config/dependency-cruiser.cjs`                         | any error-severity violation (circular deps, etc.)                                                                      |
+| `GithubActions`   | `actionlint`                                                                      | any workflow finding (no workflows → pass)                                                                              |
+| `GitHygiene`      | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files` | a repo-maintenance defect                                                                                               |
+| `Coverage`        | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                            | any metric below threshold                                                                                              |
+| `Crap`            | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                 | any function over either ceiling                                                                                        |
+| `Size`            | `npm run size` \*                                                                 | the consumer's size script failing                                                                                      |
+| `Duplication`     | `jscpd src`                                                                       | any copy-pasted block in `src/`                                                                                         |
+| `Packaging`       | `publint`                                                                         | any packaging **error** (warnings warn)                                                                                 |
+| `TypeResolution`  | `attw` on the packed tarball (`./schema` excluded)                                | any packaged type-resolution problem                                                                                    |
+| `Licenses`        | `licensee --production --osi`                                                     | any shipped dep without an OSI license                                                                                  |
+| `DocsMarkdown`    | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                         | any markdown issue                                                                                                      |
+| `DocsLinks`       | `linkinator` from `README.md`, recursive                                          | any broken **local** link (external rot warns)                                                                          |
+| `DocsFragments`   | bundled `scripts/check-docs-fragments.mjs`                                        | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers) |
+| `Accessibility`   | `pa11y` (WCAG2AA) against the consumer's own built docs site                      | any accessibility violation (no built site to scan → warn)                                                              |
+| `SecurityDeps`    | `npm audit --omit=dev`                                                            | any low/moderate/high/critical advisory (info warns)                                                                    |
+| `SecuritySecrets` | `secretlint` — bundled `config/secretlint.config.json`                            | any detected secret                                                                                                     |
+| `SecuritySocket`  | `socket ci --json` (`@socketsecurity/cli`)                                        | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                  |
+| `DeadCode`        | `knip` — bundled `config/knip.json`                                               | any unused file/export/dep, unlisted import                                                                             |
+| `Commits`         | `commitlint origin/main..HEAD` — bundled config                                   | any non-Conventional-Commit (no base branch → warn)                                                                     |
+| `Mutation`        | Stryker vs. `MUTATION_THRESHOLD` (80%), `isolated`                                | score below threshold — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                    |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
