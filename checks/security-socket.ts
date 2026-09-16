@@ -375,10 +375,29 @@ function interpretSocketRun(result: CheckEvidence, existingRecordCount: number):
 
   const data = parsed["data"]
   const rawAlerts = (isPlainObject(data) ? data["alerts"] : undefined) ?? parsed["alerts"] ?? []
+  // `alerts` is never an array in the CLI's real output (confirmed directly, against a real
+  // authenticated `socket ci --json` run, 2026-09-16): it's a plain object -- the CLI's own
+  // `mapToObject()` serialization of an internal, possibly multi-level nested `Map`
+  // (`walkNestedMap()` in @socketsecurity/cli's utils.js), never a flat array. A genuinely clean
+  // scan reports `"alerts": {}` (an empty object -- `healthy: true`, confirmed directly across
+  // three real repos), which is unambiguous: zero keys is zero alerts, regardless of the nested
+  // shape a *populated* result would have. That populated shape uses its own vocabulary this
+  // check was never written against (a `policy`/`type`/`manifest`/`url` leaf value, keyed by
+  // `[policyKey, package, introducedBy]` per `walkNestedMap`'s own output -- see
+  // toMarkdownReport() in the CLI's cli.js) rather than the `severity: critical|high|middle|low`
+  // shape `normalizeAlert` below expects. Guessing at that mapping without a real populated
+  // example to verify against risks silently misclassifying a genuine critical alert -- worse
+  // than failing loudly. So: an empty object is trusted (nothing to lose by trusting "zero
+  // keys"); anything else fails with a message pointing at the real gap, rather than the old
+  // generic "non-array" message that fired even on the always-empty case.
+  if (isPlainObject(rawAlerts) && Object.keys(rawAlerts).length === 0) {
+    return { kind: "ok", alerts: [] }
+  }
   if (!Array.isArray(rawAlerts)) {
     return {
       kind: "fail",
-      rationale: '`socket ci --json` reported `ok: true` with a non-array "alerts" field.',
+      rationale:
+        "`socket ci --json` reported one or more alerts, in the CLI's real nested-object shape this check does not yet parse (only the always-empty \"{}\" case is handled -- see this function's own doc comment). Run `socket ci --json` directly to see the raw alerts and update this check's parser against real data before trusting this result.",
     }
   }
   const normalized = rawAlerts.map((raw) => normalizeAlert(raw))

@@ -142,11 +142,29 @@ describe("securitySocket()", () => {
     expect(result.rationale).toBe("security-socket scan failed: Something else broke")
   })
 
-  it("fails when ok is true but alerts is not an array", async () => {
+  it('passes with zero alerts when alerts is an empty object -- the CLI\'s real shape for a clean scan (confirmed directly against a real authenticated run: `{ "alerts": {} }`, never `[]`)', async () => {
+    const check = securitySocket()
+    const result = await check.policy(
+      makeContext(ciOutput({ ok: true, healthy: true, alerts: {} })),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain("0 Socket alert(s) evaluated")
+  })
+
+  it("fails when ok is true but alerts is a non-empty, unparseable shape (the CLI's real nested-map structure this check doesn't parse yet)", async () => {
+    const check = securitySocket()
+    const result = await check.policy(
+      makeContext(ciOutput({ ok: true, alerts: { policyKey: { pkg: { hashery: {} } } } })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("real nested-object shape this check does not yet parse")
+  })
+
+  it("fails when ok is true but alerts is neither an array nor an object", async () => {
     const check = securitySocket()
     const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: "nope" })))
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain('non-array "alerts" field')
+    expect(result.rationale).toContain("real nested-object shape this check does not yet parse")
   })
 
   it("fails when an alert entry is missing a required field", async () => {
