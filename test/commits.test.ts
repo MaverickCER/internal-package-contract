@@ -66,6 +66,13 @@ describe("commits", () => {
     expect(result.rationale).toContain("git rebase -i origin/develop")
   })
 
+  it("passes a clean history using a custom `from` ref, delegating it through to the underlying commitlint preset", async () => {
+    const check = commits({ from: "origin/develop" })
+    const result = await check.policy(makeContext(makeResult({ exitCode: 0 })))
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain("between origin/develop and HEAD")
+  })
+
   it("fails a genuine regression -- a few non-conforming commits below the pre-adoption threshold", async () => {
     const check = commits()
     const failingBlock = "⧗   --- input ---"
