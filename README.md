@@ -94,7 +94,7 @@ the packaging checks see a fresh `dist/`.
 | `SecuritySocket`  | `socket ci --json` (`@socketsecurity/cli`)                                        | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                  |
 | `DeadCode`        | `knip` — bundled `config/knip.json`                                               | any unused file/export/dep, unlisted import                                                                             |
 | `Commits`         | `commitlint origin/main..HEAD` — bundled config                                   | any non-Conventional-Commit (no base branch → warn)                                                                     |
-| `Mutation`        | Stryker vs. `MUTATION_THRESHOLD` (80%), `isolated`                                | score below threshold — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                    |
+| `Mutation`        | Stryker, zero-tolerance (`isolated`)                                              | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**   |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
@@ -120,9 +120,10 @@ Available: `./config/dependency-cruiser`, `./config/knip`, `./config/stryker`,
 `./eslint`, `./prettier`, `./tsconfig` baselines (extend, never copy). The
 `tsconfig` baseline is the strictest practical configuration.
 
-The thresholds `COVERAGE_THRESHOLDS`, `CRAP_THRESHOLD` / `MAX_COMPLEXITY`,
-`MUTATION_THRESHOLD` live in [`checks/`](checks/) — raise them there when the
-whole fleet is ready, never per-consumer.
+The thresholds `COVERAGE_THRESHOLDS`, `CRAP_THRESHOLD` / `MAX_COMPLEXITY` live
+in [`checks/`](checks/) — raise them there when the whole fleet is ready,
+never per-consumer. `Mutation` has no threshold to raise: it requires zero
+Survived/NoCoverage/Timeout mutants, matching repo-contract's own policy.
 
 ## Running a subset
 
