@@ -126,6 +126,15 @@ describe("arethetypeswrong", () => {
     expect(result.rationale).toContain("found 1 packaged type-resolution problem(s)")
   })
 
+  it("treats a non-array group value as carrying no problems, without throwing", async () => {
+    writeReport({ problems: { FalseESM: "not an array" } })
+    const result = await arethetypeswrong.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "@arethetypeswrong/cli found 0 packaged type-resolution problem(s).",
+    })
+  })
+
   it("keeps a non-node10 problem in a group while dropping a node10 sibling in the same group", async () => {
     writeReport({
       problems: {
