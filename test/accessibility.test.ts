@@ -7,9 +7,12 @@ function makeFindingsResult(findings: readonly Record<string, unknown>[]) {
 }
 
 describe("accessibility", () => {
-  it("fails when pa11y terminated abnormally", async () => {
-    const result = accessibility.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect((await result).outcome).toBe("fail")
+  it("fails when pa11y terminated abnormally, naming pa11y (not a blank tool name) in the rationale", async () => {
+    const result = await accessibility.policy(makeContext(makeResult({ status: "timed_out" })))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "pa11y did not run to completion (status: timed_out).",
+    })
   })
 
   it("fails, appending printed output, when the scan script's own output could not be parsed as JSON", async () => {
