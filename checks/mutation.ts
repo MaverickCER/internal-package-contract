@@ -129,15 +129,13 @@ export interface MutantLocation {
   readonly start: { readonly line: number; readonly column: number }
   readonly end: { readonly line: number; readonly column: number }
 }
-/** @internal Exported for {@link resolveMutants}'s own direct-test fixtures. */
-export interface Mutant {
+interface Mutant {
   readonly status: string
   readonly mutatorName?: string
   readonly replacement?: string
   readonly location?: MutantLocation
 }
-/** @internal Exported for {@link resolveMutants}'s own direct-test fixtures. */
-export interface MutationReportFile {
+interface MutationReportFile {
   readonly mutants?: readonly Mutant[]
   readonly source?: string
 }

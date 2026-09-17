@@ -56,13 +56,13 @@ describe("securitySecrets", () => {
 
   it("omits the trailing positional entirely when the underlying preset's own run has none (last element falsy)", () => {
     const original = securitySecretsPreset.run
-    ;(securitySecretsPreset as { run: string[] }).run = []
+    ;(securitySecretsPreset as { run: string | readonly string[] }).run = []
     try {
       const check = securitySecrets()
       const run = check.run as string[]
       expect(run).toEqual(["--secretlintignore", run[1], "--secretlintrc", run[3]])
     } finally {
-      ;(securitySecretsPreset as { run: string[] }).run = original
+      ;(securitySecretsPreset as { run: string | readonly string[] }).run = original
     }
   })
 
