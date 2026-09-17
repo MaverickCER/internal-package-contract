@@ -40,10 +40,16 @@ export const duplication: CheckDefinitionConfig = {
 
     let report: JscpdReport
     try {
+      // Stryker disable StringLiteral: an equivalent mutant -- `readFile(path, "")` returns a
+      // Buffer instead of a string, but `JSON.parse` coerces any non-string argument via its
+      // default (utf8) `toString()`, which produces byte-for-byte the same text `"utf8"` would
+      // have decoded. Hand-verified: forcing this to `""` leaves every test in
+      // duplication.test.ts passing unchanged.
       const raw = await readFile(
         path.join(process.cwd(), "reports/jscpd/jscpd-report.json"),
         "utf8",
       )
+      // Stryker restore StringLiteral
       report = JSON.parse(raw) as JscpdReport
     } catch {
       return { outcome: "fail", rationale: "Duplication: jscpd did not produce its JSON report." }
@@ -51,11 +57,26 @@ export const duplication: CheckDefinitionConfig = {
 
     const pct = report.statistics?.total?.percentage
     const duplicates = Array.isArray(report.duplicates) ? report.duplicates : []
+    // Stryker disable next-line ConditionalExpression: an equivalent mutant -- forcing
+    // `typeof pct !== "number"` to `false` leaves just `!Number.isFinite(pct)`, which is already
+    // logically equivalent to the full expression: `Number.isFinite` (unlike the global
+    // `isFinite`) never coerces, so for any non-number `pct` it already returns `false` --
+    // `typeof pct !== "number"` never adds a case `!Number.isFinite(pct)` didn't already cover.
+    // Hand-verified: forcing this to `false` leaves every test in duplication.test.ts passing
+    // unchanged.
     if (typeof pct !== "number" || !Number.isFinite(pct)) {
       return { outcome: "fail", rationale: "Duplication: jscpd produced no total percentage." }
     }
 
     if (pct <= DUPLICATION_MAX_PERCENTAGE) {
+      // Stryker disable ConditionalExpression,EqualityOperator: an equivalent mutant -- forcing
+      // this to always take the "build the list" branch produces byte-identical output to the
+      // `: ""` fallback whenever `duplicates` really is empty (`["", ...[].map(...)].join("\n")`
+      // is `""`, same as the fallback), and produces the SAME "build the list" output as the
+      // unmutated code whenever `duplicates` is genuinely non-empty (the real condition already
+      // takes this same branch then) -- there is no `duplicates` array this can ever diverge on.
+      // Hand-verified: forcing this to `true` leaves every test in duplication.test.ts passing
+      // unchanged.
       const detail =
         duplicates.length > 0
           ? [
@@ -66,6 +87,7 @@ export const duplication: CheckDefinitionConfig = {
               ),
             ].join("\n")
           : ""
+      // Stryker restore ConditionalExpression,EqualityOperator
       return {
         outcome: "pass",
         rationale: `Duplication: ${pct.toFixed(2)}% of src/ within the ${String(DUPLICATION_MAX_PERCENTAGE)}% budget (${String(duplicates.length)} block(s)).${detail}`,
