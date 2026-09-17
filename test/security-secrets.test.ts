@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { securitySecrets as securitySecretsPreset } from "repo-contract/presets"
 import { securitySecrets } from "../checks/security-secrets.js"
 
 let cwd: string
@@ -51,6 +52,18 @@ describe("securitySecrets", () => {
       run[6],
       "**/*",
     ])
+  })
+
+  it("omits the trailing positional entirely when the underlying preset's own run has none (last element falsy)", () => {
+    const original = securitySecretsPreset.run
+    ;(securitySecretsPreset as { run: string[] }).run = []
+    try {
+      const check = securitySecrets()
+      const run = check.run as string[]
+      expect(run).toEqual(["--secretlintignore", run[1], "--secretlintrc", run[3]])
+    } finally {
+      ;(securitySecretsPreset as { run: string[] }).run = original
+    }
   })
 
   it("preserves the underlying secretlint preset's base command and policy", () => {
