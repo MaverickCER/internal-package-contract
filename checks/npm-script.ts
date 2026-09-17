@@ -59,12 +59,23 @@ interface GeneratedResult {
  * @returns the configured check.
  */
 export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionConfig {
+  // Stryker disable next-line StringLiteral: an equivalent mutant -- `whenMissing`'s only use
+  // (below) is `whenMissing === "fail"`, so any default other than the literal string `"fail"`
+  // itself (this default, or a mutated one) is behaviorally identical: "not fail" always means
+  // "skip". Hand-verified: forcing this default to `""` leaves every test in npm-script.test.ts
+  // passing unchanged.
   const { script, label, whenMissing = "skip", mustNotChange } = options
   const watchesArtifacts = Boolean(mustNotChange && mustNotChange.length > 0)
 
+  // Stryker disable ArrayDeclaration: unreachable, not just unobservable -- `watchesArtifacts` is
+  // only ever `true` when `mustNotChange` is itself truthy with `length > 0` (see above), so by
+  // the time this ternary's true branch runs, `mustNotChange` can never be nullish -- the `?? []`
+  // fallback exists only to satisfy the parameter's own `readonly string[] | undefined` type, and
+  // no call can ever reach it at runtime.
   const run = watchesArtifacts
     ? ["node", runGeneratedScript, script, ...(mustNotChange ?? [])]
     : ["npm", "--loglevel=silent", "run", script]
+  // Stryker restore ArrayDeclaration
 
   return {
     run,
@@ -97,6 +108,10 @@ export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionC
 
       let parsed: GeneratedResult
       try {
+        // Stryker disable next-line StringLiteral: unreachable, not just unobservable --
+        // `String.prototype.split` always returns an array with at least one element (even
+        // `"".split("\n")` is `[""]`), so `.at(-1)` on it can never be `undefined`; the `?? ""`
+        // fallback exists only to satisfy `.at`'s own possibly-`undefined` return type.
         const lastLine = result.stdout.trim().split("\n").at(-1) ?? ""
         parsed = JSON.parse(lastLine) as GeneratedResult
       } catch {
