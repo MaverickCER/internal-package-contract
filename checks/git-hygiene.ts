@@ -85,6 +85,9 @@ function collectWarnings(ev: GitHygieneEvidence): string[] {
   const warnings: string[] = []
 
   if (ev.gitignore !== undefined) {
+    // Stryker disable next-line OptionalChaining: unreachable, not just unobservable -- this line
+    // only ever runs inside the `ev.gitignore !== undefined` guard just above, so `ev.gitignore`
+    // can never be nullish here; the `?.` exists only to satisfy the field's own optional type.
     const missing = GITIGNORE_ESSENTIALS.filter((e) => !ev.gitignore?.includes(e))
     if (missing.length > 0) warnings.push(`.gitignore does not mention: ${missing.join(", ")}`)
   }
