@@ -30,6 +30,11 @@ export const coverage: CheckDefinitionConfig = {
   policy: async (ctx): Promise<PolicyResult> => {
     let summary: CoverageSummary
     try {
+      // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFile(path, "")`
+      // returns a Buffer instead of a string, but `JSON.parse` coerces any non-string argument via
+      // its default (utf8) `toString()`, which produces byte-for-byte the same text `"utf8"` would
+      // have decoded. Hand-verified: forcing this to `""` leaves every test in coverage.test.ts
+      // passing unchanged.
       const raw = await readFile(path.join(process.cwd(), "coverage/coverage-summary.json"), "utf8")
       summary = JSON.parse(raw) as CoverageSummary
     } catch {
@@ -62,6 +67,13 @@ export const coverage: CheckDefinitionConfig = {
     const parts: string[] = []
     for (const [metric, threshold] of Object.entries(COVERAGE_THRESHOLDS)) {
       const pct = total[metric]?.pct
+      // Stryker disable next-line ConditionalExpression: an equivalent mutant -- forcing
+      // `typeof pct !== "number"` to `false` leaves just `!Number.isFinite(pct)`, which is already
+      // logically equivalent to the full expression: `Number.isFinite` (unlike the global
+      // `isFinite`) never coerces, so for any non-number `pct` it already returns `false` --
+      // `typeof pct !== "number"` never adds a case `!Number.isFinite(pct)` didn't already cover.
+      // Hand-verified: forcing this to `false` leaves every test in coverage.test.ts passing
+      // unchanged.
       if (typeof pct !== "number" || !Number.isFinite(pct)) {
         failures.push(`${metric}: percentage missing or invalid`)
         continue

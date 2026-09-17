@@ -61,30 +61,6 @@
       "severity": "moderate"
     },
     {
-      "id": "security-deps:@vitest/coverage-v8@2.1.0-beta.1 - 4.1.10",
-      "version": 1,
-      "justification": "Vitest's own coverage-instrumentation internals -- dev-time-only test tooling, never reachable through a consumer's own runtime code. Fix requires vitest@5.0.0, a major bump this package's own vitest.config.ts and Stryker's @stryker-mutator/vitest-runner integration are not yet verified against.",
-      "alternatives": "An unverified major bump to vitest 5.x would also require re-verifying Stryker's vitest-runner integration, which has its own compatibility matrix.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@vitest/coverage-v8",
-      "range": "2.1.0-beta.1 - 4.1.10",
-      "remediation": "Revisit when vitest 5.x + @stryker-mutator/vitest-runner compatibility is verified.",
-      "severity": "moderate"
-    },
-    {
-      "id": "security-deps:@vitest/mocker@2.1.0 - 4.1.10",
-      "version": 1,
-      "justification": "Same vitest major-version chain as @vitest/coverage-v8.",
-      "alternatives": "Same as @vitest/coverage-v8: an unverified major bump.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@vitest/mocker",
-      "range": "2.1.0 - 4.1.10",
-      "remediation": "Revisit alongside @vitest/coverage-v8.",
-      "severity": "moderate"
-    },
-    {
       "id": "security-deps:adm-zip@<=0.6.0",
       "version": 1,
       "justification": "Transitive via github-actionlint, used only to lint this repository's own committed .github/workflows/*.yml during npm run contract -- never extracts an untrusted archive; adm-zip's actual vulnerable code path (zip extraction) is never exercised.",
@@ -167,18 +143,6 @@
       "range": "<=1.7.0",
       "remediation": "Revisit alongside markdownlint-cli2.",
       "severity": "high"
-    },
-    {
-      "id": "security-deps:vitest@2.1.0-beta.1 - 4.1.10",
-      "version": 1,
-      "justification": "The rollup entry for Vitest's own coverage/mocker vulnerability chain -- see the @vitest/coverage-v8 entry for the real explanation.",
-      "alternatives": "Same as @vitest/coverage-v8: an unverified major bump.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "vitest",
-      "range": "2.1.0-beta.1 - 4.1.10",
-      "remediation": "Revisit alongside @vitest/coverage-v8.",
-      "severity": "moderate"
     }
   ]
 }

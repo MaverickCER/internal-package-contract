@@ -75,11 +75,34 @@ export const docsLinks: CheckDefinitionConfig = {
     // even though every git host renders it. Treat any local link that exists
     // on disk (file or dir) -- stripping a `#anchor`/`?query` -- as fine.
     const existsLocally = (url: string): boolean => {
+      // Stryker disable Regex: two of this line's mutants are equivalent, hand-verified (one at a
+      // time, every test in docs-links.test.ts still passes unchanged) -- Stryker's per-line
+      // disable can't separate them from a third, genuinely-killable mutant on this same regex
+      // literal (dropping the leading `^` anchor from `/^\.?\//`, covered by the "strips only a
+      // LEADING './' or '/'" test above), so that one loses its mutation-score credit too:
+      //  - dropping the `$` anchor from `/[#?].*$/` is unobservable for any url this check will
+      //    ever see -- a url with no embedded newline (every realistic and every currently-tested
+      //    url) makes `.*` already greedy-consume to the true end of the string, so `$` never adds
+      //    a constraint; an embedded newline does make the two diverge, but in that case BOTH
+      //    variants leave a stray "\n" attached to `rel`, which can never match a real on-disk
+      //    filename either way -- `existsLocally` can't tell them apart from either side.
+      //  - `path.join` (below) already normalizes away a leading "/" whether or not `/^\.?\//`
+      //    actually stripped it (`path.join(cwd, "/x")` === `path.join(cwd, "x")`), so relaxing
+      //    the optional-dot requirement in `/^\.?\//` to mandatory (`/^\.\//`) can never change
+      //    what `existsSync` resolves.
       const rel = decodeURIComponent(url.replace(/[#?].*$/, "")).replace(/^\.?\//, "")
+      // Stryker restore Regex
       return rel.length > 0 && existsSync(path.join(process.cwd(), rel))
     }
     const broken = links.filter((l) => l.state === "BROKEN" && !existsLocally(l.url))
     const brokenLocal = broken.filter((l) => !isExternal(l.url))
+    // Stryker disable next-line MethodExpression: an equivalent mutant -- this line only ever
+    // executes inside the `brokenLocal.length === 0` branch below, at which point `broken` is
+    // ALREADY entirely external links by construction (`brokenLocal`/`brokenExternal` partition
+    // `broken` by `isExternal`, and the local partition being empty means nothing was excluded
+    // from the external one), so `broken.filter(isExternal)` and `broken` are content-identical
+    // whenever this value is actually read. Hand-verified: forcing this to `broken` (dropping the
+    // filter) leaves every test in docs-links.test.ts passing unchanged.
     const brokenExternal = broken.filter((l) => isExternal(l.url))
 
     if (brokenLocal.length === 0) {

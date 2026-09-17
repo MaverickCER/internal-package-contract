@@ -10,6 +10,7 @@ import {
   firstExisting,
   hasScript,
   packageRoot,
+  parseToolEnvelope,
   resolveConfig,
 } from "../checks/shared.js"
 import { makeResult } from "./support.js"
@@ -153,5 +154,86 @@ describe("firstExisting / resolveConfig", () => {
   it("resolveConfig falls back to the bundled config when the consumer has none", () => {
     const resolved = resolveConfig(["knip.json"], "knip.json")
     expect(resolved).toEqual({ path: bundledConfig("knip.json"), isBundled: true })
+  })
+})
+
+describe("parseToolEnvelope", () => {
+  it("fails with abnormalTermination's own rationale when the process terminated abnormally", () => {
+    const result = parseToolEnvelope(makeResult({ status: "timed_out" }), "tool", "Prefix:")
+    expect(result).toEqual({
+      ok: false,
+      result: { outcome: "fail", rationale: "tool did not run to completion (status: timed_out)." },
+    })
+  })
+
+  it("fails, with no trailing output, when result.output is missing entirely -- never reads .success off undefined", () => {
+    const result = parseToolEnvelope(makeResult(), "tool", "Prefix:")
+    expect(result).toEqual({
+      ok: false,
+      result: { outcome: "fail", rationale: "Prefix: output could not be parsed as JSON." },
+    })
+  })
+
+  it("fails, appending combinedOutput, when result.output.success is false", () => {
+    const result = parseToolEnvelope(
+      makeResult({
+        output: { format: "json", success: false, error: "bad" },
+        stdout: "raw output",
+      }),
+      "tool",
+      "Prefix:",
+    )
+    expect(result).toEqual({
+      ok: false,
+      result: {
+        outcome: "fail",
+        rationale: "Prefix: output could not be parsed as JSON.\nraw output",
+      },
+    })
+  })
+
+  it("fails, without crashing, when the parsed value is null (typeof null is 'object', so the 'ok' in check must never be reached for it)", () => {
+    const result = parseToolEnvelope(
+      makeResult({ output: { format: "json", success: true, value: null } }),
+      "tool",
+      "Prefix:",
+    )
+    expect(result).toEqual({
+      ok: false,
+      result: { outcome: "fail", rationale: "Prefix: output could not be parsed as JSON." },
+    })
+  })
+
+  it("fails, without crashing, when the parsed value is a non-object primitive (a string)", () => {
+    const result = parseToolEnvelope(
+      makeResult({ output: { format: "json", success: true, value: "just a string" } }),
+      "tool",
+      "Prefix:",
+    )
+    expect(result).toEqual({
+      ok: false,
+      result: { outcome: "fail", rationale: "Prefix: output could not be parsed as JSON." },
+    })
+  })
+
+  it("fails when the parsed value is a plain object missing its own 'ok' key", () => {
+    const result = parseToolEnvelope(
+      makeResult({ output: { format: "json", success: true, value: { notOk: true } } }),
+      "tool",
+      "Prefix:",
+    )
+    expect(result).toEqual({
+      ok: false,
+      result: { outcome: "fail", rationale: "Prefix: output could not be parsed as JSON." },
+    })
+  })
+
+  it("succeeds, returning the parsed value verbatim, once it carries an own 'ok' key", () => {
+    const result = parseToolEnvelope(
+      makeResult({ output: { format: "json", success: true, value: { ok: true, data: 1 } } }),
+      "tool",
+      "Prefix:",
+    )
+    expect(result).toEqual({ ok: true, value: { ok: true, data: 1 } })
   })
 })

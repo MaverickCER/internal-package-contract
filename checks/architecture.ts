@@ -61,6 +61,13 @@ export function architecture(): CheckDefinitionConfig {
       }
 
       const value: unknown = result.output.value
+      // Stryker disable next-line ConditionalExpression: an equivalent mutant -- forcing
+      // `typeof value !== "object"` to `false` only matters for a non-null, non-object primitive
+      // (a string/number/boolean); every such value safely auto-boxes on `.summary` access
+      // (returns `undefined`, never throws), so it falls through to the `!Array.isArray(violations)`
+      // guard just below and produces the SAME "produced invalid JSON" rationale either way. Hand-
+      // verified: forcing this to `false` leaves every test in architecture.test.ts passing
+      // unchanged.
       if (typeof value !== "object" || value === null) {
         return {
           outcome: "fail",
@@ -78,6 +85,11 @@ export function architecture(): CheckDefinitionConfig {
 
       const errors = violations.filter((v) => v.rule?.severity === "error")
       const nonErrors = violations.filter((v) => v.rule?.severity !== "error")
+      // Stryker disable next-line OptionalChaining: unreachable, not just unobservable -- reaching
+      // this line already required `(value as DepcruiseReport).summary?.violations` (above) to be
+      // a real array, which is only possible when `summary` itself is a defined object (optional
+      // chaining returns `undefined`, never an array, through a nullish `summary`) -- so `summary`
+      // can never be nullish here.
       const cruised = (value as DepcruiseReport).summary?.totalCruised ?? 0
       const via = config.isBundled ? " (bundled baseline config)" : ""
 
