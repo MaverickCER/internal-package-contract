@@ -34,11 +34,13 @@ describe("architecture", () => {
     expect(check.output).toEqual({ format: "json" })
   })
 
-  it("fails, naming the status, when dependency-cruiser terminated abnormally", async () => {
+  it("fails, naming dependency-cruiser (not a blank tool name) and the status, when it terminated abnormally", async () => {
     const check = architecture()
     const result = await check.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("did not run to completion")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "dependency-cruiser did not run to completion (status: timed_out).",
+    })
   })
 
   it("fails without throwing when result.output is entirely absent (not merely unsuccessful)", async () => {
