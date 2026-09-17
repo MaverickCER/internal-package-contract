@@ -236,19 +236,31 @@ export function validateSecurityExceptionFields(
   const remediationValid = typeof remediation === "string"
   if (!remediationValid) errors.push(`${at}.remediation must be a string.`)
 
+  // Stryker disable ConditionalExpression: `typeof method === "string"` guarding
+  // `.includes(method)` is an equivalent mutant when forced to `true` -- `Array.includes` on a
+  // string array uses SameValueZero (no coercion), so a non-string `method` can never match any
+  // element regardless of this guard. Hand-verified: forcing this to `true` leaves every test in
+  // exception-record.test.ts passing unchanged.
   const methodValid =
     method === "" ||
     (typeof method === "string" && (EXCEPTION_METHODS as readonly string[]).includes(method))
+  // Stryker restore ConditionalExpression
   if (!methodValid) {
     errors.push(
       `${at}.method must be "" or one of ${EXCEPTION_METHODS.map((m) => JSON.stringify(m)).join(", ")} (got ${JSON.stringify(method)}).`,
     )
   }
 
+  // Stryker disable ConditionalExpression: `typeof exceptionType === "string"` guarding
+  // `.includes(exceptionType)` is an equivalent mutant when forced to `true`, for the same reason
+  // as the `method` guard above -- `Array.includes` never matches a non-string against a string
+  // array. Hand-verified: forcing this to `true` leaves every test in exception-record.test.ts
+  // passing unchanged.
   const exceptionTypeValid =
     exceptionType === "" ||
     (typeof exceptionType === "string" &&
       (allowedExceptionTypes as readonly string[]).includes(exceptionType))
+  // Stryker restore ConditionalExpression
   if (!exceptionTypeValid) {
     errors.push(
       `${at}.exceptionType must be "" or one of ${allowedExceptionTypes.map((t) => JSON.stringify(t)).join(", ")} (got ${JSON.stringify(exceptionType)}).`,
