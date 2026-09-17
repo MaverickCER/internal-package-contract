@@ -30,9 +30,12 @@ function writeReport(
 }
 
 describe("duplication", () => {
-  it("fails when jscpd terminated abnormally", async () => {
+  it("fails when jscpd terminated abnormally, naming jscpd (not a blank tool name) in the rationale", async () => {
     const result = await duplication.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect(result.outcome).toBe("fail")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "jscpd did not run to completion (status: timed_out).",
+    })
   })
 
   it("fails when jscpd produced no JSON report", async () => {
@@ -80,12 +83,47 @@ describe("duplication", () => {
     })
   })
 
-  it("fails when the percentage is a number but not finite (Infinity)", async () => {
-    writeReport({ total: { percentage: Number.POSITIVE_INFINITY } })
+  it("fails when the percentage is a number but not finite (Infinity) -- via a raw report so it survives as an actual Infinity, not JSON.stringify's own Infinity->null coercion", async () => {
+    mkdirSync(path.join(cwd, "reports/jscpd"), { recursive: true })
+    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double -- unlike
+    // `JSON.stringify(Infinity)`, which the `writeReport` helper would silently turn into `null`.
+    writeFileSync(
+      path.join(cwd, "reports/jscpd/jscpd-report.json"),
+      '{"statistics":{"total":{"percentage":1e999}},"duplicates":[]}',
+      "utf8",
+    )
     const result = await duplication.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: "Duplication: jscpd produced no total percentage.",
+    })
+  })
+
+  it("fails when statistics is present but total is missing (the second optional-chain link)", async () => {
+    mkdirSync(path.join(cwd, "reports/jscpd"), { recursive: true })
+    writeFileSync(
+      path.join(cwd, "reports/jscpd/jscpd-report.json"),
+      JSON.stringify({ statistics: {}, duplicates: [] }),
+      "utf8",
+    )
+    const result = await duplication.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "Duplication: jscpd produced no total percentage.",
+    })
+  })
+
+  it("treats a non-array duplicates field as zero duplicates, without throwing", async () => {
+    mkdirSync(path.join(cwd, "reports/jscpd"), { recursive: true })
+    writeFileSync(
+      path.join(cwd, "reports/jscpd/jscpd-report.json"),
+      JSON.stringify({ statistics: { total: { percentage: 0 } }, duplicates: "not an array" }),
+      "utf8",
+    )
+    const result = await duplication.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Duplication: 0.00% of src/ within the 0.75% budget (0 block(s)).",
     })
   })
 

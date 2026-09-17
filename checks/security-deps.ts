@@ -80,16 +80,22 @@ interface SecurityDepsExceptionRecord {
   readonly severity: Severity
 }
 
-/** `security-deps:<package>@<range>` -- stable while the same vulnerable range is reported; a version bump or a new/different advisory changes `range` and the id with it, so a stale record is never silently reused for an unrelated finding. */
-function deriveSecurityDepsExceptionId(finding: {
+/**
+ * `security-deps:<package>@<range>` -- stable while the same vulnerable range is reported; a version bump or a new/different advisory changes `range` and the id with it, so a stale record is never silently reused for an unrelated finding.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function deriveSecurityDepsExceptionId(finding: {
   readonly package: string
   readonly range: string
 }): string {
   return `security-deps:${finding.package}@${finding.range}`
 }
 
-/** A fresh, blank exception record for a finding with no matching record yet. */
-function createSecurityDepsStub(
+/**
+ * A fresh, blank exception record for a finding with no matching record yet.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function createSecurityDepsStub(
   finding: NormalizedDepFinding,
   id: string,
 ): SecurityDepsExceptionRecord {
@@ -107,45 +113,55 @@ function createSecurityDepsStub(
   }
 }
 
-const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDepsExceptionRecord> = {
-  namespace: "security-deps:",
-  metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "range", "severity"],
-  validateRecord(core: ExceptionRecordCore, raw, index, errors) {
-    const at = `exceptions[${String(index)}]`
-    const security = validateSecurityExceptionFields(raw, index, EXCEPTION_TYPES, errors)
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDepsExceptionRecord> =
+  {
+    namespace: "security-deps:",
+    metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "range", "severity"],
+    validateRecord(core: ExceptionRecordCore, raw, index, errors) {
+      const at = `exceptions[${String(index)}]`
+      const security = validateSecurityExceptionFields(raw, index, EXCEPTION_TYPES, errors)
 
-    const { package: pkg, range, severity } = raw
-    const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
-    const rangeValid = isValidNonEmptyStringField(range, `${at}.range`, errors)
-    const severityValid =
-      typeof severity === "string" && (SEVERITY_VALUES.has(severity) || severity === "unknown")
-    if (!severityValid) {
-      errors.push(
-        `${at}.severity must be one of "info", "low", "moderate", "high", "critical", "unknown" (got ${JSON.stringify(severity)}).`,
-      )
-    }
+      const { package: pkg, range, severity } = raw
+      const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
+      const rangeValid = isValidNonEmptyStringField(range, `${at}.range`, errors)
+      // Stryker disable ConditionalExpression: replacing `typeof severity === "string"` with `true`
+      // is behaviorally equivalent here -- `SEVERITY_VALUES` is a `Set<string>`, and
+      // `severity === "unknown"` is a strict-equality string comparison, so both disjuncts are
+      // already `false` for any non-string `severity` (no coercion, no throw either way). The guard
+      // exists purely to satisfy TypeScript's narrowing, not to change runtime behavior.
+      // Hand-verified 2026-09-17: applying this exact mutation by hand leaves the whole suite
+      // (438 tests) passing.
+      const severityValid =
+        typeof severity === "string" && (SEVERITY_VALUES.has(severity) || severity === "unknown")
+      // Stryker restore ConditionalExpression
+      if (!severityValid) {
+        errors.push(
+          `${at}.severity must be one of "info", "low", "moderate", "high", "critical", "unknown" (got ${JSON.stringify(severity)}).`,
+        )
+      }
 
-    if (security === undefined || !pkgValid || !rangeValid || !severityValid) return undefined
+      if (security === undefined || !pkgValid || !rangeValid || !severityValid) return undefined
 
-    const identity = { package: pkg, range }
-    const derived = deriveSecurityDepsExceptionId(identity)
-    if (derived !== core.id) {
-      errors.push(
-        `${at}.id ${JSON.stringify(core.id)} does not match the id derived from its own package/range (${JSON.stringify(derived)}).`,
-      )
-      return undefined
-    }
+      const identity = { package: pkg, range }
+      const derived = deriveSecurityDepsExceptionId(identity)
+      if (derived !== core.id) {
+        errors.push(
+          `${at}.id ${JSON.stringify(core.id)} does not match the id derived from its own package/range (${JSON.stringify(derived)}).`,
+        )
+        return undefined
+      }
 
-    return {
-      id: core.id,
-      version: 1,
-      justification: core.justification,
-      ...security,
-      ...identity,
-      severity: severity as Severity,
-    }
-  },
-}
+      return {
+        id: core.id,
+        version: 1,
+        justification: core.justification,
+        ...security,
+        ...identity,
+        severity: severity as Severity,
+      }
+    },
+  }
 
 /** Every severity requires the full field set -- see this module's own doc comment for why there is no severity-tiered "forbidden" the way `SecuritySocket` has. */
 const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", "exceptionType"]
@@ -164,16 +180,26 @@ const VALID_SECURITY_DEPS_REQUIREMENTS = [
   "exceptionType",
 ] as const
 
-function evaluateFinding(
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export function evaluateFinding(
   finding: NormalizedDepFinding,
   record: SecurityDepsExceptionRecord | undefined,
 ): {
   readonly verdict: "forbidden" | "insufficient" | "permitted" | "unmatched"
   readonly missing: readonly string[]
 } {
+  // Stryker disable ObjectLiteral, StringLiteral -- unlike SecuritySocket (which forbids
+  // critical/high outright), SECURITY_DEPS_POLICY has exactly one group ("security-deps") whose
+  // `default` policy is value-identical to SECURITY_DEPS_GLOBAL_DEFAULT_POLICY (see both above):
+  // every severity requires the same full field set, with no per-category rule to select. Since
+  // `resolveExceptionPolicy` falls back to the group default (or, absent a matching group, the
+  // global default) whenever the classification doesn't pick a specific rule, corrupting or
+  // dropping this classification object entirely still resolves to the exact same policy. Hand
+  // -verified 2026-09-17: applying this exact mutation by hand leaves the whole suite passing.
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "security-deps", category: finding.severity },
   ]
+  // Stryker restore ObjectLiteral, StringLiteral
   return evaluateFindingVerdict(
     record,
     classifications,
@@ -195,14 +221,24 @@ const registrySchema: StandardSchemaV1<unknown, readonly SecurityDepsExceptionRe
   },
 }
 
-/** Normalizes `npm audit --json`'s own `vulnerabilities` object into one finding per package. */
-function normalizeFindings(report: NpmAuditReport): readonly NormalizedDepFinding[] {
+/**
+ * Normalizes `npm audit --json`'s own `vulnerabilities` object into one finding per package.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function normalizeFindings(report: NpmAuditReport): readonly NormalizedDepFinding[] {
   return Object.entries(report.vulnerabilities ?? {}).map(([name, vulnerability]) => {
     const severityRaw = vulnerability.severity
+    // Stryker disable ConditionalExpression: replacing `typeof severityRaw === "string"` with
+    // `true` is behaviorally equivalent here -- `SEVERITY_VALUES` is a `Set<string>`, so
+    // `SEVERITY_VALUES.has(severityRaw)` is already `false` for any non-string `severityRaw` (no
+    // coercion, no throw either way). The guard exists purely to satisfy TypeScript's narrowing
+    // for the `severityRaw as Severity` cast below, not to change runtime behavior. Hand-verified
+    // 2026-09-17: applying this exact mutation by hand leaves the whole suite (438 tests) passing.
     const severity: Severity =
       typeof severityRaw === "string" && SEVERITY_VALUES.has(severityRaw)
         ? (severityRaw as Severity)
         : "unknown"
+    // Stryker restore ConditionalExpression
     const range =
       typeof vulnerability.range === "string" && vulnerability.range.length > 0
         ? vulnerability.range
@@ -263,6 +299,11 @@ export function securityDeps(): CheckDefinitionConfig {
         SECURITY_DEPS_POLICY,
         VALID_SECURITY_DEPS_REQUIREMENTS,
       )
+      // Stryker disable all -- SECURITY_DEPS_POLICY/VALID_SECURITY_DEPS_REQUIREMENTS are fixed,
+      // valid module constants (see their own definitions above); this defensive guard can never
+      // observe a misconfigured policy under any real invocation of this function, since it never
+      // varies at runtime. No test can hit it without literally breaking those constants. Kept as
+      // defense-in-depth against a future editing mistake in SECURITY_DEPS_POLICY itself.
       if (configErrors.length > 0) {
         return {
           outcome: "fail",
@@ -272,6 +313,7 @@ export function securityDeps(): CheckDefinitionConfig {
           ].join("\n"),
         }
       }
+      // Stryker restore all
 
       const activeById = new Map(activeRecords.map((r) => [r.id, r]))
       const staleLines = staleRecords.map(
@@ -285,10 +327,18 @@ export function securityDeps(): CheckDefinitionConfig {
       const offenders = determinants.filter((d) => d.verdict !== "permitted")
 
       if (offenders.length === 0 && staleLines.length === 0) {
+        // Stryker disable all -- unlike SecuritySocket, every severity here requires the full
+        // field set (see this module's own doc comment), so `createSecurityDepsStub`'s blank stub
+        // is NEVER "permitted": every finding behind a freshly-scaffolded stub (`newStubIds`) is
+        // therefore always its own offender, which would already have made `offenders.length`
+        // nonzero and skipped this whole branch. `newStubIds.length > 0` can never be observed
+        // true here under any real reconciliation outcome. Hand-verified 2026-09-17: applying
+        // this exact mutation by hand leaves the whole suite passing. Kept as defense-in-depth.
         const suffix =
           newStubIds.length > 0
             ? ` (${String(newStubIds.length)} new record(s) scaffolded blank in ${REGISTRY_RELATIVE_PATH})`
             : ""
+        // Stryker restore all
         return {
           outcome: "pass",
           rationale: `${String(findings.length)} npm audit finding(s) evaluated: all permitted by a complete exception record.${suffix}`,
@@ -296,10 +346,18 @@ export function securityDeps(): CheckDefinitionConfig {
       }
 
       const offenderLines = offenders.map((d) => {
+        // Stryker disable all -- `activeById` is built from `activeRecords`, which
+        // `reconcileAndPersistExceptionRegistry` guarantees contains an entry (existing or a
+        // freshly-scaffolded stub) for every id in `findings`, so `activeById.get(finding.id)` can
+        // never be `undefined` here and `evaluateFinding` can never return "unmatched" through
+        // this real call path. Hand-verified 2026-09-17: applying this exact mutation by hand
+        // leaves the whole suite passing. Kept as defense-in-depth against a reconcile/evaluate
+        // bijection bug.
         const detail =
           d.verdict === "unmatched"
             ? "no reconciled exception record (registry integrity failure)"
             : `exception incomplete (missing: ${d.missing.join(", ")})`
+        // Stryker restore all
         return `- ${d.finding.id} [${d.finding.severity}]: ${detail}`
       })
 

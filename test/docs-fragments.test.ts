@@ -24,9 +24,12 @@ describe("docsFragments (policy)", () => {
     })
   })
 
-  it("fails when the scan itself terminated abnormally", async () => {
+  it("fails when the scan itself terminated abnormally, naming check-docs-fragments (not a blank tool name) in the rationale", async () => {
     const result = await docsFragments.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect(result.outcome).toBe("fail")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "check-docs-fragments did not run to completion (status: timed_out).",
+    })
   })
 
   it("fails, appending printed output, when the scan's output could not be parsed as JSON", async () => {
@@ -51,6 +54,22 @@ describe("docsFragments (policy)", () => {
     expect(result).toEqual({
       outcome: "fail",
       rationale: "Docs (fragments): scan failed: glob failed.",
+    })
+  })
+
+  it("falls back to 'unknown error' when the scan reports ok: false with no error field at all", async () => {
+    const result = await docsFragments.policy(makeContext(makeJsonResult({ ok: false })))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "Docs (fragments): scan failed: unknown error.",
+    })
+  })
+
+  it("treats a missing broken field as no broken links (not just an empty array)", async () => {
+    const result = await docsFragments.policy(makeContext(makeJsonResult({ ok: true })))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Docs (fragments): every local heading link resolves.",
     })
   })
 

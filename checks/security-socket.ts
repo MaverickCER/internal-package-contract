@@ -109,8 +109,11 @@ interface SocketExceptionRecord {
   readonly severity: NormalizedSocketAlert["severity"]
 }
 
-/** `socket:<package>@<version>:<type>` -- injective over a run (Socket does not emit the same package@version:type twice), stable across runs while the dependency and alert type are unchanged. */
-function deriveSocketExceptionId(alert: {
+/**
+ * `socket:<package>@<version>:<type>` -- injective over a run (Socket does not emit the same package@version:type twice), stable across runs while the dependency and alert type are unchanged.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function deriveSocketExceptionId(alert: {
   readonly package: string
   readonly packageVersion: string
   readonly type: string
@@ -118,8 +121,11 @@ function deriveSocketExceptionId(alert: {
   return `socket:${alert.package}@${alert.packageVersion}:${alert.type}`
 }
 
-/** A fresh, blank exception record for an alert with no matching record yet -- every authoring field starts empty (valid registry data, only policy-insufficient). */
-function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExceptionRecord {
+/**
+ * A fresh, blank exception record for an alert with no matching record yet -- every authoring field starts empty (valid registry data, only policy-insufficient).
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExceptionRecord {
   return {
     id,
     version: 1,
@@ -135,13 +141,22 @@ function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExcep
   }
 }
 
-/** `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise. */
-function isValidOptionalEnumField(
+/**
+ * `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function isValidOptionalEnumField(
   value: unknown,
   at: string,
   allowed: readonly string[],
   errors: string[],
 ): boolean {
+  // Stryker disable next-line ConditionalExpression: replacing `typeof value === "string"` with
+  // `true` is behaviorally equivalent here -- `allowed` is typed `readonly string[]`, so
+  // `allowed.includes(value)` is already `false` for any non-string `value` via plain strict
+  // equality (no coercion), with or without the type guard. The guard exists purely to satisfy
+  // TypeScript's narrowing for `.includes(value)`, not to change runtime behavior. Hand-verified
+  // 2026-09-17: applying this exact mutation by hand leaves the whole suite (406 tests) passing.
   const valid = value === "" || (typeof value === "string" && allowed.includes(value))
   if (!valid) {
     errors.push(
@@ -151,7 +166,8 @@ function isValidOptionalEnumField(
   return valid
 }
 
-const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = {
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = {
   namespace: "socket:",
   metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "packageVersion", "type", "severity"],
   validateRecord(core: ExceptionRecordCore, raw, index, errors) {
@@ -226,15 +242,20 @@ const VALID_SOCKET_REQUIREMENTS = [
   "exceptionType",
 ] as const
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
-function safeString(value: unknown): string {
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export function safeString(value: unknown): string {
   return typeof value === "string" ? value : ""
 }
 
-/** Recognizes Socket's own "not authenticated" JSON envelope: `{ "ok": false, "message": "Auth Error", ... }`. */
-function isAuthError(parsed: unknown): boolean {
+/**
+ * Recognizes Socket's own "not authenticated" JSON envelope: `{ "ok": false, "message": "Auth Error", ... }`.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function isAuthError(parsed: unknown): boolean {
   return (
     isPlainObject(parsed) &&
     parsed["ok"] === false &&
@@ -242,8 +263,11 @@ function isAuthError(parsed: unknown): boolean {
   )
 }
 
-/** A conservative recognizer for a network-reachability failure -- see repo-contract's own scan.ts for why this stays narrow rather than broad. */
-function isNetworkUnreachable(stderr: string, parsed: unknown): boolean {
+/**
+ * A conservative recognizer for a network-reachability failure -- see repo-contract's own scan.ts for why this stays narrow rather than broad.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function isNetworkUnreachable(stderr: string, parsed: unknown): boolean {
   const NETWORK_ERROR_CODES = /\b(ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET)\b/
   if (NETWORK_ERROR_CODES.test(stderr)) return true
   if (isPlainObject(parsed) && parsed["ok"] === false) {
@@ -253,7 +277,8 @@ function isNetworkUnreachable(stderr: string, parsed: unknown): boolean {
   return false
 }
 
-function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
   if (!isPlainObject(raw)) return undefined
   const packageName = raw["package"] ?? raw["name"]
   const { version, type } = raw
@@ -274,7 +299,8 @@ function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
   }
 }
 
-function evaluateAlert(
+/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+export function evaluateAlert(
   alert: NormalizedSocketAlert,
   record: SocketExceptionRecord | undefined,
 ): {
@@ -319,8 +345,12 @@ type SocketRunOutcome =
  * not-authenticated rationale's "N records validated but not reconciled" note (`0` if the
  * registry itself failed to load -- matches how a load failure is reported separately, never
  * folded into this note).
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
  */
-function interpretSocketRun(result: CheckEvidence, existingRecordCount: number): SocketRunOutcome {
+export function interpretSocketRun(
+  result: CheckEvidence,
+  existingRecordCount: number,
+): SocketRunOutcome {
   if (result.status === "spawn_error" && result.spawnErrorCode === "ENOENT") {
     return {
       kind: "warn",
@@ -332,11 +362,17 @@ function interpretSocketRun(result: CheckEvidence, existingRecordCount: number):
   if (terminated) return { kind: "fail", rationale: terminated }
 
   let parsed: unknown
+  // Stryker disable BlockStatement -- `parsed` is declared as `let parsed: unknown` (uninitialized,
+  // so already `undefined`) and is only ever reassigned below, in the try block's success path.
+  // Emptying the catch block is behaviorally a no-op for every input: `parsed` is already
+  // `undefined` on any parse failure with or without this line. Hand-verified 2026-09-17:
+  // applying this exact mutation by hand leaves the whole suite passing.
   try {
     parsed = JSON.parse(result.stdout.trim())
   } catch {
     parsed = undefined
   }
+  // Stryker restore BlockStatement
 
   if (isAuthError(parsed)) {
     const note =
@@ -375,10 +411,29 @@ function interpretSocketRun(result: CheckEvidence, existingRecordCount: number):
 
   const data = parsed["data"]
   const rawAlerts = (isPlainObject(data) ? data["alerts"] : undefined) ?? parsed["alerts"] ?? []
+  // `alerts` is never an array in the CLI's real output (confirmed directly, against a real
+  // authenticated `socket ci --json` run, 2026-09-16): it's a plain object -- the CLI's own
+  // `mapToObject()` serialization of an internal, possibly multi-level nested `Map`
+  // (`walkNestedMap()` in @socketsecurity/cli's utils.js), never a flat array. A genuinely clean
+  // scan reports `"alerts": {}` (an empty object -- `healthy: true`, confirmed directly across
+  // three real repos), which is unambiguous: zero keys is zero alerts, regardless of the nested
+  // shape a *populated* result would have. That populated shape uses its own vocabulary this
+  // check was never written against (a `policy`/`type`/`manifest`/`url` leaf value, keyed by
+  // `[policyKey, package, introducedBy]` per `walkNestedMap`'s own output -- see
+  // toMarkdownReport() in the CLI's cli.js) rather than the `severity: critical|high|middle|low`
+  // shape `normalizeAlert` below expects. Guessing at that mapping without a real populated
+  // example to verify against risks silently misclassifying a genuine critical alert -- worse
+  // than failing loudly. So: an empty object is trusted (nothing to lose by trusting "zero
+  // keys"); anything else fails with a message pointing at the real gap, rather than the old
+  // generic "non-array" message that fired even on the always-empty case.
+  if (isPlainObject(rawAlerts) && Object.keys(rawAlerts).length === 0) {
+    return { kind: "ok", alerts: [] }
+  }
   if (!Array.isArray(rawAlerts)) {
     return {
       kind: "fail",
-      rationale: '`socket ci --json` reported `ok: true` with a non-array "alerts" field.',
+      rationale:
+        "`socket ci --json` reported one or more alerts, in the CLI's real nested-object shape this check does not yet parse (only the always-empty \"{}\" case is handled -- see this function's own doc comment). Run `socket ci --json` directly to see the raw alerts and update this check's parser against real data before trusting this result.",
     }
   }
   const normalized = rawAlerts.map((raw) => normalizeAlert(raw))
@@ -392,12 +447,20 @@ function interpretSocketRun(result: CheckEvidence, existingRecordCount: number):
   return { kind: "ok", alerts: normalized as NormalizedSocketAlert[] }
 }
 
-/** The final pass/fail composition, once every alert has a reconciled (possibly freshly-scaffolded) record to evaluate against. */
-function evaluateFinalVerdict(
+/**
+ * The final pass/fail composition, once every alert has a reconciled (possibly freshly-scaffolded) record to evaluate against.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function evaluateFinalVerdict(
   alerts: readonly NormalizedSocketAlert[],
   registry: PersistedExceptionRegistry<SocketExceptionRecord>,
 ): PolicyResult {
   const configErrors = validateExceptionPolicyConfig(SOCKET_POLICY, VALID_SOCKET_REQUIREMENTS)
+  // Stryker disable all -- SOCKET_POLICY/VALID_SOCKET_REQUIREMENTS are fixed, valid module
+  // constants (see their own definitions above); this defensive guard can never observe a
+  // misconfigured policy under any real invocation of this function, since it never varies at
+  // runtime. No test can hit it without literally breaking those constants. Kept as
+  // defense-in-depth against a future editing mistake in SOCKET_POLICY itself.
   if (configErrors.length > 0) {
     return {
       outcome: "fail",
@@ -406,6 +469,7 @@ function evaluateFinalVerdict(
       ),
     }
   }
+  // Stryker restore all
 
   const activeById = new Map(registry.activeRecords.map((r) => [r.id, r]))
   const staleLines = registry.staleRecords.map(

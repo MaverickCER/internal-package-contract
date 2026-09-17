@@ -98,13 +98,15 @@ describe("coverage", () => {
     expect(result.rationale).toContain("lines: percentage missing or invalid")
   })
 
-  it("fails when a metric's percentage is a number but not finite (Infinity)", async () => {
-    writeSummary({
-      lines: { pct: Number.POSITIVE_INFINITY },
-      statements: { pct: 95 },
-      functions: { pct: 100 },
-      branches: { pct: 90 },
-    })
+  it("fails when a metric's percentage is a number but not finite (Infinity) -- via a raw summary so it survives as an actual Infinity, not JSON.stringify's own Infinity->null coercion", async () => {
+    mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
+    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double -- unlike
+    // `JSON.stringify(Infinity)`, which `writeSummary` would silently turn into `null`.
+    writeFileSync(
+      path.join(process.cwd(), "coverage/coverage-summary.json"),
+      '{"total":{"lines":{"pct":1e999},"statements":{"pct":95},"functions":{"pct":100},"branches":{"pct":90}}}',
+      "utf8",
+    )
     const result = await coverage.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("lines: percentage missing or invalid")
