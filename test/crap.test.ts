@@ -3,9 +3,12 @@ import { crap, CRAP_THRESHOLD, MAX_COMPLEXITY } from "../checks/crap.js"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
 describe("crap", () => {
-  it("fails when crap4ts terminated abnormally", async () => {
+  it("fails when crap4ts terminated abnormally, naming crap4ts (not a blank tool name) in the rationale", async () => {
     const result = await crap.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect(result.outcome).toBe("fail")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "crap4ts did not run to completion (status: timed_out).",
+    })
   })
 
   it("passes when every function is within budget", async () => {
@@ -40,7 +43,7 @@ describe("crap", () => {
     expect(highIdx).toBeLessThan(lowIdx)
   })
 
-  it("fails for a raw-complexity ceiling violation even with CRAP within budget", async () => {
+  it("fails for a raw-complexity ceiling violation even with CRAP within budget, omitting the CRAP section entirely (no CRAP offenders)", async () => {
     const result = await crap.policy(
       makeContext(
         makeJsonResult({
@@ -48,8 +51,13 @@ describe("crap", () => {
         }),
       ),
     )
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("complexity 21")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "Complexity ceiling (20) exceeded by 1 function(s):",
+        "- a.ts:1 f — complexity 21",
+      ].join("\n"),
+    })
   })
 
   it("fails when a function's crap/complexity score is unreadable (NaN)", async () => {
@@ -84,7 +92,11 @@ describe("crap", () => {
         },
       }),
     )
-    expect(result.outcome).toBe("warn")
+    expect(result).toEqual({
+      outcome: "warn",
+      rationale:
+        "CRAP: not evaluated -- the `Tests` run did not pass, so there is no coverage to weight complexity against (see `Tests`).",
+    })
   })
 
   it("fails, appending printed output, when output could not be parsed as JSON and Tests did not fail", async () => {
@@ -103,7 +115,7 @@ describe("crap", () => {
     })
   })
 
-  it("fails (not warn) when output could not be parsed as JSON but Tests exited 0", async () => {
+  it("fails (not warn) when output could not be parsed as JSON but Tests exited 0, with no trailing output", async () => {
     const result = await crap.policy(
       makeContext(makeResult(), {
         evidence: {
@@ -115,8 +127,11 @@ describe("crap", () => {
         },
       }),
     )
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("could not be parsed as JSON")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale:
+        "CRAP: crap4ts output could not be parsed as JSON (no coverage/coverage-final.json?).",
+    })
   })
 
   it("fails when the parsed JSON value is null", async () => {
