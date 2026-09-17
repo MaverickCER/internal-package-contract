@@ -52,6 +52,11 @@ export function abnormalTermination(result: CheckEvidence, tool: string): string
 /** The consumer's `package.json` `scripts`, read fresh from `process.cwd()`. `{}` if it can't be read. */
 export function consumerScripts(): Readonly<Record<string, string>> {
   try {
+    // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFileSync(path, "")`
+    // returns a Buffer instead of a string, but `JSON.parse` coerces any non-string argument via
+    // its default (utf8) `toString()`, which produces byte-for-byte the same text `"utf8"` would
+    // have decoded. Hand-verified: forcing this to `""` leaves every test in shared.test.ts
+    // passing unchanged.
     const raw = readFileSync(path.join(process.cwd(), "package.json"), "utf8")
     const parsed = JSON.parse(raw) as { scripts?: Record<string, string> }
     return parsed.scripts ?? {}
