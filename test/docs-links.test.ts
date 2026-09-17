@@ -31,10 +31,31 @@ describe("docsLinks", () => {
     })
   })
 
-  it("fails when linkinator terminated abnormally", async () => {
+  it("fails when linkinator terminated abnormally, naming linkinator (not a blank tool name) in the rationale", async () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(makeContext(makeResult({ status: "timed_out" })))
-    expect(result.outcome).toBe("fail")
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "linkinator did not run to completion (status: timed_out).",
+    })
+  })
+
+  it("checks docs/index.html specifically -- an index.html at the repo root alone does not count", async () => {
+    writeFileSync(path.join(cwd, "index.html"), "<html></html>")
+    const result = await docsLinks.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Docs (links): no README.md or docs/index.html.",
+    })
+  })
+
+  it("checks docs/index.html specifically -- an empty docs/ directory alone does not count", async () => {
+    mkdirSync(path.join(cwd, "docs"), { recursive: true })
+    const result = await docsLinks.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Docs (links): no README.md or docs/index.html.",
+    })
   })
 
   it("fails, appending printed output, when the scan script's own output could not be parsed as JSON", async () => {
@@ -142,6 +163,38 @@ describe("docsLinks", () => {
         "Docs (links): 1 broken local link(s):",
         "- ./missing.md (from README.md) -- HTTP 404",
       ].join("\n"),
+    })
+  })
+
+  it("strips only a LEADING './' or '/', never an interior path separator, before checking existence", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    mkdirSync(path.join(cwd, "guide"), { recursive: true })
+    writeFileSync(path.join(cwd, "guide", "index.md"), "# guide")
+    const result = await docsLinks.policy(
+      makeContext(makeLinksResult([{ url: "guide/index.md", state: "BROKEN", status: 404 }])),
+    )
+    expect(result.outcome).toBe("pass")
+  })
+
+  it("omits the '(from ...)' suffix entirely when a broken local link carries no parent", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    const result = await docsLinks.policy(
+      makeContext(makeLinksResult([{ url: "./missing.md", state: "BROKEN", status: 404 }])),
+    )
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md -- HTTP 404"].join("\n"),
+    })
+  })
+
+  it("renders a literal '?' (not a blank) for HTTP status when a broken local link carries none", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    const result = await docsLinks.policy(
+      makeContext(makeLinksResult([{ url: "./missing.md", state: "BROKEN" }])),
+    )
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md -- HTTP ?"].join("\n"),
     })
   })
 
