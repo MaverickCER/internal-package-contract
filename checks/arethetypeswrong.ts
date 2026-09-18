@@ -16,6 +16,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { CheckDefinitionConfig, PolicyContext, PolicyResult } from "repo-contract"
 import { arethetypeswrong as arethetypeswrongPreset } from "repo-contract/presets"
+import { abnormalTermination, combinedOutput } from "./shared.js"
 
 const scriptPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,6 +28,9 @@ const scriptPath = path.join(
 export const arethetypeswrong: CheckDefinitionConfig = {
   run: ["node", scriptPath, "--exclude=schema"],
   policy: async (ctx): Promise<PolicyResult> => {
+    const terminated = abnormalTermination(ctx.result, "@arethetypeswrong/cli")
+    if (terminated) return { outcome: "fail", rationale: `TypeResolution: ${terminated}` }
+
     let value: unknown
     try {
       // Stryker disable StringLiteral: an equivalent mutant -- `readFile(path, "")` returns a
@@ -39,9 +43,10 @@ export const arethetypeswrong: CheckDefinitionConfig = {
       )
       // Stryker restore StringLiteral
     } catch {
+      const printed = combinedOutput(ctx.result).slice(-3000)
       return {
         outcome: "fail",
-        rationale: "TypeResolution: @arethetypeswrong/cli did not produce a readable JSON report.",
+        rationale: `TypeResolution: @arethetypeswrong/cli did not produce a readable JSON report.${printed ? `\n${printed}` : ""}`,
       }
     }
 
