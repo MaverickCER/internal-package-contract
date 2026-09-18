@@ -186,6 +186,8 @@ export interface ResolvedMutant {
   readonly mutator: string
   readonly original: string
   readonly replacement: string
+  /** 1-indexed source line the mutant starts on, `0` if the report carried no location -- surfaced in a failing rationale so a developer (or an agent re-running this check) can jump straight to the offending mutant instead of re-deriving it from the raw JSON report. */
+  readonly line: number
 }
 
 /** @internal Exported for direct unit coverage -- its `mutatorName`/`replacement` `?? ""` fallbacks (a real Stryker report always sets both, but the report schema itself marks them optional) are otherwise unreachable through any report fixture that sets every field. */
@@ -199,6 +201,7 @@ export function resolveMutants(report: MutationReport): readonly ResolvedMutant[
         mutator: mutant.mutatorName ?? "",
         original: extractSpan(fileResult.source, mutant.location),
         replacement: mutant.replacement ?? "",
+        line: mutant.location?.start.line ?? 0,
       })
     }
   }
@@ -403,6 +406,43 @@ function applyExceptionRegistry(
   return { stale, insufficient, suppressed }
 }
 
+/** Hard cap on how many offending mutants a failing rationale lists individually -- a real, large-scale regression (hundreds of mutants) would otherwise blow up the check's own output (and the CI step-summary size limit every check's combined output shares) with no added value past the first couple dozen. */
+const MAX_LISTED_OFFENDERS = 25
+/** Each offender's `original`/`replacement` snippet is collapsed to one line and capped -- a multi-line span (common for a `BlockStatement`/`ArrowFunction` mutant) would otherwise make a 25-line listing unreadable. */
+const MAX_SNIPPET_LENGTH = 80
+
+/** @internal Exported for direct unit coverage. */
+export function truncateSnippet(text: string): string {
+  const collapsed = text.replace(/\s+/g, " ").trim()
+  return collapsed.length > MAX_SNIPPET_LENGTH
+    ? `${collapsed.slice(0, MAX_SNIPPET_LENGTH)}…`
+    : collapsed
+}
+
+/**
+ * Renders the exact non-suppressed Survived/NoCoverage/Timeout mutants a
+ * failing run found -- file, line, mutator, and a short before/after
+ * snippet each -- so a failing rationale is directly actionable (which
+ * mutant, where) instead of only a bare count. See this module's own top
+ * doc comment: this is what lets a developer or an agent re-running this
+ * check go straight to hand-verifying the exact offender, the same
+ * workflow this whole module's own disable-comment justifications already
+ * document throughout.
+ * @internal Exported for direct unit coverage.
+ */
+export function formatOffendingMutants(offenders: readonly ResolvedMutant[]): string {
+  const lines = offenders
+    .slice(0, MAX_LISTED_OFFENDERS)
+    .map(
+      (m) =>
+        `- ${m.file}:${String(m.line)} [${m.status} ${m.mutator}] "${truncateSnippet(m.original)}" -> "${truncateSnippet(m.replacement)}"`,
+    )
+  if (offenders.length > MAX_LISTED_OFFENDERS) {
+    lines.push(`... and ${String(offenders.length - MAX_LISTED_OFFENDERS)} more.`)
+  }
+  return lines.join("\n")
+}
+
 /** The final score/verdict once every valid mutant has been counted, suppressions applied. */
 function summarizeMutationScore(
   mutants: readonly ResolvedMutant[],
@@ -450,12 +490,20 @@ function summarizeMutationScore(
   // not merely small relative to the total -- matching repo-contract's own
   // real policy, not a score threshold.
   const passed = survived === 0 && noCoverage === 0 && timeout === 0
-  return passed
-    ? { outcome: "pass", rationale: `Mutation: ${summary}.` }
-    : {
-        outcome: "fail",
-        rationale: `Mutation: ${summary} -- ${String(survived)} survived, ${String(noCoverage)} no-coverage, ${String(timeout)} timeout must all be zero.`,
-      }
+  if (passed) return { outcome: "pass", rationale: `Mutation: ${summary}.` }
+
+  const offenders = mutants.filter(
+    (m) =>
+      !suppressed.has(m) &&
+      (m.status === "Survived" || m.status === "NoCoverage" || m.status === "Timeout"),
+  )
+  return {
+    outcome: "fail",
+    rationale: [
+      `Mutation: ${summary} -- ${String(survived)} survived, ${String(noCoverage)} no-coverage, ${String(timeout)} timeout must all be zero.`,
+      formatOffendingMutants(offenders),
+    ].join("\n"),
+  }
 }
 
 /** @returns the `Mutation` check. */

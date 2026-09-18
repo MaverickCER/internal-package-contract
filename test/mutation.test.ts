@@ -3,8 +3,15 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { hashRequirementFields } from "repo-contract/helpers"
-import { extractSpan, fieldValue, mutation, resolveMutants } from "../checks/mutation.js"
-import type { MutantLocation, MutationExceptionRecord } from "../checks/mutation.js"
+import {
+  extractSpan,
+  fieldValue,
+  formatOffendingMutants,
+  mutation,
+  resolveMutants,
+  truncateSnippet,
+} from "../checks/mutation.js"
+import type { MutantLocation, MutationExceptionRecord, ResolvedMutant } from "../checks/mutation.js"
 import { makeContext, makeResult } from "./support.js"
 
 /** Mirrors mutation.ts's own private `deriveMutationId` exactly -- a registry record's `id` must match this, or the schema validator rejects it as an integrity failure before the policy ever gets to evaluate it. */
@@ -137,7 +144,7 @@ describe("resolveMutants", () => {
       },
     })
     expect(resolved).toEqual([
-      { file: "a.ts", status: "Killed", mutator: "", original: "", replacement: "y" },
+      { file: "a.ts", status: "Killed", mutator: "", original: "", replacement: "y", line: 0 },
     ])
   })
 
@@ -151,8 +158,39 @@ describe("resolveMutants", () => {
       },
     })
     expect(resolved).toEqual([
-      { file: "a.ts", status: "Killed", mutator: "M", original: "", replacement: "" },
+      { file: "a.ts", status: "Killed", mutator: "M", original: "", replacement: "", line: 0 },
     ])
+  })
+
+  it("defaults a mutant's line to 0 when location is absent", () => {
+    const resolved = resolveMutants({
+      files: {
+        "a.ts": {
+          source: "x",
+          mutants: [{ status: "Killed", mutatorName: "M", replacement: "y" }],
+        },
+      },
+    })
+    expect(resolved[0]?.line).toBe(0)
+  })
+
+  it("reads line from location.start.line when present", () => {
+    const resolved = resolveMutants({
+      files: {
+        "a.ts": {
+          source: "x",
+          mutants: [
+            {
+              status: "Killed",
+              mutatorName: "M",
+              replacement: "y",
+              location: { start: { line: 42, column: 1 }, end: { line: 42, column: 2 } },
+            },
+          ],
+        },
+      },
+    })
+    expect(resolved[0]?.line).toBe(42)
   })
 })
 
@@ -177,6 +215,90 @@ describe("fieldValue", () => {
 
   it("falls back to '' for a requirement naming a key the record doesn't have at all", () => {
     expect(fieldValue(record, "doesNotExist")).toBe("")
+  })
+})
+
+describe("truncateSnippet", () => {
+  it("leaves a short string unchanged", () => {
+    expect(truncateSnippet("const x = 1")).toBe("const x = 1")
+  })
+
+  it("truncates a string over 80 characters, appending an ellipsis", () => {
+    const long = "x".repeat(90)
+    const result = truncateSnippet(long)
+    expect(result).toBe(`${"x".repeat(80)}…`)
+    expect(result.length).toBe(81)
+  })
+
+  it("leaves a string of exactly 80 characters unchanged, with no ellipsis", () => {
+    const exact = "x".repeat(80)
+    expect(truncateSnippet(exact)).toBe(exact)
+  })
+
+  it("collapses internal newlines and runs of whitespace to a single space", () => {
+    expect(truncateSnippet("foo(\n  a,\n  b,\n)")).toBe("foo( a, b, )")
+  })
+
+  it("trims leading and trailing whitespace", () => {
+    expect(truncateSnippet("  \n  const x = 1  \n  ")).toBe("const x = 1")
+  })
+})
+
+describe("formatOffendingMutants", () => {
+  function offender(overrides: Partial<ResolvedMutant> = {}): ResolvedMutant {
+    return {
+      file: "a.ts",
+      status: "Survived",
+      mutator: "M",
+      original: "x",
+      replacement: "y",
+      line: 1,
+      ...overrides,
+    }
+  }
+
+  it("renders one line per offender in the documented format", () => {
+    const result = formatOffendingMutants([
+      offender({ file: "src/a.ts", line: 12, status: "Survived", mutator: "EqualityOperator" }),
+    ])
+    expect(result).toBe('- src/a.ts:12 [Survived EqualityOperator] "x" -> "y"')
+  })
+
+  it("renders every offender in order when under the cap", () => {
+    const offenders = [
+      offender({ file: "a.ts", line: 1 }),
+      offender({ file: "b.ts", line: 2 }),
+      offender({ file: "c.ts", line: 3 }),
+    ]
+    const lines = formatOffendingMutants(offenders).split("\n")
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toContain("a.ts:1")
+    expect(lines[1]).toContain("b.ts:2")
+    expect(lines[2]).toContain("c.ts:3")
+  })
+
+  it("truncates each offender's original/replacement snippet", () => {
+    const long = "y".repeat(90)
+    const result = formatOffendingMutants([offender({ original: long, replacement: long })])
+    expect(result).toContain(`"${"y".repeat(80)}…" -> "${"y".repeat(80)}…"`)
+  })
+
+  it("lists at most MAX_LISTED_OFFENDERS (25) individually, appending a summary line for the rest", () => {
+    const offenders = Array.from({ length: 30 }, (_, i) => offender({ file: `f${String(i)}.ts` }))
+    const lines = formatOffendingMutants(offenders).split("\n")
+    expect(lines).toHaveLength(26)
+    expect(lines[25]).toBe("... and 5 more.")
+  })
+
+  it("appends no summary line when the offender count is exactly at the cap", () => {
+    const offenders = Array.from({ length: 25 }, (_, i) => offender({ file: `f${String(i)}.ts` }))
+    const lines = formatOffendingMutants(offenders).split("\n")
+    expect(lines).toHaveLength(25)
+    expect(lines.every((l) => !l.startsWith("..."))).toBe(true)
+  })
+
+  it("returns an empty string for no offenders", () => {
+    expect(formatOffendingMutants([])).toBe("")
   })
 })
 
@@ -249,6 +371,7 @@ describe("mutation()", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("killed 0, timeout 1")
     expect(result.rationale).toContain("1 timeout must all be zero")
+    expect(result.rationale).toContain('- a.ts:1 [Timeout M] "c" -> "2"')
   })
 
   it("fails when any mutant survives, regardless of how high the resulting score is", async () => {
@@ -275,6 +398,16 @@ describe("mutation()", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("1 survived")
     expect(result.rationale).toContain("must all be zero")
+    expect(result.rationale).toContain('- a.ts:1 [Survived M] "c" -> "0"')
+    expect(result.rationale).not.toContain("[Killed")
+    // The offender listing must be newline-joined onto the summary line, not
+    // concatenated directly onto it -- hand-verified: Stryker's own perTest
+    // run flagged `.join("\n")` -> `.join("")` at the final `summarizeMutationScore`
+    // fail-branch return as Survived even though this exact assertion fails
+    // immediately when that mutation is applied by hand.
+    const lines = result.rationale.split("\n")
+    expect(lines).toHaveLength(2)
+    expect(lines[1]).toBe('- a.ts:1 [Survived M] "c" -> "0"')
   })
 
   it("fails when only noCoverage is nonzero -- survived and timeout alone don't gate the noCoverage clause", async () => {
@@ -301,6 +434,7 @@ describe("mutation()", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("1 no-coverage")
     expect(result.rationale).toContain("must all be zero")
+    expect(result.rationale).toContain('- a.ts:1 [NoCoverage M] "c" -> "0"')
   })
 
   it("fails with a clear message when the registry is not valid JSON", async () => {
