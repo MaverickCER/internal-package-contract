@@ -23,12 +23,38 @@ function writeReport(value: unknown): void {
 }
 
 describe("arethetypeswrong", () => {
-  it("fails when the report file was never produced (also covers abnormal termination)", async () => {
+  it("fails with the abnormal-termination rationale when the run itself timed out, before ever touching the report file", async () => {
     const result = await arethetypeswrong.policy(makeContext(makeResult({ status: "timed_out" })))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale:
+        "TypeResolution: @arethetypeswrong/cli did not run to completion (status: timed_out).",
+    })
+  })
+
+  it("fails when the report file was never produced despite a completed run", async () => {
+    const result = await arethetypeswrong.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: "TypeResolution: @arethetypeswrong/cli did not produce a readable JSON report.",
     })
+  })
+
+  it("appends the run's own stdout/stderr to the unreadable-report rationale, so a crash inside run-attw.mjs is diagnosable without a separate log lookup", async () => {
+    const result = await arethetypeswrong.policy(
+      makeContext(makeResult({ stderr: "Error: npm pack failed (exit 1):\nENOENT" })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("did not produce a readable JSON report")
+    expect(result.rationale).toContain("Error: npm pack failed (exit 1):\nENOENT")
+  })
+
+  it("truncates a long run output tail to exactly the last 3000 characters when the report file is missing", async () => {
+    const longOutput = "a".repeat(3500) + "END"
+    const result = await arethetypeswrong.policy(makeContext(makeResult({ stdout: longOutput })))
+    const tail = result.rationale.split("\n").at(-1) ?? ""
+    expect(tail.length).toBe(3000)
+    expect(tail.endsWith("END")).toBe(true)
   })
 
   it("fails when the report file is not valid JSON", async () => {
