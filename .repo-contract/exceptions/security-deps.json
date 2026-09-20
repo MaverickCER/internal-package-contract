@@ -97,18 +97,6 @@
       "severity": "high"
     },
     {
-      "id": "security-deps:markdownlint-cli2@>=0.22.0",
-      "version": 1,
-      "justification": "Transitive via markdownlint-cli2's own TOML-parser dependency (smol-toml) -- this repository has no TOML front-matter in any scanned Markdown file, so the vulnerable parse path is never exercised. Fix requires downgrading markdownlint-cli2 below this package's currently-required ^0.23.2.",
-      "alternatives": "markdownlint-cli2@0.21.0 is older than the version range this package currently requires and would drop rule/config compatibility improvements relied on elsewhere.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "markdownlint-cli2",
-      "range": ">=0.22.0",
-      "remediation": "Revisit when markdownlint-cli2 ships a release with a patched smol-toml.",
-      "severity": "high"
-    },
-    {
       "id": "security-deps:pacote@11.2.7 - 21.5.0",
       "version": 1,
       "justification": "The rollup entry for licensee's own arborist/pacote/sigstore chain -- see the @npmcli/arborist entry for the real explanation.",
@@ -130,18 +118,6 @@
       "package": "sigstore",
       "range": "<=4.1.0",
       "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:smol-toml@<=1.7.0",
-      "version": 1,
-      "justification": "markdownlint-cli2's own transitive TOML parser -- see the markdownlint-cli2 entry for the real explanation. No Markdown file in this repository uses TOML front matter, so the vulnerable parse path is never exercised.",
-      "alternatives": "Same as markdownlint-cli2: an older markdownlint-cli2 release would drop needed rule/config compatibility.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "smol-toml",
-      "range": "<=1.7.0",
-      "remediation": "Revisit alongside markdownlint-cli2.",
       "severity": "high"
     }
   ]
