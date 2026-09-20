@@ -4,6 +4,8 @@
     "blueOak": "gold",
     "osi": true
   },
-  "packages": {},
+  "packages": {
+    "argparse": "3.0.2"
+  },
   "corrections": true
 }
