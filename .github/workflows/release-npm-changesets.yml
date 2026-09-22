@@ -60,6 +60,13 @@ jobs:
         with:
           publish: npm run release
           version: npm run version
+          # changesets/action's own default commit/PR-title ("Version Packages") is not a
+          # Conventional Commit -- every consumer's own `commits` check (bundled from
+          # internal-package-contract) fails the resulting bot commit on `origin/main..HEAD`,
+          # confirmed directly against a real Release PR. `chore:` satisfies that check and is
+          # itself accurate: a version bump is exactly a chore, not a feature or fix.
+          commit: "chore: version packages"
+          title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
