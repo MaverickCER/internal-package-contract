@@ -78,7 +78,7 @@
     "prettier": "3.9.6",
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
-    "repo-contract": "^0.6.0",
+    "repo-contract": "^0.7.0",
     "secretlint": "^9.0.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
