@@ -1,6 +1,6 @@
 {
   "name": "internal-package-contract",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "The engineering standard every publishable @maverickcer/* package must continuously satisfy, expressed once as a repo-contract contract. Not published to npm; consumed as a devDependency.",
   "license": "MIT",
