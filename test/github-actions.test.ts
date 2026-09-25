@@ -100,4 +100,22 @@ describe("githubActions", () => {
         "GitHub Actions: actionlint output could not be parsed as JSON.\nraw actionlint output",
     })
   })
+
+  it("gives a clear, actionable message instead of a raw dump when actionlint can't resolve a project root because the consumer isn't a git repository yet", async () => {
+    mkdirSync(path.join(cwd, ".github/workflows"), { recursive: true })
+    const result = await githubActions.policy(
+      makeContext(
+        makeResult({
+          exitCode: 1,
+          stderr:
+            'no project was found in any parent directories of "/tmp/ipc-adoption-test" check workflows directory is put correctly in your Git repository',
+        }),
+      ),
+    )
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale:
+        'GitHub Actions: not a git repository yet -- actionlint needs one to resolve the project root. Run `git init` (see README "Adopt it"), then re-run.',
+    })
+  })
 })

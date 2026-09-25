@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import { accessibility } from "../checks/accessibility.js"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
-function makeFindingsResult(findings: readonly Record<string, unknown>[]) {
-  return makeJsonResult({ ok: true, value: findings })
+function makeFindingsResult(findings: readonly Record<string, unknown>[], pagesScanned = 1) {
+  return makeJsonResult({ ok: true, value: findings, pagesScanned })
 }
 
 describe("accessibility", () => {
@@ -60,12 +60,21 @@ describe("accessibility", () => {
     })
   })
 
-  it("passes with 0 findings", async () => {
-    const result = accessibility.policy(makeContext(makeFindingsResult([])))
+  it("passes with 0 findings across a real scan of N pages", async () => {
+    const result = accessibility.policy(makeContext(makeFindingsResult([], 2)))
     expect(await result).toEqual({
       outcome: "pass",
       rationale:
         "Accessibility: pa11y reported 0 WCAG2AA issues across the scanned pages (0 finding(s) total, all informational).",
+    })
+  })
+
+  it("warns (not vacuously passes) when no built docs site existed to scan", async () => {
+    const result = accessibility.policy(makeContext(makeFindingsResult([], 0)))
+    expect(await result).toEqual({
+      outcome: "warn",
+      rationale:
+        "Accessibility: no built docs site found to scan (looked for docs/index.html, docs/api/index.html).",
     })
   })
 
