@@ -124,6 +124,21 @@ const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/mutation.json"
 
 const scriptPath = path.join(packageRoot, "scripts", "run-mutation.mjs")
 
+/**
+ * Keep byte-identical to scripts/run-mutation.mjs's own copy of this same
+ * string. That script prints this verbatim (and exits 0 without ever
+ * spawning Stryker) when the consumer has no own `stryker.config.*` and
+ * hasn't set `IPC_MUTATION=1` -- Stryker's own dry run throws an uncaught
+ * `ConfigError` on a fresh consumer with no `src/`/tests yet, which is both
+ * slow to discover and useless noise on day one. Matching this marker here
+ * turns that deliberate skip into a `warn`, per the README's documented
+ * "only runs with a stryker.config.* or IPC_MUTATION=1; otherwise warns" --
+ * distinct from `readMutationReport`'s `fail` when Stryker DID run but
+ * produced no report.
+ */
+const MUTATION_SKIPPED_MARKER =
+  "internal-package-contract: Mutation skipped -- no stryker.config.* in this repo and IPC_MUTATION is not set."
+
 /** @internal Exported for {@link extractSpan}'s own direct-test parameter type. */
 export interface MutantLocation {
   readonly start: { readonly line: number; readonly column: number }
@@ -513,6 +528,13 @@ export function mutation(): CheckDefinitionConfig {
     policy: async ({ result }): Promise<PolicyResult> => {
       const terminated = abnormalTermination(result, "Stryker")
       if (terminated) return { outcome: "fail", rationale: terminated }
+
+      if (result.stdout.includes(MUTATION_SKIPPED_MARKER)) {
+        return {
+          outcome: "warn",
+          rationale: `${MUTATION_SKIPPED_MARKER} Add a stryker.config.* (extend the bundled \`internal-package-contract/config/stryker\` baseline) or set IPC_MUTATION=1 to run it now (README "Running a subset").`,
+        }
+      }
 
       const reportResult = await readMutationReport(result)
       if (!reportResult.ok) return reportResult.result

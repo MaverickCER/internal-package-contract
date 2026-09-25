@@ -28,3 +28,34 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run contract
+
+  # bin/init.mjs does path/file-I/O and git-hook wiring -- verify it (and the
+  # unit suite) actually work on Windows, not just macOS/Linux. Not the full
+  # `npm run contract` here: Mutation/Accessibility need Stryker/a system
+  # Chrome, well beyond what a cross-platform path-handling smoke test needs.
+  windows-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: init.mjs smoke test in a scratch consumer
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/scratch-consumer"
+          cd "$RUNNER_TEMP/scratch-consumer"
+          git init -q
+          git remote add origin https://github.com/MaverickCER/scratch.git
+          printf '{"name":"scratch","version":"0.0.0"}' > package.json
+          node "$GITHUB_WORKSPACE/bin/init.mjs"
+          test -f .gitignore
+          test -f CODEOWNERS
+          test -f SECURITY.md
+          test -f CONTRIBUTING.md
