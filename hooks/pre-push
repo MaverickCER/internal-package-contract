@@ -15,12 +15,37 @@
 # instead through scripts/run-contract.mjs against repo-contract.config.ts, this
 # repo's own self-hosting entrypoint (see that file's own doc comment).
 #
-# Detected by whether repo-contract.config.ts sits next to this hooks/ directory:
-# it is part of this repository's own git history but deliberately excluded from
-# package.json's `files` allowlist, so it exists here in a real checkout of this
-# repo but never inside a consumer's installed node_modules copy.
-DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ -f "$DIR/../repo-contract.config.ts" ]; then
+# Detected by whether repo-contract.config.ts sits next to this hooks/ directory
+# AND that directory is physically inside the repo being pushed (not merely
+# reachable through a symlink into it). repo-contract.config.ts is part of this
+# repository's own git history but deliberately excluded from package.json's
+# `files` allowlist, so plan A ("never inside a consumer's installed
+# node_modules copy") holds for any consumer that gets a real, packed copy
+# (a git-range dependency, e.g. env-cap/data-cap's own
+# `internal-package-contract: "github:MaverickCER/internal-package-contract#main"`).
+# It does NOT hold for the README's own documented local-dev alternative,
+# `file:../internal-package-contract` (or any other absolute-path `file:`
+# dependency): npm installs those as a live symlink straight into that
+# checkout, so a consumer's node_modules/internal-package-contract/hooks is
+# reachable through a symlink to this exact hooks/ directory, and
+# repo-contract.config.ts leaks through with it -- confirmed by hand: a fresh
+# scratch consumer installed via `file:` with an absolute path had its `git
+# push` run this repository's own 472 self-tests instead of the consumer's,
+# purely because the file existed at the far end of the symlink. Resolving
+# `$DIR` with `cd -P` (physical, symlinks followed) and requiring it to sit
+# inside `git rev-parse --show-toplevel`'s own physical toplevel rules that
+# out: a symlinked-in copy resolves to wherever the real checkout lives, which
+# is never inside the *pushing* repo's own working tree.
+DIR=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd)
+TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -n "$TOPLEVEL" ]; then
+  TOPLEVEL=$(CDPATH= cd -P -- "$TOPLEVEL" && pwd)
+fi
+case "$DIR" in
+  "$TOPLEVEL"/*) inside_toplevel=1 ;;
+  *) inside_toplevel=0 ;;
+esac
+if [ "$inside_toplevel" = "1" ] && [ -f "$DIR/../repo-contract.config.ts" ]; then
   # `npm run`, not a bare `node scripts/run-contract.mjs`: repo-contract.config.ts's
   # own checks (unlike bin/contract.mjs's, which resolve each binary explicitly)
   # spawn plain command names (`eslint`, `vitest`, ...) that only resolve via PATH,
@@ -30,5 +55,5 @@ if [ -f "$DIR/../repo-contract.config.ts" ]; then
   # though `npm run contract` (this same command) passes clean.
   exec npm --prefix "$DIR/.." run contract -- --checks Lint,Format,Typecheck,Tests,Architecture,GithubActions,GitHygiene,Duplication,Licenses,DocsMarkdown,DocsLinks,DocsFragments,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
 else
-  exec node "$DIR/../bin/contract.mjs" --checks Format,Lint,Typecheck,Tests,Build,Packaging,TypeResolution,Architecture,Licenses,SecurityDeps,SecuritySecrets,DeadCode,Duplication,GitHygiene
+  exec node "$DIR/../bin/contract.mjs" --checks ApiDocs,Lint,Format,Schema,Build,Typecheck,Tests,Architecture,GithubActions,GitHygiene,Size,Duplication,Packaging,TypeResolution,Licenses,DocsMarkdown,DocsLinks,DocsFragments,Accessibility,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
 fi

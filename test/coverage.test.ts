@@ -86,6 +86,92 @@ describe("coverage", () => {
     })
   })
 
+  it("fails with one clear 'no source yet' rationale (not four vague bullets) when every metric is V8's 0/0 Unknown sentinel", async () => {
+    mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
+    writeFileSync(
+      path.join(process.cwd(), "coverage/coverage-summary.json"),
+      JSON.stringify({
+        total: {
+          lines: { pct: "Unknown" },
+          statements: { pct: "Unknown" },
+          functions: { pct: "Unknown" },
+          branches: { pct: "Unknown" },
+        },
+      }),
+      "utf8",
+    )
+    const result = await coverage.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale:
+        "Coverage: 0 statements instrumented -- there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
+    })
+  })
+
+  it("fails listing every metric missing (not the 'no source' message) when total is present but empty", async () => {
+    mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
+    writeFileSync(
+      path.join(process.cwd(), "coverage/coverage-summary.json"),
+      JSON.stringify({ total: {} }),
+      "utf8",
+    )
+    const result = await coverage.policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toBe(
+      [
+        "Coverage thresholds not met:",
+        "- lines: percentage missing or invalid",
+        "- statements: percentage missing or invalid",
+        "- functions: percentage missing or invalid",
+        "- branches: percentage missing or invalid",
+      ].join("\n"),
+    )
+  })
+
+  it("falls through to the per-metric message (not 'no source') when only some metrics are Unknown", async () => {
+    mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
+    writeFileSync(
+      path.join(process.cwd(), "coverage/coverage-summary.json"),
+      JSON.stringify({
+        total: {
+          lines: { pct: "Unknown" },
+          statements: { pct: 50 },
+          functions: { pct: 100 },
+          branches: { pct: 90 },
+        },
+      }),
+      "utf8",
+    )
+    const result = await coverage.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "Coverage thresholds not met:",
+        "- lines: percentage missing or invalid",
+        "- statements: 50% < 80% required (30.00 points short)",
+      ].join("\n"),
+    })
+  })
+
+  it("does not throw when a metric entry itself is null (falls through to the per-metric message)", async () => {
+    mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
+    writeFileSync(
+      path.join(process.cwd(), "coverage/coverage-summary.json"),
+      JSON.stringify({
+        total: {
+          lines: null,
+          statements: { pct: 95 },
+          functions: { pct: 100 },
+          branches: { pct: 90 },
+        },
+      }),
+      "utf8",
+    )
+    const result = await coverage.policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("lines: percentage missing or invalid")
+  })
+
   it("fails when a metric's percentage is missing or not a finite number", async () => {
     writeSummary({
       lines: { pct: Number.NaN },
