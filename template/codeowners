@@ -1,0 +1,4 @@
+# Default reviewer for every change. Replace with your own team/handle once
+# more than one person maintains this repo -- internal-package-contract's own
+# CODEOWNERS looks the same until then.
+* @maverickcer

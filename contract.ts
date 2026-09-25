@@ -41,6 +41,7 @@ import { format, license, lint, publint, typecheck } from "repo-contract/presets
 import { accessibility } from "./checks/accessibility.js"
 import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
+import { branchProtection } from "./checks/branch-protection.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
@@ -93,6 +94,7 @@ export default defineRepoContract({
     Architecture: architecture(),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
+    BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] },
     Crap: { ...crap, dependsOn: ["Coverage"] },
     Size: npmScriptCheck({ script: "size", label: "Size" }),
