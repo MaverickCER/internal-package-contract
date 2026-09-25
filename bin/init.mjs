@@ -32,6 +32,9 @@ scaffold("editorconfig", ".editorconfig")
 scaffold("gitmessage", ".gitmessage")
 scaffold("contract.yml", ".github/workflows/contract.yml")
 scaffold("release.yml", ".github/workflows/release.yml")
+scaffold("codeowners", "CODEOWNERS")
+scaffold("security.md", "SECURITY.md")
+scaffold("contributing.md", "CONTRIBUTING.md")
 
 // .nvmrc -- mirror this package's own supported Node.
 const nvmrcDest = path.join(cwd, ".nvmrc")

@@ -1,16 +1,34 @@
 {
   "name": "internal-package-contract",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "The engineering standard every publishable @maverickcer/* package must continuously satisfy, expressed once as a repo-contract contract. Not published to npm; consumed as a devDependency.",
   "license": "MIT",
+  "homepage": "https://github.com/MaverickCER/internal-package-contract#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaverickCER/internal-package-contract.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MaverickCER/internal-package-contract/issues"
+  },
+  "author": {
+    "name": "MaverickCER",
+    "url": "https://github.com/MaverickCER"
+  },
+  "keywords": [
+    "repo-contract",
+    "monorepo",
+    "governance",
+    "ci",
+    "lint",
+    "internal"
+  ],
   "type": "module",
   "bin": {
     "internal-package-contract": "./bin/contract.mjs"
   },
   "exports": {
-    ".": "./contract.ts",
-    "./contract": "./contract.ts",
     "./eslint": "./eslint.config.mjs",
     "./prettier": "./prettier.config.mjs",
     "./tsconfig": "./tsconfig.json",

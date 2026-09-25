@@ -53,7 +53,7 @@ if [ "$inside_toplevel" = "1" ] && [ -f "$DIR/../repo-contract.config.ts" ]; the
   # inherited shell PATH -- prepends node_modules/.bin to PATH. Confirmed: a bare
   # `node scripts/run-contract.mjs` fails every spawned check with ENOENT even
   # though `npm run contract` (this same command) passes clean.
-  exec npm --prefix "$DIR/.." run contract -- --checks Lint,Format,Typecheck,Tests,Architecture,GithubActions,GitHygiene,Duplication,Licenses,DocsMarkdown,DocsLinks,DocsFragments,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
+  exec npm --prefix "$DIR/.." run contract -- --checks Lint,Format,Typecheck,Tests,Architecture,GithubActions,GitHygiene,BranchProtection,Duplication,Licenses,DocsMarkdown,DocsLinks,DocsFragments,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
 else
-  exec node "$DIR/../bin/contract.mjs" --checks ApiDocs,Lint,Format,Schema,Build,Typecheck,Tests,Architecture,GithubActions,GitHygiene,Size,Duplication,Packaging,TypeResolution,Licenses,DocsMarkdown,DocsLinks,DocsFragments,Accessibility,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
+  exec node "$DIR/../bin/contract.mjs" --checks ApiDocs,Lint,Format,Schema,Build,Typecheck,Tests,Architecture,GithubActions,GitHygiene,BranchProtection,Size,Duplication,Packaging,TypeResolution,Licenses,DocsMarkdown,DocsLinks,DocsFragments,Accessibility,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
 fi
