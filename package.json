@@ -62,7 +62,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "contract": "node scripts/run-contract.mjs"
+    "contract": "node scripts/run-contract.mjs",
+    "version": "changeset version"
   },
   "dependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
@@ -102,6 +103,9 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1"
   },
   "overrides": {
     "tar": "^7.5.22",
