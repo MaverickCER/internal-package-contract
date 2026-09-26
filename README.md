@@ -17,25 +17,57 @@ It is the "package" row of the layered governance model
 
 **Not published to npm** (repo-contract cannot depend on it — that would be
 circular). Consumers depend on it with a `file:` / git range and get
-`repo-contract`, every executor, and every tool config transitively — one
-devDependency.
+`repo-contract`, every executor, and every tool config transitively for
+**`npm run contract` itself** — one devDependency, no extra installs needed to
+run the contract (`bin/contract.mjs` prepends every `node_modules/.bin` it
+finds, including this package's own nested one, so `eslint`/`tsc`/`vitest`/etc.
+resolve even though a plain `file:` dependency's own dependencies are never
+`npm`-hoisted into the consumer's tree).
+
+That transitivity does **not** extend to the consumer's _own_ scripts or to
+TypeScript's own type resolution, both of which only ever look in the
+consumer's own `node_modules` (never a dependency's nested one): a consumer
+that runs `build`/`test` outside of `npm run contract`, or that extends the
+bundled `internal-package-contract/tsconfig` baseline (which sets
+`"types": ["node"]`), needs its own `typescript`, `@types/node`, and
+`vitest`/`@vitest/coverage-v8` devDependencies too — exactly what every
+current real consumer (env-cap, data-cap) already has. Add them alongside
+`internal-package-contract`.
 
 ## Adopt it
 
 ```sh
-npm i -D internal-package-contract    # or "file:../internal-package-contract"
+npm i -D internal-package-contract typescript @types/node vitest @vitest/coverage-v8
 npx internal-package-contract init    # scaffold repo files + wire git hooks
 npm run contract
 ```
+
+(`internal-package-contract` itself can be a `file:../internal-package-contract`
+or git range instead of a registry version, per "Not published to npm" above;
+the other four are ordinary registry devDependencies every TypeScript +
+Vitest package already needs.)
 
 `init` is non-destructive (`--force` to overwrite). It:
 
 - writes `.gitignore`, `.gitattributes`, `.editorconfig`, `.gitmessage`,
   `.nvmrc`, `.github/workflows/contract.yml`,
-  `.github/workflows/release.yml` (only the ones you're missing);
+  `.github/workflows/release.yml`, `CODEOWNERS`, `SECURITY.md`,
+  `CONTRIBUTING.md` (only the ones you're missing);
 - sets `package.json` `scripts.contract`;
 - sets `git config core.hooksPath` → the bundled hooks and
-  `commit.template` → `.gitmessage`.
+  `commit.template` → `.gitmessage`;
+- idempotently configures a GitHub ruleset on the default branch (via the
+  `gh` CLI, best-effort -- skipped with a warning if `gh` isn't
+  installed/authenticated) blocking deletion, blocking force-pushes, and
+  requiring every merge to go through a pull request.
+
+There's no programmatic import of this package -- `contract.ts` ships as raw
+TypeScript (Node refuses to type-strip `.ts` under `node_modules`, so a plain
+`import("internal-package-contract")` doesn't work), and nothing in this
+fleet needs one. The `internal-package-contract` CLI (which loads
+`contract.ts` internally via `tsx`) is the one supported way to run it; use
+`./eslint`, `./prettier`, `./tsconfig`, and `./config/*` for the individual
+tool configs.
 
 **Bundled git hooks** (skip any with `--no-verify`):
 
@@ -45,7 +77,7 @@ npm run contract
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 27 checks
+## The 28 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -71,37 +103,55 @@ the packaging checks see a fresh `dist/`.
 
 ### 3 — Readers (concurrent)
 
-| Check             | How                                                                               | Blocks on                                                                                                               |
-| ----------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `Typecheck`       | `tsc --noEmit -p tsconfig.json`                                                   | any type error                                                                                                          |
-| `Tests`           | `vitest run` **with** V8 coverage, once                                           | any failing / errored test                                                                                              |
-| `Architecture`    | `depcruise src` — bundled `config/dependency-cruiser.cjs`                         | any error-severity violation (circular deps, etc.)                                                                      |
-| `GithubActions`   | `actionlint`                                                                      | any workflow finding (no workflows → pass)                                                                              |
-| `GitHygiene`      | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files` | a repo-maintenance defect                                                                                               |
-| `Coverage`        | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                            | any metric below threshold                                                                                              |
-| `Crap`            | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                 | any function over either ceiling                                                                                        |
-| `Size`            | `npm run size` \*                                                                 | the consumer's size script failing                                                                                      |
-| `Duplication`     | `jscpd src`                                                                       | any copy-pasted block in `src/`                                                                                         |
-| `Packaging`       | `publint`                                                                         | any packaging **error** (warnings warn)                                                                                 |
-| `TypeResolution`  | `attw` on the packed tarball (`./schema` excluded)                                | any packaged type-resolution problem                                                                                    |
-| `Licenses`        | `licensee --production --osi`                                                     | any shipped dep without an OSI license                                                                                  |
-| `DocsMarkdown`    | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                         | any markdown issue                                                                                                      |
-| `DocsLinks`       | `linkinator` from `README.md`, recursive                                          | any broken **local** link (external rot warns)                                                                          |
-| `DocsFragments`   | bundled `scripts/check-docs-fragments.mjs`                                        | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers) |
-| `Accessibility`   | `pa11y` (WCAG2AA) against the consumer's own built docs site                      | any accessibility violation (no built site to scan → warn)                                                              |
-| `SecurityDeps`    | `npm audit --omit=dev`                                                            | any low/moderate/high/critical advisory (info warns)                                                                    |
-| `SecuritySecrets` | `secretlint` — bundled `config/secretlint.config.json`                            | any detected secret                                                                                                     |
-| `SecuritySocket`  | `socket ci --json` (`@socketsecurity/cli`)                                        | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                  |
-| `DeadCode`        | `knip` — bundled `config/knip.json`                                               | any unused file/export/dep, unlisted import                                                                             |
-| `Commits`         | `commitlint origin/main..HEAD` — bundled config                                   | any non-Conventional-Commit (no base branch → warn)                                                                     |
-| `Mutation`        | Stryker, zero-tolerance (`isolated`)                                              | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**   |
+| Check              | How                                                                                | Blocks on                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Typecheck`        | `tsc --noEmit -p tsconfig.json`                                                    | any type error                                                                                                          |
+| `Tests`            | `vitest run` **with** V8 coverage, once                                            | any failing / errored test                                                                                              |
+| `Architecture`     | `depcruise src` — bundled `config/dependency-cruiser.cjs`                          | any error-severity violation (circular deps, etc.)                                                                      |
+| `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                   | any workflow finding (no workflows → pass)                                                                              |
+| `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`  | a repo-maintenance defect                                                                                               |
+| `BranchProtection` | `gh api` against the default branch's GitHub ruleset                               | deletion / force-push / PR-required protection missing (warns if `gh` unavailable)                                      |
+| `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                             | any metric below threshold                                                                                              |
+| `Crap`             | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                  | any function over either ceiling                                                                                        |
+| `Size`             | `npm run size` \*                                                                  | the consumer's size script failing                                                                                      |
+| `Duplication`      | `jscpd src`                                                                        | duplication above the 0.75% budget                                                                                      |
+| `Packaging`        | `publint`                                                                          | any packaging **error** (warnings warn)                                                                                 |
+| `TypeResolution`   | `attw` on the packed tarball (`./schema` excluded)                                 | any packaged type-resolution problem                                                                                    |
+| `Licenses`         | `licensee --production --osi`                                                      | any shipped dep without an OSI license                                                                                  |
+| `DocsMarkdown`     | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                          | any markdown issue                                                                                                      |
+| `DocsLinks`        | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/` | any broken **local** link (external rot warns)                                                                          |
+| `DocsFragments`    | bundled `scripts/check-docs-fragments.mjs`                                         | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers) |
+| `Accessibility`    | `pa11y` (WCAG2AA) against the consumer's own built docs site                       | any accessibility violation (no built site to scan → warn)                                                              |
+| `SecurityDeps`     | `npm audit --omit=dev`                                                             | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record) |
+| `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                             | any detected secret                                                                                                     |
+| `SecuritySocket`   | `socket ci --json` (`@socketsecurity/cli`)                                         | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                  |
+| `DeadCode`         | `knip` — bundled `config/knip.json`                                                | any unused file/export/dep, unlisted import                                                                             |
+| `Commits`          | `commitlint origin/main..HEAD` — bundled config                                    | any non-Conventional-Commit (no base branch → warn)                                                                     |
+| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                               | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**   |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
+**A genuinely brand-new package** (nothing but `package.json` — no `src/`,
+`tsconfig.json`, `eslint.config.*`, `build` script, or `.git` yet) will see
+more than `ApiDocs`/`Schema`/`Size` behave this way on the very first
+`npm run contract`: `Lint`, `Typecheck`, `Build`, `Architecture`, `GitHygiene`,
+and `Coverage` **fail outright**, each naming exactly what's missing (a
+`tsconfig.json`, a `src/` directory, a `git init`, …) — this is deliberate,
+not a bug: unlike the `config/`-backed checks, the `eslint`/`tsconfig`
+baselines are meant to be **extended** by the consumer's own config (see
+"Overriding a bundled config" below), never silently substituted, so `Lint`/
+`Typecheck` enforce real rules against real consumer config from day one
+instead of quietly no-op'ing. `Mutation`, `Accessibility` (no built docs site
+yet), and `BranchProtection` (no `.git`/GitHub remote yet) are the exceptions
+that _do_ default to a warn instead (see their rows above). Run `git init`
+and add a `tsconfig.json` / `eslint.config.mjs` (extending this package's
+own) and a `src/` tree to bring the rest green — Step 2 of adoption, not
+Step 1.
+
 ### Not cloned from `repo-contract.config.ts`
 
-`suppression-governance`, `api-contract`, `security-network`, `adr-governance`,
-`accessibility`, and the `test-unit/integration/property/e2e` split — each
+`suppression-governance`, `api-contract`, `security-network`,
+`adr-governance`, and the `test-unit/integration/property/e2e` split — each
 encodes repo-contract's own design rather than a general package standard.
 
 ## Overriding a bundled config

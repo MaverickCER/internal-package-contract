@@ -20,7 +20,13 @@ export const COVERAGE_THRESHOLDS = {
 } as const
 
 interface CoverageSummary {
-  readonly total?: Record<string, { readonly pct?: number }>
+  readonly total?: Record<string, { readonly pct?: number | "Unknown" }>
+}
+
+/** V8/Istanbul's own `pct` sentinel for a metric with nothing instrumented (`0/0`, printed instead of dividing 0 by 0) -- the literal string `"Unknown"`, distinct from a missing field or an actual `NaN`/`Infinity`. Checked directly, ahead of the generic per-metric loop, so a brand-new consumer with no `src/` yet gets one clear explanation instead of the same vague "percentage missing or invalid" bullet repeated four times. Requires every metric to say so (not just one) -- a report that is genuinely missing a single field, or carries a real `NaN`, still falls through to the generic per-metric message, which already names exactly which metric and why. Callers only reach this after already ruling out a missing/non-object `total`, so it takes the narrowed, non-nullable type rather than re-guarding against something that can't happen here. */
+function hasNoInstrumentedCode(total: NonNullable<CoverageSummary["total"]>): boolean {
+  const metrics = Object.values(total)
+  return metrics.length > 0 && metrics.every((metric) => metric?.pct === "Unknown")
 }
 
 export const coverage: CheckDefinitionConfig = {
@@ -60,6 +66,14 @@ export const coverage: CheckDefinitionConfig = {
       return {
         outcome: "fail",
         rationale: "Coverage: coverage-summary.json has no `total` section.",
+      }
+    }
+
+    if (hasNoInstrumentedCode(total)) {
+      return {
+        outcome: "fail",
+        rationale:
+          "Coverage: 0 statements instrumented -- there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
       }
     }
 

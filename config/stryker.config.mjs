@@ -7,9 +7,11 @@
  *   import baseline from "internal-package-contract/config/stryker"
  *   export default { ...baseline, mutate: [...baseline.mutate, "!src/legacy/**"] }
  *
- * The mutation-score threshold is NOT set here -- the `Mutation` check owns that
- * number (`MUTATION_THRESHOLD` in checks/mutation.ts) and reads the report
- * directly, so `thresholds.break` is left undefined on purpose.
+ * No score threshold is set here -- the `Mutation` check owns the policy
+ * (checks/mutation.ts) and it isn't a numeric score gate at all: it's
+ * zero-tolerance, requiring exactly 0 Survived/NoCoverage/Timeout mutants
+ * (each waivable only via a documented exception record), so
+ * `thresholds.break` is left undefined on purpose.
  *
  * @type {import('@stryker-mutator/api/core').PartialStrykerOptions}
  */

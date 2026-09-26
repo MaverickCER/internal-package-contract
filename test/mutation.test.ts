@@ -317,6 +317,21 @@ describe("mutation()", () => {
     expect(result.rationale).toContain("did not produce reports/mutation/mutation.json")
   })
 
+  it("warns (does not fail) when run-mutation.mjs deliberately skipped Stryker -- no own config, IPC_MUTATION unset", async () => {
+    const check = mutation()
+    const result = await check.policy(
+      makeContext(
+        makeResult({
+          stdout:
+            "internal-package-contract: Mutation skipped -- no stryker.config.* in this repo and IPC_MUTATION is not set.\n",
+        }),
+      ),
+    )
+    expect(result.outcome).toBe("warn")
+    expect(result.rationale).toContain("Mutation skipped")
+    expect(result.rationale).toContain("IPC_MUTATION=1")
+  })
+
   it("fails when Stryker's report contains 0 valid mutants", async () => {
     writeReport({ files: {} })
     const check = mutation()

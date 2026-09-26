@@ -1,8 +1,18 @@
 # internal-package-contract caller workflow. Runs the shared Changesets + npm OIDC
-# trusted-publishing release flow on every push to main. Replace nothing -- the real
-# logic lives in the shared, centrally-maintained reusable workflow this calls; a fix
-# or improvement there reaches every consumer without a per-repo edit. See
+# trusted-publishing release flow on every push to main. Don't inline the release
+# logic itself here -- it lives in the shared, centrally-maintained reusable workflow
+# this calls; a fix or improvement there reaches every consumer without a per-repo
+# edit. See
 # https://github.com/MaverickCER/internal-package-contract/blob/main/.github/workflows/release-npm-changesets.yml
+#
+# Requires Changesets already set up in this repo (`npm run version` / `npm run
+# release` scripts, `.changeset/config.json`) and this repo's own npm trusted
+# publisher registered on npmjs.com -- neither is set up by `internal-package-contract
+# init`. See the reusable workflow's own `roll-floating-major-tag` input doc comment
+# (linked above) before your first release: it defaults to true (every consumer had a
+# composite GitHub Action to version when this default was chosen), which pushes a
+# floating `v1` git tag on every successful publish. A plain npm package with no
+# action.yml doesn't want that tag -- uncomment the `with:` block below for one.
 name: Release
 
 on:
@@ -22,3 +32,7 @@ jobs:
       # itself declares.
       id-token: write
     uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@main
+    # An npm-only package (no composite GitHub Action / action.yml to version) --
+    # uncomment so a successful release doesn't push an unwanted floating v1 tag:
+    # with:
+    #   roll-floating-major-tag: false

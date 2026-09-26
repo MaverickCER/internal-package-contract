@@ -33,7 +33,8 @@ interface Pa11yFinding {
 }
 
 type ToolResult<T> =
-  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string }
+  | { readonly ok: true; readonly value: T; readonly pagesScanned: number }
+  | { readonly ok: false; readonly error: string }
 
 /** @returns A single-line `page -- selector [code]: message` summary. */
 function formatFinding(finding: Pa11yFinding): string {
@@ -63,6 +64,18 @@ export const accessibility: CheckDefinitionConfig = {
       return {
         outcome: "fail",
         rationale: `Accessibility: pa11y could not be evaluated: ${evidence.error}`,
+      }
+    }
+
+    // A genuinely absent built docs site (neither docs/index.html nor docs/api/index.html
+    // exists) is not the same thing as a clean scan -- pa11y never ran against anything, so
+    // "0 issues" here would be false confidence, not a real pass. Distinct from the 0-pages
+    // case, a real scan that finds 0 issues across N pages still reports `pass` below.
+    if (evidence.pagesScanned === 0) {
+      return {
+        outcome: "warn",
+        rationale:
+          "Accessibility: no built docs site found to scan (looked for docs/index.html, docs/api/index.html).",
       }
     }
 
