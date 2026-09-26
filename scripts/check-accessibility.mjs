@@ -178,7 +178,12 @@ try {
       }),
     )
 
-    process.stdout.write(JSON.stringify({ ok: true, value: perPage.flat() }))
+    // `pagesScanned` lets the policy tell a genuine "0 issues across N pages" pass apart from
+    // "0 pages existed to scan" (no built docs site at all) -- both produce an empty `value`
+    // array otherwise, and only the first is actually a clean pass. See resolvePages() above.
+    process.stdout.write(
+      JSON.stringify({ ok: true, value: perPage.flat(), pagesScanned: existingPages.length }),
+    )
     process.exitCode = 0
   }
 } catch (error) {

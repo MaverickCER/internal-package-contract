@@ -1,0 +1,70 @@
+# internal-package-contract's own release: version bump + CHANGELOG only, via
+# Changesets -- never `npm publish`. This package is deliberately never
+# published to npm (see README/SECURITY.md -- repo-contract can't depend on
+# it without a cycle), so it can't call the shared, reusable
+# release-npm-changesets.yml this repo hosts for its own consumers (that
+# workflow's whole job is an npm OIDC publish).
+#
+# On every push to main: changesets/action opens/updates the standing
+# "Version Packages" PR while changesets are pending (never publishes,
+# since no `publish` input is given). Once that PR is merged, this same
+# workflow runs again on the resulting push -- the "tag the release" step
+# below notices package.json's version has no matching git tag yet and
+# creates one, rolling the floating `v1` tag forward too (same convention
+# release-npm-changesets.yml uses for its own consumers) so a consumer can
+# pin `#v1` instead of floating on `#main`.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - run: npm ci
+
+      - name: Version Packages PR
+        uses: changesets/action@ce079ea084e08a340947ed4d6ecedb2433c8f293 # v1
+        with:
+          version: npm run version
+          # changesets/action's own default commit/PR-title ("Version Packages") is not a
+          # Conventional Commit -- this repo's own Commits check (commitlint) fails the
+          # resulting bot commit on origin/main..HEAD. Same fix as PR #7's identical one in
+          # release-npm-changesets.yml (the reusable workflow this repo hosts for consumers,
+          # which this repo's own release can't call -- see this file's own header comment).
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag the released version (no npm publish -- private package)
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "$VERSION already tagged, nothing to do."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$VERSION"
+            git push origin "$VERSION"
+            git tag -f v1
+            git push origin v1 --force
+          fi
