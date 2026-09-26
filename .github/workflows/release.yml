@@ -45,6 +45,13 @@ jobs:
         uses: changesets/action@ce079ea084e08a340947ed4d6ecedb2433c8f293 # v1
         with:
           version: npm run version
+          # changesets/action's own default commit/PR-title ("Version Packages") is not a
+          # Conventional Commit -- this repo's own Commits check (commitlint) fails the
+          # resulting bot commit on origin/main..HEAD. Same fix as PR #7's identical one in
+          # release-npm-changesets.yml (the reusable workflow this repo hosts for consumers,
+          # which this repo's own release can't call -- see this file's own header comment).
+          commit: "chore: version packages"
+          title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
