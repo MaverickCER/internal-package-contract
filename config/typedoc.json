@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "plugin": ["internal-package-contract/config/typedoc-a11y-search-label"],
+  "validation": {
+    "notExported": true,
+    "notDocumented": true,
+    "invalidLink": true
+  }
+}

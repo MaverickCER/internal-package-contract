@@ -23,6 +23,16 @@ on:
           npm-only consumer with no composite Action should pass false.
         type: boolean
         default: true
+    outputs:
+      version:
+        description: The version just published by this run; empty if nothing was published.
+        value: ${{ jobs.release.outputs.version }}
+      bump-type:
+        description: >-
+          major/minor/patch of the version just published, derived from the
+          highest-severity changeset actually consumed to produce it. Empty if
+          nothing was published.
+        value: ${{ jobs.release.outputs.bump-type }}
 
 jobs:
   release:
@@ -38,9 +48,13 @@ jobs:
       # effective permissions at the intersection of what the caller grants and what
       # this file declares.
       id-token: write
-      # Dispatches the consumer's own ci.yml on the release PR's branch below --
-      # see that step's own comment for why this is needed at all.
+      # Dispatches the consumer's own ci.yml on the release PR's branch below, and
+      # watches that run to auto-merge once it's green -- see those steps' own
+      # comments for why this is needed at all.
       actions: write
+    outputs:
+      version: ${{ steps.publish-info.outputs.version }}
+      bump-type: ${{ steps.publish-info.outputs.bump-type }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -56,6 +70,16 @@ jobs:
       # OIDC trusted publishing requires npm CLI >=11.5.1 and Node >=22.14 -- don't
       # rely on whatever version happens to be bundled.
       - run: npm install -g npm@latest
+
+      # Guarantees every commit since the last release carries a changeset -- either
+      # the hand-written one its own PR already added, or one generated here from its
+      # Conventional Commit subject (part B of the "Standardize npm release + Pages
+      # deploy" plan). Self-skips when HEAD is itself the release commit (a
+      # publish-triggered run), so it never reintroduces pending changesets into a
+      # run that should just publish. Invoked from the consumer's own installed
+      # devDependency -- one implementation shared by every consumer, no per-repo copy.
+      - name: Auto-generate changesets for any commit missing one
+        run: node node_modules/internal-package-contract/scripts/generate-changeset-from-commits.mjs
 
       - name: Create Release Pull Request or Publish
         id: changesets
@@ -81,15 +105,65 @@ jobs:
       # release PRs before this step existed). `gh workflow run` is explicitly
       # exempted from that restriction, and its run's checks attach to the given
       # ref's head SHA exactly as a normal `pull_request` run's would, so the
-      # branch's required status checks end up satisfied by the time a human
-      # reviews the PR -- no more manual close/reopen or empty-commit workaround.
+      # branch's required status checks end up satisfied by the time the merge
+      # step below runs.
       - name: Dispatch the consumer's CI on the release PR's branch
+        id: dispatch
         if: steps.changesets.outputs.pullRequestNumber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH=$(gh pr view "${{ steps.changesets.outputs.pullRequestNumber }}" --json headRefName -q .headRefName)
+          SHA=$(gh pr view "${{ steps.changesets.outputs.pullRequestNumber }}" --json headRefOid -q .headRefOid)
           gh workflow run ci.yml --ref "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      # Closes the loop the dispatch step above only half-finished: without this, a
+      # human still has to notice the release PR is green and click merge by hand --
+      # exactly the "someone has to remember to cut the release" step the design
+      # principle rules out. Branch protection on every consumer requires 0 approving
+      # reviews (confirmed live via `gh api .../rulesets`), so once the dispatched run
+      # this same job just kicked off reports success, nothing else stands between
+      # this PR and npm. Not a new risk category: repo-contract's own `badges` job
+      # already auto-merged a bot-authored PR with zero review before this plan.
+      - name: Wait for the dispatched CI run, then merge the release PR
+        if: steps.changesets.outputs.pullRequestNumber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.dispatch.outputs.branch }}"
+          SHA="${{ steps.dispatch.outputs.sha }}"
+          RUN_ID=""
+          for _ in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow=ci.yml --branch "$BRANCH" --json databaseId,headSha \
+              --jq "[.[] | select(.headSha == \"$SHA\")][0].databaseId")
+            [ -n "$RUN_ID" ] && break
+            sleep 10
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Never saw the dispatched ci.yml run start for $SHA on $BRANCH."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status
+          gh pr merge "${{ steps.changesets.outputs.pullRequestNumber }}" --squash --delete-branch
+
+      # Surfaces what this run actually published, for a caller (repo-contract's
+      # notify-internal-package-contract job, part E) to act on. bump-type comes from
+      # `.changeset/.release-bump.json`, written by the auto-generation step above
+      # during the VERSION run that produced this exact version bump -- not by
+      # diffing version strings, which is ambiguous pre-1.0 (a 0.3.0 -> 0.4.0 bump
+      # can be either a real "minor" or the pre-1.0 stand-in for "major"). That file
+      # is not a `.changeset/*.md` changeset itself, so `changeset version` leaves it
+      # alone, and it rides along in the same commit as the version bump it describes.
+      - name: Surface what this run published
+        id: publish-info
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          VERSION=$(node -p "JSON.parse(process.argv[1])[0].version" '${{ steps.changesets.outputs.publishedPackages }}')
+          BUMP=$(node -p "require('./.changeset/.release-bump.json').bump" 2>/dev/null || echo "")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "bump-type=$BUMP" >> "$GITHUB_OUTPUT"
 
       # Rolls the floating `v1` tag documented in a composite Action's own
       # README/action.yml example (standard GitHub Actions convention, e.g.
