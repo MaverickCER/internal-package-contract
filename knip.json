@@ -3,6 +3,7 @@
   "entry": [
     "bin/**/*.mjs!",
     "scripts/**/*.mjs!",
+    "scripts/**/*.ts!",
     "contract.ts!",
     "repo-contract.config.ts!",
     "eslint.config.mjs!",
@@ -11,7 +12,7 @@
     "stryker.config.mjs!",
     ".dependency-cruiser.cjs!"
   ],
-  "project": ["checks/**/*.ts", "bin/**/*.mjs", "scripts/**/*.mjs"],
+  "project": ["checks/**/*.ts", "bin/**/*.mjs", "scripts/**/*.mjs", "scripts/**/*.ts"],
   "ignore": ["template/**", "coverage/**", "reports/**", ".stryker-tmp/**"],
   "ignoreDependencies": [
     "@arethetypeswrong/cli",

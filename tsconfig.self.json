@@ -1,6 +1,7 @@
 {
   // Type-checks this package's own authored TypeScript files (the contract
-  // definition, its checks, and its own dogfooded repo-contract config).
+  // definition, its checks, its TypeScript wrapper scripts, and its own
+  // dogfooded repo-contract config).
   // `eslint.config.mjs`/`prettier.config.mjs` are deliberately plain
   // JavaScript, not TypeScript -- see either file's own doc comment for why
   // -- so they aren't included here; `@type` JSDoc comments there provide
@@ -19,6 +20,7 @@
     "repo-contract.config.ts",
     "vitest.config.ts",
     "checks/**/*.ts",
+    "scripts/**/*.ts",
     "test/**/*.ts"
   ]
 }
