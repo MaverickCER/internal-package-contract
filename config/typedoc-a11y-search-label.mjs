@@ -19,7 +19,12 @@
 // not the static markup TypeDoc emitted.
 //
 // Dependency-free (only the `typedoc` peer this plugin runs inside) -- dev tooling,
-// never shipped.
+// never shipped. Resolves against whichever consuming repo's own installed
+// `typedoc` is running this plugin (standard Node module resolution walks up from
+// this file's location under the consumer's node_modules/internal-package-contract/,
+// finding the consumer's own node_modules/typedoc) -- this package deliberately
+// does not declare `typedoc` as its own dependency.
+import { JSX } from "typedoc"
 
 const LABEL_SCRIPT = [
   'document.getElementById("tsd-search-input")',
@@ -28,7 +33,7 @@ const LABEL_SCRIPT = [
 
 /** @param {import("typedoc").Application} app */
 export function load(app) {
-  app.renderer.hooks.on("body.end", ({ JSX }) =>
+  app.renderer.hooks.on("body.end", () =>
     // A plain string child would come back through TypeDoc's JSX renderer HTML-escaped
     // (`"` -> `&quot;`) -- fine for normal text nodes, but inside `<script>` those
     // entities are never decoded by the browser, which breaks the script outright.
