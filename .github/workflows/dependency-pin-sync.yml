@@ -1,0 +1,133 @@
+# Reusable "receive a dispatch -> bump a pin -> open a PR -> merge conditionally"
+# workflow, shared between:
+#   - sync-repo-contract-version.yml (part E): repo-contract -> internal-package-contract,
+#     always adds a matching-severity changeset (a real functional/engine coupling).
+#   - each consumer's own sync-internal-package-contract.yml (part F): internal-package-contract
+#     -> its dependents, never adds a changeset (a devDependency/tooling bump alone
+#     doesn't mean the consumer's own published behavior changed).
+#
+# `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
+name: Dependency pin sync (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      dependency-name:
+        description: The npm package whose pin is being bumped (also its devDependency/dependency key in package.json).
+        required: true
+        type: string
+      new-version:
+        description: The version to bump dependency-name to.
+        required: true
+        type: string
+      add-changeset:
+        description: >-
+          Whether to also add a changeset bumping the CALLING repo's own version by
+          bump-type. Only correct when dependency-name is a real functional
+          dependency of the caller, not just a devDependency version tick.
+        required: true
+        type: boolean
+      bump-type:
+        description: major/minor/patch for the generated changeset. Required when add-changeset is true.
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Bump the pin, preserving its existing range operator
+        env:
+          DEP: ${{ inputs.dependency-name }}
+          NEW_VERSION: ${{ inputs.new-version }}
+        run: |
+          CURRENT=$(node -p "(require('./package.json').dependencies||{})['$DEP'] || (require('./package.json').devDependencies||{})['$DEP'] || ''")
+          PREFIX=$(node -p "('$CURRENT'.match(/^[\^~]/) || [''])[0]")
+          npm install "${DEP}@${PREFIX}${NEW_VERSION}"
+
+      - name: Generate a changeset for this repo's own version
+        if: ${{ inputs.add-changeset }}
+        env:
+          DEP: ${{ inputs.dependency-name }}
+          NEW_VERSION: ${{ inputs.new-version }}
+          BUMP: ${{ inputs.bump-type }}
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          mkdir -p .changeset
+          cat > ".changeset/sync-${DEP}-${NEW_VERSION}.md" <<EOF
+          ---
+          "$PKG": $BUMP
+          ---
+
+          Bump \`$DEP\` to $NEW_VERSION.
+          EOF
+
+      - name: Commit and open a PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEP: ${{ inputs.dependency-name }}
+          NEW_VERSION: ${{ inputs.new-version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- package.json package-lock.json .changeset
+          if git diff --cached --quiet; then
+            echo "Already at ${NEW_VERSION}; nothing to do."
+            exit 0
+          fi
+          BRANCH="chore/bump-${DEP}-${NEW_VERSION}"
+          git checkout -b "$BRANCH"
+          git commit -m "chore(deps): bump ${DEP} to ${NEW_VERSION}"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(deps): bump ${DEP} to ${NEW_VERSION}" \
+            --body "Automated dependency-pin sync triggered by ${DEP}@${NEW_VERSION}."
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      # Same dispatch-and-poll shape as release-npm-changesets.yml's own merge step
+      # (part C), with one deliberate difference: a red run here leaves the PR open
+      # for a human instead of erroring the job -- bumping a real dependency (unlike
+      # a purely-generated version/changelog bump) can genuinely surface a failure
+      # that should be looked at, not silently forced through (part F's explicit
+      # safety valve; harmless when add-changeset is true too, since E's coupling
+      # can break the same way).
+      - name: Dispatch CI, then merge only if it comes back green
+        if: steps.pr.outputs.branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${{ steps.pr.outputs.branch }}"
+          SHA=$(git rev-parse HEAD)
+          gh workflow run ci.yml --ref "$BRANCH"
+          RUN_ID=""
+          for _ in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow=ci.yml --branch "$BRANCH" --json databaseId,headSha \
+              --jq "[.[] | select(.headSha == \"$SHA\")][0].databaseId")
+            [ -n "$RUN_ID" ] && break
+            sleep 10
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::Never saw the dispatched ci.yml run start for $SHA; leaving PR open for a human."
+            exit 0
+          fi
+          if gh run watch "$RUN_ID" --exit-status; then
+            PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+            gh pr merge "$PR_NUMBER" --squash --delete-branch
+          else
+            echo "::warning::CI failed on the dependency-bump branch; leaving PR open for a human, not force-merging."
+          fi

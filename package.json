@@ -38,6 +38,9 @@
     "./config/commitlint": "./config/commitlint.config.mjs",
     "./config/secretlint": "./config/secretlint.config.json",
     "./config/markdownlint": "./config/markdownlint.jsonc",
+    "./config/typedoc": "./config/typedoc.json",
+    "./config/typedoc-markdown": "./config/typedoc-markdown.json",
+    "./config/typedoc-a11y-search-label": "./config/typedoc-a11y-search-label.mjs",
     "./package.json": "./package.json"
   },
   "files": [
