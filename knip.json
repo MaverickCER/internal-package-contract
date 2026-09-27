@@ -28,6 +28,7 @@
     "markdownlint-cli2",
     "publint",
     "puppeteer-core",
-    "secretlint"
+    "secretlint",
+    "typedoc"
   ]
 }
