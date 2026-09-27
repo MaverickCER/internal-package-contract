@@ -38,6 +38,9 @@ jobs:
       # effective permissions at the intersection of what the caller grants and what
       # this file declares.
       id-token: write
+      # Dispatches the consumer's own ci.yml on the release PR's branch below --
+      # see that step's own comment for why this is needed at all.
+      actions: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -69,6 +72,24 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # changesets/action pushes the release-PR branch using the default
+      # GITHUB_TOKEN, which GitHub deliberately never lets trigger `push`/
+      # `pull_request`-based workflows (anti-recursion guard) -- so without this,
+      # the release PR sits with zero CI checks until a human pushes a real
+      # commit to it (confirmed directly: this is exactly what happened to real
+      # release PRs before this step existed). `gh workflow run` is explicitly
+      # exempted from that restriction, and its run's checks attach to the given
+      # ref's head SHA exactly as a normal `pull_request` run's would, so the
+      # branch's required status checks end up satisfied by the time a human
+      # reviews the PR -- no more manual close/reopen or empty-commit workaround.
+      - name: Dispatch the consumer's CI on the release PR's branch
+        if: steps.changesets.outputs.pullRequestNumber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH=$(gh pr view "${{ steps.changesets.outputs.pullRequestNumber }}" --json headRefName -q .headRefName)
+          gh workflow run ci.yml --ref "$BRANCH"
 
       # Rolls the floating `v1` tag documented in a composite Action's own
       # README/action.yml example (standard GitHub Actions convention, e.g.
