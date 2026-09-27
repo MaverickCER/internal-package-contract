@@ -130,6 +130,26 @@ describe("evaluateCoderabbitPolicy", () => {
     expect(result.rationale).toContain("EACCES")
   })
 
+  it("lists every registry error on its own '- ' line, newline-joined, in order", () => {
+    const result = evaluateCoderabbitPolicy({
+      evidence: {
+        ...NOT_APPLICABLE,
+        registryError: [
+          "exceptions[0].file must be a non-empty string.",
+          "exceptions[1] is broken",
+        ],
+      },
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        `${REGISTRY} failed to load or reconcile and was left unchanged:`,
+        "- exceptions[0].file must be a non-empty string.",
+        "- exceptions[1] is broken",
+      ].join("\n"),
+    })
+  })
+
   it("notes present-but-unreconciled records on a not-applicable run", () => {
     const result = evaluateCoderabbitPolicy({
       evidence: { ...NOT_APPLICABLE, existingRecordCount: 2 },
@@ -141,6 +161,42 @@ describe("evaluateCoderabbitPolicy", () => {
   it("omits the unreconciled note when the registry holds nothing", () => {
     const result = evaluateCoderabbitPolicy({ evidence: NOT_APPLICABLE })
     expect(result.rationale).not.toContain("were validated but not reconciled")
+  })
+
+  it("warns with the exact not-applicable rationale, with nothing appended, at 0 records", () => {
+    expect(evaluateCoderabbitPolicy({ evidence: NOT_APPLICABLE })).toEqual({
+      outcome: "warn",
+      rationale:
+        "CodeRabbit did not run (ci) -- findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app.",
+    })
+  })
+
+  it("appends the exact unreconciled-record note at 1 record", () => {
+    expect(
+      evaluateCoderabbitPolicy({ evidence: { ...NOT_APPLICABLE, existingRecordCount: 1 } }),
+    ).toEqual({
+      outcome: "warn",
+      rationale:
+        "CodeRabbit did not run (ci) -- findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app." +
+        ` 1 exception record(s) in ${REGISTRY} were validated but not reconciled (no review ran).`,
+    })
+  })
+
+  it("warns with the exact unavailable rationale, with nothing appended, at 0 records", () => {
+    expect(
+      evaluateCoderabbitPolicy({
+        evidence: {
+          status: "unavailable",
+          reason: "cli-not-installed",
+          registryPath: REGISTRY,
+          existingRecordCount: 0,
+        },
+      }),
+    ).toEqual({
+      outcome: "warn",
+      rationale:
+        "CodeRabbit did not run (cli-not-installed) -- findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) and run from a real branch to enable real enforcement.",
+    })
   })
 
   it("fails on a real CLI-reported error", () => {
@@ -156,9 +212,24 @@ describe("evaluateCoderabbitPolicy", () => {
     expect(result.rationale).toContain("unexpected shape")
   })
 
-  it("passes a 0-findings review with an empty registry", () => {
-    const result = evaluateCoderabbitPolicy({ evidence: reviewed([]) })
-    expect(result.outcome).toBe("pass")
+  it("passes a 0-findings review with an empty registry, with no scaffolded-count suffix", () => {
+    expect(evaluateCoderabbitPolicy({ evidence: reviewed([], { scaffoldedIds: [] }) })).toEqual({
+      outcome: "pass",
+      rationale: "0 CodeRabbit finding(s) evaluated: all permitted by a complete exception record.",
+    })
+  })
+
+  it("appends the exact scaffolded-count suffix at exactly 1 scaffolded id", () => {
+    expect(
+      evaluateCoderabbitPolicy({
+        evidence: reviewed([], { scaffoldedIds: ["coderabbit:src/other.ts:minor:aaaaaaaaaaaa"] }),
+      }),
+    ).toEqual({
+      outcome: "pass",
+      rationale:
+        "0 CodeRabbit finding(s) evaluated: all permitted by a complete exception record." +
+        ` (1 new record(s) scaffolded blank in ${REGISTRY})`,
+    })
   })
 
   it("fails a 0-findings review with a stale record", () => {
@@ -261,6 +332,69 @@ describe("evaluateCoderabbitPolicy", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("independent registry validation")
   })
+
+  it("lists every independent-validation error on its own '- ' line, newline-joined", () => {
+    // Two records whose `severity` is a value the registry schema doesn't recognize -- one error
+    // each, so the "- " prefix and the "\n" join are both observable in the asserted output.
+    const bad = "nope" as NormalizedFinding["severity"]
+    const first = finding({ severity: bad, summary: "The first finding." })
+    const second = finding({ severity: bad, summary: "The second finding." })
+    const result = evaluateCoderabbitPolicy({
+      evidence: reviewed([
+        { finding: first, record: record(first, COMPLETE) },
+        { finding: second, record: record(second, COMPLETE) },
+      ]),
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "CodeRabbit evidence failed independent registry validation:",
+        '- exceptions[0].severity must be one of "critical", "major", "minor", "unknown" (got "nope").',
+        '- exceptions[1].severity must be one of "critical", "major", "minor", "unknown" (got "nope").',
+      ].join("\n"),
+    })
+  })
+
+  it("lists every bijection error on its own '- ' line, newline-joined", () => {
+    const unbacked = finding({ summary: "A finding with no record at all." })
+    const orphaned = finding({ summary: "A record whose finding is gone." })
+    const result = evaluateCoderabbitPolicy({
+      evidence: {
+        status: "reviewed",
+        registryPath: REGISTRY,
+        findings: [unbacked],
+        activeExceptions: { [orphaned.id]: record(orphaned, COMPLETE) },
+        staleExceptions: [],
+        scaffoldedIds: [],
+      },
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "CodeRabbit evidence broke the findings <-> activeExceptions bijection:",
+        `- finding ${JSON.stringify(unbacked.id)} has no active exception record.`,
+        `- active exception ${JSON.stringify(orphaned.id)} matches no finding.`,
+      ].join("\n"),
+    })
+  })
+
+  it("fails with the exact offender line, missing-field list and combined count", () => {
+    const f = finding({ file: "src/resolve.ts", summary: "Consider returning early." })
+    const gone = finding({ file: "src/gone.ts", summary: "A finding no longer raised." })
+    const result = evaluateCoderabbitPolicy({
+      evidence: reviewed([{ finding: f, record: record(f) }], {
+        stale: [record(gone, COMPLETE)],
+      }),
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "2 CodeRabbit finding(s) or stale record(s) need attention:",
+        "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType) -- Consider returning early.",
+        `- Stale exception in ${REGISTRY}: ${JSON.stringify(gone.id)} -- CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
+      ].join("\n"),
+    })
+  })
 })
 
 describe("findBijectionErrors", () => {
@@ -334,6 +468,17 @@ describe("coderabbitai()", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("could not be parsed as JSON. Unexpected token o")
     expect(result.rationale).toContain("oops")
+  })
+
+  it("fails with the bare parse-failure rationale when there is no parsed output at all", async () => {
+    // `output` entirely absent (the wrapper printed nothing parseable) and nothing on
+    // stdout/stderr: both the error detail and the printed-output tail must be empty, and every
+    // `result.output` access must stay optional or this throws.
+    const result = await coderabbitai().policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "CodeRabbit: scripts/coderabbitai/review.ts output could not be parsed as JSON.",
+    })
   })
 
   it("delegates a well-formed evidence value straight to evaluateCoderabbitPolicy", async () => {

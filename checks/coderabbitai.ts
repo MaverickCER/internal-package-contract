@@ -112,9 +112,17 @@ export function evaluateFinding(
   readonly verdict: "forbidden" | "insufficient" | "permitted" | "unmatched"
   readonly missing: readonly string[]
 } {
+  // Stryker disable all -- equivalent mutants. `CODERABBIT_GLOBAL_DEFAULT_POLICY` is deliberately
+  // byte-identical to `CODERABBIT_POLICY.coderabbit.default` (see
+  // `scripts/coderabbitai/policy-config.ts`: one group, one group-level default, the same four
+  // requirements), so mutating `"coderabbit"` to `""` -- or the whole classification to `{}` --
+  // only makes `resolveExceptionPolicy` miss the group and fall through to that identical global
+  // default. Every input then resolves to exactly the same policy, the same verdict and the same
+  // `missing` list, so no test could ever observe a difference.
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "coderabbit", category: finding.severity },
   ]
+  // Stryker restore all
   return evaluateFindingVerdict(
     record,
     classifications,
@@ -154,6 +162,12 @@ export function evaluateCoderabbitPolicy(input: {
     CODERABBIT_POLICY,
     VALID_CODERABBIT_REQUIREMENTS,
   )
+  // Stryker disable all -- CODERABBIT_POLICY/VALID_CODERABBIT_REQUIREMENTS are fixed, valid module
+  // constants (see `scripts/coderabbitai/policy-config.ts`); this defensive guard can never observe
+  // a misconfigured policy under any real invocation of this function, since it never varies at
+  // runtime. No test can hit it without literally breaking those constants. Kept as
+  // defense-in-depth against a future editing mistake in CODERABBIT_POLICY itself -- exactly as
+  // `SecuritySocket`'s and `SecurityDeps`' own identical guards are annotated.
   if (configErrors.length > 0) {
     return {
       outcome: "fail",
@@ -162,6 +176,7 @@ export function evaluateCoderabbitPolicy(input: {
       ),
     }
   }
+  // Stryker restore all
 
   if (evidence.status === "not-applicable") {
     return {
@@ -233,12 +248,25 @@ export function evaluateCoderabbitPolicy(input: {
   }
 
   const offenderLines = offenders.map((d) => {
+    // Both leading branches are structurally unreachable *from here*, unlike in
+    // `SecuritySocket`'s identically-shaped `evaluateFinalVerdict` this line format was ported
+    // alongside: `CODERABBIT_POLICY` declares no `{ mode: "forbidden" }` tier at all (one group,
+    // every severity in `"exception"` mode), so `evaluateFinding` can never return `"forbidden"`
+    // here; and `findBijectionErrors` above has already failed the whole run for any finding whose
+    // id is absent from `evidence.activeExceptions`, so `evaluateFindingVerdict`'s
+    // `record === undefined -> "unmatched"` short-circuit can never be observed past that guard
+    // either (both verdicts *are* independently covered on `evaluateFinding`/`findBijectionErrors`
+    // themselves). Kept verbatim as defense-in-depth: a future `forbidden` severity tier, or a
+    // relaxed bijection guard, must still render a correct offender line rather than silently
+    // mislabel one as "exception incomplete".
+    // Stryker disable all -- unreachable defensive branches, see comment above.
     const detail =
       d.verdict === "forbidden"
         ? "forbidden by policy"
         : d.verdict === "unmatched"
           ? "no reconciled exception record (registry integrity failure)"
-          : `exception incomplete (missing: ${d.missing.join(", ")})`
+          : // Stryker restore all
+            `exception incomplete (missing: ${d.missing.join(", ")})`
     return `- ${d.finding.file} [${d.finding.severity}]: ${detail} -- ${d.finding.summary}`
   })
 
