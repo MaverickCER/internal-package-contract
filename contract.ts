@@ -42,6 +42,7 @@ import { accessibility } from "./checks/accessibility.js"
 import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
 import { branchProtection } from "./checks/branch-protection.js"
+import { coderabbitai } from "./checks/coderabbitai.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
@@ -118,6 +119,16 @@ export default defineRepoContract({
     SecuritySocket: securitySocket(),
     DeadCode: deadCode(),
     Commits: commits(),
+    // Declared late among the readers (only `Mutation`'s own barrier follows):
+    // the slowest reader by far on a real reviewed run -- a network round trip
+    // to a remote AI review, minutes long -- so every fast, deterministic
+    // check's verdict surfaces before it. NOT `isolated`, unlike
+    // `Tests`/`Mutation`: it waits on a network response rather than
+    // saturating cores, so it contends with nothing -- matching
+    // repo-contract's own plain `coderabbitai,` registration. Its own
+    // non-execution (CI, no CLI installed, a detached checkout) is a visible
+    // `warn` on every run, by design -- see checks/coderabbitai.ts.
+    CodeRabbit: coderabbitai(),
     Mutation: { ...mutation(), isolated: true },
   },
 })
