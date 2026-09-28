@@ -1,4 +1,4 @@
 {
   "$comment": "MaverickCER-owned repos that depend on internal-package-contract and should receive a dependency-pin-bump PR (part F of the 'Standardize npm release + Pages deploy' plan) on every internal-package-contract release. Explicit and auditable rather than discovered dynamically -- this package isn't published to npm, so GitHub's own dependency graph can't see these consumers anyway. Adding a future consumer is a one-line addition here, plus that repo's own sync-internal-package-contract.yml listener.",
-  "consumers": ["data-cap", "env-cap"]
+  "consumers": ["data-cap", "env-cap", "repo-contract"]
 }
