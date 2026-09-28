@@ -1,0 +1,65 @@
+# Reusable "regenerate the committed ApiContract baseline on the release PR branch"
+# workflow -- the internal-package-contract-owned counterpart to the bespoke
+# api-baseline.yml every consumer used to hand-roll around its own now-deleted
+# contract:baseline script. Any consumer whose typedoc.json makes it an ApiContract
+# target needs this: a release bumps package.json's version, and the committed
+# baseline.meta.json must track that same version once the release actually lands
+# (see scripts/api-contract/update-baseline.ts's own module comment for the full
+# outcome matrix) -- otherwise the very next PR's ApiContract check sees a
+# baseline one version behind reality.
+#
+# `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
+name: API baseline sync (reusable)
+
+on:
+  workflow_call: {}
+
+concurrency:
+  # Serialize runs for the same Release PR branch: this job pushes a commit back
+  # onto that branch, and two overlapping runs (a fast `synchronize` after the
+  # push, say) would race to regenerate and push the baseline. `cancel-in-progress`
+  # is deliberately false -- a run must not be interrupted mid-`git push`.
+  group: api-baseline-sync-${{ github.head_ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update-baseline:
+    # Changesets' own fixed branch name for a single-package repo's Version
+    # Packages PR (see each consumer's own .changeset/config.json baseBranch: main).
+    if: github.head_ref == 'changeset-release/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      # Idempotent: a no-op (exit 0, no file writes) once every target's baseline
+      # already carries package.json's version. See update-baseline.ts.
+      - run: npx internal-package-contract update-baseline
+
+      - name: Commit the regenerated baseline
+        env:
+          # Passed through the environment rather than interpolated straight into
+          # `run` -- a branch ref is attacker-influenced input and must never be
+          # spliced into the shell command text.
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- .repo-contract/api-contract
+          if git diff --cached --quiet -- .repo-contract/api-contract; then
+            echo "Baseline already current; nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: sync generated API baseline for release"
+          git push origin HEAD:"$HEAD_REF"

@@ -210,6 +210,12 @@ publisher registered on npmjs.com — `init` does not set either of those up. Pa
 workflow's own input doc comment) for an npm-only consumer with no composite GitHub
 Action to version.
 
+A consumer whose `typedoc.json` makes it an `ApiContract` target also needs a thin
+caller of [`api-baseline-sync.yml`](.github/workflows/api-baseline-sync.yml) (`on:
+pull_request`, gated on `github.head_ref == 'changeset-release/main'`), so the
+committed baseline tracks each release's real version instead of falling one release
+behind on the very next PR.
+
 ## Evolving the standard
 
 Per ADR 0010: a review finding becomes a new check here only when it exposes a
