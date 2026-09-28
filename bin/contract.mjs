@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // The runnable entry point this standard ships:
 //
-//   internal-package-contract              run the whole contract
-//   internal-package-contract --checks a,b run only checks a, b (and their deps)
-//   internal-package-contract init         scaffold repo files + git wiring
+//   internal-package-contract                 run the whole contract
+//   internal-package-contract --checks a,b    run only checks a, b (and their deps)
+//   internal-package-contract init            scaffold repo files + git wiring
+//   internal-package-contract update-baseline regenerate every ApiContract target's baseline
 //
 // A consuming package's package.json only needs
 // `{ "scripts": { "contract": "internal-package-contract" } }`.
@@ -24,6 +25,9 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 if (process.argv[2] === "init") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "init.mjs")).href)
   // init sets its own exit behaviour; nothing else to do here.
+} else if (process.argv[2] === "update-baseline") {
+  await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
+  // update-baseline sets its own exit behaviour; nothing else to do here.
 } else {
   await runContract()
 }
