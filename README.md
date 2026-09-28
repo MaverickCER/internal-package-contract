@@ -77,7 +77,7 @@ tool configs.
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 29 checks
+## The 32 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -89,12 +89,14 @@ Three declaration-order phases (repo-contract ADR 0002):
 
 ### 1 — Writers
 
-| Check     | How                             | Blocks on                                               |
-| --------- | ------------------------------- | ------------------------------------------------------- |
-| `ApiDocs` | `npm run docs:api` \*           | the API-docs build failing                              |
-| `Lint`    | `eslint . --format json`        | any ESLint **error** (warnings warn)                    |
-| `Format`  | `prettier --check .`            | any unformatted file                                    |
-| `Schema`  | `npm run schema` \* + hash diff | the script failing **or** regenerating a committed file |
+| Check           | How                                      | Blocks on                                                         |
+| --------------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| `ApiDocs`       | `npm run docs:api` \*                    | the API-docs build failing                                        |
+| `ApiDocsReport` | `npm run docs:api:report` \* + hash diff | the script failing **or** regenerating `docs/api-report`          |
+| `ReadmeExample` | `npm run verify:readme-example` \*       | example CLI output drifting from README prose (skipped if absent) |
+| `Lint`          | `eslint . --format json`                 | any ESLint **error** (warnings warn)                              |
+| `Format`        | `prettier --check .`                     | any unformatted file                                              |
+| `Schema`        | `npm run schema` \* + hash diff          | the script failing **or** regenerating a committed file           |
 
 ### 2 — Build barrier
 
@@ -103,32 +105,33 @@ the packaging checks see a fresh `dist/`.
 
 ### 3 — Readers (concurrent)
 
-| Check              | How                                                                                | Blocks on                                                                                                                                    |
-| ------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Typecheck`        | `tsc --noEmit -p tsconfig.json`                                                    | any type error                                                                                                                               |
-| `Tests`            | `vitest run` **with** V8 coverage, once                                            | any failing / errored test                                                                                                                   |
-| `Architecture`     | `depcruise src` — bundled `config/dependency-cruiser.cjs`                          | any error-severity violation (circular deps, etc.)                                                                                           |
-| `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                   | any workflow finding (no workflows → pass)                                                                                                   |
-| `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`  | a repo-maintenance defect                                                                                                                    |
-| `BranchProtection` | `gh api` against the default branch's GitHub ruleset                               | deletion / force-push / PR-required protection missing (warns if `gh` unavailable)                                                           |
-| `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                             | any metric below threshold                                                                                                                   |
-| `Crap`             | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                  | any function over either ceiling                                                                                                             |
-| `Size`             | `npm run size` \*                                                                  | the consumer's size script failing                                                                                                           |
-| `Duplication`      | `jscpd src`                                                                        | duplication above the 0.75% budget                                                                                                           |
-| `Packaging`        | `publint`                                                                          | any packaging **error** (warnings warn)                                                                                                      |
-| `TypeResolution`   | `attw` on the packed tarball (`./schema` excluded)                                 | any packaged type-resolution problem                                                                                                         |
-| `Licenses`         | `licensee --production --osi`                                                      | any shipped dep without an OSI license                                                                                                       |
-| `DocsMarkdown`     | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                          | any markdown issue                                                                                                                           |
-| `DocsLinks`        | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/` | any broken **local** link (external rot warns)                                                                                               |
-| `DocsFragments`    | bundled `scripts/check-docs-fragments.mjs`                                         | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers)                      |
-| `Accessibility`    | `pa11y` (WCAG2AA) against the consumer's own built docs site                       | any accessibility violation (no built site to scan → warn)                                                                                   |
-| `SecurityDeps`     | `npm audit --omit=dev`                                                             | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record)                      |
-| `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                             | any detected secret                                                                                                                          |
-| `SecuritySocket`   | `socket ci --json` (`@socketsecurity/cli`)                                         | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                                       |
-| `DeadCode`         | `knip` — bundled `config/knip.json`                                                | any unused file/export/dep, unlisted import                                                                                                  |
-| `Commits`          | `commitlint origin/main..HEAD` — bundled config                                    | any non-Conventional-Commit (no base branch → warn)                                                                                          |
-| `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)  | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded) |
-| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                               | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                        |
+| Check              | How                                                                                 | Blocks on                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApiContract`      | diffs every target's public API against its committed baseline (needs `dist/.dts/`) | the branch's changesets declaring a smaller bump than the diff actually requires                                                             |
+| `Typecheck`        | `tsc --noEmit -p tsconfig.json`                                                     | any type error                                                                                                                               |
+| `Tests`            | `vitest run` **with** V8 coverage, once                                             | any failing / errored test                                                                                                                   |
+| `Architecture`     | `depcruise src` — bundled `config/dependency-cruiser.cjs`                           | any error-severity violation (circular deps, etc.)                                                                                           |
+| `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                    | any workflow finding (no workflows → pass)                                                                                                   |
+| `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`   | a repo-maintenance defect                                                                                                                    |
+| `BranchProtection` | `gh api` against the default branch's GitHub ruleset                                | deletion / force-push / PR-required protection missing (warns if `gh` unavailable)                                                           |
+| `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                              | any metric below threshold                                                                                                                   |
+| `Crap`             | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                   | any function over either ceiling                                                                                                             |
+| `Size`             | `npm run size` \*                                                                   | the consumer's size script failing                                                                                                           |
+| `Duplication`      | `jscpd src`                                                                         | duplication above the 0.75% budget                                                                                                           |
+| `Packaging`        | `publint`                                                                           | any packaging **error** (warnings warn)                                                                                                      |
+| `TypeResolution`   | `attw` on the packed tarball (`./schema` excluded)                                  | any packaged type-resolution problem                                                                                                         |
+| `Licenses`         | `licensee --production --osi`                                                       | any shipped dep without an OSI license                                                                                                       |
+| `DocsMarkdown`     | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                           | any markdown issue                                                                                                                           |
+| `DocsLinks`        | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/`  | any broken **local** link (external rot warns)                                                                                               |
+| `DocsFragments`    | bundled `scripts/check-docs-fragments.mjs`                                          | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers)                      |
+| `Accessibility`    | `pa11y` (WCAG2AA) against the consumer's own built docs site                        | any accessibility violation (no built site to scan → warn)                                                                                   |
+| `SecurityDeps`     | `npm audit --omit=dev`                                                              | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record)                      |
+| `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                              | any detected secret                                                                                                                          |
+| `SecuritySocket`   | `socket ci --json` (`@socketsecurity/cli`)                                          | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                                       |
+| `DeadCode`         | `knip` — bundled `config/knip.json`                                                 | any unused file/export/dep, unlisted import                                                                                                  |
+| `Commits`          | `commitlint origin/main..HEAD` — bundled config                                     | any non-Conventional-Commit (no base branch → warn)                                                                                          |
+| `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)   | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded) |
+| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                                | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                        |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
@@ -151,9 +154,11 @@ Step 1.
 
 ### Not cloned from `repo-contract.config.ts`
 
-`suppression-governance`, `api-contract`, `security-network`,
-`adr-governance`, and the `test-unit/integration/property/e2e` split — each
-encodes repo-contract's own design rather than a general package standard.
+`suppression-governance`, `security-network`, `adr-governance`, and the
+`test-unit/integration/property/e2e` split — each encodes repo-contract's own
+design rather than a general package standard. (`api-contract` used to be on
+this list; it moved here entirely once every repo in the fleet versioned via
+Changesets — see `contract.ts`'s own doc comment.)
 
 ## Overriding a bundled config
 

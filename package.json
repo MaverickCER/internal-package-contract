@@ -41,6 +41,8 @@
     "./config/typedoc": "./config/typedoc.json",
     "./config/typedoc-markdown": "./config/typedoc-markdown.json",
     "./config/typedoc-a11y-search-label": "./config/typedoc-a11y-search-label.mjs",
+    "./checks/npm-script": "./checks/npm-script.ts",
+    "./checks/api-contract": "./checks/api-contract.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -75,6 +77,8 @@
     "@commitlint/types": "^21.2.0",
     "@danibram/crap4ts": "^0.6.0",
     "@eslint/js": "^10.0.1",
+    "@microsoft/api-extractor": "^7.58.13",
+    "@microsoft/api-extractor-model": "^7.33.12",
     "@secretlint/secretlint-rule-preset-recommend": "^9.0.0",
     "@socketsecurity/cli": "^1.1.169",
     "@stryker-mutator/api": "^10.0.0",
