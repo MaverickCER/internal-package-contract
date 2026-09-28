@@ -14,18 +14,27 @@
  * write only build/coverage/report artifacts, which `bin/contract.mjs` cleans up.
  *
  * Declaration order = schedule (repo-contract ADR 0002), three phases:
- *  1. Writers -- `ApiDocs`, `Lint`, `Format`, `Schema` (Lint/Format are the
- *     read-only `--check` forms).
+ *  1. Writers -- `ApiDocs`, `ApiDocsReport`, `ReadmeExample`, `Lint`, `Format`,
+ *     `Schema` (Lint/Format are the read-only `--check` forms).
  *  2. `Build` (`isolated`) -- barrier; readers below always see a fresh `dist/`.
- *  3. Readers -- everything else, concurrent. `Tests` runs Vitest once WITH
+ *  3. Readers -- everything else, concurrent. `ApiContract` needs the fresh
+ *     `dist/.dts/` this barrier provides, unlike the TypeDoc-based writers
+ *     above (which read source directly). `Tests` runs Vitest once WITH
  *     coverage; `Coverage` and `Crap` `dependsOn` it and only read its
  *     artifacts (one Vitest run, not three). `Mutation` is `isolated`, declared
  *     last, and does not run at all without a `stryker.config.*` or
  *     `IPC_MUTATION=1` (it is minutes-to-tens-of-minutes on a large `src/`).
  *
+ * `api-contract` is no longer on the "not cloned" list below: it moved here
+ * entirely (see `checks/api-contract.ts`'s own module comment) rather than
+ * staying duplicated in repo-contract, once repo-contract's own migration off
+ * release-please onto Changesets meant every repo in this fleet shares one
+ * "declared bump" rule. repo-contract now consumes this engine as a
+ * devDependency instead of hosting its own copy.
+ *
  * Not cloned (encode repo-contract's own design, not a general standard):
- * `suppression-governance`, `api-contract`, `security-network`, `adr-governance`,
- * and the `test-unit/integration/property/e2e` split.
+ * `suppression-governance`, `security-network`, `adr-governance`, and the
+ * `test-unit/integration/property/e2e` split.
  *
  * `accessibility` *was* on that list until it wasn't: repo-contract's own
  * `docs/index.html` website rebuild (and the matching one for env-cap/
@@ -39,6 +48,7 @@ import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import { format, license, lint, publint, typecheck } from "repo-contract/presets"
 import { accessibility } from "./checks/accessibility.js"
+import { apiContract } from "./checks/api-contract.js"
 import { architecture } from "./checks/architecture.js"
 import { arethetypeswrong } from "./checks/arethetypeswrong.js"
 import { branchProtection } from "./checks/branch-protection.js"
@@ -73,6 +83,25 @@ export default defineRepoContract({
   checks: {
     // -- Writers --
     ApiDocs: npmScriptCheck({ script: "docs:api", label: "API docs" }),
+    // The committed `docs/api-report/*` Markdown must already match what `docs:api:report`
+    // (TypeDoc + typedoc-plugin-markdown) produces right now -- `mustNotChange` reruns the
+    // consumer's own regeneration script and fails if it touches the watched path, exactly what
+    // each consumer's own now-deleted `scripts/check-api-report.mjs` did by hand. See ADR/notes on
+    // the api-docs-report dedup for why this replaced two near-identical per-consumer scripts.
+    ApiDocsReport: npmScriptCheck({
+      script: "docs:api:report",
+      label: "API docs report",
+      mustNotChange: ["docs/api-report"],
+    }),
+    // Package-specific: extracts named sections from a consumer's own example CLI output and
+    // diffs them against README prose unique to that package -- too bespoke to centralize the way
+    // Schema/Docs are, so this just gates whatever the consumer's own script already does (the
+    // fallback the maintainer chose over relocating that logic here).
+    ReadmeExample: npmScriptCheck({
+      script: "verify:readme-example",
+      label: "README example freshness",
+      whenMissing: "skip",
+    }),
     Lint: lint(),
     Format: { ...format, run: ["prettier", "--check", "."] },
     Schema: npmScriptCheck({ script: "schema", label: "Schema", mustNotChange: ["schemas"] }),
@@ -84,6 +113,13 @@ export default defineRepoContract({
     },
 
     // -- Readers --
+    // Needs `dist/.dts/` (unlike the TypeDoc-based checks above, which read source directly) --
+    // declaration-order phasing (writers, then the Build barrier) already guarantees a fresh build
+    // before this runs, so no explicit `dependsOn` is needed. Diffs every target's real,
+    // current public surface (see scripts/api-contract/targets.ts) against its committed baseline
+    // and fails when the branch's changesets under-declare the resulting bump -- see
+    // checks/api-contract.ts's own module comment.
+    ApiContract: apiContract,
     Typecheck: typecheck,
     // `isolated` -- Vitest with V8 coverage instrumentation is the single
     // heaviest check, and a consumer's own subprocess-spawning integration tests
