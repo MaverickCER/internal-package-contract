@@ -216,6 +216,65 @@ pull_request`, gated on `github.head_ref == 'changeset-release/main'`), so the
 committed baseline tracks each release's real version instead of falling one release
 behind on the very next PR.
 
+## Shared benchmark engine
+
+[`scripts/benchmark/`](scripts/benchmark) is a consumer-agnostic engine for the
+"tiered benchmark + committed history + PR-comment summary + Pages history chart"
+methodology env-cap and data-cap each independently built (`benchmark/`/`benchmarks/`,
+`benchmark-fixtures/scenarios.mjs`, `benchmark-fixtures/budgets.mjs`). It does not
+run benchmarks itself — a consumer keeps its own `run-benchmark.mjs`/tier
+definitions/budgets, exactly as domain judgment they own — it only takes each run's
+`results.json` and turns it into history, a PR summary, and a history page, once,
+instead of every consumer maintaining its own near-identical copy.
+
+- **`append-history.mjs <results.json> <history.json>`** — appends a compact entry
+  to a committed history file. Schema v2: each tier measurement now carries its full
+  `inputs: Record<string, number>` alongside `medianMs` (a v1 entry without `inputs`
+  stays valid forever — it's just excluded from complexity classification, never
+  force-migrated) plus a generic `unitsPerSecond` throughput figure and a `versions`
+  object copied verbatim from `results.json`'s own metadata (no hardcoded
+  `envCapVersion`/`dataCapVersion`-style field).
+- **`classify-complexity.mjs`** — pure library, no CLI. Infers an algorithmic
+  complexity class (`constant` → `exponential-or-worse`) per named benchmark group
+  from its tiers' `{ medianMs, inputs }`, via a least-squares log-log slope, snapped
+  to the nearest of six fixed classes. Never assumes tier names or count — a tier's
+  "size" is always the sum of its own `inputs` object. See the module's own doc
+  comment for the full algorithm and its documented limitations (constant vs.
+  logarithmic, and linear vs. linearithmic, are both inherently close calls at
+  realistic tier ratios).
+- **`render-summary.mjs`** — renders the Markdown PR-comment summary: a
+  **complexity-shift** section (a group's inferred class changed since the last
+  history entry — a shape change, not just a slope change) leads, ahead of the
+  ordinary per-tier `maxRegressionPercent` budget table. Highlight-only, same as
+  before — nothing here gates a merge.
+- **`render-page.mjs`** — builds a static `docs/benchmarks/index.html`: small-multiples
+  line charts (one per group, tiers as categorical-colored series, ≤200 most-recent
+  entries per history file), each annotated with its currently-inferred complexity
+  class. Generated fresh by a consumer's own `deploy` job, never committed — same
+  treatment `docs/api/` already gets.
+
+A consumer wires these up as three thin npm scripts that just forward to this
+package's copies (no consumer-owned logic beyond its own `budgets.mjs`):
+
+```json
+{
+  "scripts": {
+    "benchmark:history": "node node_modules/internal-package-contract/scripts/benchmark/append-history.mjs",
+    "benchmark:summary": "node node_modules/internal-package-contract/scripts/benchmark/render-summary.mjs",
+    "benchmark:page": "node node_modules/internal-package-contract/scripts/benchmark/render-page.mjs"
+  }
+}
+```
+
+[`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) is the reusable
+`workflow_call` counterpart (same "thin per-repo caller, real logic lives in one
+reusable workflow" pattern as `## Release` above) — measure, post/update the PR
+comment, conditionally commit refreshed
+results + history, preserving the anti-recursion-loop guard
+(`github.actor != 'github-actions[bot]'`, same-repo PRs only) the current per-repo
+job already fixed. Takes `benchmark-dir`/`history-dir` as inputs rather than
+assuming either env-cap's or data-cap's own directory-naming convention.
+
 ## Evolving the standard
 
 Per ADR 0010: a review finding becomes a new check here only when it exposes a
