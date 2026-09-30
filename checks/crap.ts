@@ -7,9 +7,24 @@
  *
  * Reads the same `coverage/coverage-final.json` the `Coverage` check just
  * produced, so it is declared with `dependsOn: ["Coverage"]` in contract.ts.
+ *
+ * `--output` writes crap4ts's own JSON report straight to a file
+ * ({@link crapReportPath}) instead of this check reading it back off the
+ * process's captured stdout -- deliberate, not cosmetic: crap4ts's own CLI
+ * calls `process.exit()` immediately after an un-awaited `process.stdout.write()`,
+ * which can terminate the process before a large report (hundreds of
+ * functions) finishes draining through the OS pipe's own backpressure,
+ * silently truncating stdout -- confirmed to reproduce on an unmodified
+ * checkout, independent of any consumer's own source. Writing to a real file
+ * isn't subject to that same pipe-sized race, so this sidesteps the bug at
+ * its call site rather than depending on an upstream fix.
  */
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput } from "./shared.js"
+
+const crapReportPath = path.join("reports", "crap.json")
 
 /** CRAP ceiling. Above this a function is too risky for its coverage. */
 export const CRAP_THRESHOLD = 30
@@ -37,13 +52,20 @@ export const crap: CheckDefinitionConfig = {
     String(CRAP_THRESHOLD),
     "--reporter",
     "json",
+    "--output",
+    crapReportPath,
   ],
-  output: { format: "json" },
-  policy: ({ result, evidence }): PolicyResult => {
+  policy: async ({ result, evidence }): Promise<PolicyResult> => {
     const terminated = abnormalTermination(result, "crap4ts")
     if (terminated) return { outcome: "fail", rationale: terminated }
 
-    if (!result.output?.success) {
+    let value: unknown
+    try {
+      // Stryker disable next-line StringLiteral: see coverage.ts's identical, already-verified
+      // justification for this exact pattern.
+      const raw = await readFile(path.join(process.cwd(), crapReportPath), "utf8")
+      value = JSON.parse(raw)
+    } catch {
       const testsExit = evidence.checks["Tests"]?.exitCode
       if (testsExit !== undefined && testsExit !== 0) {
         return {
@@ -55,11 +77,10 @@ export const crap: CheckDefinitionConfig = {
       const printed = combinedOutput(result)
       return {
         outcome: "fail",
-        rationale: `CRAP: crap4ts output could not be parsed as JSON (no coverage/coverage-final.json?).${printed ? `\n${printed}` : ""}`,
+        rationale: `CRAP: crap4ts wrote no readable ${crapReportPath} (no coverage/coverage-final.json?).${printed ? `\n${printed}` : ""}`,
       }
     }
 
-    const value: unknown = result.output.value
     const functions = (value as CrapReport | null)?.functions
     if (!Array.isArray(functions)) {
       return { outcome: "fail", rationale: "CRAP: crap4ts produced invalid JSON report data." }
