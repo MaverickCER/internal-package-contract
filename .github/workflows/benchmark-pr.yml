@@ -1,0 +1,192 @@
+# Reusable "measure benchmarks -> post/update a PR comment -> conditionally
+# commit refreshed results+history" workflow -- consolidates the current
+# near-duplicate `benchmark-pr` job from env-cap's and data-cap's own
+# `.github/workflows/ci.yml` into one `on: workflow_call` workflow, matching
+# this repo's own reusable-workflow conventions (see dependency-pin-sync.yml,
+# api-baseline-sync.yml). Calls into this package's own
+# `scripts/benchmark/*.mjs` instead of each consumer's own now-retired
+# copies (append-benchmark-history.mjs, render-benchmark-summary.mjs).
+#
+# Both real consumers today (env-cap, data-cap) have exactly two benchmark
+# categories -- "runtime" (performance-runtime/) and "buildtime"
+# (performance-buildtime/) -- so this workflow keeps that same two-category
+# shape rather than inventing open-ended N-category generality nobody has
+# asked for yet. What DOES vary between them, and is genuinely
+# parameterized below via `inputs`, is the directory naming the two repos
+# independently settled on (env-cap's `benchmark/` +
+# `docs/benchmark-history/` vs data-cap's `benchmarks/` +
+# `benchmarks/history/`) -- this workflow makes no assumption about either
+# one; a caller supplies its own paths.
+#
+# `on: workflow_call` only -- see release-npm-changesets.yml's own identical
+# note in this repo for why every reusable workflow here follows that
+# pattern (a caller's own `ci.yml` job decides *when* this runs; this file
+# only defines *what* runs).
+#
+# Rewiring env-cap's/data-cap's own `ci.yml` to actually call this workflow
+# is a separate, later task (B2) -- not done here. This file is written to
+# be genuinely callable that way once that happens: clear `inputs`, no
+# consumer-repo-specific assumption baked in beyond what's passed in.
+name: Benchmark PR (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      benchmark-dir:
+        description: >-
+          Root directory containing performance-runtime/ and
+          performance-buildtime/ subdirectories (env-cap: "benchmark",
+          data-cap: "benchmarks").
+        required: true
+        type: string
+      history-dir:
+        description: >-
+          Directory the committed runtime.json/buildtime.json history files
+          live in (env-cap: "docs/benchmark-history", data-cap:
+          "benchmarks/history").
+        required: true
+        type: string
+      budgets-path:
+        description: Path to the consumer's own benchmark-fixtures/budgets.mjs (BUDGETS export).
+        required: true
+        type: string
+      comment-marker:
+        description: HTML comment marker identifying this PR's own summary comment, for update-in-place instead of a new comment each run.
+        required: true
+        type: string
+      node-version:
+        description: Node version for actions/setup-node.
+        required: false
+        type: string
+        default: 22.x
+
+jobs:
+  # Same anti-recursion-loop shape as today's per-repo job -- see either
+  # env-cap's or data-cap's own ci.yml for the incident this design avoids
+  # (a GITHUB_TOKEN-authored push firing its own `pull_request: synchronize`
+  # and re-triggering an unbounded remeasure loop). Preserved verbatim here:
+  # same-repo PRs only, and `github.actor != 'github-actions[bot]'` breaks
+  # the loop once this job's own commit becomes the new HEAD.
+  benchmark-pr:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: benchmarks-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - working-directory: ${{ inputs.benchmark-dir }}/performance-runtime
+        run: npm install
+      - working-directory: ${{ inputs.benchmark-dir }}/performance-buildtime
+        run: npm install
+
+      - name: Snapshot main's committed results as "previous"
+        env:
+          BENCHMARK_DIR: ${{ inputs.benchmark-dir }}
+        run: |
+          git show "origin/main:${BENCHMARK_DIR}/performance-runtime/results.json" > /tmp/previous-runtime.json || echo '{}' > /tmp/previous-runtime.json
+          git show "origin/main:${BENCHMARK_DIR}/performance-buildtime/results.json" > /tmp/previous-buildtime.json || echo '{}' > /tmp/previous-buildtime.json
+
+      - run: npm run benchmark
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: benchmark-results
+          path: |
+            ${{ inputs.benchmark-dir }}/performance-runtime/results.json
+            ${{ inputs.benchmark-dir }}/performance-runtime/RESULTS.md
+            ${{ inputs.benchmark-dir }}/performance-buildtime/results.json
+            ${{ inputs.benchmark-dir }}/performance-buildtime/RESULTS.md
+          retention-days: 14
+
+      - name: Post or update the marker-tagged summary comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BENCHMARK_DIR: ${{ inputs.benchmark-dir }}
+          HISTORY_DIR: ${{ inputs.history-dir }}
+          BUDGETS_PATH: ${{ inputs.budgets-path }}
+          COMMENT_MARKER: ${{ inputs.comment-marker }}
+        run: |
+          node node_modules/internal-package-contract/scripts/benchmark/render-summary.mjs \
+            --budgets "$BUDGETS_PATH" \
+            --marker "$COMMENT_MARKER" \
+            --example "Runtime (\`${BENCHMARK_DIR}/performance-runtime\`)|/tmp/previous-runtime.json|${BENCHMARK_DIR}/performance-runtime/results.json|${HISTORY_DIR}/runtime.json" \
+            --example "Build-time (\`${BENCHMARK_DIR}/performance-buildtime\`)|/tmp/previous-buildtime.json|${BENCHMARK_DIR}/performance-buildtime/results.json|${HISTORY_DIR}/buildtime.json" \
+            > /tmp/summary.md
+          PR="${{ github.event.pull_request.number }}"
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" --jq ".[] | select(.body | startswith(\"$COMMENT_MARKER\")) | .id" | head -n1)
+          if [ -n "$EXISTING" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" -X PATCH -f body=@/tmp/summary.md
+          else
+            gh api "repos/${{ github.repository }}/issues/${PR}/comments" -X POST -f body=@/tmp/summary.md
+          fi
+
+      - name: Commit refreshed results + history into this PR, only when it touches benchmarked code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed through the environment rather than interpolated straight into
+          # `run` -- a branch ref is attacker-influenced input and must never be
+          # spliced into the shell command text.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BENCHMARK_DIR: ${{ inputs.benchmark-dir }}
+          HISTORY_DIR: ${{ inputs.history-dir }}
+        run: |
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          RELEVANT=$(echo "$CHANGED" | grep -E "^(src/|${BENCHMARK_DIR}/)" | grep -vE "^${BENCHMARK_DIR}/(performance-[^/]+/(results\.json|RESULTS\.md)$|history/)" || true)
+          if [ -z "$RELEVANT" ]; then
+            echo "This PR doesn't touch benchmarked code paths -- comment posted above, nothing to commit."
+            exit 0
+          fi
+
+          node node_modules/internal-package-contract/scripts/benchmark/append-history.mjs \
+            "${BENCHMARK_DIR}/performance-runtime/results.json" "${HISTORY_DIR}/runtime.json"
+          node node_modules/internal-package-contract/scripts/benchmark/append-history.mjs \
+            "${BENCHMARK_DIR}/performance-buildtime/results.json" "${HISTORY_DIR}/buildtime.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            "${BENCHMARK_DIR}/performance-runtime/results.json" "${BENCHMARK_DIR}/performance-runtime/RESULTS.md" \
+            "${BENCHMARK_DIR}/performance-buildtime/results.json" "${BENCHMARK_DIR}/performance-buildtime/RESULTS.md" \
+            "${HISTORY_DIR}/runtime.json" "${HISTORY_DIR}/buildtime.json"
+          if git diff --cached --quiet; then
+            echo "Freshly measured results match what's already committed -- nothing to push."
+            exit 0
+          fi
+          git commit -m "chore(benchmarks): refresh results.json"
+          git push origin HEAD:"$HEAD_REF"
+
+# Pages deploy step (documented here, not wired up yet -- B2/B5's job):
+#
+# Each consumer's own `deploy` job in its ci.yml needs one step added before
+# the Pages artifact upload:
+#
+#   - run: >-
+#       node node_modules/internal-package-contract/scripts/benchmark/render-page.mjs
+#       --out docs/benchmarks/index.html
+#       --history 'Runtime|<history-dir>/runtime.json'
+#       --history 'Build-time|<history-dir>/buildtime.json'
+#
+# `docs/benchmarks/index.html` is generated fresh on every deploy and never
+# committed -- the same treatment `docs/api/` (typedoc output) already gets
+# in this fleet (see deploy-pages-typedoc.yml). <history-dir> is whatever
+# this workflow's own `history-dir` input points a given consumer at.
