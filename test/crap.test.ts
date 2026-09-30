@@ -17,10 +17,13 @@ afterEach(() => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
+/** Matches `checks/crap.ts`'s own private `crapReportPath` -- kept in sync by construction (both build it via `path.join`) rather than by a hardcoded literal, so a test assertion never hardcodes a `/`-only separator that fails on Windows. */
+const crapReportPath = path.join("reports", "crap.json")
+
 /** Writes `reports/crap.json`, matching what `crap4ts --output` writes for real -- see coverage.test.ts's identical `writeSummary()` convention. */
 function writeCrapReport(value: unknown): void {
   mkdirSync(path.join(process.cwd(), "reports"), { recursive: true })
-  writeFileSync(path.join(process.cwd(), "reports/crap.json"), JSON.stringify(value), "utf8")
+  writeFileSync(path.join(process.cwd(), crapReportPath), JSON.stringify(value), "utf8")
 }
 
 describe("crap", () => {
@@ -114,8 +117,7 @@ describe("crap", () => {
     const result = await crap.policy(makeContext(makeResult({ stdout: "raw crap4ts output" })))
     expect(result).toEqual({
       outcome: "fail",
-      rationale:
-        "CRAP: crap4ts wrote no readable reports/crap.json (no coverage/coverage-final.json?).\nraw crap4ts output",
+      rationale: `CRAP: crap4ts wrote no readable ${crapReportPath} (no coverage/coverage-final.json?).\nraw crap4ts output`,
     })
   })
 
@@ -133,8 +135,7 @@ describe("crap", () => {
     )
     expect(result).toEqual({
       outcome: "fail",
-      rationale:
-        "CRAP: crap4ts wrote no readable reports/crap.json (no coverage/coverage-final.json?).",
+      rationale: `CRAP: crap4ts wrote no readable ${crapReportPath} (no coverage/coverage-final.json?).`,
     })
   })
 
