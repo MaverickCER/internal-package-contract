@@ -1,6 +1,30 @@
-import { describe, expect, it } from "vitest"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { crap, CRAP_THRESHOLD, MAX_COMPLEXITY } from "../checks/crap.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeResult } from "./support.js"
+
+let cwd: string
+
+beforeEach(() => {
+  cwd = mkdtempSync(path.join(tmpdir(), "ipc-crap-test-"))
+  vi.spyOn(process, "cwd").mockReturnValue(cwd)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+/** Matches `checks/crap.ts`'s own private `crapReportPath` -- kept in sync by construction (both build it via `path.join`) rather than by a hardcoded literal, so a test assertion never hardcodes a `/`-only separator that fails on Windows. */
+const crapReportPath = path.join("reports", "crap.json")
+
+/** Writes `reports/crap.json`, matching what `crap4ts --output` writes for real -- see coverage.test.ts's identical `writeSummary()` convention. */
+function writeCrapReport(value: unknown): void {
+  mkdirSync(path.join(process.cwd(), "reports"), { recursive: true })
+  writeFileSync(path.join(process.cwd(), crapReportPath), JSON.stringify(value), "utf8")
+}
 
 describe("crap", () => {
   it("fails when crap4ts terminated abnormally, naming crap4ts (not a blank tool name) in the rationale", async () => {
@@ -12,13 +36,10 @@ describe("crap", () => {
   })
 
   it("passes when every function is within budget", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 2, crap: 2 }],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 2, crap: 2 }],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "pass",
       rationale: `CRAP: no function above CRAP ${String(CRAP_THRESHOLD)} or complexity ${String(MAX_COMPLEXITY)} (1 analyzed).`,
@@ -26,16 +47,13 @@ describe("crap", () => {
   })
 
   it("fails, listing offenders sorted worst-first, for a CRAP-threshold violation", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [
-            { file: "a.ts", name: "low", startLine: 1, complexity: 2, crap: 31 },
-            { file: "a.ts", name: "high", startLine: 5, complexity: 2, crap: 99 },
-          ],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [
+        { file: "a.ts", name: "low", startLine: 1, complexity: 2, crap: 31 },
+        { file: "a.ts", name: "high", startLine: 5, complexity: 2, crap: 99 },
+      ],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
     const highIdx = result.rationale.indexOf("high")
     const lowIdx = result.rationale.indexOf("low")
@@ -44,13 +62,10 @@ describe("crap", () => {
   })
 
   it("fails for a raw-complexity ceiling violation even with CRAP within budget, omitting the CRAP section entirely (no CRAP offenders)", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 21, crap: 1 }],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 21, crap: 1 }],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: [
@@ -61,19 +76,17 @@ describe("crap", () => {
   })
 
   it("fails when a function's crap/complexity score is unreadable (NaN)", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: Number.NaN, crap: 1 }],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: Number.NaN, crap: 1 }],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("unreadable CRAP/complexity score")
   })
 
   it("fails when crap4ts produced invalid JSON report data (no functions array)", async () => {
-    const result = await crap.policy(makeContext(makeJsonResult({ notFunctions: [] })))
+    writeCrapReport({ notFunctions: [] })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: "CRAP: crap4ts produced invalid JSON report data.",
@@ -81,6 +94,7 @@ describe("crap", () => {
   })
 
   it("warns instead of failing when Tests already failed, leaving no coverage to weight against", async () => {
+    // No reports/crap.json written -- exactly what happens when crap4ts never ran.
     const result = await crap.policy(
       makeContext(makeResult({ exitCode: 1 }), {
         evidence: {
@@ -99,23 +113,15 @@ describe("crap", () => {
     })
   })
 
-  it("fails, appending printed output, when output could not be parsed as JSON and Tests did not fail", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeResult({
-          output: { format: "json", success: false, error: "bad" },
-          stdout: "raw crap4ts output",
-        }),
-      ),
-    )
+  it("fails, appending printed output, when no readable report file exists and Tests did not fail", async () => {
+    const result = await crap.policy(makeContext(makeResult({ stdout: "raw crap4ts output" })))
     expect(result).toEqual({
       outcome: "fail",
-      rationale:
-        "CRAP: crap4ts output could not be parsed as JSON (no coverage/coverage-final.json?).\nraw crap4ts output",
+      rationale: `CRAP: crap4ts wrote no readable ${crapReportPath} (no coverage/coverage-final.json?).\nraw crap4ts output`,
     })
   })
 
-  it("fails (not warn) when output could not be parsed as JSON but Tests exited 0, with no trailing output", async () => {
+  it("fails (not warn) when no readable report file exists but Tests exited 0, with no trailing output", async () => {
     const result = await crap.policy(
       makeContext(makeResult(), {
         evidence: {
@@ -129,13 +135,13 @@ describe("crap", () => {
     )
     expect(result).toEqual({
       outcome: "fail",
-      rationale:
-        "CRAP: crap4ts output could not be parsed as JSON (no coverage/coverage-final.json?).",
+      rationale: `CRAP: crap4ts wrote no readable ${crapReportPath} (no coverage/coverage-final.json?).`,
     })
   })
 
   it("fails when the parsed JSON value is null", async () => {
-    const result = await crap.policy(makeContext(makeJsonResult(null)))
+    writeCrapReport(null)
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: "CRAP: crap4ts produced invalid JSON report data.",
@@ -143,22 +149,19 @@ describe("crap", () => {
   })
 
   it("fails, listing every unreadable function with file:line name, exactly", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [
-            { file: "a.ts", name: "f", startLine: 3, complexity: Number.NaN, crap: 1 },
-            {
-              file: "b.ts",
-              name: "g",
-              startLine: 7,
-              complexity: 1,
-              crap: Number.POSITIVE_INFINITY,
-            },
-          ],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [
+        { file: "a.ts", name: "f", startLine: 3, complexity: Number.NaN, crap: 1 },
+        {
+          file: "b.ts",
+          name: "g",
+          startLine: 7,
+          complexity: 1,
+          crap: Number.POSITIVE_INFINITY,
+        },
+      ],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: [
@@ -170,13 +173,10 @@ describe("crap", () => {
   })
 
   it("omits the complexity-ceiling section entirely when only CRAP is exceeded", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 1, crap: 40 }],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [{ file: "a.ts", name: "f", startLine: 1, complexity: 1, crap: 40 }],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: ["CRAP threshold (30) exceeded by 1 function(s):", "- a.ts:1 f — CRAP 40"].join(
@@ -186,37 +186,31 @@ describe("crap", () => {
   })
 
   it("does not flag a function at exactly the CRAP threshold or exactly the complexity ceiling (both are > , not >=)", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [
-            {
-              file: "a.ts",
-              name: "f",
-              startLine: 1,
-              complexity: MAX_COMPLEXITY,
-              crap: CRAP_THRESHOLD,
-            },
-          ],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [
+        {
+          file: "a.ts",
+          name: "f",
+          startLine: 1,
+          complexity: MAX_COMPLEXITY,
+          crap: CRAP_THRESHOLD,
+        },
+      ],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("pass")
   })
 
   it("counts only the functions that actually exceed each ceiling, ignoring compliant ones mixed in", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [
-            { file: "a.ts", name: "okCrap", startLine: 1, complexity: 1, crap: 1 },
-            { file: "a.ts", name: "okComplexity", startLine: 2, complexity: 1, crap: 1 },
-            { file: "a.ts", name: "badCrap", startLine: 3, complexity: 1, crap: 40 },
-            { file: "a.ts", name: "badComplexity", startLine: 4, complexity: 25, crap: 1 },
-          ],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [
+        { file: "a.ts", name: "okCrap", startLine: 1, complexity: 1, crap: 1 },
+        { file: "a.ts", name: "okComplexity", startLine: 2, complexity: 1, crap: 1 },
+        { file: "a.ts", name: "badCrap", startLine: 3, complexity: 1, crap: 40 },
+        { file: "a.ts", name: "badComplexity", startLine: 4, complexity: 25, crap: 1 },
+      ],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
       rationale: [
@@ -229,16 +223,13 @@ describe("crap", () => {
   })
 
   it("sorts multiple complexity offenders worst-first, same as CRAP offenders", async () => {
-    const result = await crap.policy(
-      makeContext(
-        makeJsonResult({
-          functions: [
-            { file: "a.ts", name: "low", startLine: 1, complexity: 21, crap: 1 },
-            { file: "a.ts", name: "high", startLine: 5, complexity: 99, crap: 1 },
-          ],
-        }),
-      ),
-    )
+    writeCrapReport({
+      functions: [
+        { file: "a.ts", name: "low", startLine: 1, complexity: 21, crap: 1 },
+        { file: "a.ts", name: "high", startLine: 5, complexity: 99, crap: 1 },
+      ],
+    })
+    const result = await crap.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
     const highIdx = result.rationale.indexOf("high")
     const lowIdx = result.rationale.indexOf("low")
