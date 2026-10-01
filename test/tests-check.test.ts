@@ -6,13 +6,17 @@ import { tests, VITEST_RESULTS_PATH } from "../checks/tests.js"
 import { makeContext, makeResult } from "./support.js"
 
 let cwd: string
+const originalCwd = process.cwd()
 
 beforeEach(() => {
   cwd = mkdtempSync(path.join(tmpdir(), "ipc-tests-check-test-"))
-  vi.spyOn(process, "cwd").mockReturnValue(cwd)
+  // A real chdir (not just a `process.cwd` spy): newer repo-contract `test` presets read the
+  // results file by a cwd-relative path of their own.
+  process.chdir(cwd)
 })
 
 afterEach(() => {
+  process.chdir(originalCwd)
   vi.restoreAllMocks()
   rmSync(cwd, { recursive: true, force: true })
 })
