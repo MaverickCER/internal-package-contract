@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/index.ts!", "scripts/*.mjs", "benchmarks/*.mjs"],
+  "project": ["src/**/*.ts!"],
+  "ignore": ["**/*.d.ts", "dist/**", "coverage/**", "reports/**"],
+  "ignoreDependencies": ["{{name}}", "typedoc-plugin-markdown"],
+  "typedoc": { "config": ["typedoc.json", "typedoc.markdown.json"] }
+}
