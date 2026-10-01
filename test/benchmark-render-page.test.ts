@@ -34,6 +34,43 @@ function entry(medianMs: { baseline: number; stress: number }) {
   }
 }
 
+describe("link to the package's benchmarks guide", () => {
+  const render = (extra: string[]): string => {
+    const historyPath = writeHistory("runtime.json", [entry({ baseline: 1, stress: 10 })])
+    const out = path.join(dir, "index.html")
+    execFileSync(process.execPath, [
+      scriptPath,
+      "--out",
+      out,
+      "--history",
+      `Runtime|${historyPath}`,
+      ...extra,
+    ])
+    return readFileSync(out, "utf8")
+  }
+  it("links to the readme when one is given, escaping it", () => {
+    const html = render([
+      "--readme",
+      'https://example.test/blob/main/benchmarks/README.md?a=1&b="2"',
+    ])
+    expect(html).toContain(
+      '<a href="https://example.test/blob/main/benchmarks/README.md?a=1&amp;b=&quot;2&quot;">Read this package\'s benchmarks guide</a>',
+    )
+  })
+  it("adds no link when no readme is given", () => {
+    expect(render([])).not.toContain("benchmarks guide")
+  })
+  it("carries the readme url through the page model", async () => {
+    const historyPath = writeHistory("runtime.json", [entry({ baseline: 1, stress: 10 })])
+    const model = await buildPageModel({
+      histories: [`Runtime|${historyPath}`],
+      maxEntries: 200,
+      readme: "https://x.test/README.md",
+    })
+    expect(model.readmeUrl).toBe("https://x.test/README.md")
+  })
+})
+
 describe("buildPageModel", () => {
   it("builds an index-aligned series per tier, per group, across a bounded window", async () => {
     const historyPath = writeHistory("runtime.json", [

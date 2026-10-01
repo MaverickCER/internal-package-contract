@@ -1,0 +1,133 @@
+{
+  "ok": true,
+  "data": {
+    "purl": "pkg:npm/data-cap@0.4.0",
+    "self": {
+      "purl": "npm/data-cap@0.4.0",
+      "score": {
+        "license": 100,
+        "maintenance": 90,
+        "overall": 78,
+        "quality": 98,
+        "supplyChain": 78,
+        "vulnerability": 100
+      },
+      "capabilities": ["url"],
+      "alerts": [
+        {
+          "name": "unpopularPackage",
+          "severity": "middle",
+          "category": "quality",
+          "example": "npm/data-cap@0.4.0"
+        },
+        {
+          "name": "minifiedFile",
+          "severity": "low",
+          "category": "quality",
+          "example": "npm/data-cap@0.4.0"
+        },
+        {
+          "name": "urlStrings",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/data-cap@0.4.0"
+        }
+      ]
+    },
+    "transitively": {
+      "dependencyCount": 78,
+      "func": "min",
+      "score": {
+        "license": 90,
+        "maintenance": 75,
+        "overall": 68,
+        "quality": 68,
+        "supplyChain": 78,
+        "vulnerability": 100
+      },
+      "lowest": {
+        "license": "npm/typescript@5.9.3",
+        "maintenance": "npm/path-key@3.1.1",
+        "overall": "npm/shebang-command@2.0.0",
+        "quality": "npm/shebang-command@2.0.0",
+        "supplyChain": "npm/data-cap@0.4.0",
+        "vulnerability": "npm/estraverse@5.3.0"
+      },
+      "capabilities": ["env", "eval", "fs", "shell", "unsafe", "url"],
+      "alerts": [
+        {
+          "name": "gptDidYouMean",
+          "severity": "middle",
+          "category": "supplyChainRisk",
+          "example": "npm/hashery@1.5.1"
+        },
+        {
+          "name": "shellAccess",
+          "severity": "middle",
+          "category": "supplyChainRisk",
+          "example": "npm/cross-spawn@7.0.6"
+        },
+        {
+          "name": "unpopularPackage",
+          "severity": "middle",
+          "category": "quality",
+          "example": "npm/data-cap@0.4.0"
+        },
+        {
+          "name": "usesEval",
+          "severity": "middle",
+          "category": "supplyChainRisk",
+          "example": "npm/ajv@6.15.0"
+        },
+        {
+          "name": "debugAccess",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/@humanwhocodes/module-importer@1.0.1"
+        },
+        {
+          "name": "envVars",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/which@2.0.2"
+        },
+        {
+          "name": "filesystemAccess",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/path-exists@4.0.0"
+        },
+        {
+          "name": "gptAnomaly",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/data-cap@0.4.0"
+        },
+        {
+          "name": "minifiedFile",
+          "severity": "low",
+          "category": "quality",
+          "example": "npm/esquery@1.7.0"
+        },
+        {
+          "name": "nonpermissiveLicense",
+          "severity": "low",
+          "category": "license",
+          "example": "npm/typescript@5.9.3"
+        },
+        {
+          "name": "unmaintained",
+          "severity": "low",
+          "category": "maintenance",
+          "example": "npm/path-key@3.1.1"
+        },
+        {
+          "name": "urlStrings",
+          "severity": "low",
+          "category": "supplyChainRisk",
+          "example": "npm/ajv@6.15.0"
+        }
+      ]
+    }
+  }
+}

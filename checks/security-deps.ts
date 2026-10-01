@@ -32,13 +32,13 @@ import type {
   ExceptionRecordCore,
   StandardSchemaV1,
 } from "repo-contract/helpers"
-import { loadExceptionRegistry, validateExceptionPolicyConfig } from "repo-contract/helpers"
+import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
-  reconcileAndPersistExceptionRegistry,
+  loadAndReconcileExceptionRegistry,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
@@ -274,21 +274,10 @@ export function securityDeps(): CheckDefinitionConfig {
       const findings = normalizeFindings(parsed as NpmAuditReport)
 
       const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
-      const loaded = await loadExceptionRegistry({ path: registryPath, schema: registrySchema })
-      if (!loaded.ok) {
-        return {
-          outcome: "fail",
-          rationale: [
-            `${REGISTRY_RELATIVE_PATH} failed to load and was left unchanged:`,
-            ...loaded.errors.map((e) => `- ${e}`),
-          ].join("\n"),
-        }
-      }
-
-      const persisted = await reconcileAndPersistExceptionRegistry(
+      const persisted = await loadAndReconcileExceptionRegistry(
         registryPath,
         REGISTRY_RELATIVE_PATH,
-        loaded.records,
+        registrySchema,
         findings,
         createSecurityDepsStub,
       )

@@ -1,0 +1,18 @@
+# Listens for internal-package-contract's own release and keeps this repo's pin in sync.
+name: Sync internal-package-contract version
+
+on:
+  repository_dispatch:
+    types: [internal-package-contract-released]
+
+jobs:
+  sync:
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    uses: MaverickCER/internal-package-contract/.github/workflows/dependency-pin-sync.yml@main
+    with:
+      dependency-name: internal-package-contract
+      new-version: ${{ github.event.client_payload.version }}
+      add-changeset: false

@@ -31,6 +31,10 @@ jobs:
       # permissions at the intersection of what this caller grants and what it
       # itself declares.
       id-token: write
+      # The shared workflow dispatches this repo's CI on the release PR's branch and watches it,
+      # which needs `actions: write`. A caller granting less than the called workflow declares makes
+      # GitHub refuse to start the run at all (`startup_failure`), so no release ever runs.
+      actions: write
     uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@main
     # An npm-only package (no composite GitHub Action / action.yml to version) --
     # uncomment so a successful release doesn't push an unwanted floating v1 tag:

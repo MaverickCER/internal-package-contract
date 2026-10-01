@@ -1,0 +1,2 @@
+# Scaffold templates carry {{placeholders}} and are formatted in the scaffolded package, not here.
+template/package

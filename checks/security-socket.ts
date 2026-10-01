@@ -1,56 +1,58 @@
 /**
- * Supply-chain alert scanning via `@socketsecurity/cli` (`socket ci --json`) -- a generic
- * recreation of repo-contract's own self-hosting `security-socket` check
- * (`scripts/security-socket/*` + `checks/security-socket.ts` in that repo), adapted to run
- * against a consuming package (env-cap, data-cap, ...) the same way every other check here does.
+ * Supply-chain alert scanning from Socket.dev, evaluated against the package's own Socket page.
  *
- * `run` invokes the real `socket` CLI directly -- `defineRepoContract`'s own engine reports a
- * missing binary as `result.status === "spawn_error"` with `spawnErrorCode: "ENOENT"`, so no
- * wrapper script is needed to detect "not installed" (unlike repo-contract's own version, which
- * predates that engine capability and hand-rolls the same detection via `cross-spawn`).
- * `--no-banner --no-spinner` keep stdout pure JSON (confirmed for the `ci` subcommand
- * specifically -- see repo-contract's own scan script for the caveat about other subcommands,
- * irrelevant here since only `ci` is ever invoked).
+ * `run` executes `scripts/socket-package-score.mjs`, which wraps `socket package score` -- the same
+ * data the package's page on socket.dev shows, for the package itself AND its whole transitive
+ * closure (peer dependencies included). It deliberately does NOT use `socket ci`: that scans repo
+ * manifests against the org policy and by default reports only "error"-level alerts, so it returned
+ * `healthy: true, alerts: {}` for a package whose page showed `urlStrings`, `minifiedFile`,
+ * `shellAccess`, `usesEval` and more (confirmed on data-cap). The script scores the current
+ * `package.json` version, falls back to the latest published version when Socket has no result
+ * for it yet, and passes vacuously for a private or never-published package (DistNoUrls and
+ * NoMinify gate what is about to ship; this check gates what is already out and its closure).
  *
- * ## Severity policy
+ * ## Policy
  *
- * Per the same direction repo-contract's own check follows: `critical`/`high` alerts are
- * `forbidden` outright -- no waiver possible, the dependency must be removed or swapped.
- * `middle`/`low` (and any severity value this check doesn't recognize, treated at least as
- * strictly as `middle`) are waivable via a finding-specific record in
- * `.repo-contract/exceptions/socket.json`, using the same reusable exception-policy primitive
- * (`repo-contract/helpers`) every other governed check in this package uses. A `low` alert's
- * waiver drops the `alternatives`/`remediation` prose requirement; every other tier requires all
- * five fields (`justification`, `alternatives`, `remediation`, `method`, `exceptionType`).
+ * - `critical`/`high` alerts are `forbidden` outright.
+ * - **Any `supplyChainRisk` alert, at any severity, is `forbidden` outright** -- the score covers
+ *   only what actually ships (dependencies and peers, not devDependencies), so every such alert is
+ *   shipped by construction. Nothing can waive it: remove or replace the dependency, or fix the
+ *   package's own code.
+ * - Everything else (`middle`/`low` quality, maintenance, license, vulnerability, unknown) is
+ *   waivable only via a finding-specific, fully-written record in
+ *   `.repo-contract/exceptions/socket.json` (the shared exception-policy primitive from
+ *   `repo-contract/helpers`). A `low` waiver drops the `alternatives`/`remediation` prose.
+ * - **The scan can never be skipped silently.** CLI not installed, not signed in, token rejected,
+ *   network down and rate limiting all FAIL, with steps that differ between CI and a developer
+ *   machine (see `./socket-guidance.ts`).
  *
- * Example record:
+ * Example record (id is `socket:<package>@<version>:<alert name>`):
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
- *       "id": "socket:hashery@1.5.1:filesystem",
+ *       "id": "socket:data-cap@0.4.0:unpopularPackage",
  *       "version": 1,
- *       "justification": "Transitive via eslint's own file-entry-cache -> flat-cache -> cacheable chain; reads its own cache file only.",
- *       "alternatives": "None -- eslint itself pulls this in; not a direct dependency choice.",
- *       "remediation": "None planned; revisit if eslint drops the dependency.",
+ *       "justification": "A new package with few downloads yet; popularity is not something code can change.",
+ *       "alternatives": "None -- publishing is the way to gain adoption.",
+ *       "remediation": "Resolves itself as the package is adopted.",
  *       "method": "independent-human-review",
  *       "exceptionType": "accepted-risk",
- *       "package": "hashery",
- *       "packageVersion": "1.5.1",
- *       "type": "filesystem",
- *       "severity": "low"
+ *       "package": "data-cap",
+ *       "packageVersion": "0.4.0",
+ *       "type": "unpopularPackage",
+ *       "severity": "middle"
  *     }
  *   ]
  * }
  * ```
  *
- * The registry is reconciled every run (unlike `mutation.ts`'s deliberately non-reconciling
- * model): Socket's own findings for a given `package@version` are stable/deterministic, so a
- * blank stub is scaffolded for a genuinely new alert and a record with no matching alert this run
- * is reported stale -- exactly repo-contract's own approach, via the same
+ * The registry is reconciled every run: a blank stub is scaffolded for a genuinely new alert and a
+ * record with no matching alert this run is reported stale, via the same
  * `reconcileExceptions`/`writeExceptionRegistry` (`repo-contract/helpers`) primitives.
  */
+import path from "node:path"
 import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"
 import type {
   ExceptionClassification,
@@ -59,14 +61,13 @@ import type {
   ExceptionRecordCore,
   StandardSchemaV1,
 } from "repo-contract/helpers"
-import { loadExceptionRegistry, validateExceptionPolicyConfig } from "repo-contract/helpers"
-import path from "node:path"
+import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
-  reconcileAndPersistExceptionRegistry,
+  loadAndReconcileExceptionRegistry,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
@@ -76,8 +77,11 @@ import type {
   ExceptionType,
   PersistedExceptionRegistry,
 } from "./exception-record.js"
-import { abnormalTermination } from "./shared.js"
+import { abnormalTermination, packageRoot } from "./shared.js"
+import { socketGuidance } from "./socket-guidance.js"
+import type { SocketProblem } from "./socket-guidance.js"
 
+const SCRIPT_PATH = path.join(packageRoot, "scripts", "socket-package-score.mjs")
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/socket.json"
 
 /** Socket's own recognized severity tiers -- what a *raw alert* may report. Anything else normalizes to `"unknown"` (never a value Socket itself sends). */
@@ -92,6 +96,8 @@ interface NormalizedSocketAlert {
   readonly version: string
   readonly type: string
   readonly severity: "critical" | "high" | "middle" | "low" | "unknown"
+  /** Socket's own alert category (`supplyChainRisk`, `quality`, `license`, ...). */
+  readonly category: string
 }
 
 /** One `.repo-contract/exceptions/socket.json` record: the shared security-family fields (`./exception-record.js`) plus this registry's own identity fields. */
@@ -218,7 +224,11 @@ const AUTHORING_REQUIREMENTS_FULL = [
 ]
 const AUTHORING_REQUIREMENTS_LIGHT = ["justification", "method", "exceptionType"]
 
-/** Above medium severity is never waivable; middle/low/unknown require a complete, finding-specific exception. */
+/**
+ * Above medium severity is never waivable, and neither is ANY supply-chain-risk alert at any
+ * severity (the score covers only what ships, so every such alert is shipped by construction);
+ * everything else needs a complete, finding-specific exception.
+ */
 const SOCKET_POLICY: ExceptionPolicyConfig = {
   socket: {
     rules: {
@@ -228,6 +238,10 @@ const SOCKET_POLICY: ExceptionPolicyConfig = {
       low: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_LIGHT] },
       unknown: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_FULL] },
     },
+  },
+  "socket-category": {
+    rules: { supplyChainRisk: { mode: "forbidden" } },
+    default: { mode: "allowed" },
   },
 }
 const SOCKET_GLOBAL_DEFAULT_POLICY: ExceptionPolicy = {
@@ -263,39 +277,74 @@ export function isAuthError(parsed: unknown): boolean {
   )
 }
 
-/**
- * A conservative recognizer for a network-reachability failure -- see repo-contract's own scan.ts for why this stays narrow rather than broad.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
- */
-export function isNetworkUnreachable(stderr: string, parsed: unknown): boolean {
-  const NETWORK_ERROR_CODES = /\b(ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET)\b/
-  if (NETWORK_ERROR_CODES.test(stderr)) return true
-  if (isPlainObject(parsed) && parsed["ok"] === false) {
-    const text = `${safeString(parsed["message"])} ${safeString(parsed["cause"])} ${safeString(parsed["data"])}`
-    return /network|unreachable|could not connect/i.test(text)
-  }
-  return false
+/** The HTTP-style `data.code` of a failed Socket envelope (compared strictly, so any type is safe). */
+function failureCode(parsed: unknown): unknown {
+  if (!isPlainObject(parsed)) return undefined
+  const data = parsed["data"]
+  return isPlainObject(data) ? data["code"] : undefined
 }
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/**
+ * Maps a failed `socket package score` envelope (or raw stderr) to the problem a contributor can act on.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function classifyProblem(stderr: string, parsed: unknown): SocketProblem | undefined {
+  if (isAuthError(parsed)) return "not-authenticated"
+  const code = failureCode(parsed)
+  if (code === 401 || code === 403) return "token-rejected"
+  if (code === 429) return "rate-limited"
+  if (code === "ENOENT") return "cli-not-installed"
+  const NETWORK_ERROR_CODES = /\b(ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN)\b/
+  if (NETWORK_ERROR_CODES.test(stderr)) return "network-unreachable"
+  if (isPlainObject(parsed) && parsed["ok"] === false) {
+    const text = `${safeString(parsed["message"])} ${safeString(parsed["cause"])}`
+    if (NETWORK_ERROR_CODES.test(text) || /network|unreachable|could not connect/i.test(text)) {
+      return "network-unreachable"
+    }
+  }
+  return undefined
+}
+
+/**
+ * Splits a Socket alert example such as `npm/@scope/pkg@1.2.3` into package and version.
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
+export function parseExample(
+  example: string,
+): { readonly name: string; readonly version: string } | undefined {
+  const withoutEcosystem = example.startsWith("npm/") ? example.slice("npm/".length) : example
+  const at = withoutEcosystem.lastIndexOf("@")
+  return at < 1 || at === withoutEcosystem.length - 1
+    ? undefined
+    : { name: withoutEcosystem.slice(0, at), version: withoutEcosystem.slice(at + 1) }
+}
+
+/**
+ * Normalizes one flattened `socket-package-score` alert (`{ name, severity, category, example }`).
+ * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ */
 export function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
   if (!isPlainObject(raw)) return undefined
-  const packageName = raw["package"] ?? raw["name"]
-  const { version, type } = raw
-  const severityRaw = raw["severity"]
-  if (typeof packageName !== "string" || packageName.length === 0) return undefined
-  if (typeof version !== "string" || version.length === 0) return undefined
-  if (typeof type !== "string" || type.length === 0) return undefined
+  const { name, example, severity: severityRaw, category } = raw
+  if (typeof name !== "string" || name.length === 0) return undefined
+  if (typeof example !== "string") return undefined
+  const subject = parseExample(example)
+  if (subject === undefined) return undefined
   const severity =
     typeof severityRaw === "string" && RAW_SEVERITY_VALUES.has(severityRaw.toLowerCase())
       ? (severityRaw.toLowerCase() as "critical" | "high" | "middle" | "low")
       : "unknown"
   return {
-    id: deriveSocketExceptionId({ package: packageName, packageVersion: version, type }),
-    package: packageName,
-    version,
-    type,
+    id: deriveSocketExceptionId({
+      package: subject.name,
+      packageVersion: subject.version,
+      type: name,
+    }),
+    package: subject.name,
+    version: subject.version,
+    type: name,
     severity,
+    category: typeof category === "string" ? category : "",
   }
 }
 
@@ -309,6 +358,7 @@ export function evaluateAlert(
 } {
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "socket", category: alert.severity },
+    { group: "socket-category", category: alert.category },
   ]
   return evaluateFindingVerdict(
     record,
@@ -331,120 +381,108 @@ const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]
   },
 }
 
-/** @returns the `SecuritySocket` check. */
-/** The outcome of running and interpreting `socket ci --json` itself, before any registry work. */
+/** The outcome of running and interpreting the score script itself, before any registry work. */
 type SocketRunOutcome =
-  | { readonly kind: "warn" | "fail"; readonly rationale: string }
-  | { readonly kind: "ok"; readonly alerts: readonly NormalizedSocketAlert[] }
+  | { readonly kind: "fail" | "pass"; readonly rationale: string }
+  | {
+      readonly kind: "ok"
+      readonly alerts: readonly NormalizedSocketAlert[]
+      readonly note: string
+    }
+
+/** Everything a CI run or a developer machine may export, narrowed to what the guidance reads. */
+type Env = Readonly<Record<string, string | undefined>>
 
 /**
- * Runs and interprets the socket CLI's own raw evidence -- every recognized non-alert state
- * (not installed, not authenticated, unreachable, malformed output) short-circuits to `warn`/
- * `fail` here; only a genuine, well-formed alert list reaches the caller's registry work.
- * @param existingRecordCount - the exception registry's current record count, for the
- * not-authenticated rationale's "N records validated but not reconciled" note (`0` if the
- * registry itself failed to load -- matches how a load failure is reported separately, never
- * folded into this note).
+ * Parses stdout as JSON; `null` when it is not (a literal JSON `null` is equally unusable).
+ * @param stdout - the script's raw stdout.
+ */
+function parseEnvelope(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout) as unknown
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Interprets the score script's single JSON envelope -- every recognized "Socket could not run"
+ * state fails with environment-specific steps (see `./socket-guidance.ts`); only a genuine,
+ * well-formed alert list (or a package with nothing published to score) gets past this point.
+ * @param result - the script's raw evidence.
+ * @param env - the environment to inspect for CI (`process.env` in production).
  * @internal Exported for direct unit coverage -- see this module's own doc comment.
  */
-export function interpretSocketRun(
-  result: CheckEvidence,
-  existingRecordCount: number,
-): SocketRunOutcome {
-  if (result.status === "spawn_error" && result.spawnErrorCode === "ENOENT") {
-    return {
-      kind: "warn",
-      rationale:
-        "security-socket did not run (cli-not-installed) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
-    }
-  }
-  const terminated = abnormalTermination(result, "socket")
+export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOutcome {
+  const terminated = abnormalTermination(result, "socket-package-score")
   if (terminated) return { kind: "fail", rationale: terminated }
 
-  let parsed: unknown
-  // Stryker disable BlockStatement -- `parsed` is declared as `let parsed: unknown` (uninitialized,
-  // so already `undefined`) and is only ever reassigned below, in the try block's success path.
-  // Emptying the catch block is behaviorally a no-op for every input: `parsed` is already
-  // `undefined` on any parse failure with or without this line. Hand-verified 2026-09-17:
-  // applying this exact mutation by hand leaves the whole suite passing.
-  try {
-    parsed = JSON.parse(result.stdout.trim())
-  } catch {
-    parsed = undefined
-  }
-  // Stryker restore BlockStatement
-
-  if (isAuthError(parsed)) {
-    const note =
-      existingRecordCount > 0
-        ? ` ${String(existingRecordCount)} exception record(s) in ${REGISTRY_RELATIVE_PATH} were validated but not reconciled (the CLI produced no alert list this run).`
-        : ""
-    return {
-      kind: "warn",
-      rationale: `security-socket did not run (not-authenticated) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.${note}`,
-    }
-  }
-  if (isNetworkUnreachable(result.stderr, parsed)) {
-    return {
-      kind: "warn",
-      rationale: "security-socket did not run (network-unreachable) -- alerts were not evaluated.",
-    }
-  }
-  if (parsed === undefined) {
+  const parsed = parseEnvelope(result.stdout)
+  if (parsed === null) {
+    const problem = classifyProblem(result.stderr, undefined)
     return {
       kind: "fail",
-      rationale: `\`socket ci --json\` produced no parseable JSON output (exit code ${String(result.exitCode)}).`,
+      rationale:
+        problem === undefined
+          ? `The Socket score script produced no parseable JSON output (exit code ${String(result.exitCode)}).`
+          : socketGuidance(problem, env),
     }
   }
   if (!isPlainObject(parsed) || typeof parsed["ok"] !== "boolean") {
     return {
       kind: "fail",
-      rationale: '`socket ci --json` produced JSON with no recognized "ok" boolean field.',
+      rationale: 'The Socket score script produced JSON with no recognized "ok" boolean field.',
     }
   }
   if (!parsed["ok"]) {
-    const message = parsed["message"]
-    const detail =
-      typeof message === "string" ? message : "socket ci reported an unrecognized failure."
-    return { kind: "fail", rationale: `security-socket scan failed: ${detail}` }
+    const problem = classifyProblem(result.stderr, parsed)
+    if (problem !== undefined) return { kind: "fail", rationale: socketGuidance(problem, env) }
+    const detail = [safeString(parsed["message"]), safeString(parsed["cause"])]
+      .filter((part) => part.length > 0)
+      .join(": ")
+    return {
+      kind: "fail",
+      rationale: `security-socket scan failed: ${detail.length > 0 ? detail : "unrecognized failure"}.`,
+    }
   }
 
   const data = parsed["data"]
-  const rawAlerts = (isPlainObject(data) ? data["alerts"] : undefined) ?? parsed["alerts"] ?? []
-  // `alerts` is never an array in the CLI's real output (confirmed directly, against a real
-  // authenticated `socket ci --json` run, 2026-09-16): it's a plain object -- the CLI's own
-  // `mapToObject()` serialization of an internal, possibly multi-level nested `Map`
-  // (`walkNestedMap()` in @socketsecurity/cli's utils.js), never a flat array. A genuinely clean
-  // scan reports `"alerts": {}` (an empty object -- `healthy: true`, confirmed directly across
-  // three real repos), which is unambiguous: zero keys is zero alerts, regardless of the nested
-  // shape a *populated* result would have. That populated shape uses its own vocabulary this
-  // check was never written against (a `policy`/`type`/`manifest`/`url` leaf value, keyed by
-  // `[policyKey, package, introducedBy]` per `walkNestedMap`'s own output -- see
-  // toMarkdownReport() in the CLI's cli.js) rather than the `severity: critical|high|middle|low`
-  // shape `normalizeAlert` below expects. Guessing at that mapping without a real populated
-  // example to verify against risks silently misclassifying a genuine critical alert -- worse
-  // than failing loudly. So: an empty object is trusted (nothing to lose by trusting "zero
-  // keys"); anything else fails with a message pointing at the real gap, rather than the old
-  // generic "non-array" message that fired even on the always-empty case.
-  if (isPlainObject(rawAlerts) && Object.keys(rawAlerts).length === 0) {
-    return { kind: "ok", alerts: [] }
-  }
-  if (!Array.isArray(rawAlerts)) {
+  if (!isPlainObject(data)) {
     return {
       kind: "fail",
-      rationale:
-        "`socket ci --json` reported one or more alerts, in the CLI's real nested-object shape this check does not yet parse (only the always-empty \"{}\" case is handled -- see this function's own doc comment). Run `socket ci --json` directly to see the raw alerts and update this check's parser against real data before trusting this result.",
+      rationale: "The Socket score script reported success without a data object.",
     }
+  }
+  if (typeof data["skipped"] === "string") {
+    return { kind: "pass", rationale: `Socket scan skipped: ${data["skipped"]}.` }
+  }
+  if (data["unpublished"] === true) {
+    return {
+      kind: "pass",
+      rationale:
+        "Socket scan has nothing to score yet: the package is not published. DistNoUrls and NoMinify gate what is about to ship; this check gates it from its first publish on.",
+    }
+  }
+  const rawAlerts = data["alerts"]
+  if (!Array.isArray(rawAlerts)) {
+    return { kind: "fail", rationale: 'The Socket score script\'s "alerts" is not an array.' }
   }
   const normalized = rawAlerts.map((raw) => normalizeAlert(raw))
   const malformedIndex = normalized.findIndex((alert) => alert === undefined)
   if (malformedIndex !== -1) {
     return {
       kind: "fail",
-      rationale: `\`socket ci --json\` reported an alert entry (index ${String(malformedIndex)}) missing a required field (package/version/type).`,
+      rationale: `The Socket score script reported an alert (index ${String(malformedIndex)}) missing its name or example package@version.`,
     }
   }
-  return { kind: "ok", alerts: normalized as NormalizedSocketAlert[] }
+  const unique = new Map((normalized as NormalizedSocketAlert[]).map((alert) => [alert.id, alert]))
+  const scored = safeString(data["scoredVersion"])
+  const requested = safeString(data["requestedVersion"])
+  const note =
+    scored !== "" && requested !== "" && scored !== requested
+      ? ` (scored the latest published version ${scored}; ${requested} is not on Socket yet)`
+      : ""
+  return { kind: "ok", alerts: [...unique.values()], note }
 }
 
 /**
@@ -496,7 +534,9 @@ export function evaluateFinalVerdict(
   const offenderLines = offenders.map((d) => {
     const detail =
       d.verdict === "forbidden"
-        ? "forbidden by policy (above medium severity)"
+        ? d.alert.category === "supplyChainRisk"
+          ? "forbidden by policy (supply-chain risk -- remove or replace the dependency, or fix the code)"
+          : "forbidden by policy (above medium severity)"
         : d.verdict === "unmatched"
           ? "no reconciled exception record (registry integrity failure)"
           : `exception incomplete (missing: ${d.missing.join(", ")})`
@@ -515,34 +555,23 @@ export function evaluateFinalVerdict(
 
 export function securitySocket(): CheckDefinitionConfig {
   return {
-    run: ["socket", "ci", "--json", "--no-banner", "--no-spinner"],
+    run: ["node", SCRIPT_PATH],
     policy: async ({ result }): Promise<PolicyResult> => {
-      const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
-      const loaded = await loadExceptionRegistry({ path: registryPath, schema: registrySchema })
-
-      const run = interpretSocketRun(result, loaded.ok ? loaded.records.length : 0)
+      const run = interpretSocketRun(result, process.env)
       if (run.kind !== "ok") return { outcome: run.kind, rationale: run.rationale }
 
-      if (!loaded.ok) {
-        return {
-          outcome: "fail",
-          rationale: [
-            `${REGISTRY_RELATIVE_PATH} failed to load and was left unchanged:`,
-            ...loaded.errors.map((e) => `- ${e}`),
-          ].join("\n"),
-        }
-      }
-
-      const persisted = await reconcileAndPersistExceptionRegistry(
+      const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
+      const persisted = await loadAndReconcileExceptionRegistry(
         registryPath,
         REGISTRY_RELATIVE_PATH,
-        loaded.records,
+        registrySchema,
         run.alerts,
         createSocketStub,
       )
       if (!persisted.ok) return { outcome: "fail", rationale: persisted.rationale }
 
-      return evaluateFinalVerdict(run.alerts, persisted.registry)
+      const verdict = evaluateFinalVerdict(run.alerts, persisted.registry)
+      return { ...verdict, rationale: `${verdict.rationale}${run.note}` }
     },
   }
 }
