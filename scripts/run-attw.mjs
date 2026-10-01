@@ -40,6 +40,7 @@ for (let dir = import.meta.dirname; ;) {
 }
 
 const JSON_TOKEN = new Set(["[", "]", "{", "}", "[]", "{}"])
+const JSON_CLOSE = new Set(["]", "}", "[]", "{}"])
 
 /** Parse `npm pack --json` stdout, tolerant of npm prefixing its own log lines ahead of the payload. */
 function parseNpmPackFilename(stdout, stderr) {
@@ -55,17 +56,23 @@ function parseNpmPackFilename(stdout, stderr) {
   if (parsed === undefined) {
     const lines = stdout.split(/\r?\n/)
     const start = lines.findIndex((line) => JSON_TOKEN.has(line.trim()))
-    const end = start === -1 ? -1 : lines.map((line) => line.trim()).lastIndexOf("]")
+    const end = start === -1 ? -1 : lines.findLastIndex((line) => JSON_CLOSE.has(line.trim()))
     if (start !== -1 && end >= start) parsed = attempt(lines.slice(start, end + 1).join("\n"))
   }
 
-  if (!Array.isArray(parsed) || typeof parsed[0]?.filename !== "string") {
+  // npm <= 11 prints an array of results; npm 12 prints an object keyed by package name.
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : typeof parsed === "object" && parsed !== null
+      ? Object.values(parsed)
+      : []
+  if (typeof entries[0]?.filename !== "string") {
     throw new Error(
       `npm pack --json produced an unexpected shape.\nstdout:\n${stdout}\nstderr:\n${stderr}`,
     )
   }
 
-  return parsed[0].filename
+  return entries[0].filename
 }
 
 // Every attw entrypoint name (without the leading "./") to skip. `schema` and
