@@ -12,12 +12,17 @@
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import type { CheckDefinitionConfig, PolicyContext, PolicyResult } from "repo-contract"
+import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { test as testPreset } from "repo-contract/presets"
 import { abnormalTermination, combinedOutput } from "./shared.js"
 
-/** Where the Vitest JSON reporter writes; also read by `Coverage`/`Crap` siblings via `coverage/`. */
-export const VITEST_RESULTS_PATH = "reports/vitest-results.json"
+/**
+ * Where the Vitest JSON reporter writes. This is deliberately the exact path repo-contract's own
+ * `test` preset reads (newer repo-contract versions read this file themselves instead of the
+ * process's stdout), so the delegation below works against both the older stdout-based preset and
+ * the newer file-based one.
+ */
+export const VITEST_RESULTS_PATH = "reports/vitest/vitest-report.json"
 
 /** @returns the `Tests` check. */
 export function tests(): CheckDefinitionConfig {
@@ -37,14 +42,13 @@ export function tests(): CheckDefinitionConfig {
       const terminated = abnormalTermination(ctx.result, "Vitest")
       if (terminated) return { outcome: "fail", rationale: terminated }
 
-      let value: unknown
       try {
         // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFile(path, "")`
         // returns a Buffer instead of a string, but `JSON.parse` coerces any non-string argument
         // via its default (utf8) `toString()`, which produces byte-for-byte the same text `"utf8"`
         // would have decoded. Hand-verified: forcing this to `""` leaves every test in
         // tests-check.test.ts passing unchanged.
-        value = JSON.parse(await readFile(path.join(process.cwd(), VITEST_RESULTS_PATH), "utf8"))
+        JSON.parse(await readFile(path.join(process.cwd(), VITEST_RESULTS_PATH), "utf8"))
       } catch {
         const tail = combinedOutput(ctx.result).slice(-3000)
         return {
@@ -52,16 +56,8 @@ export function tests(): CheckDefinitionConfig {
           rationale: `Tests: Vitest did not produce ${VITEST_RESULTS_PATH}.${tail ? `\n${tail}` : ""}`,
         }
       }
-
-      // Stryker disable StringLiteral: an equivalent mutant -- `testPreset`'s own policy never
-      // reads `output.format`, only `output.success` and `output.value`. Hand-verified: forcing
-      // this to `""` leaves every test in tests-check.test.ts passing unchanged.
-      const synthetic: PolicyContext = {
-        ...ctx,
-        result: { ...ctx.result, output: { format: "json", success: true, value } },
-      }
-      // Stryker restore StringLiteral
-      return testPreset.policy(synthetic)
+      // repo-contract's own `test` preset reads that same file itself.
+      return testPreset.policy(ctx)
     },
   }
 }

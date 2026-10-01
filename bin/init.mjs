@@ -7,12 +7,66 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { resolveOwnerRepo, rulesetCoversBranch } from "../scripts/github-repo.mjs"
+import {
+  buildVars,
+  listTemplateFiles,
+  parseInitArgs,
+  render,
+  renderJson,
+  validatePackageName,
+} from "../scripts/init-lib.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const cwd = process.cwd()
-const force = process.argv.includes("--force")
+const args = parseInitArgs(process.argv.slice(2))
+const force = args.force
 const done = []
 const skipped = []
+
+const USAGE = `Usage: internal-package-contract init [--name <package-name> [--owner <github-owner>] [--description <text>]] [--force]
+
+  Without --name: scaffolds repo-hygiene files and git wiring only.
+  With --name:    ALSO scaffolds a complete, working package (package.json, src/, test/, tsup/tsconfig/
+                  eslint/prettier/knip/stryker/typedoc/vitest configs, governance docs, GitHub
+                  templates and workflows), replacing {{name}}/{{repo}}/{{owner}}/{{description}}/{{year}}.
+                  --owner defaults to the origin remote's owner, else MaverickCER.
+  --force:        overwrite files that already exist.
+`
+
+const nameProblem = args.name === undefined ? undefined : validatePackageName(args.name)
+if (args.errors.length > 0 || nameProblem !== undefined) {
+  for (const problem of [...args.errors, ...(nameProblem === undefined ? [] : [nameProblem])]) {
+    process.stderr.write(`${problem}\n`)
+  }
+  process.stderr.write(`\n${USAGE}`)
+  process.exit(1)
+}
+
+/** Writes `template/package/<rel>` to `<cwd>/<rel>` with placeholders rendered, unless it exists (or --force). */
+function scaffoldPackageFile(rel, vars) {
+  const dest = path.join(cwd, rel)
+  if (existsSync(dest) && !force) {
+    skipped.push(`${rel} (exists)`)
+    return
+  }
+  const source = readFileSync(path.join(packageRoot, "template", "package", rel), "utf8")
+  mkdirSync(path.dirname(dest), { recursive: true })
+  writeFileSync(
+    dest,
+    rel.endsWith(".json") && rel === "package.json"
+      ? renderJson(source, vars)
+      : render(source, vars),
+  )
+  done.push(rel)
+}
+
+if (args.name !== undefined) {
+  const owner = args.owner ?? resolveOwnerRepo(cwd)?.owner ?? "MaverickCER"
+  const vars = buildVars({ name: args.name, owner, description: args.description })
+  for (const rel of listTemplateFiles(path.join(packageRoot, "template", "package"))) {
+    scaffoldPackageFile(rel, vars)
+  }
+}
 
 /** Copy `template/<from>` to `<cwd>/<to>` unless it exists (or --force). */
 function scaffold(from, to) {
@@ -35,6 +89,11 @@ scaffold("release.yml", ".github/workflows/release.yml")
 scaffold("codeowners", "CODEOWNERS")
 scaffold("security.md", "SECURITY.md")
 scaffold("contributing.md", "CONTRIBUTING.md")
+// The benchmarking guides ship with every package, with or without --name: one explains how to write
+// and document benchmarks, the other how to read them.
+scaffold("benchmarks/README.md", "benchmarks/README.md")
+scaffold("benchmarks/WRITING-BENCHMARKS.md", "benchmarks/WRITING-BENCHMARKS.md")
+scaffold("benchmarks/READING-BENCHMARKS.md", "benchmarks/READING-BENCHMARKS.md")
 
 // .nvmrc -- mirror this package's own supported Node.
 const nvmrcDest = path.join(cwd, ".nvmrc")

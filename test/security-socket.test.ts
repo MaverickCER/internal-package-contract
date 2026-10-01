@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -9,15 +17,22 @@ import {
   evaluateFinalVerdict,
   interpretSocketRun,
   isAuthError,
-  isNetworkUnreachable,
+  classifyProblem,
   isPlainObject,
   isValidOptionalEnumField,
   normalizeAlert,
+  parseExample,
   safeString,
   securitySocket,
   SOCKET_EXCEPTION_SCHEMA,
 } from "../checks/security-socket.js"
 import { makeContext, makeResult } from "./support.js"
+
+// The guidance builder asks git for this repository's remote, running it with the (temp) working
+// directory; on Windows a lingering git process locks that directory against cleanup.
+vi.mock("../scripts/github-repo.mjs", () => ({
+  resolveOwnerRepo: () => ({ owner: "MaverickCER", repo: "demo" }),
+}))
 
 /** Mirrors security-socket.ts's own private `deriveSocketExceptionId` exactly. */
 function deriveId(alert: {
@@ -37,7 +52,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  rmSync(cwd, { recursive: true, force: true })
+  // Windows can hold a just-exited child's cwd for a moment, so retry the removal.
+  rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 function registryPath(): string {
@@ -53,16 +69,35 @@ function readRegistry(): { exceptions: readonly Record<string, unknown>[] } {
   return JSON.parse(readFileSync(registryPath(), "utf8"))
 }
 
-function ciOutput(
+function scriptOutput(
   body: unknown,
   overrides: Parameters<typeof makeResult>[0] = {},
 ): ReturnType<typeof makeResult> {
   return makeResult({ stdout: JSON.stringify(body), ...overrides })
 }
 
+/** One flattened alert exactly as scripts/socket-package-score.mjs emits it. */
+function scoreAlert(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    name: "unmaintained",
+    severity: "middle",
+    category: "maintenance",
+    example: "npm/left-pad@1.0.0",
+    scope: "transitive",
+    ...overrides,
+  }
+}
+
+function okScore(alerts: readonly unknown[], extra: Record<string, unknown> = {}): unknown {
+  return { ok: true, data: { alerts, requestedVersion: "1.0.0", scoredVersion: "1.0.0", ...extra } }
+}
+
+const LOCAL_ENV = {}
+const CI_ENV = { CI: "true" }
+
 function completeRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const base = {
-    id: deriveId({ package: "left-pad", version: "1.0.0", type: "envVars" }),
+    id: deriveId({ package: "left-pad", version: "1.0.0", type: "unmaintained" }),
     version: 1,
     justification: "Reads PORT only, matches documented behavior.",
     alternatives: "None -- transitive, not a direct choice.",
@@ -71,238 +106,173 @@ function completeRecord(overrides: Record<string, unknown> = {}): Record<string,
     exceptionType: "accepted-risk",
     package: "left-pad",
     packageVersion: "1.0.0",
-    type: "envVars",
+    type: "unmaintained",
     severity: "middle",
   }
   return { ...base, ...overrides }
 }
 
 describe("securitySocket()", () => {
-  it("warns when the socket CLI is not installed", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(
-        makeResult({ status: "spawn_error", spawnErrorCode: "ENOENT", stdout: "", exitCode: null }),
-      ),
-    )
-    expect(result).toEqual({
-      outcome: "warn",
-      rationale:
-        "security-socket did not run (cli-not-installed) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
-    })
+  const alert = scoreAlert()
+
+  it("runs the bundled score script with node", () => {
+    const run = securitySocket().run as readonly string[]
+    expect(run[0]).toBe("node")
+    expect(run[1]).toMatch(/scripts[\\/]socket-package-score\.mjs$/)
+    expect(run).toHaveLength(2)
   })
 
-  it("fails when the socket process terminated abnormally", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(makeResult({ status: "timed_out" })))
+  it("fails when the score script terminated abnormally", async () => {
+    const result = await securitySocket().policy(makeContext(makeResult({ status: "timed_out" })))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("did not run to completion")
   })
 
-  it("fails when stdout is not parseable JSON", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(makeResult({ stdout: "not json" })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("no parseable JSON output")
-  })
-
-  it("warns on Socket's own not-authenticated envelope", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(
-        ciOutput({ ok: false, message: "Auth Error", cause: "Run `socket login` first." }),
-      ),
-    )
-    expect(result.outcome).toBe("warn")
-    expect(result.rationale).toContain("not-authenticated")
-  })
-
-  it("notes existing (unreconciled) exception records when unauthenticated", async () => {
-    writeRegistry([completeRecord()])
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(
-        ciOutput({ ok: false, message: "Auth Error", cause: "Run `socket login` first." }),
-      ),
-    )
-    expect(result.outcome).toBe("warn")
-    expect(result.rationale).toContain("1 exception record(s)")
-    // Not reconciled -- the file on disk is untouched.
-    expect(readRegistry().exceptions).toHaveLength(1)
-  })
-
-  it("warns on a recognized network-unreachable failure", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(makeResult({ stdout: "", stderr: "getaddrinfo ENOTFOUND registry.socket.dev" })),
-    )
-    expect(result.outcome).toBe("warn")
-    expect(result.rationale).toContain("network-unreachable")
-  })
-
-  it("fails when the report has no recognized ok field", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ nothing: "recognized" })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain('no recognized "ok" boolean field')
-  })
-
-  it("fails when ok is false with an unrecognized message", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(ciOutput({ ok: false, message: "Something else broke" })),
-    )
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toBe("security-socket scan failed: Something else broke")
-  })
-
-  it('passes with zero alerts when alerts is an empty object -- the CLI\'s real shape for a clean scan (confirmed directly against a real authenticated run: `{ "alerts": {} }`, never `[]`)', async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(ciOutput({ ok: true, healthy: true, alerts: {} })),
-    )
-    expect(result.outcome).toBe("pass")
-    expect(result.rationale).toContain("0 Socket alert(s) evaluated")
-  })
-
-  it("fails when ok is true but alerts is a non-empty, unparseable shape (the CLI's real nested-map structure this check doesn't parse yet)", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(ciOutput({ ok: true, alerts: { policyKey: { pkg: { hashery: {} } } } })),
-    )
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("real nested-object shape this check does not yet parse")
-  })
-
-  it("fails when ok is true but alerts is neither an array nor an object", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: "nope" })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("real nested-object shape this check does not yet parse")
-  })
-
-  it("fails when an alert entry is missing a required field", async () => {
-    const check = securitySocket()
-    const result = await check.policy(
-      makeContext(ciOutput({ ok: true, alerts: [{ package: "left-pad" }] })),
-    )
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("missing a required field")
-  })
-
   it("passes with zero alerts and leaves an empty registry alone", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [] })))
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([]))))
     expect(result).toEqual({
       outcome: "pass",
       rationale: "0 Socket alert(s) evaluated: all permitted by a complete exception record.",
     })
   })
 
-  it("also reads alerts nested under data.alerts", async () => {
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ ok: true, data: { alerts: [] } })))
-    expect(result.outcome).toBe("pass")
+  it("passes vacuously, saying why, for a skipped or unpublished package", async () => {
+    const skipped = await securitySocket().policy(
+      makeContext(scriptOutput({ ok: true, data: { skipped: "package is private" } })),
+    )
+    expect(skipped).toEqual({
+      outcome: "pass",
+      rationale: "Socket scan skipped: package is private.",
+    })
+    const unpublished = await securitySocket().policy(
+      makeContext(scriptOutput({ ok: true, data: { unpublished: true } })),
+    )
+    expect(unpublished.outcome).toBe("pass")
+    expect(unpublished.rationale).toContain("not published")
   })
 
-  it("fails and scaffolds a blank stub for a new alert with no existing record", async () => {
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+  it("fails and scaffolds a blank stub for a new waivable alert with no existing record", async () => {
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
     expect(result.outcome).toBe("fail")
-    // The stub is scaffolded and reconciled as this alert's active record, then evaluated like
-    // any other -- blank, so every requirement is reported missing (never "unmatched": that
-    // verdict is only reachable if the reconcile<->policy bijection itself breaks).
     expect(result.rationale).toContain(
       "exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
     )
-
     const written = readRegistry().exceptions
     expect(written).toHaveLength(1)
     expect(written[0]).toMatchObject({
-      id: deriveId(alert),
+      id: deriveId({ package: "left-pad", version: "1.0.0", type: "unmaintained" }),
       justification: "",
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle",
     })
   })
 
-  it("passes a middle-severity alert with a complete exception record", async () => {
+  it("passes a middle-severity waivable alert with a complete exception record", async () => {
     writeRegistry([completeRecord()])
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
     expect(result).toEqual({
       outcome: "pass",
       rationale: "1 Socket alert(s) evaluated: all permitted by a complete exception record.",
     })
   })
 
+  it("deduplicates the same alert reported by both the self and transitive sections", async () => {
+    writeRegistry([completeRecord()])
+    const result = await securitySocket().policy(
+      makeContext(scriptOutput(okScore([alert, { ...alert, scope: "self" }]))),
+    )
+    expect(result.rationale).toContain("1 Socket alert(s) evaluated")
+  })
+
   it("passes a low-severity alert missing only alternatives/remediation", async () => {
     writeRegistry([
       completeRecord({
-        id: deriveId({ package: "left-pad", version: "1.0.0", type: "filesystem" }),
-        type: "filesystem",
+        id: deriveId({ package: "left-pad", version: "1.0.0", type: "nonpermissiveLicense" }),
+        type: "nonpermissiveLicense",
         severity: "low",
         alternatives: "",
         remediation: "",
       }),
     ])
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "filesystem", severity: "low" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+    const result = await securitySocket().policy(
+      makeContext(
+        scriptOutput(
+          okScore([
+            scoreAlert({ name: "nonpermissiveLicense", severity: "low", category: "license" }),
+          ]),
+        ),
+      ),
+    )
     expect(result.outcome).toBe("pass")
   })
 
   it("fails an incomplete exception record, listing missing fields", async () => {
     writeRegistry([completeRecord({ justification: "" })])
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("exception incomplete (missing: justification)")
   })
 
-  it("forbids a critical-severity alert even with an otherwise-complete exception record", async () => {
-    writeRegistry([completeRecord({ severity: "critical" })])
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "critical" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("forbidden by policy (above medium severity)")
+  it("forbids a critical or high severity alert even with a complete exception record", async () => {
+    for (const severity of ["critical", "high"]) {
+      writeRegistry([completeRecord({ severity })])
+      const result = await securitySocket().policy(
+        makeContext(scriptOutput(okScore([scoreAlert({ severity })]))),
+      )
+      expect(result.outcome).toBe("fail")
+      expect(result.rationale).toContain("forbidden by policy (above medium severity)")
+    }
   })
 
-  it("forbids a high-severity alert the same way", async () => {
-    writeRegistry([completeRecord({ severity: "high" })])
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "high" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("forbidden by policy")
+  it("forbids ANY supply-chain-risk alert, at any severity, even with a complete exception record", async () => {
+    for (const severity of ["low", "middle"]) {
+      const risky = scoreAlert({ name: "shellAccess", severity, category: "supplyChainRisk" })
+      writeRegistry([
+        completeRecord({
+          id: deriveId({ package: "left-pad", version: "1.0.0", type: "shellAccess" }),
+          type: "shellAccess",
+          severity,
+        }),
+      ])
+      const result = await securitySocket().policy(makeContext(scriptOutput(okScore([risky]))))
+      expect(result.outcome).toBe("fail")
+      expect(result.rationale).toContain(
+        "- socket:left-pad@1.0.0:shellAccess [" +
+          severity +
+          "]: forbidden by policy (supply-chain risk -- remove or replace the dependency, or fix the code)",
+      )
+    }
   })
 
-  it("reports a stale record that matches no current alert, and removes it from the rewritten registry as inactive but still listed", async () => {
+  it("reports a stale record that matches no current alert", async () => {
     writeRegistry([completeRecord()])
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [] })))
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([]))))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("Socket no longer raises this alert")
   })
 
   it("treats an unrecognized severity value as unknown, requiring the full field set", async () => {
     writeRegistry([completeRecord({ severity: "unknown", justification: "" })])
-    const check = securitySocket()
-    const alert = {
-      package: "left-pad",
-      version: "1.0.0",
-      type: "envVars",
-      severity: "something-new",
-    }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+    const result = await securitySocket().policy(
+      makeContext(scriptOutput(okScore([scoreAlert({ severity: "something-new" })]))),
+    )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("exception incomplete")
+  })
+
+  it("appends a note when the latest published version was scored instead of package.json's", async () => {
+    writeRegistry([completeRecord()])
+    const result = await securitySocket().policy(
+      makeContext(
+        scriptOutput(okScore([alert], { requestedVersion: "2.0.0", scoredVersion: "1.9.0" })),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "(scored the latest published version 1.9.0; 2.0.0 is not on Socket yet)",
+    )
   })
 
   it("fails with the exact rendered error list when the on-disk registry is malformed", async () => {
@@ -312,8 +282,7 @@ describe("securitySocket()", () => {
       JSON.stringify({ exceptions: [{ id: "not-namespaced", version: 1 }] }),
       "utf8",
     )
-    const check = securitySocket()
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [] })))
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([]))))
     expect(result).toEqual({
       outcome: "fail",
       rationale: [
@@ -324,20 +293,32 @@ describe("securitySocket()", () => {
     })
   })
 
-  it("runs the exact socket CLI invocation", () => {
-    expect(securitySocket().run).toEqual(["socket", "ci", "--json", "--no-banner", "--no-spinner"])
-  })
-
   it("fails with the persisted-write rationale when the registry path is a symlink", async () => {
     const target = path.join(cwd, "real-registry.json")
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
     mkdirSync(path.dirname(registryPath()), { recursive: true })
     symlinkSync(target, registryPath())
-    const check = securitySocket()
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const result = await check.policy(makeContext(ciOutput({ ok: true, alerts: [alert] })))
+    try {
+      const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
+      expect(result.outcome).toBe("fail")
+      expect(result.rationale).toContain("is a symlink")
+    } finally {
+      // Windows cannot remove a dangling file symlink during the recursive cleanup, so drop it first.
+      unlinkSync(registryPath())
+    }
+  })
+
+  it("never reconciles the registry when Socket could not run (a failure, not a pass)", async () => {
+    writeRegistry([completeRecord()])
+    vi.stubEnv("CI", "")
+    vi.stubEnv("GITHUB_ACTIONS", "")
+    const result = await securitySocket().policy(
+      makeContext(scriptOutput({ ok: false, message: "Auth Error", cause: "x" })),
+    )
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("is a symlink")
+    expect(result.rationale).toContain("socket login")
+    expect(readRegistry().exceptions).toHaveLength(1)
+    vi.unstubAllEnvs()
   })
 })
 
@@ -396,130 +377,123 @@ describe("isAuthError()", () => {
   })
 })
 
-describe("isNetworkUnreachable()", () => {
-  it("is true when stderr contains a recognized network error code", () => {
-    expect(isNetworkUnreachable("getaddrinfo ENOTFOUND registry.socket.dev", undefined)).toBe(true)
-    expect(isNetworkUnreachable("connect ETIMEDOUT 1.2.3.4:443", undefined)).toBe(true)
-    expect(isNetworkUnreachable("connect ECONNREFUSED 127.0.0.1:443", undefined)).toBe(true)
-    expect(isNetworkUnreachable("read ECONNRESET", undefined)).toBe(true)
+describe("classifyProblem()", () => {
+  it("maps Socket's auth envelope to not-authenticated", () => {
+    expect(classifyProblem("", { ok: false, message: "Auth Error" })).toBe("not-authenticated")
   })
-  it("is false when stderr contains no recognized code and parsed is not a not-ok object", () => {
-    expect(isNetworkUnreachable("", undefined)).toBe(false)
-    expect(isNetworkUnreachable("some other stderr text", { ok: true })).toBe(false)
-    expect(isNetworkUnreachable("", "not an object")).toBe(false)
+  it("maps 401 and 403 to token-rejected, 429 to rate-limited, ENOENT to cli-not-installed", () => {
+    const withCode = (code: unknown) => ({ ok: false, message: "Socket API error", data: { code } })
+    expect(classifyProblem("", withCode(401))).toBe("token-rejected")
+    expect(classifyProblem("", withCode(403))).toBe("token-rejected")
+    expect(classifyProblem("", withCode(429))).toBe("rate-limited")
+    expect(classifyProblem("", withCode("ENOENT"))).toBe("cli-not-installed")
+    expect(classifyProblem("", withCode(500))).toBeUndefined()
+    expect(classifyProblem("", withCode({}))).toBeUndefined()
+    expect(classifyProblem("", { ok: false, data: "x" })).toBeUndefined()
   })
-  it("is false when parsed is not-ok but message/cause/data mention nothing network-related", () => {
-    expect(
-      isNetworkUnreachable("", { ok: false, message: "boom", cause: "bad", data: "oops" }),
-    ).toBe(false)
+  it("recognizes every network error code in stderr", () => {
+    for (const code of ["ENOTFOUND", "ETIMEDOUT", "ECONNREFUSED", "ECONNRESET", "EAI_AGAIN"]) {
+      expect(classifyProblem(`getaddrinfo ${code} api.socket.dev`, undefined)).toBe(
+        "network-unreachable",
+      )
+    }
+    expect(classifyProblem("a different problem", undefined)).toBeUndefined()
   })
-  it("is true when the not-ok message mentions network", () => {
-    expect(isNetworkUnreachable("", { ok: false, message: "network error" })).toBe(true)
+  it("recognizes network wording or codes in a failed envelope's message or cause", () => {
+    expect(classifyProblem("", { ok: false, message: "Network down" })).toBe("network-unreachable")
+    expect(classifyProblem("", { ok: false, cause: "host unreachable" })).toBe(
+      "network-unreachable",
+    )
+    expect(classifyProblem("", { ok: false, cause: "could not connect" })).toBe(
+      "network-unreachable",
+    )
+    expect(classifyProblem("", { ok: false, cause: "ETIMEDOUT" })).toBe("network-unreachable")
+    expect(classifyProblem("", { ok: false, message: "something else" })).toBeUndefined()
   })
-  it("is true when the not-ok cause mentions unreachable", () => {
-    expect(isNetworkUnreachable("", { ok: false, cause: "host unreachable" })).toBe(true)
+  it("ignores a successful envelope and non-objects", () => {
+    expect(classifyProblem("", { ok: true, message: "network" })).toBeUndefined()
+    expect(classifyProblem("", "network")).toBeUndefined()
+    expect(classifyProblem("", null)).toBeUndefined()
   })
-  it("is true when the not-ok data mentions could not connect", () => {
-    expect(isNetworkUnreachable("", { ok: false, data: "could not connect to host" })).toBe(true)
+})
+
+describe("parseExample()", () => {
+  it("splits ecosystem/name@version, including scoped names", () => {
+    expect(parseExample("npm/left-pad@1.0.0")).toEqual({ name: "left-pad", version: "1.0.0" })
+    expect(parseExample("npm/@scope/pkg@2.3.4")).toEqual({ name: "@scope/pkg", version: "2.3.4" })
+    expect(parseExample("plain@1.0.0")).toEqual({ name: "plain", version: "1.0.0" })
+    expect(parseExample("npm/a@1")).toEqual({ name: "a", version: "1" })
   })
-  it("is false at the final fallback when parsed is a plain object with ok true", () => {
-    expect(isNetworkUnreachable("", { ok: true, message: "network" })).toBe(false)
+  it("rejects anything without a name and a version", () => {
+    for (const bad of ["npm/left-pad", "npm/@scope", "npm/left-pad@", "@1.0.0", "", "npm/@1.0.0"]) {
+      expect(parseExample(bad)).toBeUndefined()
+    }
   })
 })
 
 describe("normalizeAlert()", () => {
-  it("returns undefined for a non-plain-object", () => {
+  const valid = {
+    name: "shellAccess",
+    severity: "Middle",
+    category: "supplyChainRisk",
+    example: "npm/cross-spawn@7.0.6",
+  }
+  it("returns the exact normalized shape, lowercasing a recognized severity", () => {
+    expect(normalizeAlert(valid)).toEqual({
+      id: "socket:cross-spawn@7.0.6:shellAccess",
+      package: "cross-spawn",
+      version: "7.0.6",
+      type: "shellAccess",
+      severity: "middle",
+      category: "supplyChainRisk",
+    })
+  })
+  it("returns undefined for a non-object or a missing/empty name or unparseable example", () => {
+    expect(normalizeAlert("x")).toBeUndefined()
     expect(normalizeAlert(null)).toBeUndefined()
-    expect(normalizeAlert("nope")).toBeUndefined()
     expect(normalizeAlert([])).toBeUndefined()
+    expect(normalizeAlert({ ...valid, name: undefined })).toBeUndefined()
+    expect(normalizeAlert({ ...valid, name: "" })).toBeUndefined()
+    expect(normalizeAlert({ ...valid, name: 4 })).toBeUndefined()
+    expect(normalizeAlert({ ...valid, example: undefined })).toBeUndefined()
+    expect(normalizeAlert({ ...valid, example: 4 })).toBeUndefined()
+    expect(normalizeAlert({ ...valid, example: "npm/nope" })).toBeUndefined()
   })
-  it("falls back to name when package is absent", () => {
-    const result = normalizeAlert({ name: "left-pad", version: "1.0.0", type: "envVars" })
-    expect(result?.package).toBe("left-pad")
+  it("normalizes a non-string or unrecognized severity to unknown", () => {
+    expect(normalizeAlert({ ...valid, severity: 3 })?.severity).toBe("unknown")
+    expect(normalizeAlert({ ...valid, severity: "wat" })?.severity).toBe("unknown")
+    expect(normalizeAlert({ ...valid, severity: undefined })?.severity).toBe("unknown")
   })
-  it("prefers package over name when both are present", () => {
-    const result = normalizeAlert({
-      package: "left-pad",
-      name: "wrong-name",
-      version: "1.0.0",
-      type: "envVars",
-    })
-    expect(result?.package).toBe("left-pad")
-  })
-  it("returns undefined when package/name are both absent", () => {
-    expect(normalizeAlert({ version: "1.0.0", type: "envVars" })).toBeUndefined()
-  })
-  it("returns undefined when package is an empty string", () => {
-    expect(normalizeAlert({ package: "", version: "1.0.0", type: "envVars" })).toBeUndefined()
-  })
-  it("returns undefined when version is missing, non-string, or empty", () => {
-    expect(normalizeAlert({ package: "left-pad", type: "envVars" })).toBeUndefined()
-    expect(normalizeAlert({ package: "left-pad", version: 1, type: "envVars" })).toBeUndefined()
-    expect(normalizeAlert({ package: "left-pad", version: "", type: "envVars" })).toBeUndefined()
-  })
-  it("returns undefined when type is missing, non-string, or empty", () => {
-    expect(normalizeAlert({ package: "left-pad", version: "1.0.0" })).toBeUndefined()
-    expect(normalizeAlert({ package: "left-pad", version: "1.0.0", type: 1 })).toBeUndefined()
-    expect(normalizeAlert({ package: "left-pad", version: "1.0.0", type: "" })).toBeUndefined()
-  })
-  it("normalizes a non-string severity to unknown", () => {
-    const result = normalizeAlert({ package: "left-pad", version: "1.0.0", type: "envVars" })
-    expect(result?.severity).toBe("unknown")
-  })
-  it("normalizes an unrecognized severity string to unknown", () => {
-    const result = normalizeAlert({
-      package: "left-pad",
-      version: "1.0.0",
-      type: "envVars",
-      severity: "extreme",
-    })
-    expect(result?.severity).toBe("unknown")
-  })
-  it("lowercases a recognized severity value", () => {
-    const result = normalizeAlert({
-      package: "left-pad",
-      version: "1.0.0",
-      type: "envVars",
-      severity: "HIGH",
-    })
-    expect(result?.severity).toBe("high")
-  })
-  it("returns the exact normalized shape for a fully valid alert", () => {
-    const result = normalizeAlert({
-      package: "left-pad",
-      version: "1.0.0",
-      type: "envVars",
-      severity: "middle",
-    })
-    expect(result).toEqual({
-      id: "socket:left-pad@1.0.0:envVars",
-      package: "left-pad",
-      version: "1.0.0",
-      type: "envVars",
-      severity: "middle",
-    })
+  it("uses an empty category when Socket sent none", () => {
+    expect(normalizeAlert({ ...valid, category: undefined })?.category).toBe("")
+    expect(normalizeAlert({ ...valid, category: 7 })?.category).toBe("")
   })
 })
 
 describe("deriveSocketExceptionId()", () => {
   it("joins package/packageVersion/type into the socket: id", () => {
     expect(
-      deriveSocketExceptionId({ package: "left-pad", packageVersion: "1.0.0", type: "envVars" }),
-    ).toBe("socket:left-pad@1.0.0:envVars")
+      deriveSocketExceptionId({
+        package: "left-pad",
+        packageVersion: "1.0.0",
+        type: "unmaintained",
+      }),
+    ).toBe("socket:left-pad@1.0.0:unmaintained")
   })
 })
 
 describe("createSocketStub()", () => {
   it("returns a fully blank stub with the alert's identity fields mapped in", () => {
     const alert = {
-      id: "socket:left-pad@1.0.0:envVars",
+      id: "socket:left-pad@1.0.0:unmaintained",
       package: "left-pad",
       version: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle" as const,
+      category: "maintenance",
     }
-    expect(createSocketStub(alert, "socket:left-pad@1.0.0:envVars")).toEqual({
-      id: "socket:left-pad@1.0.0:envVars",
+    expect(createSocketStub(alert, "socket:left-pad@1.0.0:unmaintained")).toEqual({
+      id: "socket:left-pad@1.0.0:unmaintained",
       version: 1,
       justification: "",
       alternatives: "",
@@ -528,7 +502,7 @@ describe("createSocketStub()", () => {
       exceptionType: "",
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle",
     })
   })
@@ -558,7 +532,7 @@ describe("isValidOptionalEnumField()", () => {
 })
 
 describe("SOCKET_EXCEPTION_SCHEMA.validateRecord()", () => {
-  const core = { id: "socket:left-pad@1.0.0:envVars", version: 1 as const, justification: "" }
+  const core = { id: "socket:left-pad@1.0.0:unmaintained", version: 1 as const, justification: "" }
   function validRaw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return {
       alternatives: "",
@@ -567,7 +541,7 @@ describe("SOCKET_EXCEPTION_SCHEMA.validateRecord()", () => {
       exceptionType: "",
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle",
       ...overrides,
     }
@@ -578,7 +552,7 @@ describe("SOCKET_EXCEPTION_SCHEMA.validateRecord()", () => {
     const record = SOCKET_EXCEPTION_SCHEMA.validateRecord(core, validRaw(), 0, errors)
     expect(errors).toEqual([])
     expect(record).toEqual({
-      id: "socket:left-pad@1.0.0:envVars",
+      id: "socket:left-pad@1.0.0:unmaintained",
       version: 1,
       justification: "",
       alternatives: "",
@@ -587,7 +561,7 @@ describe("SOCKET_EXCEPTION_SCHEMA.validateRecord()", () => {
       exceptionType: "",
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle",
     })
   })
@@ -645,22 +619,23 @@ describe("SOCKET_EXCEPTION_SCHEMA.validateRecord()", () => {
   })
   it("returns undefined and reports a mismatched id, without ever double-reporting field errors", () => {
     const errors: string[] = []
-    const mismatchedCore = { ...core, id: "socket:wrong@1.0.0:envVars" }
+    const mismatchedCore = { ...core, id: "socket:wrong@1.0.0:unmaintained" }
     const record = SOCKET_EXCEPTION_SCHEMA.validateRecord(mismatchedCore, validRaw(), 0, errors)
     expect(record).toBeUndefined()
     expect(errors).toEqual([
-      'exceptions[0].id "socket:wrong@1.0.0:envVars" does not match the id derived from its own package/packageVersion/type ("socket:left-pad@1.0.0:envVars").',
+      'exceptions[0].id "socket:wrong@1.0.0:unmaintained" does not match the id derived from its own package/packageVersion/type ("socket:left-pad@1.0.0:unmaintained").',
     ])
   })
 })
 
 describe("evaluateAlert()", () => {
   const alert = {
-    id: "socket:left-pad@1.0.0:envVars",
+    id: "socket:left-pad@1.0.0:unmaintained",
     package: "left-pad",
     version: "1.0.0",
-    type: "envVars",
+    type: "unmaintained",
     severity: "middle" as const,
+    category: "maintenance",
   }
   const blankRecord = {
     id: alert.id,
@@ -672,7 +647,7 @@ describe("evaluateAlert()", () => {
     exceptionType: "" as const,
     package: "left-pad",
     packageVersion: "1.0.0",
-    type: "envVars",
+    type: "unmaintained",
     severity: "middle" as const,
   }
   it("is unmatched when there is no record", () => {
@@ -705,7 +680,7 @@ describe("evaluateAlert()", () => {
       exceptionType: "" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle" as const,
     }
     expect(evaluateAlert(alert, record)).toEqual({
@@ -724,7 +699,7 @@ describe("evaluateAlert()", () => {
       exceptionType: "accepted-risk" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "low" as const,
     }
     expect(evaluateAlert({ ...alert, severity: "low" }, record)).toEqual({
@@ -738,224 +713,181 @@ describe("evaluateAlert()", () => {
       missing: [],
     })
   })
+  it("is forbidden for a supply-chain-risk alert at any severity, even with a complete record", () => {
+    for (const severity of ["low", "middle"] as const) {
+      const risky = { ...alert, severity, category: "supplyChainRisk" }
+      const complete = {
+        ...blankRecord,
+        severity,
+        justification: "j",
+        alternatives: "a",
+        remediation: "r",
+        method: "independent-human-review" as const,
+        exceptionType: "accepted-risk" as const,
+      }
+      expect(evaluateAlert(risky, complete).verdict).toBe("forbidden")
+    }
+  })
+  it("applies only the severity rules when the alert has no category", () => {
+    const uncategorized = { ...alert, category: "" }
+    expect(evaluateAlert(uncategorized, undefined)).toEqual({ verdict: "unmatched", missing: [] })
+  })
 })
 
 describe("interpretSocketRun()", () => {
-  function result(overrides: Parameters<typeof makeResult>[0] = {}) {
-    return makeResult(overrides)
-  }
+  const ok = (body: unknown, overrides: Parameters<typeof makeResult>[0] = {}) =>
+    interpretSocketRun(scriptOutput(body, overrides), LOCAL_ENV)
 
-  it("warns cli-not-installed on ENOENT spawn error", () => {
-    const outcome = interpretSocketRun(
-      result({ status: "spawn_error", spawnErrorCode: "ENOENT", stdout: "", exitCode: null }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "warn",
-      rationale:
-        "security-socket did not run (cli-not-installed) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
-    })
-  })
-  it("does not treat a spawn_error with a different code as cli-not-installed", () => {
-    const outcome = interpretSocketRun(
-      result({ status: "spawn_error", spawnErrorCode: "EACCES", stdout: "", exitCode: null }),
-      0,
-    )
-    expect(outcome.kind).not.toBe("warn")
-  })
-  it("does not treat an ENOENT spawnErrorCode as cli-not-installed unless status is also spawn_error", () => {
-    const outcome = interpretSocketRun(
-      result({ status: "completed", spawnErrorCode: "ENOENT", stdout: "not json" }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale: "`socket ci --json` produced no parseable JSON output (exit code 0).",
-    })
-  })
   it("fails on abnormal termination with the exact tool-labeled rationale", () => {
-    const outcome = interpretSocketRun(result({ status: "timed_out" }), 0)
-    expect(outcome).toEqual({
+    expect(interpretSocketRun(makeResult({ status: "timed_out" }), LOCAL_ENV)).toEqual({
       kind: "fail",
-      rationale: "socket did not run to completion (status: timed_out).",
+      rationale: "socket-package-score did not run to completion (status: timed_out).",
     })
   })
-  it("treats unparseable JSON stdout as parsed undefined, reaching the no-JSON fail branch", () => {
-    const outcome = interpretSocketRun(result({ stdout: "not json" }), 0)
-    expect(outcome).toEqual({
+
+  it("fails with the no-JSON rationale for unparseable stdout, naming the exit code", () => {
+    expect(interpretSocketRun(makeResult({ stdout: "nope", exitCode: 3 }), LOCAL_ENV)).toEqual({
       kind: "fail",
-      rationale: "`socket ci --json` produced no parseable JSON output (exit code 0).",
+      rationale: "The Socket score script produced no parseable JSON output (exit code 3).",
     })
   })
-  it("parses JSON stdout padded with non-JSON-whitespace that only String.trim() strips", () => {
-    const padded = `\v${JSON.stringify({ ok: true, alerts: [] })}\v`
-    const outcome = interpretSocketRun(result({ stdout: padded }), 0)
-    expect(outcome).toEqual({ kind: "ok", alerts: [] })
+
+  it("tolerates whitespace around the JSON", () => {
+    expect(
+      interpretSocketRun(
+        makeResult({ stdout: '\n {"ok":true,"data":{"skipped":"x"}} \n' }),
+        LOCAL_ENV,
+      ).kind,
+    ).toBe("pass")
   })
-  it("warns not-authenticated with no note when there are zero existing records", () => {
+
+  it("gives network guidance when stdout is empty and stderr shows a network error", () => {
     const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: false, message: "Auth Error" }) }),
-      0,
+      makeResult({ stdout: "", stderr: "getaddrinfo ENOTFOUND api.socket.dev" }),
+      LOCAL_ENV,
     )
-    expect(outcome).toEqual({
-      kind: "warn",
+    expect(outcome.kind).toBe("fail")
+    expect(outcome.kind === "fail" && outcome.rationale).toContain("could not be reached")
+  })
+
+  it("fails when there is no recognized ok field (object without it, or not an object)", () => {
+    const expected = {
+      kind: "fail",
+      rationale: 'The Socket score script produced JSON with no recognized "ok" boolean field.',
+    }
+    expect(ok({ nope: 1 })).toEqual(expected)
+    expect(ok({ ok: "yes" })).toEqual(expected)
+    expect(ok([])).toEqual(expected)
+  })
+
+  it("gives local, cause-specific steps for each problem", () => {
+    const fail = (body: unknown, env = LOCAL_ENV) => {
+      const outcome = interpretSocketRun(scriptOutput(body), env)
+      return outcome.kind === "fail" ? outcome.rationale : ""
+    }
+    expect(fail({ ok: false, message: "Auth Error" })).toContain("you are not signed in to Socket")
+    expect(fail({ ok: false, message: "Auth Error" })).toContain("1. Sign in: `socket login`")
+    expect(fail({ ok: false, data: { code: 401 } })).toContain("rejected the API token")
+    expect(fail({ ok: false, data: { code: 429 } })).toContain("rate-limited")
+    expect(fail({ ok: false, data: { code: "ENOENT" } })).toContain("`socket` CLI is not installed")
+  })
+
+  it("gives CI-specific steps (secret setup) instead of local sign-in when running in CI", () => {
+    const outcome = interpretSocketRun(scriptOutput({ ok: false, message: "Auth Error" }), CI_ENV)
+    const rationale = outcome.kind === "fail" ? outcome.rationale : ""
+    expect(rationale).toContain("no Socket API token is available to this CI run")
+    expect(rationale).toContain("SOCKET_SECURITY_API_KEY")
+    expect(rationale).not.toContain("socket login")
+  })
+
+  it("fails with Socket's own message and cause for an unclassified failure", () => {
+    expect(ok({ ok: false, message: "Boom", cause: "because" })).toEqual({
+      kind: "fail",
+      rationale: "security-socket scan failed: Boom: because.",
+    })
+    expect(ok({ ok: false, message: "Boom" })).toEqual({
+      kind: "fail",
+      rationale: "security-socket scan failed: Boom.",
+    })
+    expect(ok({ ok: false })).toEqual({
+      kind: "fail",
+      rationale: "security-socket scan failed: unrecognized failure.",
+    })
+  })
+
+  it("fails when success has no data object", () => {
+    expect(ok({ ok: true })).toEqual({
+      kind: "fail",
+      rationale: "The Socket score script reported success without a data object.",
+    })
+    expect(ok({ ok: true, data: [] }).kind).toBe("fail")
+  })
+
+  it("passes, saying why, for skipped and unpublished packages", () => {
+    expect(ok({ ok: true, data: { skipped: "reason" } })).toEqual({
+      kind: "pass",
+      rationale: "Socket scan skipped: reason.",
+    })
+    const unpublished = ok({ ok: true, data: { unpublished: true } })
+    expect(unpublished.kind).toBe("pass")
+  })
+
+  it("fails when alerts is not an array", () => {
+    expect(ok({ ok: true, data: { alerts: {} } })).toEqual({
+      kind: "fail",
+      rationale: 'The Socket score script\'s "alerts" is not an array.',
+    })
+    expect(ok({ ok: true, data: {} }).kind).toBe("fail")
+  })
+
+  it("fails at the correct index when an alert entry is malformed", () => {
+    expect(ok(okScore([scoreAlert(), scoreAlert(), { name: "x" }]))).toEqual({
+      kind: "fail",
       rationale:
-        "security-socket did not run (not-authenticated) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement.",
+        "The Socket score script reported an alert (index 2) missing its name or example package@version.",
     })
   })
-  it("warns not-authenticated with the exact note when there are existing records", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: false, message: "Auth Error" }) }),
-      3,
-    )
-    expect(outcome).toEqual({
-      kind: "warn",
-      rationale:
-        "security-socket did not run (not-authenticated) -- alerts were not evaluated. Install and authenticate @socketsecurity/cli to enable real enforcement. 3 exception record(s) in .repo-contract/exceptions/socket.json were validated but not reconciled (the CLI produced no alert list this run).",
-    })
-  })
-  it("warns network-unreachable", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: "", stderr: "getaddrinfo ENOTFOUND registry.socket.dev" }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "warn",
-      rationale: "security-socket did not run (network-unreachable) -- alerts were not evaluated.",
-    })
-  })
-  it("fails with no recognized ok field when parsed is a plain object without a boolean ok", () => {
-    const outcome = interpretSocketRun(result({ stdout: JSON.stringify({ nothing: true }) }), 0)
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale: '`socket ci --json` produced JSON with no recognized "ok" boolean field.',
-    })
-  })
-  it("fails with no recognized ok field when parsed is not a plain object at all (an array)", () => {
-    const outcome = interpretSocketRun(result({ stdout: JSON.stringify([1, 2]) }), 0)
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale: '`socket ci --json` produced JSON with no recognized "ok" boolean field.',
-    })
-  })
-  it("fails with the CLI's own message when ok is false with a string message", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: false, message: "custom failure" }) }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale: "security-socket scan failed: custom failure",
-    })
-  })
-  it("fails with a generic message when ok is false with a non-string message", () => {
-    const outcome = interpretSocketRun(result({ stdout: JSON.stringify({ ok: false }) }), 0)
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale: "security-socket scan failed: socket ci reported an unrecognized failure.",
-    })
-  })
-  it("passes with zero alerts for an empty alerts object", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: {} }) }),
-      0,
-    )
-    expect(outcome).toEqual({ kind: "ok", alerts: [] })
-  })
-  it("reads alerts nested under data.alerts in preference to top-level alerts", () => {
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const outcome = interpretSocketRun(
-      result({
-        stdout: JSON.stringify({ ok: true, data: { alerts: [alert] }, alerts: [] }),
-      }),
-      0,
-    )
+
+  it("returns the deduplicated alert list with no note when versions agree", () => {
+    const outcome = ok(okScore([scoreAlert(), scoreAlert({ scope: "self" })]))
     expect(outcome).toEqual({
       kind: "ok",
       alerts: [
         {
-          id: "socket:left-pad@1.0.0:envVars",
+          id: "socket:left-pad@1.0.0:unmaintained",
           package: "left-pad",
           version: "1.0.0",
-          type: "envVars",
+          type: "unmaintained",
           severity: "middle",
+          category: "maintenance",
         },
       ],
+      note: "",
     })
   })
-  it("falls back to top-level alerts when data.alerts is absent", () => {
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "low" }
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: [alert] }) }),
-      0,
+
+  it("adds a note only when both versions are known and differ", () => {
+    const note = (extra: Record<string, unknown>) => {
+      const outcome = ok(okScore([], extra))
+      return outcome.kind === "ok" ? outcome.note : "n/a"
+    }
+    expect(note({ requestedVersion: "2.0.0", scoredVersion: "1.0.0" })).toBe(
+      " (scored the latest published version 1.0.0; 2.0.0 is not on Socket yet)",
     )
-    expect(outcome.kind).toBe("ok")
-  })
-  it("defaults to an empty array when neither data.alerts nor alerts is present", () => {
-    const outcome = interpretSocketRun(result({ stdout: JSON.stringify({ ok: true }) }), 0)
-    expect(outcome).toEqual({ kind: "ok", alerts: [] })
-  })
-  it("fails with the nested-shape rationale for a non-empty, non-array alerts object", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: { policyKey: {} } }) }),
-      0,
-    )
-    expect(outcome).toMatchObject({ kind: "fail" })
-    expect((outcome as { rationale: string }).rationale).toContain(
-      "real nested-object shape this check does not yet parse",
-    )
-  })
-  it("fails with the same rationale when alerts is neither array nor object", () => {
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: "nope" }) }),
-      0,
-    )
-    expect(outcome).toMatchObject({ kind: "fail" })
-    expect((outcome as { rationale: string }).rationale).toContain(
-      "real nested-object shape this check does not yet parse",
-    )
-  })
-  it("fails at the correct index when an alert entry in the middle of the array is malformed", () => {
-    const good = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const bad = { package: "left-pad" }
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: [good, bad] }) }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "fail",
-      rationale:
-        "`socket ci --json` reported an alert entry (index 1) missing a required field (package/version/type).",
-    })
-  })
-  it("returns the exact normalized alert list when every entry is well-formed", () => {
-    const alert = { package: "left-pad", version: "1.0.0", type: "envVars", severity: "middle" }
-    const outcome = interpretSocketRun(
-      result({ stdout: JSON.stringify({ ok: true, alerts: [alert] }) }),
-      0,
-    )
-    expect(outcome).toEqual({
-      kind: "ok",
-      alerts: [
-        {
-          id: "socket:left-pad@1.0.0:envVars",
-          package: "left-pad",
-          version: "1.0.0",
-          type: "envVars",
-          severity: "middle",
-        },
-      ],
-    })
+    expect(note({ requestedVersion: "", scoredVersion: "1.0.0" })).toBe("")
+    expect(note({ requestedVersion: "2.0.0", scoredVersion: "" })).toBe("")
+    expect(note({ requestedVersion: "1.0.0", scoredVersion: "1.0.0" })).toBe("")
   })
 })
 
 describe("evaluateFinalVerdict()", () => {
   const alert = {
-    id: "socket:left-pad@1.0.0:envVars",
+    id: "socket:left-pad@1.0.0:unmaintained",
     package: "left-pad",
     version: "1.0.0",
-    type: "envVars",
+    type: "unmaintained",
     severity: "middle" as const,
+    category: "maintenance",
   }
   function registryWith(
     overrides: Partial<{
@@ -998,7 +930,7 @@ describe("evaluateFinalVerdict()", () => {
       exceptionType: "accepted-risk" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "critical" as const,
     }
     const result = evaluateFinalVerdict(
@@ -1009,7 +941,7 @@ describe("evaluateFinalVerdict()", () => {
       outcome: "fail",
       rationale: [
         "1 Socket alert(s) or stale record(s) need attention:",
-        "- socket:left-pad@1.0.0:envVars [critical]: forbidden by policy (above medium severity)",
+        "- socket:left-pad@1.0.0:unmaintained [critical]: forbidden by policy (above medium severity)",
       ].join("\n"),
     })
   })
@@ -1019,7 +951,7 @@ describe("evaluateFinalVerdict()", () => {
       outcome: "fail",
       rationale: [
         "1 Socket alert(s) or stale record(s) need attention:",
-        "- socket:left-pad@1.0.0:envVars [middle]: no reconciled exception record (registry integrity failure)",
+        "- socket:left-pad@1.0.0:unmaintained [middle]: no reconciled exception record (registry integrity failure)",
       ].join("\n"),
     })
   })
@@ -1034,7 +966,7 @@ describe("evaluateFinalVerdict()", () => {
       exceptionType: "" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle" as const,
     }
     const result = evaluateFinalVerdict([alert], registryWith({ activeRecords: [record] }))
@@ -1042,13 +974,13 @@ describe("evaluateFinalVerdict()", () => {
       outcome: "fail",
       rationale: [
         "1 Socket alert(s) or stale record(s) need attention:",
-        "- socket:left-pad@1.0.0:envVars [middle]: exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
+        "- socket:left-pad@1.0.0:unmaintained [middle]: exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
       ].join("\n"),
     })
   })
   it("fails listing a stale record with the exact line format, combining counts with offenders", () => {
     const staleRecord = {
-      id: "socket:old@1.0.0:envVars",
+      id: "socket:old@1.0.0:unmaintained",
       version: 1 as const,
       justification: "j",
       alternatives: "",
@@ -1057,7 +989,7 @@ describe("evaluateFinalVerdict()", () => {
       exceptionType: "accepted-risk" as const,
       package: "old",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "middle" as const,
     }
     const criticalRecord = {
@@ -1070,7 +1002,7 @@ describe("evaluateFinalVerdict()", () => {
       exceptionType: "accepted-risk" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
-      type: "envVars",
+      type: "unmaintained",
       severity: "critical" as const,
     }
     const result = evaluateFinalVerdict(
@@ -1081,8 +1013,8 @@ describe("evaluateFinalVerdict()", () => {
       outcome: "fail",
       rationale: [
         "2 Socket alert(s) or stale record(s) need attention:",
-        "- socket:left-pad@1.0.0:envVars [critical]: forbidden by policy (above medium severity)",
-        '- Stale exception in .repo-contract/exceptions/socket.json: "socket:old@1.0.0:envVars" -- Socket no longer raises this alert; delete this entry.',
+        "- socket:left-pad@1.0.0:unmaintained [critical]: forbidden by policy (above medium severity)",
+        '- Stale exception in .repo-contract/exceptions/socket.json: "socket:old@1.0.0:unmaintained" -- Socket no longer raises this alert; delete this entry.',
       ].join("\n"),
     })
   })

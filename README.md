@@ -77,7 +77,7 @@ tool configs.
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 32 checks
+## The 34 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -105,33 +105,35 @@ the packaging checks see a fresh `dist/`.
 
 ### 3 — Readers (concurrent)
 
-| Check              | How                                                                                 | Blocks on                                                                                                                                    |
-| ------------------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ApiContract`      | diffs every target's public API against its committed baseline (needs `dist/.dts/`) | the branch's changesets declaring a smaller bump than the diff actually requires                                                             |
-| `Typecheck`        | `tsc --noEmit -p tsconfig.json`                                                     | any type error                                                                                                                               |
-| `Tests`            | `vitest run` **with** V8 coverage, once                                             | any failing / errored test                                                                                                                   |
-| `Architecture`     | `depcruise src` — bundled `config/dependency-cruiser.cjs`                           | any error-severity violation (circular deps, etc.)                                                                                           |
-| `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                    | any workflow finding (no workflows → pass)                                                                                                   |
-| `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`   | a repo-maintenance defect                                                                                                                    |
-| `BranchProtection` | `gh api` against the default branch's GitHub ruleset                                | deletion / force-push / PR-required protection missing (warns if `gh` unavailable)                                                           |
-| `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                              | any metric below threshold                                                                                                                   |
-| `Crap`             | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                   | any function over either ceiling                                                                                                             |
-| `Size`             | `npm run size` \*                                                                   | the consumer's size script failing                                                                                                           |
-| `Duplication`      | `jscpd src`                                                                         | duplication above the 0.75% budget                                                                                                           |
-| `Packaging`        | `publint`                                                                           | any packaging **error** (warnings warn)                                                                                                      |
-| `TypeResolution`   | `attw` on the packed tarball (`./schema` excluded)                                  | any packaged type-resolution problem                                                                                                         |
-| `Licenses`         | `licensee --production --osi`                                                       | any shipped dep without an OSI license                                                                                                       |
-| `DocsMarkdown`     | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                           | any markdown issue                                                                                                                           |
-| `DocsLinks`        | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/`  | any broken **local** link (external rot warns)                                                                                               |
-| `DocsFragments`    | bundled `scripts/check-docs-fragments.mjs`                                          | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers)                      |
-| `Accessibility`    | `pa11y` (WCAG2AA) against the consumer's own built docs site                        | any accessibility violation (no built site to scan → warn)                                                                                   |
-| `SecurityDeps`     | `npm audit --omit=dev`                                                              | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record)                      |
-| `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                              | any detected secret                                                                                                                          |
-| `SecuritySocket`   | `socket ci --json` (`@socketsecurity/cli`)                                          | any `critical`/`high` alert (forbidden, no waiver); `middle`/`low` waivable via the exception registry                                       |
-| `DeadCode`         | `knip` — bundled `config/knip.json`                                                 | any unused file/export/dep, unlisted import                                                                                                  |
-| `Commits`          | `commitlint origin/main..HEAD` — bundled config                                     | any non-Conventional-Commit (no base branch → warn)                                                                                          |
-| `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)   | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded) |
-| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                                | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                        |
+| Check              | How                                                                                                                  | Blocks on                                                                                                                                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApiContract`      | diffs every target's public API against its committed baseline (needs `dist/.dts/`)                                  | the branch's changesets declaring a smaller bump than the diff actually requires                                                                                                                                             |
+| `Typecheck`        | `tsc --noEmit -p tsconfig.json`                                                                                      | any type error                                                                                                                                                                                                               |
+| `Tests`            | `vitest run` **with** V8 coverage, once                                                                              | any failing / errored test                                                                                                                                                                                                   |
+| `Architecture`     | `depcruise src` — bundled `config/dependency-cruiser.cjs`                                                            | any error-severity violation (circular deps, etc.)                                                                                                                                                                           |
+| `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                                                     | any workflow finding (no workflows → pass)                                                                                                                                                                                   |
+| `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`                                    | a repo-maintenance defect                                                                                                                                                                                                    |
+| `BranchProtection` | `gh api` against the default branch's GitHub ruleset                                                                 | deletion / force-push / PR-required protection missing (warns if `gh` unavailable)                                                                                                                                           |
+| `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS` (80%)                                                               | any metric below threshold                                                                                                                                                                                                   |
+| `Crap`             | `crap4ts src` — CRAP ≤ 30, cyclomatic ≤ 20 (`dependsOn Coverage`)                                                    | any function over either ceiling                                                                                                                                                                                             |
+| `Size`             | `npm run size` \*                                                                                                    | the consumer's size script failing                                                                                                                                                                                           |
+| `NoMinify`         | static check of tsup config / scripts + inspection of `dist/` for minified code                                      | any `minify*` option, or a minified-looking built file (Socket flags minified code; 0 minification is allowed; no allowlist)                                                                                                 |
+| `DistNoUrls`       | `repo-contract/presets` `distNoUrls` scanner over **every** file in `dist/` (maps, `.d.ts` too)                      | any shipped URL without a complete record in `.repo-contract/exceptions/dist-urls.json` (stubs scaffolded; stale records fail)                                                                                               |
+| `Duplication`      | `jscpd src`                                                                                                          | duplication above the 0.75% budget                                                                                                                                                                                           |
+| `Packaging`        | `publint`                                                                                                            | any packaging **error** (warnings warn)                                                                                                                                                                                      |
+| `TypeResolution`   | `attw` on the packed tarball (`./schema` excluded)                                                                   | any packaged type-resolution problem                                                                                                                                                                                         |
+| `Licenses`         | `licensee --production --osi`                                                                                        | any shipped dep without an OSI license                                                                                                                                                                                       |
+| `DocsMarkdown`     | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                                                            | any markdown issue                                                                                                                                                                                                           |
+| `DocsLinks`        | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/`                                   | any broken **local** link (external rot warns)                                                                                                                                                                               |
+| `DocsFragments`    | bundled `scripts/check-docs-fragments.mjs`                                                                           | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers)                                                                                                      |
+| `Accessibility`    | `pa11y` (WCAG2AA) against the consumer's own built docs site                                                         | any accessibility violation (no built site to scan → warn)                                                                                                                                                                   |
+| `SecurityDeps`     | `npm audit --omit=dev`                                                                                               | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record)                                                                                                      |
+| `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                                                               | any detected secret                                                                                                                                                                                                          |
+| `SecuritySocket`   | `socket package score` (`@socketsecurity/cli`) — the package's own Socket page, whole transitive closure incl. peers | **any** `supplyChainRisk` alert (forbidden, no waiver), any `critical`/`high` alert; other `middle`/`low` waivable via the exception registry. **Fails** — never warns — when Socket can't run, with CI-vs-local setup steps |
+| `DeadCode`         | `knip` — bundled `config/knip.json`                                                                                  | any unused file/export/dep, unlisted import                                                                                                                                                                                  |
+| `Commits`          | `commitlint origin/main..HEAD` — bundled config                                                                      | any non-Conventional-Commit (no base branch → warn)                                                                                                                                                                          |
+| `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)                                    | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded)                                                                                 |
+| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                                                                 | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                                                                                                        |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
@@ -159,6 +161,20 @@ Step 1.
 design rather than a general package standard. (`api-contract` used to be on
 this list; it moved here entirely once every repo in the fleet versioned via
 Changesets — see `contract.ts`'s own doc comment.)
+
+## Contributor setup: Socket.dev
+
+`SecuritySocket` scores the package on Socket.dev and **fails** (never warns) when it cannot run.
+When it fails it prints the exact steps for where it is running -- the short version:
+
+- **On your machine:** `npm install --global @socketsecurity/cli`, then `socket login`; confirm
+  with `socket config list` that `apiToken` is set.
+- **In GitHub Actions:** create a Socket API token (socket.dev > Settings > API Tokens, permission
+  `packages:list`), add it as the repository (or organization) secret `SOCKET_SECURITY_API_KEY`, and
+  map it under `env:` on the step that runs the contract (the scaffolded `contract.yml` does).
+
+`SOCKET_SECURITY_API_KEY` is read only by the `socket` CLI while the contract runs; shipped code never
+touches it, so it is not an env-cap contract. The scan costs Socket API quota units per run.
 
 ## Overriding a bundled config
 
@@ -216,6 +232,25 @@ pull_request`, gated on `github.head_ref == 'changeset-release/main'`), so the
 committed baseline tracks each release's real version instead of falling one release
 behind on the very next PR.
 
+## Benchmark kit: the foundation for meaningful benchmarks
+
+[`scripts/benchmark/kit/`](scripts/benchmark/kit) is the one self-contained way every package here
+benchmarks itself. A package supplies an **input** -- a `suite.mjs` that imports its real functions and
+documents each one -- and the kit stresses it through ten doubling sizes (20 ... 10240), measures wall
+time, CPU time and memory, infers the big-O and compares it with the documented one, prices the result
+and writes an **output**: `results.json` (a fixed, validated shape) and a cost-first `BENCHMARKS.md`.
+
+- **Three views:** end-to-end total impact (empty functions, with vs without the package), every function
+  on its own, and which functions make up the end-to-end overhead.
+- **Import and run:** `import { defineSuite } from "internal-package-contract/benchmark"`; list functions as
+  `{ call, input }` and the kit calls `call(...input(n))` at every size. `defineSuite` rejects undocumented
+  entries (why, what poor performance means, big-O and its reason, every variable).
+- **Commands:** `run-suite.mjs <suite> [--quick] [--check] [--render] [--only ...]`.
+- **`init`** scaffolds `benchmarks/README.md` (input and output shapes), `WRITING-BENCHMARKS.md` and
+  `READING-BENCHMARKS.md`, plus a working `suite.mjs` and the `benchmark` scripts with `--name`.
+- **History and pages** read the same results; the history page links to the package's
+  `benchmarks/README.md` (`render-page.mjs --readme <url>`).
+
 ## Shared benchmark engine
 
 [`scripts/benchmark/`](scripts/benchmark) is a consumer-agnostic engine for the
@@ -266,14 +301,15 @@ package's copies (no consumer-owned logic beyond its own `budgets.mjs`):
 }
 ```
 
-[`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) is the reusable
-`workflow_call` counterpart (same "thin per-repo caller, real logic lives in one
-reusable workflow" pattern as `## Release` above) — measure, post/update the PR
-comment, conditionally commit refreshed
-results + history, preserving the anti-recursion-loop guard
-(`github.actor != 'github-actions[bot]'`, same-repo PRs only) the current per-repo
-job already fixed. Takes `benchmark-dir`/`history-dir` as inputs rather than
-assuming either env-cap's or data-cap's own directory-naming convention.
+[`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) is the reusable `workflow_call`
+counterpart (same "thin per-repo caller, real logic lives in one reusable workflow" pattern as
+`## Release` above): build, run `npm run benchmark:check` and the benchmarks, post or update the PR
+comment, and conditionally commit refreshed results and history, keeping the anti-recursion guard
+(`github.actor != 'github-actions[bot]'`, same-repo PRs only). It assumes nothing about how many suites
+a package has: the caller lists them in `suites` (one `label|directory|history-file` per line), names
+any self-contained suite projects needing their own `npm install` in `install-dirs`, and points
+`budgets-path` at its `benchmarks/budgets.mjs`. A caller pins the workflow by commit SHA and must bump
+that SHA together with its `internal-package-contract` dependency pin.
 
 ## Evolving the standard
 

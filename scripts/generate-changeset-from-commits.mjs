@@ -181,7 +181,7 @@ function main() {
 
   const overallBump = highestSeverityAcrossChangesets()
   if (overallBump) {
-    writeFileSync(".changeset/.release-bump.json", JSON.stringify({ bump: overallBump }) + "\n")
+    writeFileSync(".changeset/.release-bump.json", `{ "bump": "${overallBump}" }\n`)
     console.log(`Recorded overall bump severity: ${overallBump}`)
   }
 }

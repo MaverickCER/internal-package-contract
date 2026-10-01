@@ -14,6 +14,7 @@
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import {
+  loadExceptionRegistry,
   reconcileExceptions,
   writeExceptionRegistry,
   evaluateExceptionRecord,
@@ -23,6 +24,7 @@ import type {
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
+  StandardSchemaV1,
 } from "repo-contract/helpers"
 
 /**
@@ -402,4 +404,46 @@ export async function reconcileAndPersistExceptionRegistry<
   }
 
   return { ok: true, registry: { activeRecords, staleRecords, newStubIds } }
+}
+
+/**
+ * Loads a registry from disk, reconciles `findings` against it and persists the result -- the
+ * whole "read, reconcile, write back" sequence every registry-backed check performs, in one place.
+ * @param registryPath - Absolute path of the registry file.
+ * @param registryRelativePath - The registry's repo-relative path, for rationales.
+ * @param schema - Validates the file's records.
+ * @param findings - This run's findings.
+ * @param createStub - Builds a blank record for a finding with none yet.
+ * @returns the reconciled registry, or the failure rationale to return verbatim.
+ */
+export async function loadAndReconcileExceptionRegistry<
+  TFinding extends { readonly id: string },
+  TRecord extends { readonly id: string },
+>(
+  registryPath: string,
+  registryRelativePath: string,
+  schema: StandardSchemaV1<unknown, readonly TRecord[]>,
+  findings: readonly TFinding[],
+  createStub: (finding: TFinding, id: string) => TRecord,
+): Promise<
+  | { readonly ok: true; readonly registry: PersistedExceptionRegistry<TRecord> }
+  | { readonly ok: false; readonly rationale: string }
+> {
+  const loaded = await loadExceptionRegistry({ path: registryPath, schema })
+  if (!loaded.ok) {
+    return {
+      ok: false,
+      rationale: [
+        `${registryRelativePath} failed to load and was left unchanged:`,
+        ...loaded.errors.map((error) => `- ${error}`),
+      ].join("\n"),
+    }
+  }
+  return reconcileAndPersistExceptionRegistry(
+    registryPath,
+    registryRelativePath,
+    loaded.records,
+    findings,
+    createStub,
+  )
 }

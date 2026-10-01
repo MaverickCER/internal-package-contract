@@ -1,4 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import fsPromises from "node:fs/promises"
+import { syncBuiltinESMExports } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -10,11 +12,22 @@ let cwd: string
 beforeEach(() => {
   cwd = mkdtempSync(path.join(tmpdir(), "ipc-tests-check-test-"))
   vi.spyOn(process, "cwd").mockReturnValue(cwd)
+  // Newer repo-contract `test` presets read the results file by a cwd-relative path of their own,
+  // which Node resolves against the real working directory (and `process.chdir` is unsupported in
+  // worker threads, which Stryker's runner uses). Redirect exactly that read into the temp dir.
+  const realReadFile = fsPromises.readFile.bind(fsPromises)
+  vi.spyOn(fsPromises, "readFile").mockImplementation(((file: unknown, ...rest: unknown[]) =>
+    realReadFile(
+      (file === VITEST_RESULTS_PATH ? path.join(cwd, VITEST_RESULTS_PATH) : file) as string,
+      ...(rest as []),
+    )) as typeof fsPromises.readFile)
+  syncBuiltinESMExports()
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
-  rmSync(cwd, { recursive: true, force: true })
+  syncBuiltinESMExports()
+  rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 function writeResults(value: unknown): void {

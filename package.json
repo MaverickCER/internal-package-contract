@@ -43,7 +43,8 @@
     "./config/typedoc-a11y-search-label": "./config/typedoc-a11y-search-label.mjs",
     "./checks/npm-script": "./checks/npm-script.ts",
     "./checks/api-contract": "./checks/api-contract.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./benchmark": "./scripts/benchmark/kit/index.mjs"
   },
   "files": [
     "bin",
@@ -104,7 +105,7 @@
     "prettier": "3.9.6",
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
-    "repo-contract": "^0.7.0",
+    "repo-contract": "^0.8.4",
     "secretlint": "^9.0.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
