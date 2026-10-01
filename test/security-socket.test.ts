@@ -38,7 +38,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-  rmSync(cwd, { recursive: true, force: true })
+  // Windows can hold a just-exited child's cwd for a moment, so retry the removal.
+  rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 function registryPath(): string {
