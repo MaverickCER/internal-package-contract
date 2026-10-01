@@ -94,12 +94,10 @@ const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", 
 
 /** Every shipped URL needs a complete record; none is forbidden outright. */
 const DIST_URL_POLICY: ExceptionPolicyConfig = {
-  "dist-url": { default: { mode: "exception", requirements: [...REQUIREMENTS] } },
+  "dist-url": { rules: { url: { mode: "exception", requirements: [...REQUIREMENTS] } } },
 }
-const DIST_URL_GLOBAL_DEFAULT: ExceptionPolicy = {
-  mode: "exception",
-  requirements: [...REQUIREMENTS],
-}
+// Anything outside the one classification above is never waivable.
+const DIST_URL_GLOBAL_DEFAULT: ExceptionPolicy = { mode: "forbidden" }
 
 /** `dist-url:<url>` -- stable while the URL is unchanged. */
 export function deriveDistUrlId(url: string): string {

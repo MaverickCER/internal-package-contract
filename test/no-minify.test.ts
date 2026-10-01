@@ -15,6 +15,40 @@ describe("noMinify (policy)", () => {
     expect((noMinify("out").run as readonly string[])[2]).toBe("out")
   })
 
+  it("asks for the script's output as JSON", () => {
+    expect(noMinify().output).toEqual({ format: "json" })
+  })
+
+  it("fails on a config finding alone", async () => {
+    const result = await noMinify().policy(
+      makeContext(
+        makeJsonResult({
+          ok: true,
+          dirExists: true,
+          config: [{ file: "tsup.config.ts", line: 3, text: "minify: true" }],
+          output: [],
+        }),
+      ),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("- tsup.config.ts:3 requests minification: minify: true")
+  })
+
+  it("fails on an output finding alone", async () => {
+    const result = await noMinify().policy(
+      makeContext(
+        makeJsonResult({
+          ok: true,
+          dirExists: true,
+          config: [],
+          output: [{ file: "index.js", reason: "a line is 9000 characters long (limit 5000)" }],
+        }),
+      ),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("index.js")
+  })
+
   it("passes when nothing was found in an existing build directory", async () => {
     const result = await noMinify().policy(
       makeContext(makeJsonResult({ ok: true, dirExists: true, config: [], output: [] })),

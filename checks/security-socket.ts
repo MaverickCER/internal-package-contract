@@ -277,12 +277,11 @@ export function isAuthError(parsed: unknown): boolean {
   )
 }
 
-/** The HTTP-style `data.code` of a failed Socket envelope, or `undefined`. */
-function failureCode(parsed: unknown): string | number | undefined {
+/** The HTTP-style `data.code` of a failed Socket envelope (compared strictly, so any type is safe). */
+function failureCode(parsed: unknown): unknown {
   if (!isPlainObject(parsed)) return undefined
   const data = parsed["data"]
-  const code = isPlainObject(data) ? data["code"] : undefined
-  return typeof code === "string" || typeof code === "number" ? code : undefined
+  return isPlainObject(data) ? data["code"] : undefined
 }
 
 /**
@@ -315,10 +314,9 @@ export function parseExample(
 ): { readonly name: string; readonly version: string } | undefined {
   const withoutEcosystem = example.startsWith("npm/") ? example.slice("npm/".length) : example
   const at = withoutEcosystem.lastIndexOf("@")
-  if (at <= 0) return undefined
-  const name = withoutEcosystem.slice(0, at)
-  const version = withoutEcosystem.slice(at + 1)
-  return name.length > 0 && version.length > 0 ? { name, version } : undefined
+  return at < 1 || at === withoutEcosystem.length - 1
+    ? undefined
+    : { name: withoutEcosystem.slice(0, at), version: withoutEcosystem.slice(at + 1) }
 }
 
 /**
@@ -360,7 +358,7 @@ export function evaluateAlert(
 } {
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "socket", category: alert.severity },
-    ...(alert.category === "" ? [] : [{ group: "socket-category", category: alert.category }]),
+    { group: "socket-category", category: alert.category },
   ]
   return evaluateFindingVerdict(
     record,
@@ -396,14 +394,14 @@ type SocketRunOutcome =
 type Env = Readonly<Record<string, string | undefined>>
 
 /**
- * Parses stdout as JSON; `undefined` when it is not.
+ * Parses stdout as JSON; `null` when it is not (a literal JSON `null` is equally unusable).
  * @param stdout - the script's raw stdout.
  */
 function parseEnvelope(stdout: string): unknown {
   try {
-    return JSON.parse(stdout.trim())
+    return JSON.parse(stdout) as unknown
   } catch {
-    return undefined
+    return null
   }
 }
 
@@ -420,7 +418,7 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
   if (terminated) return { kind: "fail", rationale: terminated }
 
   const parsed = parseEnvelope(result.stdout)
-  if (parsed === undefined) {
+  if (parsed === null) {
     const problem = classifyProblem(result.stderr, undefined)
     return {
       kind: "fail",
