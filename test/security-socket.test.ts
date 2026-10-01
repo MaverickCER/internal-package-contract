@@ -28,6 +28,12 @@ import {
 } from "../checks/security-socket.js"
 import { makeContext, makeResult } from "./support.js"
 
+// The guidance builder asks git for this repository's remote, running it with the (temp) working
+// directory; on Windows a lingering git process locks that directory against cleanup.
+vi.mock("../scripts/github-repo.mjs", () => ({
+  resolveOwnerRepo: () => ({ owner: "MaverickCER", repo: "demo" }),
+}))
+
 /** Mirrors security-socket.ts's own private `deriveSocketExceptionId` exactly. */
 function deriveId(alert: {
   readonly package: string
