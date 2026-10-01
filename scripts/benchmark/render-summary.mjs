@@ -142,7 +142,9 @@ function renderExample(label, previous, current, budgets) {
       changeCell = `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(1)}%`
     }
 
-    const budget = budgets[name]
+    // A group with no entry of its own falls back to the "*" default, so a suite whose groups are
+    // generated (one per function and variant) needs no per-group list.
+    const budget = budgets[name] ?? budgets["*"]
     const budgetCell = budget ? `${budget.maxRegressionPercent}%` : "(unbudgeted)"
     if (budget && changePercent !== undefined && changePercent > budget.maxRegressionPercent) {
       highlights.push({ name, tier, changePercent, budget: budget.maxRegressionPercent })

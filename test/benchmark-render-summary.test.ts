@@ -93,6 +93,34 @@ describe("renderSummary", () => {
     expect(output).toContain("cold-start.baseline")
   })
 
+  it('falls back to the "*" default budget for a group with no entry of its own', async () => {
+    const prevPath = write("prev.json", makeResults())
+    const curPath = write(
+      "cur.json",
+      makeResults({
+        results: {
+          "cold-start": {
+            tiers: {
+              baseline: { status: "completed", inputs: { n: 10 }, durationMs: { medianMs: 20 } },
+              stress: { status: "completed", inputs: { n: 100 }, durationMs: { medianMs: 100 } },
+            },
+          },
+        },
+      }),
+    )
+    const budgetsPath = writeRaw(
+      "budgets.mjs",
+      'export const BUDGETS = { "*": { maxRegressionPercent: 10 } }',
+    )
+    const output = await renderSummary({
+      budgetsPath,
+      examples: [`Runtime|${prevPath}|${curPath}|`],
+    })
+    expect(output).toContain("Exceeds budget")
+    expect(output).toContain("10%")
+    expect(output).not.toContain("(unbudgeted)")
+  })
+
   it("treats a first-run previous file (missing/unreadable) as no prior data, not a crash", async () => {
     const curPath = write("cur.json", makeResults())
     const output = await renderSummary({
