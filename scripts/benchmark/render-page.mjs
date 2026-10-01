@@ -63,6 +63,7 @@ function parseArgs(argv) {
     if (arg === "--out") args.out = argv[++i]
     else if (arg === "--history") args.histories.push(argv[++i])
     else if (arg === "--max-entries") args.maxEntries = Number(argv[++i])
+    else if (arg === "--readme") args.readme = argv[++i]
     else if (arg === "--help" || arg === "-h") args.help = true
   }
   return args
@@ -127,7 +128,7 @@ function buildGroupData(group, entries, tierOrder) {
   return { group, series, ...latestClassification }
 }
 
-export async function buildPageModel({ histories, maxEntries }) {
+export async function buildPageModel({ histories, maxEntries, readme }) {
   const categories = []
   for (const spec of histories) {
     const { label, historyPath } = parseHistorySpec(spec)
@@ -145,7 +146,16 @@ export async function buildPageModel({ histories, maxEntries }) {
       groups,
     })
   }
-  return { generatedAt: new Date().toISOString(), maxEntries, categories }
+  return { generatedAt: new Date().toISOString(), maxEntries, categories, readmeUrl: readme }
+}
+
+/** Escapes text for use in HTML element content or a double-quoted attribute. */
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
 }
 
 function renderHtml(model) {
@@ -278,6 +288,7 @@ ${CATEGORICAL_SLOTS.map((s, i) => `    --series-${i + 1}: ${s.dark};`).join("\n"
 <main>
   <h1>Benchmark history</h1>
   <p class="lede">Committed benchmark history, rendered fresh on every deploy.</p>
+  ${model.readmeUrl ? `<p class="lede">New here? <a href="${escapeHtml(model.readmeUrl)}">Read this package's benchmarks guide</a> for what is measured, how to read the results, and how they are documented.</p>` : ""}
 
   <section class="methodology">
     <p><strong>What's measured:</strong> the median wall-clock time (\`medianMs\`) of each named benchmark group, at each of its declared input-size tiers, tracked across successive CI runs.</p>
@@ -457,7 +468,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help || !args.out || args.histories.length === 0) {
     console.error(
-      "Usage: node render-page.mjs --out <docs/benchmarks/index.html> --history 'label|path/to/history.json' [--history ...] [--max-entries 200]",
+      "Usage: node render-page.mjs --out <docs/benchmarks/index.html> --history 'label|path/to/history.json' [--history ...] [--max-entries 200] [--readme <url of the package's benchmarks/README.md>]",
     )
     process.exitCode = args.help ? 0 : 1
     return

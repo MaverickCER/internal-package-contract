@@ -4,6 +4,7 @@
 export interface BuildPageModelOptions {
   readonly histories: readonly string[]
   readonly maxEntries: number
+  readonly readme?: string | undefined
 }
 
 export interface PageModelGroup {
@@ -28,6 +29,7 @@ export interface PageModelCategory {
 }
 
 export interface PageModel {
+  readonly readmeUrl?: string | undefined
   readonly generatedAt: string
   readonly maxEntries: number
   readonly categories: readonly PageModelCategory[]
