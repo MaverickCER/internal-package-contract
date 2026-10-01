@@ -23,4 +23,9 @@ jobs:
           node-version: 24.x
           cache: npm
       - run: npm ci
+      # SecuritySocket scores the package on Socket.dev and FAILS without a token. Create one at
+      # socket.dev (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings >
+      # Secrets and variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
       - run: npm run contract
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}

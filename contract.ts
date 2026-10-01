@@ -57,6 +57,7 @@ import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
+import { distNoUrlsCheck } from "./checks/dist-no-urls.js"
 import { duplication } from "./checks/duplication.js"
 import { docsFragments } from "./checks/docs-fragments.js"
 import { docsLinks } from "./checks/docs-links.js"
@@ -64,6 +65,7 @@ import { docsMarkdown } from "./checks/docs-markdown.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
+import { noMinify } from "./checks/no-minify.js"
 import { npmScriptCheck } from "./checks/npm-script.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
@@ -135,6 +137,11 @@ export default defineRepoContract({
     Coverage: { ...coverage, dependsOn: ["Tests"] },
     Crap: { ...crap, dependsOn: ["Coverage"] },
     Size: npmScriptCheck({ script: "size", label: "Size" }),
+    // Both gate what actually ships (the build output the Build barrier above just produced).
+    // NoMinify has no exceptions at all; every URL DistNoUrls finds needs a record in the consumer's
+    // reviewed-exception registry `.repo-contract/exceptions/dist-urls.json` (see checks/dist-no-urls.ts).
+    NoMinify: noMinify(),
+    DistNoUrls: distNoUrlsCheck(),
     Duplication: duplication,
     Packaging: publint,
     // `dependsOn: ["Tests"]` -- this packs a tarball, and a consumer's own
