@@ -1,0 +1,10 @@
+{
+  // Extends internal-package-contract's org-wide strict baseline; add overrides only with a reason.
+  "extends": "internal-package-contract/tsconfig",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true
+  },
+  "include": ["src", "test"]
+}
