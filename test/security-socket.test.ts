@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -284,9 +292,14 @@ describe("securitySocket()", () => {
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
     mkdirSync(path.dirname(registryPath()), { recursive: true })
     symlinkSync(target, registryPath())
-    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
-    expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("is a symlink")
+    try {
+      const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
+      expect(result.outcome).toBe("fail")
+      expect(result.rationale).toContain("is a symlink")
+    } finally {
+      // Windows cannot remove a dangling file symlink during the recursive cleanup, so drop it first.
+      unlinkSync(registryPath())
+    }
   })
 
   it("never reconciles the registry when Socket could not run (a failure, not a pass)", async () => {
@@ -403,6 +416,7 @@ describe("parseExample()", () => {
     expect(parseExample("npm/left-pad@1.0.0")).toEqual({ name: "left-pad", version: "1.0.0" })
     expect(parseExample("npm/@scope/pkg@2.3.4")).toEqual({ name: "@scope/pkg", version: "2.3.4" })
     expect(parseExample("plain@1.0.0")).toEqual({ name: "plain", version: "1.0.0" })
+    expect(parseExample("npm/a@1")).toEqual({ name: "a", version: "1" })
   })
   it("rejects anything without a name and a version", () => {
     for (const bad of ["npm/left-pad", "npm/@scope", "npm/left-pad@", "@1.0.0", "", "npm/@1.0.0"]) {

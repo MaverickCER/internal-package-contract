@@ -98,4 +98,17 @@ describe("socketGuidance()", () => {
       "https://github.com/<owner>/<repo>/settings/secrets/actions",
     )
   })
+
+  it("always ends the local fix with a re-run, and tells CI how to replace a rejected token", () => {
+    expect(local("cli-not-installed")).toContain("Re-run `npm run contract`.")
+    expect(local("token-rejected")).toContain("Re-run `npm run contract`.")
+    expect(ci("token-rejected")).toContain(
+      "Create a new Socket API token (socket.dev > Settings > API Tokens, `packages:list` permission).",
+    )
+  })
+  it("tells a network failure to check the connection first", () => {
+    expect(local("network-unreachable")).toContain(
+      "Check your network connection, proxy and VPN, then re-run the contract.",
+    )
+  })
 })

@@ -176,9 +176,29 @@ describe("evaluateDistUrls()", () => {
       5,
     )
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("1 shipped URL(s) or stale record(s) need attention")
+    expect(result.rationale.startsWith("1 shipped URL(s) or stale record(s) need attention")).toBe(
+      true,
+    )
     expect(result.rationale).toContain(
       '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test" -- this URL no longer ships; delete this entry.',
+    )
+  })
+  it("renders the exact failure text, counting offenders and stale records together", () => {
+    const result = evaluateDistUrls(
+      [shipped],
+      registry({
+        activeRecords: [complete(URL_A, { justification: "" })],
+        staleRecords: [complete("https://gone.test")],
+      }),
+      "dist",
+      5,
+    )
+    expect(result.rationale).toBe(
+      [
+        "2 shipped URL(s) or stale record(s) need attention -- Socket.dev flags every URL in a published package; remove it from the source (comments, JSDoc, string literals, sourcemap content) or explain it in .repo-contract/exceptions/dist-urls.json:",
+        "- https://a.test/x (first at index.js:1): exception incomplete (missing: justification)",
+        '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test" -- this URL no longer ships; delete this entry.',
+      ].join("\n"),
     )
   })
   it("caps the listing at 20 and says how many more", () => {
@@ -202,15 +222,16 @@ describe("distNoUrlsCheck() -- policy", () => {
     distNoUrlsCheck(dir).policy(makeContext(result))
 
   it("fails closed on abnormal termination and unparseable or malformed scan output", async () => {
-    expect((await policy(makeResult({ status: "timed_out" }))).rationale).toBe(
-      "the dist URL scan did not run to completion (status: timed_out).",
-    )
+    expect(await policy(makeResult({ status: "timed_out" }))).toEqual({
+      outcome: "fail",
+      rationale: "the dist URL scan did not run to completion (status: timed_out).",
+    })
     const unparseable = "The dist URL scan output could not be parsed."
     expect(
       (await policy(makeResult({ output: { format: "json", success: false, error: "x" } })))
         .rationale,
     ).toBe(unparseable)
-    expect((await policy(makeResult())).rationale).toBe(unparseable)
+    expect(await policy(makeResult())).toEqual({ outcome: "fail", rationale: unparseable })
     for (const bad of [
       null,
       5,

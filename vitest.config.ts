@@ -6,8 +6,6 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     exclude: ["**/node_modules/**", "template/**"],
     watch: false,
-    // `process.chdir()` (test/tests-check.test.ts) is unsupported in worker threads; child processes support it.
-    pool: "forks",
     testTimeout: 20_000,
     coverage: {
       provider: "v8",
