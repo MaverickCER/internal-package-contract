@@ -26,6 +26,14 @@ jobs:
       # SecuritySocket scores the package on Socket.dev and FAILS without a token. Create one at
       # socket.dev (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings >
       # Secrets and variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
+      # Socket scores a published version, so one score serves every run for a day; the contract
+      # scans only after every other check passes, and this keeps even that scan to once per version.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ipc-socket-score
+          key: ipc-socket-score-${{ github.run_id }}
+          restore-keys: ipc-socket-score-
       - run: npm run contract
         env:
+          IPC_SOCKET_CACHE_DIR: ${{ runner.temp }}/ipc-socket-score
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
