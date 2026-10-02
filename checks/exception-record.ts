@@ -169,6 +169,9 @@ export function validateExceptionRegistry<TRecord extends { readonly id: string 
  * - `"scheduled-remediation"`: the fix is planned and tracked, not yet landed.
  * - `"platform-or-vendor-constraint"`: the finding cannot be resolved without a change outside
  *   this repository's own control (an upstream dependency, a platform API).
+ * - `"required-for-package-to-exist"`: the package cannot exist at all without the flagged
+ *   dependency or behavior -- removing it would remove the package's purpose. The only type
+ *   `SecuritySocket` accepts.
  */
 export const EXCEPTION_TYPES = [
   "validated-false-positive",
@@ -177,9 +180,13 @@ export const EXCEPTION_TYPES = [
   "tooling-limitation",
   "scheduled-remediation",
   "platform-or-vendor-constraint",
+  "required-for-package-to-exist",
 ] as const
 
 export type ExceptionType = (typeof EXCEPTION_TYPES)[number]
+
+/** The only exception type `SecuritySocket` accepts: the flagged code is why the package exists. */
+export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = ["required-for-package-to-exist"]
 
 /**
  * How an exception's claim was substantiated -- a required root field on every security-family
