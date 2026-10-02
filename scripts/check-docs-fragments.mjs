@@ -72,10 +72,15 @@ function stripFencedCodeBlocks(content) {
 
 /** Converts inline link/image markdown to plain text (keeping a link's own visible text, dropping an image entirely) -- `github-slugger` strips punctuation character-by-character and has no notion of markdown syntax, so `[Link text](url)` must become `Link text` *before* slugging or the URL's own characters pollute the slug. */
 function toPlainHeadingText(raw) {
-  return raw
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/<[^>]+>/g, "")
+  const text = raw.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+  // One pass can leave a tag behind (`<<b>b>` -> `<b>`), so strip until nothing changes.
+  let stripped = text
+  let previous
+  do {
+    previous = stripped
+    stripped = stripped.replace(/<[^>]+>/g, "")
+  } while (stripped !== previous)
+  return stripped
 }
 
 /** Every heading in `content`, as `{ line, slug }`, in document order -- duplicate heading text gets GitHub's own `-1`/`-2`/... suffix, via one `GithubSlugger` instance per file (its dedup state is intentionally per-document). */

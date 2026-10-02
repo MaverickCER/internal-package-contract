@@ -172,6 +172,9 @@ export function validateExceptionRegistry<TRecord extends { readonly id: string 
  * - `"required-for-package-to-exist"`: the package cannot exist at all without the flagged
  *   dependency or behavior -- removing it would remove the package's purpose. The only type
  *   `SecuritySocket` accepts.
+ * - `"dev-only-not-shipped"`: the finding is in development-only code (tests, scripts, docs, CI
+ *   configuration) that never reaches a build, a runtime or a published package. The only type
+ *   `CodeScanning` accepts.
  */
 export const EXCEPTION_TYPES = [
   "validated-false-positive",
@@ -181,12 +184,16 @@ export const EXCEPTION_TYPES = [
   "scheduled-remediation",
   "platform-or-vendor-constraint",
   "required-for-package-to-exist",
+  "dev-only-not-shipped",
 ] as const
 
 export type ExceptionType = (typeof EXCEPTION_TYPES)[number]
 
 /** The only exception type `SecuritySocket` accepts: the flagged code is why the package exists. */
 export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = ["required-for-package-to-exist"]
+
+/** The only exception type `CodeScanning` accepts: the finding is in code that is never shipped. */
+export const CODE_SCANNING_EXCEPTION_TYPES: readonly ExceptionType[] = ["dev-only-not-shipped"]
 
 /**
  * How an exception's claim was substantiated -- a required root field on every security-family

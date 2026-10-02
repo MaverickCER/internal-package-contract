@@ -77,7 +77,7 @@ tool configs.
 | `commit-msg` | Conventional Commits check on the message                            |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
-## The 34 checks
+## The 35 checks
 
 [`contract.ts`](contract.ts) — read-only against the consumer's source tree.
 `Build` / `Tests` write only build + coverage + report artifacts, which
@@ -130,6 +130,7 @@ the packaging checks see a fresh `dist/`.
 | `SecurityDeps`     | `npm audit --omit=dev`                                                                                               | any advisory of any severity, including `info` (no severity-tiered waiver; every finding needs a full exception record)                                                                                                                                                                                 |
 | `SecuritySecrets`  | `secretlint` — bundled `config/secretlint.config.json`                                                               | any detected secret                                                                                                                                                                                                                                                                                     |
 | `SecuritySocket`   | `socket package score` (`@socketsecurity/cli`) — the package's own Socket page, whole transitive closure incl. peers | any `critical`/`high` alert is forbidden; every other alert, `supplyChainRisk` included, needs a fully written exception record (all five fields) whose only accepted `exceptionType` is `required-for-package-to-exist`. **Fails** — never warns — when Socket can't run, with CI-vs-local setup steps |
+| `CodeScanning`     | open GitHub code-scanning alerts via your `gh` login — **local only**, a no-op in CI                                 | an alert in code that builds, runs or ships must be fixed (no exception); an alert in development-only code (tests, unpublished `scripts/`, docs, `.github/`, configs) is rejected with a standing, auto-written record in the **git-ignored** `.repo-contract/exceptions/code-scanning.json`           |
 | `DeadCode`         | `knip` — bundled `config/knip.json`                                                                                  | any unused file/export/dep, unlisted import                                                                                                                                                                                                                                                             |
 | `Commits`          | `commitlint origin/main..HEAD` — bundled config                                                                      | any non-Conventional-Commit (no base branch → warn)                                                                                                                                                                                                                                                     |
 | `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)                                    | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded)                                                                                                                                                            |
@@ -184,9 +185,11 @@ A scan costs 100 Socket API quota units (the token holds 500), so it is spent sp
 - **It is cached.** Socket scores a _published_ version, so the result depends only on
   `<package>@<version>`, not on the branch or pull request. A successful score is kept for 24 hours
   and served to every run, every pull request and the pre-push hook. Failures are never cached.
-  `IPC_SOCKET_CACHE_DIR` moves the cache (the scaffolded `contract.yml` points it at a directory
-  `actions/cache` carries between runs), `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
-  `IPC_SOCKET_CACHE=off` disables it.
+  `IPC_SOCKET_CACHE_DIR` moves the cache, `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
+  `IPC_SOCKET_CACHE=off` disables it. The cache is local to a machine: CI deliberately does not
+  persist it with `actions/cache`, because a cache written by a workflow that runs pull-request
+  code can be poisoned (CodeQL `actions/cache-poisoning`), and the scaffolded workflows use no
+  caches at all for the same reason.
 
 ## Overriding a bundled config
 
