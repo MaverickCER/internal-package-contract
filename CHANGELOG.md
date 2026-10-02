@@ -1,5 +1,15 @@
 # internal-package-contract
 
+## 0.5.0
+
+### Minor Changes
+
+- 0d1e90a: `SecuritySocket` now waives supply-chain-risk alerts instead of forbidding them: every alert below `critical`/`high` needs a finding-specific record with all five fields fully written (`justification`, `alternatives`, `remediation`, `method`, `exceptionType`), and the only accepted `exceptionType` is the new `required-for-package-to-exist` -- the flagged dependency or behavior is why the package exists. Critical and high alerts stay forbidden.
+
+### Patch Changes
+
+- d93a0c9: Key `SecuritySocket` exception records for the scored package's own alerts by the stable word `self` instead of its version (`socket:<name>@self:<alert>`), so a release no longer orphans every record and fails the next run. Alerts on dependencies keep their `package@version` ids.
+
 ## 0.4.0
 
 ### Minor Changes
