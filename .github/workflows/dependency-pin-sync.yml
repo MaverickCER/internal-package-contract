@@ -1,10 +1,14 @@
-# Reusable "receive a dispatch -> bump a pin -> open a PR -> merge conditionally"
+# Reusable "check for a newer pin -> bump it -> open a PR -> merge conditionally"
 # workflow, shared between:
-#   - sync-repo-contract-version.yml (part E): repo-contract -> internal-package-contract,
-#     always adds a matching-severity changeset (a real functional/engine coupling).
-#   - each consumer's own sync-internal-package-contract.yml (part F): internal-package-contract
-#     -> its dependents, never adds a changeset (a devDependency/tooling bump alone
-#     doesn't mean the consumer's own published behavior changed).
+#   - sync-repo-contract-version.yml: repo-contract -> internal-package-contract, always adds a
+#     changeset (a real functional/engine coupling) whose severity follows the version change.
+#   - each consumer's own sync-internal-package-contract.yml: internal-package-contract -> its
+#     dependents, never adds a changeset (a devDependency/tooling bump alone doesn't mean the
+#     consumer's own published behavior changed).
+#
+# PULL, not push: each caller runs this on its own daily schedule (and on demand) with its OWN
+# `GITHUB_TOKEN`, so no cross-repository token exists to expire. It opens nothing when the pin is
+# already current, and does not open a second PR for a bump that already has one.
 #
 # `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
 name: Dependency pin sync (reusable)
@@ -17,18 +21,24 @@ on:
         required: true
         type: string
       new-version:
-        description: The version to bump dependency-name to.
-        required: true
+        description: >-
+          The version to bump an npm dependency to. Optional: left empty, the latest published
+          version is used. Ignored for a git dependency, which is re-resolved to its branch head.
+        required: false
         type: string
+        default: ""
       add-changeset:
         description: >-
-          Whether to also add a changeset bumping the CALLING repo's own version by
-          bump-type. Only correct when dependency-name is a real functional
-          dependency of the caller, not just a devDependency version tick.
-        required: true
+          Whether to also add a changeset bumping the CALLING repo's own version. Only correct when
+          dependency-name is a real functional dependency of the caller, not just a devDependency
+          version tick.
+        required: false
         type: boolean
+        default: false
       bump-type:
-        description: major/minor/patch for the generated changeset. Required when add-changeset is true.
+        description: >-
+          major/minor/patch for the generated changeset. Optional: left empty, it follows the size of
+          the version change (major, then minor, otherwise patch).
         required: false
         type: string
         default: ""
@@ -50,61 +60,83 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Bump the pin, preserving its existing range operator
+        id: bump
         env:
           DEP: ${{ inputs.dependency-name }}
           NEW_VERSION: ${{ inputs.new-version }}
         run: |
           CURRENT=$(node -p "(require('./package.json').dependencies||{})['$DEP'] || (require('./package.json').devDependencies||{})['$DEP'] || ''")
+          OLD=$(node -p "((require('./package-lock.json').packages||{})['node_modules/$DEP']||{}).version||''")
           case "$CURRENT" in
             # A git dependency (internal-package-contract is consumed as `github:owner/repo#main`
             # and is not on npm, so `name@version` cannot resolve): re-resolve the branch head.
             github:*|git+*|git@*|https://*|ssh://*)
               npm update "${DEP}"
+              TARGET=$(node -p "(((require('./package-lock.json').packages||{})['node_modules/$DEP']||{}).resolved||'').split('#')[1]||''" | cut -c1-7)
               ;;
             *)
+              LATEST="${NEW_VERSION:-$(npm view "$DEP" version)}"
               PREFIX=$(node -p "('$CURRENT'.match(/^[\^~]/) || [''])[0]")
-              npm install "${DEP}@${PREFIX}${NEW_VERSION}"
+              npm install "${DEP}@${PREFIX}${LATEST}"
+              TARGET="$LATEST"
               ;;
           esac
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "${DEP} is already current (${TARGET}); nothing to do."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "target=${TARGET}" >> "$GITHUB_OUTPUT"
+          echo "old=${OLD}" >> "$GITHUB_OUTPUT"
 
       - name: Generate a changeset for this repo's own version
-        if: ${{ inputs.add-changeset }}
+        if: ${{ inputs.add-changeset && steps.bump.outputs.changed == 'true' }}
         env:
           DEP: ${{ inputs.dependency-name }}
-          NEW_VERSION: ${{ inputs.new-version }}
+          TARGET: ${{ steps.bump.outputs.target }}
+          OLD: ${{ steps.bump.outputs.old }}
           BUMP: ${{ inputs.bump-type }}
         run: |
+          if [ -z "$BUMP" ]; then
+            BUMP=$(node -e '
+              const [oa, ob] = process.env.OLD.split(".").map(Number)
+              const [na, nb] = process.env.TARGET.split(".").map(Number)
+              console.log(na !== oa ? "major" : nb !== ob ? "minor" : "patch")
+            ')
+          fi
           PKG=$(node -p "require('./package.json').name")
           mkdir -p .changeset
-          cat > ".changeset/sync-${DEP}-${NEW_VERSION}.md" <<EOF
+          cat > ".changeset/sync-${DEP}-${TARGET}.md" <<EOF
           ---
           "$PKG": $BUMP
           ---
 
-          Bump \`$DEP\` to $NEW_VERSION.
+          Bump \`$DEP\` to $TARGET.
           EOF
 
       - name: Commit and open a PR
         id: pr
+        if: ${{ steps.bump.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           DEP: ${{ inputs.dependency-name }}
-          NEW_VERSION: ${{ inputs.new-version }}
+          TARGET: ${{ steps.bump.outputs.target }}
         run: |
+          BRANCH="chore/bump-${DEP}-${TARGET}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "A bump to ${TARGET} is already open on ${BRANCH}; nothing to do."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A -- package.json package-lock.json .changeset
-          if git diff --cached --quiet; then
-            echo "Already at ${NEW_VERSION}; nothing to do."
-            exit 0
-          fi
-          BRANCH="chore/bump-${DEP}-${NEW_VERSION}"
           git checkout -b "$BRANCH"
-          git commit -m "chore(deps): bump ${DEP} to ${NEW_VERSION}"
+          git commit -m "chore(deps): bump ${DEP} to ${TARGET}"
           git push origin "$BRANCH"
           gh pr create --base main --head "$BRANCH" \
-            --title "chore(deps): bump ${DEP} to ${NEW_VERSION}" \
-            --body "Automated dependency-pin sync triggered by ${DEP}@${NEW_VERSION}."
+            --title "chore(deps): bump ${DEP} to ${TARGET}" \
+            --body "Automated dependency-pin sync: ${DEP} is now ${TARGET}."
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       # Same dispatch-and-poll shape as release-npm-changesets.yml's own merge step

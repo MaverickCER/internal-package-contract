@@ -1,9 +1,11 @@
-# Listens for internal-package-contract's own release and keeps this repo's pin in sync.
+# Keeps this repo's internal-package-contract pin current. PULLS: a daily check (or a manual run)
+# re-resolves the pin with this repo's own GITHUB_TOKEN, so no cross-repository token exists to expire.
 name: Sync internal-package-contract version
 
 on:
-  repository_dispatch:
-    types: [internal-package-contract-released]
+  schedule:
+    - cron: "43 6 * * *"
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -14,5 +16,3 @@ jobs:
     uses: MaverickCER/internal-package-contract/.github/workflows/dependency-pin-sync.yml@main
     with:
       dependency-name: internal-package-contract
-      new-version: ${{ github.event.client_payload.version }}
-      add-changeset: false
