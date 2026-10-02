@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process"
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -27,7 +35,7 @@ process.stdout.write(out ?? "")
 `
   const npm = `#!/usr/bin/env node
 const cfg = JSON.parse(require("node:fs").readFileSync(${JSON.stringify(cfgPath)}, "utf8"))
-process.stdout.write(cfg.npm ?? "")
+process.stdout.write((cfg.npmFor ?? {})[process.argv[3]] ?? cfg.npm ?? "")
 process.exit(cfg.npmExit ?? 0)
 `
   for (const [name, body] of [
@@ -52,6 +60,7 @@ function run(
   pkg: unknown,
   config: unknown,
   pathOverride?: string,
+  extraEnv: Record<string, string> = {},
 ): { readonly out: ScoreOutput; readonly calls: Record<string, number> } {
   if (pkg !== undefined) writeFileSync(path.join(cwd, "package.json"), JSON.stringify(pkg))
   if (config !== undefined) installFakes(binDir, config)
@@ -62,11 +71,13 @@ function run(
       ...process.env,
       PATH: pathOverride ?? `${binDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
       SOCKET_SCORE_RETRY_WAIT_MS: "1",
+      IPC_SOCKET_CACHE_DIR: path.join(cwd, "score-cache"),
+      ...extraEnv,
     },
   })
   expect(result.status).toBe(0)
-  const cfg =
-    config === undefined ? {} : JSON.parse(readFileSync(path.join(binDir, "cfg.json"), "utf8"))
+  const cfgPath = path.join(binDir, "cfg.json")
+  const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, "utf8")) : {}
   return { out: JSON.parse(result.stdout) as ScoreOutput, calls: cfg.calls ?? {} }
 }
 
@@ -221,6 +232,87 @@ describe.skipIf(process.platform === "win32")("socket-package-score.mjs", () => 
       message: "Spawn Error",
       cause: "ENOENT",
       data: { code: "ENOENT" },
+    })
+  })
+
+  describe("score cache", () => {
+    const pkg = { name: "data-cap", version: "0.4.0" }
+    const config = { socket: { "npm/data-cap@0.4.0": fixture }, npm: '"0.4.0"' }
+
+    it("serves a repeat run from the cache without asking Socket again", () => {
+      const first = run(pkg, config)
+      expect(first.calls["npm/data-cap@0.4.0"]).toBe(1)
+      expect(first.out.data["cached"]).toBeUndefined()
+
+      const second = run(undefined, undefined)
+      expect(second.calls["npm/data-cap@0.4.0"]).toBe(1)
+      expect(second.out.data).toMatchObject({ cached: true, scoredVersion: "0.4.0" })
+      expect(second.out.data.alerts).toEqual(first.out.data.alerts)
+    })
+
+    it("scans again once the cached entry is older than the lifetime", () => {
+      run(pkg, config)
+      const entry = path.join(cwd, "score-cache", "data-cap@0.4.0.json")
+      const stored = JSON.parse(readFileSync(entry, "utf8"))
+      writeFileSync(entry, JSON.stringify({ ...stored, savedAt: Date.now() - 25 * 3_600_000 }))
+      expect(run(undefined, undefined).calls["npm/data-cap@0.4.0"]).toBe(2)
+    })
+
+    it("honors a custom lifetime in hours", () => {
+      run(pkg, config)
+      const entry = path.join(cwd, "score-cache", "data-cap@0.4.0.json")
+      const stored = JSON.parse(readFileSync(entry, "utf8"))
+      writeFileSync(entry, JSON.stringify({ ...stored, savedAt: Date.now() - 3 * 3_600_000 }))
+      const shortLived = run(undefined, undefined, undefined, { IPC_SOCKET_CACHE_TTL_HOURS: "2" })
+      expect(shortLived.calls["npm/data-cap@0.4.0"]).toBe(2)
+    })
+
+    it("treats a nonsense lifetime as the default 24 hours", () => {
+      run(pkg, config)
+      const reused = run(undefined, undefined, undefined, { IPC_SOCKET_CACHE_TTL_HOURS: "-5" })
+      expect(reused.calls["npm/data-cap@0.4.0"]).toBe(1)
+    })
+
+    it("never caches a failure", () => {
+      const auth = JSON.stringify({ ok: false, message: "Auth Error", cause: "no token" })
+      const failing = { socket: { "npm/data-cap@0.4.0": auth }, npm: '"0.4.0"' }
+      expect(run(pkg, failing).out.ok).toBe(false)
+      expect(run(undefined, undefined).calls["npm/data-cap@0.4.0"]).toBe(2)
+    })
+
+    it("is bypassed entirely when switched off", () => {
+      run(pkg, config, undefined, { IPC_SOCKET_CACHE: "off" })
+      const again = run(undefined, undefined, undefined, { IPC_SOCKET_CACHE: "off" })
+      expect(again.calls["npm/data-cap@0.4.0"]).toBe(2)
+      expect(again.out.data["cached"]).toBeUndefined()
+    })
+
+    it("reuses the latest published version's score for an unpublished version", () => {
+      const unpublished = { name: "data-cap", version: "9.9.9" }
+      const fallback = {
+        socket: { "npm/data-cap@9.9.9": notFound, "npm/data-cap@0.4.0": fixture },
+        npm: '"0.4.0"',
+        npmFor: { "data-cap@9.9.9": JSON.stringify({ error: { code: "E404" } }) },
+      }
+      run(unpublished, fallback)
+      const again = run(undefined, undefined)
+      expect(again.calls["npm/data-cap@9.9.9"]).toBe(1)
+      expect(again.calls["npm/data-cap@0.4.0"]).toBe(1)
+      expect(again.out.data).toMatchObject({
+        cached: true,
+        requestedVersion: "9.9.9",
+        scoredVersion: "0.4.0",
+      })
+    })
+
+    it("falls back to scanning when the cache directory cannot be written", () => {
+      const blocker = path.join(cwd, "blocker")
+      writeFileSync(blocker, "a file, not a directory")
+      const result = run(pkg, config, undefined, {
+        IPC_SOCKET_CACHE_DIR: path.join(blocker, "nested"),
+      })
+      expect(result.out.ok).toBe(true)
+      expect(result.out.data.alerts.length).toBeGreaterThan(0)
     })
   })
 })

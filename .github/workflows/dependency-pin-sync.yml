@@ -56,8 +56,17 @@ jobs:
           NEW_VERSION: ${{ inputs.new-version }}
         run: |
           CURRENT=$(node -p "(require('./package.json').dependencies||{})['$DEP'] || (require('./package.json').devDependencies||{})['$DEP'] || ''")
-          PREFIX=$(node -p "('$CURRENT'.match(/^[\^~]/) || [''])[0]")
-          npm install "${DEP}@${PREFIX}${NEW_VERSION}"
+          case "$CURRENT" in
+            # A git dependency (internal-package-contract is consumed as `github:owner/repo#main`
+            # and is not on npm, so `name@version` cannot resolve): re-resolve the branch head.
+            github:*|git+*|git@*|https://*|ssh://*)
+              npm update "${DEP}"
+              ;;
+            *)
+              PREFIX=$(node -p "('$CURRENT'.match(/^[\^~]/) || [''])[0]")
+              npm install "${DEP}@${PREFIX}${NEW_VERSION}"
+              ;;
+          esac
 
       - name: Generate a changeset for this repo's own version
         if: ${{ inputs.add-changeset }}

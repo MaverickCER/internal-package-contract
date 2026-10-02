@@ -174,7 +174,19 @@ When it fails it prints the exact steps for where it is running -- the short ver
   map it under `env:` on the step that runs the contract (the scaffolded `contract.yml` does).
 
 `SOCKET_SECURITY_API_KEY` is read only by the `socket` CLI while the contract runs; shipped code never
-touches it, so it is not an env-cap contract. The scan costs Socket API quota units per run.
+touches it, so it is not an env-cap contract.
+
+A scan costs 100 Socket API quota units (the token holds 500), so it is spent sparingly:
+
+- **It runs last.** `internal-package-contract` runs every check except `SecuritySocket` first and
+  scans only if all of them passed; a change that is already failing prints
+  `[SKIPPED] SecuritySocket` and costs nothing.
+- **It is cached.** Socket scores a _published_ version, so the result depends only on
+  `<package>@<version>`, not on the branch or pull request. A successful score is kept for 24 hours
+  and served to every run, every pull request and the pre-push hook. Failures are never cached.
+  `IPC_SOCKET_CACHE_DIR` moves the cache (the scaffolded `contract.yml` points it at a directory
+  `actions/cache` carries between runs), `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
+  `IPC_SOCKET_CACHE=off` disables it.
 
 ## Overriding a bundled config
 
