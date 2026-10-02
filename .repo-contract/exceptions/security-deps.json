@@ -1,66 +1,6 @@
 {
   "exceptions": [
     {
-      "id": "security-deps:@npmcli/arborist@2.8.0 - 9.0.0-pre.1",
-      "version": 1,
-      "justification": "Transitive via licensee's own dependency-resolution internals (npm's arborist/pacote/sigstore stack, needed for REGISTRY package-fetch/verify operations). This package's own use of licensee only reads local node_modules license metadata already on disk (`licensee --production --errors-only --ndjson` against an installed tree); the registry-fetch code path that would actually exercise arborist never runs.",
-      "alternatives": "A pinned older licensee (8.2.0, via npm audit fix --force) avoids this specific arborist range but is an unverified major downgrade with its own CLI/flag-parsing differences (already hit one docopt-parsing incompatibility with the current licensee major line during this repo's own setup).",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@npmcli/arborist",
-      "range": "2.8.0 - 9.0.0-pre.1",
-      "remediation": "Revisit when licensee ships a patched release in its current major line, or when a verified upgrade path to licensee 12.x lands.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:@npmcli/metavuln-calculator@2.0.0 - 8.0.1",
-      "version": 1,
-      "justification": "Same licensee -> pacote -> npm-registry-internals chain as @npmcli/arborist -- this package's own licensee usage never reaches the registry-fetch code path that would exercise it.",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@npmcli/metavuln-calculator",
-      "range": "2.0.0 - 8.0.1",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:@sigstore/core@<=3.2.0",
-      "version": 1,
-      "justification": "Same licensee -> pacote -> sigstore chain -- provenance/signature verification code this package's own licensee usage never invokes (local-only license metadata reads).",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@sigstore/core",
-      "range": "<=3.2.0",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "moderate"
-    },
-    {
-      "id": "security-deps:@sigstore/sign@2.2.1 - 3.1.0",
-      "version": 1,
-      "justification": "Same licensee -> pacote -> sigstore chain as @sigstore/core.",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@sigstore/sign",
-      "range": "2.2.1 - 3.1.0",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "moderate"
-    },
-    {
-      "id": "security-deps:@sigstore/verify@<=2.1.1",
-      "version": 1,
-      "justification": "Same licensee -> pacote -> sigstore chain as @sigstore/core.",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "@sigstore/verify",
-      "range": "<=2.1.1",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "moderate"
-    },
-    {
       "id": "security-deps:adm-zip@<=0.6.0",
       "version": 1,
       "justification": "Transitive via github-actionlint, used only to lint this repository's own committed .github/workflows/*.yml during npm run contract -- never extracts an untrusted archive; adm-zip's actual vulnerable code path (zip extraction) is never exercised.",
@@ -73,30 +13,6 @@
       "severity": "high"
     },
     {
-      "id": "security-deps:brace-expansion@2.0.0 - 2.1.6 || 4.0.0 - 5.0.11",
-      "version": 1,
-      "justification": "Transitive via minimatch, pulled in by four independent dev-tool chains (crap4ts -> ts-morph -> @ts-morph/common, @microsoft/api-extractor, @stryker-mutator/core, and licensee -> @npmcli/arborist -> glob/map-workspaces) -- confirmed via `npm ls brace-expansion`. The DoS (quadratic-time / stack-exhaustion expansion) requires an attacker-controlled brace pattern reaching minimatch; every one of these call sites only ever matches this repository's own fixed, source-controlled glob patterns (Stryker's own mutate globs, api-extractor's own doc-model globs, crap4ts's own scan globs, arborist's own local dependency-tree walk) -- never a pattern derived from untrusted/external input.",
-      "alternatives": "No single version bump clears every path at once -- the four chains resolve independently (minimatch 9.x and 10.x, via different parents), so pinning would mean four separate overrides for tooling internals this package doesn't control the release cadence of.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "brace-expansion",
-      "range": "2.0.0 - 2.1.6 || 4.0.0 - 5.0.11",
-      "remediation": "Revisit once crap4ts/api-extractor/Stryker/licensee each bump their own minimatch past the patched range.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:fast-uri@3.0.0 - 3.1.7",
-      "version": 1,
-      "justification": "Transitive via ajv (JSON Schema validator), pulled in by @microsoft/tsdoc-config and @stryker-mutator/core -- confirmed via `npm ls fast-uri`. Both only use ajv to validate their OWN static, local config-schema objects (typedoc/tsdoc config shape, Stryker's own config schema) at dev-tool startup. The vulnerability is an inconsistent host-case normalization in fast-uri's URI parsing that can make a security-relevant allowlist check admit a host it should reject; this package's own use of ajv here never parses or compares a URI at all (it validates plain config object shapes), let alone one derived from untrusted/attacker-supplied input, so the vulnerable code path is never exercised.",
-      "alternatives": "No fix available within either ajv's own current resolved range without an unverified major bump to ajv itself in two independent dev-dependency chains this package doesn't control.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "fast-uri",
-      "range": "3.0.0 - 3.1.7",
-      "remediation": "Revisit once @microsoft/tsdoc-config and @stryker-mutator/core each bump their own ajv past the patched fast-uri range.",
-      "severity": "moderate"
-    },
-    {
       "id": "security-deps:github-actionlint@*",
       "version": 1,
       "justification": "The rollup entry for github-actionlint's own vulnerable transitive dependency (adm-zip) -- see that entry for the real explanation. github-actionlint itself has no fix available at any version.",
@@ -106,54 +22,6 @@
       "package": "github-actionlint",
       "range": "*",
       "remediation": "None available; revisit if a patched release ships.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:ip-address@<=10.7.0",
-      "version": 1,
-      "justification": "Part of the same licensee -> @npmcli/arborist chain as the adjacent @npmcli/arborist/@sigstore/* exceptions in this file -- confirmed via `npm ls ip-address`: licensee -> arborist -> npm-registry-fetch -> make-fetch-happen -> @npmcli/agent -> socks-proxy-agent -> socks -> ip-address, i.e. SOCKS-proxy support for npm's own registry-fetch machinery. As those sibling entries already establish, this package's own licensee usage (`licensee --production --errors-only --ndjson`) only reads local node_modules license metadata already on disk and never reaches arborist's registry-fetch code path at all -- and even within that unreached path, ip-address's own vulnerable subnet-comparison/parse-diagnostic code only runs when a request is actually routed through a SOCKS proxy, which nothing in this repo's CI or local setup configures (no SOCKS proxy in .npmrc or environment).",
-      "alternatives": "Same as the adjacent @npmcli/arborist entry: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "ip-address",
-      "range": "<=10.7.0",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "moderate"
-    },
-    {
-      "id": "security-deps:licensee@9.0.0-pre.1 - 11.1.1",
-      "version": 1,
-      "justification": "The rollup entry for licensee's own arborist/pacote/sigstore chain -- see the @npmcli/arborist entry for the real explanation. This package's own licensee usage (`licensee --production --errors-only --ndjson`) only reads local node_modules license metadata already on disk; the registry-fetch/verify code path this vulnerability chain lives in never runs.",
-      "alternatives": "licensee@8.2.0 (via npm audit fix --force) is an unverified major downgrade with its own CLI/flag-parsing differences -- already hit one docopt-parsing incompatibility with the current major line during this repo's own setup.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "licensee",
-      "range": "9.0.0-pre.1 - 11.1.1",
-      "remediation": "Revisit when licensee ships a patched release in its current major line, or when a verified upgrade path to licensee 12.x lands.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:pacote@11.2.7 - 21.5.0",
-      "version": 1,
-      "justification": "The rollup entry for licensee's own arborist/pacote/sigstore chain -- see the @npmcli/arborist entry for the real explanation.",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "pacote",
-      "range": "11.2.7 - 21.5.0",
-      "remediation": "Revisit alongside @npmcli/arborist.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:sigstore@<=4.1.0",
-      "version": 1,
-      "justification": "The rollup entry for licensee's own arborist/pacote/sigstore chain -- see the @npmcli/arborist entry for the real explanation.",
-      "alternatives": "Same as @npmcli/arborist: an unverified licensee major downgrade.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "sigstore",
-      "range": "<=4.1.0",
-      "remediation": "Revisit alongside @npmcli/arborist.",
       "severity": "high"
     }
   ]
