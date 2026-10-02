@@ -1,12 +1,13 @@
-# Listens for repo-contract's own release (part E of the "Standardize npm release +
-# Pages deploy" plan) and keeps this repo's `repo-contract` devDependency pin -- a
-# real functional/engine coupling, not just a version tick -- in sync automatically.
-# See dependency-pin-sync.yml for the actual bump/PR/merge mechanics this calls into.
+# Keeps this repo's `repo-contract` devDependency pin -- a real functional/engine coupling, not just a
+# version tick -- in sync automatically. PULLS: a daily check (or a manual run) compares against the
+# latest published repo-contract using this repo's own GITHUB_TOKEN, so no cross-repository token
+# exists to expire. See dependency-pin-sync.yml for the bump/PR/merge mechanics this calls into.
 name: Sync repo-contract version
 
 on:
-  repository_dispatch:
-    types: [repo-contract-released]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -17,6 +18,4 @@ jobs:
     uses: ./.github/workflows/dependency-pin-sync.yml
     with:
       dependency-name: repo-contract
-      new-version: ${{ github.event.client_payload.version }}
       add-changeset: true
-      bump-type: ${{ github.event.client_payload.bump-type }}

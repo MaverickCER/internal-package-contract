@@ -70,23 +70,3 @@ jobs:
             git push origin v1 --force
             echo "new-tag=$VERSION" >> "$GITHUB_OUTPUT"
           fi
-
-      # Propagates this version bump to every MaverickCER-owned dependent listed in
-      # consumers.json (part F of the "Standardize npm release + Pages deploy" plan)
-      # -- each one gets a PR bumping its own internal-package-contract pin, merged
-      # automatically only if that PR's own CI comes back green (see each listener's
-      # own sync-internal-package-contract.yml / dependency-pin-sync.yml for why).
-      # Requires a fine-grained PAT (CROSS_REPO_PAT): the default GITHUB_TOKEN cannot
-      # dispatch to another repository at all -- see RELEASING.md's counterpart
-      # bootstrap step in repo-contract for the one-time setup.
-      - name: Notify dependents of the new version
-        if: steps.tag.outputs.new-tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
-        run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          for consumer in $(node -p "require('./consumers.json').consumers.join('\n')"); do
-            gh api "repos/MaverickCER/${consumer}/dispatches" \
-              -f event_type=internal-package-contract-released \
-              -f "client_payload[version]=${VERSION}"
-          done
