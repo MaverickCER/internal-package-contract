@@ -10,6 +10,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A pull request opened by a workflow's own GITHUB_TOKEN (the dependency-pin sync, the release PR)
+  # does not start CI by itself, so those workflows dispatch it on the PR's branch.
+  workflow_dispatch:
 
 permissions:
   contents: read
