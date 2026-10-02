@@ -1,5 +1,12 @@
 # internal-package-contract
 
+## 0.8.1
+
+### Patch Changes
+
+- 462c0af: Let this repository's own CI be started on demand (`workflow_dispatch`), so the dependency-pin sync can run it on the pull requests it opens with its own `GITHUB_TOKEN`, which GitHub does not run CI for by itself.
+- 260f1d2: Bump `repo-contract` to 0.8.8.
+
 ## 0.8.0
 
 ### Minor Changes
