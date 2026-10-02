@@ -103,7 +103,7 @@ function completeRecord(overrides: Record<string, unknown> = {}): Record<string,
     alternatives: "None -- transitive, not a direct choice.",
     remediation: "None planned.",
     method: "independent-human-review",
-    exceptionType: "accepted-risk",
+    exceptionType: "required-for-package-to-exist",
     package: "left-pad",
     packageVersion: "1.0.0",
     type: "unmaintained",
@@ -186,7 +186,7 @@ describe("securitySocket()", () => {
     expect(result.rationale).toContain("1 Socket alert(s) evaluated")
   })
 
-  it("passes a low-severity alert missing only alternatives/remediation", async () => {
+  it("requires every field for a low-severity alert too -- no lighter waiver exists", async () => {
     writeRegistry([
       completeRecord({
         id: deriveId({ package: "left-pad", version: "1.0.0", type: "nonpermissiveLicense" }),
@@ -205,7 +205,8 @@ describe("securitySocket()", () => {
         ),
       ),
     )
-    expect(result.outcome).toBe("pass")
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("exception incomplete (missing: alternatives, remediation)")
   })
 
   it("fails an incomplete exception record, listing missing fields", async () => {
@@ -226,24 +227,33 @@ describe("securitySocket()", () => {
     }
   })
 
-  it("forbids ANY supply-chain-risk alert, at any severity, even with a complete exception record", async () => {
+  it("waives a supply-chain-risk alert, at any severity, only with a complete record", async () => {
     for (const severity of ["low", "middle"]) {
       const risky = scoreAlert({ name: "shellAccess", severity, category: "supplyChainRisk" })
-      writeRegistry([
-        completeRecord({
-          id: deriveId({ package: "left-pad", version: "1.0.0", type: "shellAccess" }),
-          type: "shellAccess",
-          severity,
-        }),
-      ])
+      const id = deriveId({ package: "left-pad", version: "1.0.0", type: "shellAccess" })
+      writeRegistry([completeRecord({ id, type: "shellAccess", severity })])
+      expect(
+        (await securitySocket().policy(makeContext(scriptOutput(okScore([risky]))))).outcome,
+      ).toBe("pass")
+
+      writeRegistry([completeRecord({ id, type: "shellAccess", severity, remediation: "" })])
       const result = await securitySocket().policy(makeContext(scriptOutput(okScore([risky]))))
       expect(result.outcome).toBe("fail")
       expect(result.rationale).toContain(
         "- socket:left-pad@1.0.0:shellAccess [" +
           severity +
-          "]: forbidden by policy (supply-chain risk -- remove or replace the dependency, or fix the code)",
+          "]: exception incomplete (missing: remediation)",
       )
     }
+  })
+
+  it("rejects any exception type other than required-for-package-to-exist as a malformed registry", async () => {
+    writeRegistry([completeRecord({ exceptionType: "accepted-risk" })])
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain(
+      'exceptions[0].exceptionType must be "" or one of "required-for-package-to-exist" (got "accepted-risk").',
+    )
   })
 
   it("reports a stale record that matches no current alert", async () => {
@@ -688,7 +698,7 @@ describe("evaluateAlert()", () => {
       missing: ["justification", "alternatives", "remediation", "method", "exceptionType"],
     })
   })
-  it("is permitted for low severity missing only alternatives/remediation", () => {
+  it("needs every field for low severity too", () => {
     const record = {
       id: alert.id,
       version: 1 as const,
@@ -696,15 +706,15 @@ describe("evaluateAlert()", () => {
       alternatives: "",
       remediation: "",
       method: "independent-human-review" as const,
-      exceptionType: "accepted-risk" as const,
+      exceptionType: "required-for-package-to-exist" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
       type: "unmaintained",
       severity: "low" as const,
     }
     expect(evaluateAlert({ ...alert, severity: "low" }, record)).toEqual({
-      verdict: "permitted",
-      missing: [],
+      verdict: "insufficient",
+      missing: ["alternatives", "remediation"],
     })
   })
   it("treats unknown severity the same as the full requirement set", () => {
@@ -713,7 +723,7 @@ describe("evaluateAlert()", () => {
       missing: [],
     })
   })
-  it("is forbidden for a supply-chain-risk alert at any severity, even with a complete record", () => {
+  it("is permitted for a supply-chain-risk alert at any severity once the record is complete", () => {
     for (const severity of ["low", "middle"] as const) {
       const risky = { ...alert, severity, category: "supplyChainRisk" }
       const complete = {
@@ -723,9 +733,9 @@ describe("evaluateAlert()", () => {
         alternatives: "a",
         remediation: "r",
         method: "independent-human-review" as const,
-        exceptionType: "accepted-risk" as const,
+        exceptionType: "required-for-package-to-exist" as const,
       }
-      expect(evaluateAlert(risky, complete).verdict).toBe("forbidden")
+      expect(evaluateAlert(risky, complete).verdict).toBe("permitted")
     }
   })
   it("applies only the severity rules when the alert has no category", () => {
@@ -927,7 +937,7 @@ describe("evaluateFinalVerdict()", () => {
       alternatives: "",
       remediation: "",
       method: "independent-human-review" as const,
-      exceptionType: "accepted-risk" as const,
+      exceptionType: "required-for-package-to-exist" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
       type: "unmaintained",
@@ -986,7 +996,7 @@ describe("evaluateFinalVerdict()", () => {
       alternatives: "",
       remediation: "",
       method: "independent-human-review" as const,
-      exceptionType: "accepted-risk" as const,
+      exceptionType: "required-for-package-to-exist" as const,
       package: "old",
       packageVersion: "1.0.0",
       type: "unmaintained",
@@ -999,7 +1009,7 @@ describe("evaluateFinalVerdict()", () => {
       alternatives: "",
       remediation: "",
       method: "independent-human-review" as const,
-      exceptionType: "accepted-risk" as const,
+      exceptionType: "required-for-package-to-exist" as const,
       package: "left-pad",
       packageVersion: "1.0.0",
       type: "unmaintained",

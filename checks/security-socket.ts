@@ -14,14 +14,12 @@
  * ## Policy
  *
  * - `critical`/`high` alerts are `forbidden` outright.
- * - **Any `supplyChainRisk` alert, at any severity, is `forbidden` outright** -- the score covers
- *   only what actually ships (dependencies and peers, not devDependencies), so every such alert is
- *   shipped by construction. Nothing can waive it: remove or replace the dependency, or fix the
- *   package's own code.
- * - Everything else (`middle`/`low` quality, maintenance, license, vulnerability, unknown) is
- *   waivable only via a finding-specific, fully-written record in
- *   `.repo-contract/exceptions/socket.json` (the shared exception-policy primitive from
- *   `repo-contract/helpers`). A `low` waiver drops the `alternatives`/`remediation` prose.
+ * - **Every other alert** (`supplyChainRisk` included, at any severity) is waivable only via a
+ *   finding-specific record in `.repo-contract/exceptions/socket.json` (the shared exception-policy
+ *   primitive from `repo-contract/helpers`) with **every field fully written** -- `justification`,
+ *   `alternatives`, `remediation`, `method` and `exceptionType` -- and the only accepted
+ *   `exceptionType` is `"required-for-package-to-exist"`: the flagged dependency or behavior must
+ *   be the reason the package exists at all, and `justification` must say why.
  * - **The scan can never be skipped silently.** CLI not installed, not signed in, token rejected,
  *   network down and rate limiting all FAIL, with steps that differ between CI and a developer
  *   machine (see `./socket-guidance.ts`).
@@ -38,7 +36,7 @@
  *       "alternatives": "None -- publishing is the way to gain adoption.",
  *       "remediation": "Resolves itself as the package is adopted.",
  *       "method": "independent-human-review",
- *       "exceptionType": "accepted-risk",
+ *       "exceptionType": "required-for-package-to-exist",
  *       "package": "data-cap",
  *       "packageVersion": "0.4.0",
  *       "type": "unpopularPackage",
@@ -63,7 +61,7 @@ import type {
 } from "repo-contract/helpers"
 import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
-  EXCEPTION_TYPES,
+  SOCKET_EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
@@ -178,7 +176,7 @@ export const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRec
   metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "packageVersion", "type", "severity"],
   validateRecord(core: ExceptionRecordCore, raw, index, errors) {
     const at = `exceptions[${String(index)}]`
-    const security = validateSecurityExceptionFields(raw, index, EXCEPTION_TYPES, errors)
+    const security = validateSecurityExceptionFields(raw, index, SOCKET_EXCEPTION_TYPES, errors)
 
     const { package: pkg, packageVersion, type, severity } = raw
     const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
@@ -222,12 +220,10 @@ const AUTHORING_REQUIREMENTS_FULL = [
   "method",
   "exceptionType",
 ]
-const AUTHORING_REQUIREMENTS_LIGHT = ["justification", "method", "exceptionType"]
 
 /**
- * Above medium severity is never waivable, and neither is ANY supply-chain-risk alert at any
- * severity (the score covers only what ships, so every such alert is shipped by construction);
- * everything else needs a complete, finding-specific exception.
+ * Critical and high alerts are never waivable; every other alert -- supply-chain risks included --
+ * needs a complete, finding-specific exception.
  */
 const SOCKET_POLICY: ExceptionPolicyConfig = {
   socket: {
@@ -235,13 +231,9 @@ const SOCKET_POLICY: ExceptionPolicyConfig = {
       critical: { mode: "forbidden" },
       high: { mode: "forbidden" },
       middle: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_FULL] },
-      low: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_LIGHT] },
+      low: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_FULL] },
       unknown: { mode: "exception", requirements: [...AUTHORING_REQUIREMENTS_FULL] },
     },
-  },
-  "socket-category": {
-    rules: { supplyChainRisk: { mode: "forbidden" } },
-    default: { mode: "allowed" },
   },
 }
 const SOCKET_GLOBAL_DEFAULT_POLICY: ExceptionPolicy = {
@@ -358,7 +350,6 @@ export function evaluateAlert(
 } {
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "socket", category: alert.severity },
-    { group: "socket-category", category: alert.category },
   ]
   return evaluateFindingVerdict(
     record,
@@ -534,9 +525,7 @@ export function evaluateFinalVerdict(
   const offenderLines = offenders.map((d) => {
     const detail =
       d.verdict === "forbidden"
-        ? d.alert.category === "supplyChainRisk"
-          ? "forbidden by policy (supply-chain risk -- remove or replace the dependency, or fix the code)"
-          : "forbidden by policy (above medium severity)"
+        ? "forbidden by policy (above medium severity)"
         : d.verdict === "unmatched"
           ? "no reconciled exception record (registry integrity failure)"
           : `exception incomplete (missing: ${d.missing.join(", ")})`
