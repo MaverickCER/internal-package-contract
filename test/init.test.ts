@@ -110,7 +110,9 @@ describe("listTemplateFiles()", () => {
   })
 })
 
-describe("internal-package-contract init (real run)", () => {
+// Each test spawns the real CLI and copies the whole package template; a Windows runner needs well over
+// the default 20 s for that, so these get a generous limit instead of flaking.
+describe("internal-package-contract init (real run)", { timeout: 120_000 }, () => {
   let cwd: string
   beforeEach(() => {
     cwd = mkdtempSync(path.join(tmpdir(), "ipc-init-"))
