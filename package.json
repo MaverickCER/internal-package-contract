@@ -120,7 +120,8 @@
     "qs": "^6.16.0",
     "pa11y": {
       "puppeteer": "npm:puppeteer-core@^25.9.0"
-    }
+    },
+    "adm-zip": "0.6.1"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,
