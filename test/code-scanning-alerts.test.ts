@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process"
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -245,6 +253,5 @@ describe.skipIf(process.platform === "win32")("code-scanning-alerts.mjs", () => 
 })
 
 function readFileLines(file: string): string[] {
-  const text = spawnSync("cat", [file], { encoding: "utf8" }).stdout
-  return text.split("\n").filter(Boolean)
+  return readFileSync(file, "utf8").split("\n").filter(Boolean)
 }
