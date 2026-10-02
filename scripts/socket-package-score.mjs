@@ -104,6 +104,7 @@ if (!existsSync(pkgFile)) {
       emit({
         ok: true,
         data: {
+          package: pkg.name,
           purl: attempt.parsed.data?.purl,
           requestedVersion: pkg.version,
           scoredVersion,

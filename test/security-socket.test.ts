@@ -179,9 +179,16 @@ describe("securitySocket()", () => {
   })
 
   it("deduplicates the same alert reported by both the self and transitive sections", async () => {
-    writeRegistry([completeRecord()])
+    writeRegistry([
+      completeRecord({
+        id: deriveId({ package: "left-pad", version: "self", type: "unmaintained" }),
+        packageVersion: "self",
+      }),
+    ])
     const result = await securitySocket().policy(
-      makeContext(scriptOutput(okScore([alert, { ...alert, scope: "self" }]))),
+      makeContext(
+        scriptOutput(okScore([alert, { ...alert, scope: "self" }], { package: "left-pad" })),
+      ),
     )
     expect(result.rationale).toContain("1 Socket alert(s) evaluated")
   })
@@ -254,6 +261,35 @@ describe("securitySocket()", () => {
     expect(result.rationale).toContain(
       'exceptions[0].exceptionType must be "" or one of "required-for-package-to-exist" (got "accepted-risk").',
     )
+  })
+
+  it("keys the scored package's alerts as self even when only the transitive section lists them", () => {
+    expect(normalizeAlert({ name: "x", example: "npm/left-pad@9.9.9" }, "left-pad")?.id).toBe(
+      "socket:left-pad@self:x",
+    )
+    expect(normalizeAlert({ name: "x", example: "npm/other@9.9.9" }, "left-pad")?.id).toBe(
+      "socket:other@9.9.9:x",
+    )
+  })
+
+  it("matches a record for the package's own alert across releases by the self id", async () => {
+    const own = scoreAlert({
+      name: "urlStrings",
+      severity: "low",
+      category: "supplyChainRisk",
+      example: "npm/left-pad@2.0.0",
+      scope: "self",
+    })
+    writeRegistry([
+      completeRecord({
+        id: deriveId({ package: "left-pad", version: "self", type: "urlStrings" }),
+        packageVersion: "self",
+        type: "urlStrings",
+        severity: "low",
+      }),
+    ])
+    const result = await securitySocket().policy(makeContext(scriptOutput(okScore([own]))))
+    expect(result.outcome).toBe("pass")
   })
 
   it("reports a stale record that matches no current alert", async () => {
@@ -457,6 +493,20 @@ describe("normalizeAlert()", () => {
       severity: "middle",
       category: "supplyChainRisk",
     })
+  })
+  it("keys an alert on the scored package itself by the stable word self, not its version", () => {
+    const own = normalizeAlert({ ...valid, scope: "self", example: "npm/@scope/pkg@3.2.1" })
+    expect(own).toEqual({
+      id: "socket:@scope/pkg@self:shellAccess",
+      package: "@scope/pkg",
+      version: "self",
+      type: "shellAccess",
+      severity: "middle",
+      category: "supplyChainRisk",
+    })
+    expect(normalizeAlert({ ...valid, scope: "transitive" })?.id).toBe(
+      "socket:cross-spawn@7.0.6:shellAccess",
+    )
   })
   it("returns undefined for a non-object or a missing/empty name or unparseable example", () => {
     expect(normalizeAlert("x")).toBeUndefined()
@@ -859,14 +909,16 @@ describe("interpretSocketRun()", () => {
   })
 
   it("returns the deduplicated alert list with no note when versions agree", () => {
-    const outcome = ok(okScore([scoreAlert(), scoreAlert({ scope: "self" })]))
+    const outcome = ok(
+      okScore([scoreAlert(), scoreAlert({ scope: "self" })], { package: "left-pad" }),
+    )
     expect(outcome).toEqual({
       kind: "ok",
       alerts: [
         {
-          id: "socket:left-pad@1.0.0:unmaintained",
+          id: "socket:left-pad@self:unmaintained",
           package: "left-pad",
-          version: "1.0.0",
+          version: "self",
           type: "unmaintained",
           severity: "middle",
           category: "maintenance",
