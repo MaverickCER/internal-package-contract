@@ -1,28 +1,3 @@
 {
-  "exceptions": [
-    {
-      "id": "security-deps:adm-zip@<=0.6.0",
-      "version": 1,
-      "justification": "Transitive via github-actionlint, used only to lint this repository's own committed .github/workflows/*.yml during npm run contract -- never extracts an untrusted archive; adm-zip's actual vulnerable code path (zip extraction) is never exercised.",
-      "alternatives": "No fix available at any adm-zip version; github-actionlint itself has no alternative extraction-free release.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "adm-zip",
-      "range": "<=0.6.0",
-      "remediation": "None available; revisit if github-actionlint drops or replaces its adm-zip dependency.",
-      "severity": "high"
-    },
-    {
-      "id": "security-deps:github-actionlint@*",
-      "version": 1,
-      "justification": "The rollup entry for github-actionlint's own vulnerable transitive dependency (adm-zip) -- see that entry for the real explanation. github-actionlint itself has no fix available at any version.",
-      "alternatives": "No fix available at any version.",
-      "exceptionType": "accepted-risk",
-      "method": "independent-human-review",
-      "package": "github-actionlint",
-      "range": "*",
-      "remediation": "None available; revisit if a patched release ships.",
-      "severity": "high"
-    }
-  ]
+  "exceptions": []
 }

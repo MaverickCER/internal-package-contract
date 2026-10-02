@@ -191,6 +191,18 @@ A scan costs 100 Socket API quota units (the token holds 500), so it is spent sp
   code can be poisoned (CodeQL `actions/cache-poisoning`), and the scaffolded workflows use no
   caches at all for the same reason.
 
+## Dependency overrides every consumer needs
+
+`npm` honors `overrides` only from the **root** project, so a fix made here does not reach a package
+that depends on this one. `GithubActions` is run through `github-actionlint`, which unzips the
+actionlint release at install time with `adm-zip@^0.5`; every `adm-zip` before 0.6.1 carries
+published advisories (decompression bombs, SUID/SGID and symlink extraction). Add this to your own
+`package.json` (the `init` scaffold already does):
+
+```json
+{ "overrides": { "adm-zip": "0.6.1" } }
+```
+
 ## Overriding a bundled config
 
 Write your own — the check picks it up automatically. Extend the bundled one so
