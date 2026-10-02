@@ -19,6 +19,7 @@
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
+import { cacheDir, cacheTtlMs, readCached, writeCached } from "./socket-score-cache.mjs"
 
 const SOCKET_FLAGS = ["--json", "--no-banner", "--no-spinner"]
 
@@ -63,6 +64,17 @@ function flatten(data) {
   return [...scoped("self", data.self), ...scoped("transitive", data.transitively)]
 }
 
+const CACHE_DIR = cacheDir(process.env)
+const CACHE_TTL_MS = cacheTtlMs(process.env)
+
+/** A cached score for `version`, re-labelled for the version this run was asked about. */
+function emitCached(name, version, requestedVersion) {
+  const cached = readCached(CACHE_DIR, name, version, CACHE_TTL_MS, Date.now())
+  if (cached === undefined) return false
+  emit({ ok: true, data: { ...cached, requestedVersion, cached: true } })
+  return true
+}
+
 const pkgFile = path.join(process.cwd(), "package.json")
 if (!existsSync(pkgFile)) {
   emit({ ok: true, data: { skipped: "no package.json in the working directory" } })
@@ -71,6 +83,15 @@ if (!existsSync(pkgFile)) {
   if (pkg.private === true || typeof pkg.name !== "string" || typeof pkg.version !== "string") {
     emit({ ok: true, data: { skipped: "package is private or unnamed, so nothing is published" } })
   } else {
+    // A score is a property of the published version, so a fresh cached one needs no quota.
+    if (emitCached(pkg.name, pkg.version, pkg.version)) process.exit(0)
+    const exact = runJson("npm", ["view", `${pkg.name}@${pkg.version}`, "version", "--json"])
+    if (typeof exact.parsed !== "string") {
+      const latest = runJson("npm", ["view", pkg.name, "version", "--json"])
+      if (typeof latest.parsed === "string" && emitCached(pkg.name, latest.parsed, pkg.version)) {
+        process.exit(0)
+      }
+    }
     let scoredVersion = pkg.version
     let attempt = score(pkg.name, scoredVersion)
     const notFound = (a) => a.parsed?.ok === false && a.parsed?.data?.code === 404
@@ -101,16 +122,15 @@ if (!existsSync(pkgFile)) {
     } else if (attempt.parsed.ok !== true) {
       emit(attempt.parsed)
     } else {
-      emit({
-        ok: true,
-        data: {
-          package: pkg.name,
-          purl: attempt.parsed.data?.purl,
-          requestedVersion: pkg.version,
-          scoredVersion,
-          alerts: flatten(attempt.parsed.data ?? {}),
-        },
-      })
+      const data = {
+        package: pkg.name,
+        purl: attempt.parsed.data?.purl,
+        requestedVersion: pkg.version,
+        scoredVersion,
+        alerts: flatten(attempt.parsed.data ?? {}),
+      }
+      writeCached(CACHE_DIR, pkg.name, scoredVersion, data, Date.now())
+      emit({ ok: true, data })
     }
   }
 }
