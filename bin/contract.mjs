@@ -18,6 +18,7 @@
 import { existsSync, rmSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { planPhases } from "../scripts/contract-phases.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -84,9 +85,28 @@ async function runContract() {
   const alwaysRemove = [".stryker-tmp"]
   const removeIfCreated = ["reports", "coverage"].filter((d) => !existsSync(path.join(cwd, d)))
 
-  let verdict
+  // Phase 1 is every check but SecuritySocket; the Socket scan (which spends API quota) runs second,
+  // and only if phase 1 passed -- see scripts/contract-phases.mjs.
+  const { first, deferred } = planPhases(Object.keys(config.checks), checkIds)
+  const results = {}
+  let passed
+  let skippedDeferred = false
   try {
-    ;({ verdict } = await runRepoContract(config, checkIds ? { checks: checkIds } : undefined))
+    const phaseOne = await runRepoContract(
+      config,
+      deferred || checkIds ? { checks: first } : undefined,
+    )
+    Object.assign(results, phaseOne.verdict.checks)
+    passed = phaseOne.verdict.passed
+    if (deferred !== undefined) {
+      if (passed) {
+        const phaseTwo = await runRepoContract(config, { checks: [deferred] })
+        Object.assign(results, phaseTwo.verdict.checks)
+        passed = phaseTwo.verdict.passed
+      } else {
+        skippedDeferred = true
+      }
+    }
   } finally {
     for (const dir of [...alwaysRemove, ...removeIfCreated]) {
       rmSync(path.join(cwd, dir), { recursive: true, force: true })
@@ -96,9 +116,14 @@ async function runContract() {
   process.stdout.write(
     `\ninternal-package-contract${checkIds ? ` (${checkIds.join(", ")})` : ""}\n\n`,
   )
-  for (const [id, result] of Object.entries(verdict.checks)) {
+  for (const [id, result] of Object.entries(results)) {
     process.stdout.write(`[${result.outcome.toUpperCase()}] ${id}: ${result.rationale}\n`)
   }
-  process.stdout.write(`\n${verdict.passed ? "PASS" : "FAIL"}\n`)
-  process.exitCode = verdict.passed ? 0 : 1
+  if (skippedDeferred) {
+    process.stdout.write(
+      `[SKIPPED] ${deferred}: not run -- it scans only after every other check has passed, so a change that is already failing never spends Socket quota.\n`,
+    )
+  }
+  process.stdout.write(`\n${passed ? "PASS" : "FAIL"}\n`)
+  process.exitCode = passed ? 0 : 1
 }
