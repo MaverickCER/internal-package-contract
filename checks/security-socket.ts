@@ -24,13 +24,14 @@
  *   network down and rate limiting all FAIL, with steps that differ between CI and a developer
  *   machine (see `./socket-guidance.ts`).
  *
- * Example record (id is `socket:<package>@<version>:<alert name>`):
+ * Example record (id is `socket:<package>@<version>:<alert name>`; alerts on the scored package
+ * itself use the version `self`, so their records survive releases):
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
- *       "id": "socket:data-cap@0.4.0:unpopularPackage",
+ *       "id": "socket:data-cap@self:unpopularPackage",
  *       "version": 1,
  *       "justification": "A new package with few downloads yet; popularity is not something code can change.",
  *       "alternatives": "None -- publishing is the way to gain adoption.",
@@ -38,7 +39,7 @@
  *       "method": "independent-human-review",
  *       "exceptionType": "required-for-package-to-exist",
  *       "package": "data-cap",
- *       "packageVersion": "0.4.0",
+ *       "packageVersion": "self",
  *       "type": "unpopularPackage",
  *       "severity": "middle"
  *     }
@@ -297,6 +298,9 @@ export function classifyProblem(stderr: string, parsed: unknown): SocketProblem 
   return undefined
 }
 
+/** The `packageVersion` of an alert on the scored package itself (see `normalizeAlert`). */
+const SELF_VERSION = "self"
+
 /**
  * Splits a Socket alert example such as `npm/@scope/pkg@1.2.3` into package and version.
  * @internal Exported for direct unit coverage -- see this module's own doc comment.
@@ -315,9 +319,12 @@ export function parseExample(
  * Normalizes one flattened `socket-package-score` alert (`{ name, severity, category, example }`).
  * @internal Exported for direct unit coverage -- see this module's own doc comment.
  */
-export function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined {
+export function normalizeAlert(
+  raw: unknown,
+  selfPackage?: string,
+): NormalizedSocketAlert | undefined {
   if (!isPlainObject(raw)) return undefined
-  const { name, example, severity: severityRaw, category } = raw
+  const { name, example, severity: severityRaw, category, scope } = raw
   if (typeof name !== "string" || name.length === 0) return undefined
   if (typeof example !== "string") return undefined
   const subject = parseExample(example)
@@ -326,14 +333,17 @@ export function normalizeAlert(raw: unknown): NormalizedSocketAlert | undefined 
     typeof severityRaw === "string" && RAW_SEVERITY_VALUES.has(severityRaw.toLowerCase())
       ? (severityRaw.toLowerCase() as "critical" | "high" | "middle" | "low")
       : "unknown"
+  // The package's own alerts are keyed by the stable word "self", not its version: the scored
+  // version changes with every release, and a version in the id would orphan every record each time.
+  const version = scope === "self" || subject.name === selfPackage ? SELF_VERSION : subject.version
   return {
     id: deriveSocketExceptionId({
       package: subject.name,
-      packageVersion: subject.version,
+      packageVersion: version,
       type: name,
     }),
     package: subject.name,
-    version: subject.version,
+    version,
     type: name,
     severity,
     category: typeof category === "string" ? category : "",
@@ -458,7 +468,8 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
   if (!Array.isArray(rawAlerts)) {
     return { kind: "fail", rationale: 'The Socket score script\'s "alerts" is not an array.' }
   }
-  const normalized = rawAlerts.map((raw) => normalizeAlert(raw))
+  const selfPackage = safeString(data["package"])
+  const normalized = rawAlerts.map((raw) => normalizeAlert(raw, selfPackage))
   const malformedIndex = normalized.findIndex((alert) => alert === undefined)
   if (malformedIndex !== -1) {
     return {
