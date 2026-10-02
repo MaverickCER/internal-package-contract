@@ -69,6 +69,7 @@ import { noMinify } from "./checks/no-minify.js"
 import { npmScriptCheck } from "./checks/npm-script.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
+import { codeScanning } from "./checks/code-scanning.js"
 import { securitySocket } from "./checks/security-socket.js"
 import { tests } from "./checks/tests.js"
 
@@ -160,6 +161,9 @@ export default defineRepoContract({
     SecurityDeps: securityDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
+    // Local only (a no-op in CI): rejects open GitHub code-scanning alerts, waiving only the ones in
+    // development-only code via a git-ignored registry.
+    CodeScanning: codeScanning(),
     DeadCode: deadCode(),
     Commits: commits(),
     // Declared late among the readers (only `Mutation`'s own barrier follows):

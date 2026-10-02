@@ -33,3 +33,6 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+
+# CodeScanning's exception registry lists weaknesses in the code, so it is never committed.
+.repo-contract/exceptions/code-scanning.json

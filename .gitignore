@@ -6,3 +6,6 @@ reports/
 *.log
 .DS_Store
 .eslintcache
+
+# CodeScanning's exception registry lists weaknesses in the code, so it is never committed.
+.repo-contract/exceptions/code-scanning.json
