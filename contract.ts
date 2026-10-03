@@ -22,8 +22,8 @@
  *     above (which read source directly). `Tests` runs Vitest once WITH
  *     coverage; `Coverage` and `Crap` `dependsOn` it and only read its
  *     artifacts (one Vitest run, not three). `Mutation` is `isolated`, declared
- *     last, and does not run at all without a `stryker.config.*` or
- *     `IPC_MUTATION=1` (it is minutes-to-tens-of-minutes on a large `src/`).
+ *     last, and always runs (it is minutes-to-tens-of-minutes on a large `src/`);
+ *     without a `stryker.config.*` of the consumer's own, the bundled baseline runs.
  *
  * `api-contract` is no longer on the "not cloned" list below: it moved here
  * entirely (see `checks/api-contract.ts`'s own module comment) rather than

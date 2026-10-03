@@ -151,7 +151,7 @@ the packaging checks see a fresh `dist/`.
 | `DeadCode`         | `knip` — bundled `config/knip.json`                                                                                  | any unused file/export/dep, unlisted import                                                                                                                                                                                                                                                             |
 | `Commits`          | `commitlint origin/main..HEAD` — bundled config                                                                      | any non-Conventional-Commit (no base branch → warn)                                                                                                                                                                                                                                                     |
 | `CodeRabbit`       | `coderabbit review --agent --uncommitted` (CodeRabbit CLI, installed per machine)                                    | any finding without a complete waiver in `.repo-contract/exceptions/coderabbit.json` (CI / no CLI / detached `HEAD` → warn, always recorded)                                                                                                                                                            |
-| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                                                                 | any Survived/NoCoverage/Timeout mutant — **only runs with a `stryker.config.*` or `IPC_MUTATION=1`; otherwise warns**                                                                                                                                                                                   |
+| `Mutation`         | Stryker, zero-tolerance (`isolated`)                                                                                 | any Survived/NoCoverage/Timeout mutant (always runs: without a `stryker.config.*` the bundled baseline does; mutants hidden by `Stryker disable` comments are counted in the rationale)                                                                                                                 |
 
 \* runs the consumer's own npm script; **skipped with a note** if absent.
 
@@ -165,9 +165,11 @@ not a bug: unlike the `config/`-backed checks, the `eslint`/`tsconfig`
 baselines are meant to be **extended** by the consumer's own config (see
 "Overriding a bundled config" below), never silently substituted, so `Lint`/
 `Typecheck` enforce real rules against real consumer config from day one
-instead of quietly no-op'ing. `Mutation`, `Accessibility` (no built docs site
-yet), and `BranchProtection` (no `.git`/GitHub remote yet) are the exceptions
-that _do_ default to a warn instead (see their rows above). Run `git init`
+instead of quietly no-op'ing; `Mutation` is the same (it always runs, and fails until there is
+something to mutate). `Accessibility` (no built docs site yet) and `BranchProtection` (no
+`.git`/GitHub remote yet) cannot run at all there, so they record a degradation instead: a warn
+locally, accepted by a record in `.repo-contract/exceptions/environment.json`, and a failure under
+the CI gate without one (see "Exceptions" below). Run `git init`
 and add a `tsconfig.json` / `eslint.config.mjs` (extending this package's
 own) and a `src/` tree to bring the rest green — Step 2 of adoption, not
 Step 1.
@@ -262,7 +264,8 @@ Survived/NoCoverage/Timeout mutants, matching repo-contract's own policy.
 
 ```sh
 npx internal-package-contract --checks Format,Lint,Typecheck,Tests
-IPC_MUTATION=1 npx internal-package-contract --checks Mutation
+npx internal-package-contract --checks Mutation
+npx internal-package-contract --skip Coverage,Crap,Mutation   # everything but the slow analyses
 ```
 
 ## CI

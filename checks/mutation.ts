@@ -16,8 +16,9 @@
  * own worker pool.
  *
  * Part of the standard contract -- runs on every full `npm run contract`, not
- * opt-in. The fast hook subsets (pre-commit, pre-push) omit it by name; a fast
- * local loop is an explicit `--checks ...` subset.
+ * opt-in, and a package cannot satisfy the contract by omitting a `stryker.config.*`:
+ * without one the bundled baseline runs. The fast hook subsets (pre-commit, pre-push) omit
+ * it by name; a fast local loop is an explicit `--checks ...` or `--skip Mutation` subset.
  *
  * Uses the consumer's own `stryker.config.*` when present, otherwise the bundled
  * baseline (`config/stryker.config.mjs`, Vitest runner, `mutate: src/**`). Runs
@@ -117,6 +118,7 @@ import {
 } from "repo-contract/helpers"
 import {
   EXCEPTION_V2_FIELD_KEYS,
+  isValidNonEmptyStringField,
   recordFieldValue,
   validateExceptionRegistry,
 } from "./exception-record.js"
@@ -127,21 +129,6 @@ import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/mutation.json"
 
 const scriptPath = path.join(packageRoot, "scripts", "run-mutation.mjs")
-
-/**
- * Keep byte-identical to scripts/run-mutation.mjs's own copy of this same
- * string. That script prints this verbatim (and exits 0 without ever
- * spawning Stryker) when the consumer has no own `stryker.config.*` and
- * hasn't set `IPC_MUTATION=1` -- Stryker's own dry run throws an uncaught
- * `ConfigError` on a fresh consumer with no `src/`/tests yet, which is both
- * slow to discover and useless noise on day one. Matching this marker here
- * turns that deliberate skip into a `warn`, per the README's documented
- * "only runs with a stryker.config.* or IPC_MUTATION=1; otherwise warns" --
- * distinct from `readMutationReport`'s `fail` when Stryker DID run but
- * produced no report.
- */
-const MUTATION_SKIPPED_MARKER =
-  "internal-package-contract: Mutation skipped -- no stryker.config.* in this repo and IPC_MUTATION is not set."
 
 /** @internal Exported for {@link extractSpan}'s own direct-test parameter type. */
 export interface MutantLocation {
@@ -227,16 +214,7 @@ export function resolveMutants(report: MutationReport): readonly ResolvedMutant[
   return resolved
 }
 
-// Stryker's own perTest coverage attribution misreports several of this
-// function's own mutants as Survived on some runs -- confirmed by hand
-// (mutating `mutant.file === record.file` to `true` and running the real
-// suite directly fails "does not match when only file differs" immediately,
-// yet Stryker's own report has shown this specific mutant, and others in
-// this same AND-chain, as Survived). This is the same general defect this
-// module's own top doc comment describes for consumer code, now observed in
-// this check's own implementation too -- not limited to async-continuation
-// code.
-// Stryker disable ConditionalExpression, EqualityOperator, LogicalOperator
+/** Whether a registry record describes exactly this mutant: same file, mutator, original source text and replacement. */
 function matchesRecord(mutant: ResolvedMutant, record: MutationExceptionRecord): boolean {
   return (
     mutant.file === record.file &&
@@ -245,7 +223,6 @@ function matchesRecord(mutant: ResolvedMutant, record: MutationExceptionRecord):
     mutant.replacement === record.replacement
   )
 }
-// Stryker restore ConditionalExpression, EqualityOperator, LogicalOperator
 
 /** @internal Exported for direct unit coverage -- its `: ""` fallback (a `requirement` naming a non-string field, e.g. the numeric `version`, or a key the record doesn't have at all) is otherwise unreachable through `evaluateExceptionRecord`/`hashRequirementFields`'s own real callers, which only ever request `file`/`mutator`/`original`/`replacement`. */
 export function fieldValue(record: MutationExceptionRecord, requirement: string): string {
@@ -267,26 +244,17 @@ function deriveMutationId(
   return `mutation:${mutant.file}:${mutant.mutator}:${digest.slice(0, 12)}`
 }
 
-const MUTATION_EXCEPTION_SCHEMA: ExceptionRegistrySchema<MutationExceptionRecord> = {
+/** @internal Exported for direct unit coverage. */
+export const MUTATION_EXCEPTION_SCHEMA: ExceptionRegistrySchema<MutationExceptionRecord> = {
   namespace: "mutation:",
   metadataKeys: ["file", "mutator", "original", "replacement"],
-  // Stryker's own perTest coverage attribution misreports several mutants
-  // in this function as Survived on some runs -- confirmed by hand
-  // (forcing `fileValid` to `true` unconditionally and running the real
-  // suite directly fails two real tests immediately, yet Stryker's own
-  // report has shown this and other mutants in this same function as
-  // Survived). Same class this module's own top doc comment describes.
-  // Stryker disable BlockStatement, ConditionalExpression, EqualityOperator, LogicalOperator, StringLiteral
   validateRecord(core: ExceptionRecordCore, raw, index, errors) {
     const at = `exceptions[${String(index)}]`
     const { file, mutator, original, replacement } = raw
 
-    const fileValid = typeof file === "string" && file.length > 0
-    if (!fileValid) errors.push(`${at}.file must be a non-empty string.`)
-    const mutatorValid = typeof mutator === "string" && mutator.length > 0
-    if (!mutatorValid) errors.push(`${at}.mutator must be a non-empty string.`)
-    const originalValid = typeof original === "string" && original.length > 0
-    if (!originalValid) errors.push(`${at}.original must be a non-empty string.`)
+    const fileValid = isValidNonEmptyStringField(file, `${at}.file`, errors)
+    const mutatorValid = isValidNonEmptyStringField(mutator, `${at}.mutator`, errors)
+    const originalValid = isValidNonEmptyStringField(original, `${at}.original`, errors)
     const replacementValid = typeof replacement === "string"
     if (!replacementValid) errors.push(`${at}.replacement must be a string.`)
     if (!fileValid || !mutatorValid || !originalValid || !replacementValid) return undefined
@@ -302,15 +270,11 @@ const MUTATION_EXCEPTION_SCHEMA: ExceptionRegistrySchema<MutationExceptionRecord
 
     return { id: core.id, version: 1, justification: core.justification, ...identity }
   },
-  // Stryker restore BlockStatement, ConditionalExpression, EqualityOperator, LogicalOperator, StringLiteral
 }
 
-/** Every mutation exception is `{ mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] }` -- there is no severity tier here, unlike security findings. */
-const EXCEPTION_POLICY_CONFIG: ExceptionPolicyConfig = {
-  mutation: {
-    default: { mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] },
-  },
-}
+/** No per-group tiering: there is no severity here, unlike security findings, so every mutation exception falls through to {@link GLOBAL_DEFAULT}. */
+const EXCEPTION_POLICY_CONFIG: ExceptionPolicyConfig = {}
+/** Every mutation exception is `{ mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] }`. */
 const GLOBAL_DEFAULT: ExceptionPolicy = {
   mode: "exception",
   requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS],
@@ -327,6 +291,8 @@ async function readMutationReport(
   | { readonly ok: false; readonly result: PolicyResult }
 > {
   try {
+    // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFile(path, "")` yields a
+    // Buffer, which `JSON.parse` coerces to byte-for-byte the same text `"utf8"` would have decoded.
     const raw = await readFile(path.join(process.cwd(), "reports/mutation/mutation.json"), "utf8")
     return { ok: true, report: JSON.parse(raw) as MutationReport }
   } catch {
@@ -466,6 +432,36 @@ export function formatOffendingMutants(offenders: readonly ResolvedMutant[]): st
   return lines.join("\n")
 }
 
+/** How many files to name when listing where `Ignored` mutants are. */
+const MAX_IGNORED_FILES = 5
+
+/**
+ * The evidence for mutants Stryker did not test because a `// Stryker disable` comment (or
+ * `ignoreStatic`) told it not to. They count neither for nor against the score, so without this note
+ * a source file can quietly exclude most of itself from mutation testing and the verdict would still
+ * read as a clean score.
+ * @param mutants - Every mutant in the report.
+ * @returns A leading-space note naming the count and the files holding most of them, or `""` for none.
+ * @internal Exported for direct unit coverage.
+ */
+export function describeIgnored(mutants: readonly ResolvedMutant[]): string {
+  const byFile = new Map<string, number>()
+  for (const mutant of mutants) {
+    if (mutant.status === "Ignored") byFile.set(mutant.file, (byFile.get(mutant.file) ?? 0) + 1)
+  }
+  if (byFile.size === 0) return ""
+  const total = [...byFile.values()].reduce((sum, n) => sum + n, 0)
+  const top = [...byFile.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, MAX_IGNORED_FILES)
+    .map(([file, n]) => `${file} ${String(n)}`)
+  const more =
+    byFile.size > MAX_IGNORED_FILES
+      ? `, +${String(byFile.size - MAX_IGNORED_FILES)} more file(s)`
+      : ""
+  return `; ${String(total)} ignored by Stryker disable comments or ignoreStatic (${top.join(", ")}${more})`
+}
+
 /** The final score/verdict once every valid mutant has been counted, suppressions applied. */
 function summarizeMutationScore(
   mutants: readonly ResolvedMutant[],
@@ -481,6 +477,7 @@ function summarizeMutationScore(
   const timeout = counts["Timeout"] ?? 0
   const survived = counts["Survived"] ?? 0
   const noCoverage = counts["NoCoverage"] ?? 0
+  const ignoredNote = describeIgnored(mutants)
   const runtimeErrors = counts["RuntimeError"] ?? 0
   const compileErrors = counts["CompileError"] ?? 0
   // Timeout is deliberately excluded here, the same tier as Survived, never
@@ -498,7 +495,7 @@ function summarizeMutationScore(
   if (valid === 0) {
     return {
       outcome: "pass",
-      rationale: `Mutation: every mutant in the report (${String(mutants.length)}) was excluded by a known Stryker false positive, see ${REGISTRY_RELATIVE_PATH}.`,
+      rationale: `Mutation: every mutant in the report (${String(mutants.length)}) was excluded by a known Stryker false positive, see ${REGISTRY_RELATIVE_PATH}${ignoredNote}.`,
     }
   }
 
@@ -507,7 +504,7 @@ function summarizeMutationScore(
     suppressed.size > 0
       ? ` (${String(suppressed.size)} known Stryker false positive${suppressed.size === 1 ? "" : "s"} excluded, see ${REGISTRY_RELATIVE_PATH})`
       : ""
-  const summary = `score ${score.toFixed(2)}% (killed ${String(killed)}, timeout ${String(timeout)}, survived ${String(survived)}, no-coverage ${String(noCoverage)})${suppressedNote}`
+  const summary = `score ${score.toFixed(2)}% (killed ${String(killed)}, timeout ${String(timeout)}, survived ${String(survived)}, no-coverage ${String(noCoverage)})${suppressedNote}${ignoredNote}`
 
   // Zero-tolerance: survived/noCoverage/timeout must all be exactly zero,
   // not merely small relative to the total -- matching repo-contract's own
@@ -536,13 +533,6 @@ export function mutation(): CheckDefinitionConfig {
     policy: async ({ result }): Promise<PolicyResult> => {
       const terminated = abnormalTermination(result, "Stryker")
       if (terminated) return { outcome: "fail", rationale: terminated }
-
-      if (result.stdout.includes(MUTATION_SKIPPED_MARKER)) {
-        return {
-          outcome: "warn",
-          rationale: `${MUTATION_SKIPPED_MARKER} Add a stryker.config.* (extend the bundled \`internal-package-contract/config/stryker\` baseline) or set IPC_MUTATION=1 to run it now (README "Running a subset").`,
-        }
-      }
 
       const reportResult = await readMutationReport(result)
       if (!reportResult.ok) return reportResult.result
