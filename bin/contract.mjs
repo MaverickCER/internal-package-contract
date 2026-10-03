@@ -7,6 +7,7 @@
 //   internal-package-contract --strict        also fail on a "not evaluated" result no exception covers
 //                                             (the default under CI; --no-strict turns it off)
 //   internal-package-contract init            scaffold repo files + git wiring
+//   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
 //
 // A consuming package's package.json only needs
@@ -29,6 +30,11 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 if (process.argv[2] === "init") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "init.mjs")).href)
   // init sets its own exit behaviour; nothing else to do here.
+} else if (process.argv[2] === "exceptions") {
+  const { runInventory } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "exceptions-inventory.mjs")).href
+  )
+  runInventory(process.argv.slice(3), process.cwd(), process.stdout)
 } else if (process.argv[2] === "update-baseline") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.

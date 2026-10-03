@@ -163,6 +163,22 @@ export function renderMarkdown(report, options = {}) {
     }
     lines.push("")
   }
+  const inventory = /** @type {any} */ (report).exceptions
+  if (inventory && inventory.total > 0) {
+    lines.push(
+      "### Exceptions in force",
+      "",
+      `${String(inventory.total)} record(s): ${String(inventory.legacy)} legacy version 1, ${String(inventory.expired)} expired, ${String(inventory.incomplete)} incomplete.`,
+      "",
+      "| Registry | Records | Legacy | Expired | Incomplete |",
+      "| --- | ---: | ---: | ---: | ---: |",
+      ...inventory.registries.map(
+        (r) =>
+          `| ${r.name} | ${String(r.total)} | ${String(r.legacy)} | ${String(r.expired)} | ${String(r.incomplete)} |`,
+      ),
+      "",
+    )
+  }
   const slowest = [...report.checks].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5)
   if (slowest.some((c) => c.durationMs > 0)) {
     lines.push("### Slowest checks", "", "| Check | Time |", "| --- | ---: |")

@@ -7,6 +7,7 @@ import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"
 import { selectChecks } from "./contract-args.mjs"
 import { planPhases } from "./contract-phases.mjs"
+import { collectInventory, renderInventory } from "./exceptions-inventory.mjs"
 import { buildReport, mergeEvidence, renderMarkdown, writeReportFiles } from "./contract-report.mjs"
 
 /** Where the durable report is written, relative to the repository root. It survives the cleanup below. */
@@ -114,8 +115,13 @@ export async function runContract({
     strict,
     generatedAt: new Date().toISOString(),
   })
-  const markdown = renderMarkdown(report, { title })
-  writeReportFiles(path.join(cwd, REPORT_DIR), { evidence, report, markdown })
+  const exceptions = collectInventory(cwd)
+  const markdown = renderMarkdown({ ...report, exceptions }, { title })
+  writeReportFiles(path.join(cwd, REPORT_DIR), {
+    evidence,
+    report: { ...report, exceptions },
+    markdown,
+  })
   if (env["GITHUB_STEP_SUMMARY"]) appendFileSync(env["GITHUB_STEP_SUMMARY"], `${markdown}\n`)
 
   out.write(`\n${title}${checkIds ? ` (${checkIds.join(", ")})` : ""}\n\n`)
@@ -132,6 +138,7 @@ export async function runContract({
       "Results with no recorded exception fail the CI gate (--strict); record each in .repo-contract/exceptions/environment.json.\n",
     )
   }
+  if (exceptions.total > 0) out.write(`\n${renderInventory(exceptions)}`)
   out.write(`Report: ${path.join(REPORT_DIR, "report.json")}\n`)
   out.write(`\n${report.passed ? "PASS" : "FAIL"}\n`)
   process.exitCode = report.passed ? 0 : 1

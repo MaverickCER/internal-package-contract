@@ -10,7 +10,7 @@ import {
   SECURITY_DEPS_EXCEPTION_SCHEMA,
   securityDeps,
 } from "../checks/security-deps.js"
-import { makeContext, makeJsonResult, makeResult, BLANK_V2 } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, BLANK_V2, COMPLETE_V2 } from "./support.js"
 
 function deriveId(finding: { readonly package: string; readonly range: string }): string {
   return `security-deps:${finding.package}@${finding.range}`
@@ -60,6 +60,55 @@ function completeRecord(overrides: Record<string, unknown> = {}): Record<string,
   }
   return { ...base, ...overrides }
 }
+
+describe("securityDeps() -- critical is never waivable", () => {
+  for (const severity of ["critical"] as const) {
+    it(`forbids a ${severity} runtime advisory even with a complete exception record`, async () => {
+      writeRegistry([
+        completeRecord({
+          id: deriveId({ package: "vitest", range: "<4" }),
+          range: "<4",
+          severity,
+          ...COMPLETE_V2,
+          version: 2,
+        }),
+      ])
+      const result = await securityDeps().policy(
+        makeContext(auditResult({ vitest: { severity, range: "<4" } })),
+      )
+      expect(result.outcome).toBe("fail")
+      expect(result.rationale).toContain(`[${severity}]`)
+    })
+  }
+
+  it("still lets a high severity (no patched release yet is common) through a complete record", async () => {
+    writeRegistry([
+      completeRecord({
+        id: deriveId({ package: "vitest", range: "<4" }),
+        range: "<4",
+        severity: "high",
+      }),
+    ])
+    const result = await securityDeps().policy(
+      makeContext(auditResult({ vitest: { severity: "high", range: "<4" } })),
+    )
+    expect(result.outcome).toBe("pass")
+  })
+
+  it("still lets a lower severity through a complete record", async () => {
+    writeRegistry([
+      completeRecord({
+        id: deriveId({ package: "vitest", range: "<4" }),
+        range: "<4",
+        severity: "moderate",
+      }),
+    ])
+    const result = await securityDeps().policy(
+      makeContext(auditResult({ vitest: { severity: "moderate", range: "<4" } })),
+    )
+    expect(result.outcome).toBe("pass")
+  })
+})
 
 describe("securityDeps()", () => {
   it("fails with the exact tool-labeled rationale when npm audit terminated abnormally", async () => {
@@ -152,13 +201,13 @@ describe("securityDeps()", () => {
     expect(result.rationale).toContain("exception incomplete (missing: alternatives, remediation)")
   })
 
-  it("requires the full field set even for a critical-severity finding -- no severity-tiered forbidding here", async () => {
+  it("forbids a critical-severity finding outright, even with a complete record", async () => {
     writeRegistry([completeRecord({ severity: "critical" })])
     const check = securityDeps()
     const result = await check.policy(
       makeContext(auditResult({ vitest: { severity: "critical", range: "3.0.0 - 3.2.7" } })),
     )
-    expect(result.outcome).toBe("pass")
+    expect(result.outcome).toBe("fail")
   })
 
   it("reports a stale record that matches no current finding", async () => {
@@ -381,7 +430,7 @@ describe("evaluateFinding()", () => {
     }
     expect(evaluateFinding(finding, record)).toEqual({ verdict: "permitted", missing: [] })
   })
-  it("requires the full field set even for a critical-severity finding", () => {
+  it("forbids a critical-severity finding outright, whatever its record says", () => {
     const record = {
       id: finding.id,
       version: 1 as const,
@@ -395,8 +444,8 @@ describe("evaluateFinding()", () => {
       severity: "critical" as const,
     }
     expect(evaluateFinding({ ...finding, severity: "critical" }, record)).toEqual({
-      verdict: "insufficient",
-      missing: ["justification", "alternatives", "remediation", "method", "exceptionType"],
+      verdict: "forbidden",
+      missing: [],
     })
   })
 })
