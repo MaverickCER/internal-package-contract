@@ -4,11 +4,13 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+  buildPinVars,
   buildVars,
   listTemplateFiles,
   parseInitArgs,
   render,
   renderJson,
+  shaFromLockfile,
   validatePackageName,
 } from "../scripts/init-lib.mjs"
 
@@ -63,6 +65,40 @@ describe("validatePackageName()", () => {
   })
 })
 
+const SHA = "8a0b0cf0000000000000000000000000000000ab"
+
+describe("shaFromLockfile()", () => {
+  const lock = (resolved: unknown) =>
+    JSON.stringify({ packages: { "node_modules/internal-package-contract": { resolved } } })
+
+  it("reads the commit a git dependency resolved to", () => {
+    expect(
+      shaFromLockfile(
+        lock(`git+ssh://git@github.com/MaverickCER/internal-package-contract.git#${SHA}`),
+      ),
+    ).toBe(SHA)
+  })
+
+  it("is undefined without a lockfile, an entry, a pinned commit, or valid JSON", () => {
+    expect(shaFromLockfile(undefined)).toBeUndefined()
+    expect(shaFromLockfile("not json")).toBeUndefined()
+    expect(shaFromLockfile("{}")).toBeUndefined()
+    expect(shaFromLockfile(lock("https://registry.npmjs.org/x/-/x-1.0.0.tgz"))).toBeUndefined()
+    expect(shaFromLockfile(lock(42))).toBeUndefined()
+    expect(shaFromLockfile(lock("git+ssh://x.git#main"))).toBeUndefined()
+  })
+})
+
+describe("buildPinVars()", () => {
+  it("names the release tag and carries the commit, or an empty one when unknown", () => {
+    expect(buildPinVars({ version: "0.8.1", sha: SHA })).toEqual({ ipcRef: "v0.8.1", ipcSha: SHA })
+    expect(buildPinVars({ version: "0.8.1", sha: undefined })).toEqual({
+      ipcRef: "v0.8.1",
+      ipcSha: "",
+    })
+  })
+})
+
 describe("buildVars() / render() / renderJson()", () => {
   it("derives repo from a scoped name and defaults the description and year", () => {
     expect(buildVars({ name: "@acme/demo", owner: "Acme", year: 2030 })).toEqual({
@@ -71,6 +107,8 @@ describe("buildVars() / render() / renderJson()", () => {
       owner: "Acme",
       description: "TODO: describe @acme/demo.",
       year: "2030",
+      ipcRef: "main",
+      ipcSha: "",
     })
     expect(buildVars({ name: "demo", owner: "Acme", description: "D", year: 1 }).repo).toBe("demo")
     expect(buildVars({ name: "demo", owner: "o" }).year).toBe(String(new Date().getFullYear()))
@@ -200,6 +238,32 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     expect(existsSync(path.join(cwd, "benchmarks", "suite.mjs"))).toBe(false)
     expect(existsSync(path.join(cwd, "src"))).toBe(false)
     expect(existsSync(path.join(cwd, "tsup.config.ts"))).toBe(false)
+  })
+
+  it("pins the scaffolded workflows to the commit its lockfile resolved, never to a branch", () => {
+    writeFileSync(
+      path.join(cwd, "package-lock.json"),
+      JSON.stringify({
+        packages: {
+          "node_modules/internal-package-contract": {
+            resolved: `git+ssh://git@github.com/MaverickCER/internal-package-contract.git#${SHA}`,
+          },
+        },
+      }),
+    )
+    expect(init("--name", "demo").status).toBe(0)
+    const release = readFileSync(path.join(cwd, ".github/workflows/release.yml"), "utf8")
+    expect(release).toMatch(new RegExp(`release-npm-changesets\\.yml@${SHA} # v\\d+\\.\\d+\\.\\d+`))
+    expect(release).not.toContain("@main")
+    const sync = readFileSync(
+      path.join(cwd, ".github/workflows/sync-internal-package-contract.yml"),
+      "utf8",
+    )
+    expect(sync).toContain(`dependency-pin-sync.yml@${SHA} # v`)
+    const dep = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")).devDependencies[
+      "internal-package-contract"
+    ]
+    expect(dep).toMatch(/^github:MaverickCER\/internal-package-contract#v\d+\.\d+\.\d+$/)
   })
 
   it("exits 1 with the problem and usage for a bad name or unknown argument", () => {

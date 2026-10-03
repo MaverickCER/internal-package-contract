@@ -13,11 +13,13 @@ import {
   rulesetCoversBranch,
 } from "../scripts/github-repo.mjs"
 import {
+  buildPinVars,
   buildVars,
   listTemplateFiles,
   parseInitArgs,
   render,
   renderJson,
+  shaFromLockfile,
   validatePackageName,
 } from "../scripts/init-lib.mjs"
 
@@ -37,6 +39,27 @@ const USAGE = `Usage: internal-package-contract init [--name <package-name> [--o
                   --owner defaults to the origin remote's owner, else MaverickCER.
   --force:        overwrite files that already exist.
 `
+
+/**
+ * The commit of this package to pin scaffolded workflows at: what the consumer's lockfile resolved,
+ * else the checkout this CLI is running from. `undefined` when neither is known.
+ */
+function resolveIpcSha() {
+  let lockText
+  try {
+    lockText = readFileSync(path.join(cwd, "package-lock.json"), "utf8")
+  } catch {
+    lockText = undefined
+  }
+  const fromLock = shaFromLockfile(lockText)
+  if (fromLock !== undefined) return fromLock
+  const head = spawnSync("git", ["-C", packageRoot, "rev-parse", "HEAD"], { encoding: "utf8" })
+  const sha = head.status === 0 ? head.stdout.trim() : ""
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : undefined
+}
+
+const ipcVersion = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8")).version
+const pins = buildPinVars({ version: ipcVersion, sha: resolveIpcSha() })
 
 const nameProblem = args.name === undefined ? undefined : validatePackageName(args.name)
 if (args.errors.length > 0 || nameProblem !== undefined) {
@@ -67,8 +90,14 @@ function scaffoldPackageFile(rel, vars) {
 
 if (args.name !== undefined) {
   const owner = args.owner ?? resolveOwnerRepo(cwd)?.owner ?? "MaverickCER"
-  const vars = buildVars({ name: args.name, owner, description: args.description })
+  const vars = buildVars({ name: args.name, owner, description: args.description, ...pins })
   for (const rel of listTemplateFiles(path.join(packageRoot, "template", "package"))) {
+    // A workflow that calls one of this repository's reusable workflows is pinned by commit SHA; with
+    // no SHA to pin it to, writing it would only produce a workflow that cannot run.
+    if (pins.ipcSha === "" && rel.endsWith("sync-internal-package-contract.yml")) {
+      skipped.push(`${rel} (no commit of internal-package-contract to pin it to -- see below)`)
+      continue
+    }
     scaffoldPackageFile(rel, vars)
   }
 }
@@ -85,12 +114,31 @@ function scaffold(from, to) {
   done.push(to)
 }
 
+/** Like {@link scaffold}, with the pin placeholders (`{{ipcRef}}`, `{{ipcSha}}`) rendered. */
+function scaffoldRendered(from, to) {
+  const dest = path.join(cwd, to)
+  if (existsSync(dest) && !force) {
+    skipped.push(`${to} (exists)`)
+    return
+  }
+  mkdirSync(path.dirname(dest), { recursive: true })
+  const text = readFileSync(path.join(packageRoot, "template", from), "utf8")
+  writeFileSync(dest, render(text, { ipcRef: pins.ipcRef, ipcSha: pins.ipcSha }))
+  done.push(to)
+}
+
 scaffold("gitignore", ".gitignore")
 scaffold("gitattributes", ".gitattributes")
 scaffold("editorconfig", ".editorconfig")
 scaffold("gitmessage", ".gitmessage")
 scaffold("contract.yml", ".github/workflows/contract.yml")
-scaffold("release.yml", ".github/workflows/release.yml")
+if (pins.ipcSha === "") {
+  skipped.push(
+    ".github/workflows/release.yml (it is pinned to a commit of internal-package-contract, and none could be resolved: run `npm install` so the lockfile pins one, then `init` again)",
+  )
+} else {
+  scaffoldRendered("release.yml", ".github/workflows/release.yml")
+}
 scaffold("codeowners", "CODEOWNERS")
 scaffold("security.md", "SECURITY.md")
 scaffold("contributing.md", "CONTRIBUTING.md")

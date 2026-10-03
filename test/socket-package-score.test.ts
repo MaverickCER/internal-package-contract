@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -35,7 +36,10 @@ process.stdout.write(out ?? "")
 `
   const npm = `#!/usr/bin/env node
 const cfg = JSON.parse(require("node:fs").readFileSync(${JSON.stringify(cfgPath)}, "utf8"))
-process.stdout.write((cfg.npmFor ?? {})[process.argv[3]] ?? cfg.npm ?? "")
+// With nothing configured, npm view name@x.y.z finds the version (as it does for a published one).
+const spec = process.argv[3]
+const defaultOut = spec.lastIndexOf("@") > 0 ? JSON.stringify(spec.slice(spec.lastIndexOf("@") + 1)) : ""
+process.stdout.write((cfg.npmFor ?? {})[spec] ?? cfg.npm ?? defaultOut)
 process.exit(cfg.npmExit ?? 0)
 `
   for (const [name, body] of [
@@ -224,14 +228,72 @@ describe.skipIf(process.platform === "win32")("socket-package-score.mjs", () => 
   })
 
   it("reports a missing socket CLI as an ENOENT spawn error", () => {
-    const empty = path.join(cwd, "empty-bin")
-    mkdirSync(empty)
-    const { out } = run({ name: "a", version: "1.0.0" }, undefined, empty)
+    // npm is present (the version exists), the socket CLI is not.
+    const npmOnly = path.join(cwd, "npm-only-bin")
+    installFakes(npmOnly, { socket: {} })
+    rmSync(path.join(npmOnly, "socket"))
+    // `node` itself must stay resolvable for the fake npm's shebang; the socket CLI must not be (a
+    // machine that has it installed globally would otherwise find it next to node).
+    const nodeOnly = path.join(cwd, "node-only-bin")
+    mkdirSync(nodeOnly)
+    symlinkSync(process.execPath, path.join(nodeOnly, "node"))
+    const { out } = run(
+      { name: "a", version: "1.0.0" },
+      undefined,
+      `${npmOnly}${path.delimiter}${nodeOnly}`,
+    )
     expect(out).toMatchObject({
       ok: false,
       message: "Spawn Error",
       cause: "ENOENT",
       data: { code: "ENOENT" },
+    })
+  })
+
+  it("reports a missing npm as a failed lookup, not as an unpublished package", () => {
+    const empty = path.join(cwd, "empty-bin")
+    mkdirSync(empty)
+    const { out } = run({ name: "a", version: "1.0.0" }, undefined, empty)
+    expect(out).toMatchObject({
+      ok: false,
+      message: "npm Lookup Failed",
+      data: { code: "ENOENT" },
+    })
+  })
+
+  it("does not treat a transient npm failure as an unpublished version", () => {
+    const { out } = run(
+      { name: "a", version: "1.0.0" },
+      {
+        socket: {},
+        npm: JSON.stringify({ error: { code: "ETIMEDOUT", summary: "network timeout" } }),
+        npmExit: 1,
+      },
+    )
+    expect(out).toMatchObject({
+      ok: false,
+      message: "npm Lookup Failed",
+      cause: "network timeout",
+      data: { code: "ETIMEDOUT" },
+    })
+  })
+
+  it("does not call a failed lookup of the latest version 'never published'", () => {
+    const { out } = run(
+      { name: "a", version: "1.0.0" },
+      {
+        socket: { "npm/a@1.0.0": JSON.stringify({ ok: false, data: { code: 404 } }) },
+        npmFor: {
+          "a@1.0.0": '"1.0.0"',
+          a: JSON.stringify({ error: { code: "EAI_AGAIN", summary: "dns" } }),
+        },
+        npmExit: 0,
+      },
+    )
+    expect(out).toMatchObject({
+      ok: false,
+      message: "npm Lookup Failed",
+      data: { code: "EAI_AGAIN" },
     })
   })
 
