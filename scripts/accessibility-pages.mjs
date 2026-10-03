@@ -65,9 +65,8 @@ export async function resolvePages(docsDir) {
       if (kind.endsWith(".html")) pages.push(join(apiDir, kind))
       const kindDir = join(apiDir, kind)
       if (!(await isDirectory(kindDir))) continue
-      const first = (await list(kindDir)).find(
-        (name) => name.endsWith(".html") && name !== "index.html",
-      )
+      const names = (await list(kindDir)).filter((name) => name.endsWith(".html"))
+      const first = names.find((name) => name !== "index.html") ?? names[0]
       if (first !== undefined) pages.push(join(kindDir, first))
     }
   }
