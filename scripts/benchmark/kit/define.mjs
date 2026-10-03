@@ -12,7 +12,7 @@ export const COMPLEXITY_NOTATION = Object.freeze({
   linear: "O(n)",
   linearithmic: "O(n log n)",
   quadratic: "O(n²)",
-  "exponential-or-worse": "O(n³) or worse",
+  "cubic-or-worse": "O(n³) or worse",
 })
 
 /** Thrown by {@link defineSuite} with every documentation/shape problem found. */
@@ -220,6 +220,24 @@ export function defineSuite(suite) {
       const calls = benchmark.inEndToEnd.callsPerOperation
       if (typeof calls !== "number" && typeof calls !== "function") {
         problems.push(`${at}.inEndToEnd.callsPerOperation must be a number or a function of n.`)
+      }
+      // A function measured on its own includes everything it calls. When one benchmarked function
+      // calls another that is also attributed, naming it here lets the report subtract the nested time
+      // instead of counting it twice.
+      const includes = benchmark.inEndToEnd.includes
+      if (includes !== undefined) {
+        if (!Array.isArray(includes) || includes.some((id) => typeof id !== "string")) {
+          problems.push(`${at}.inEndToEnd.includes must be a list of function ids.`)
+        } else {
+          for (const id of includes) {
+            if (id === benchmark.id) problems.push(`${at}.inEndToEnd.includes cannot list itself.`)
+            else if (!functions.some((other) => other?.id === id)) {
+              problems.push(
+                `${at}.inEndToEnd.includes names "${id}", which is not a function in this suite.`,
+              )
+            }
+          }
+        }
       }
     }
   })

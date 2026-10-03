@@ -5,9 +5,14 @@
 // Markdown PR-comment summary. Highlights entries that exceed their own
 // budgets.mjs threshold, and leads with any complexity-shift flags (see
 // classify-complexity.mjs) -- a change in a group's inferred Big-O shape,
-// not just an ordinary "got somewhat slower." Never gates, never fails: this
-// script always exits 0, it renders findings for a human (or a PR comment)
-// to read.
+// not just an ordinary "got somewhat slower."
+//
+// What may FAIL a run is deliberately narrow (see gates.mjs): only properties of one run, or ratios
+// between quantities measured in the same run -- a function whose measured growth class differs from
+// its documented one, and the package's overhead as a percentage of the bare baseline growing past a
+// threshold against the last run on main and the last release. Raw millisecond deltas between two
+// runs on different machines stay highlights. With `--gate` the script exits 1 when a gate fails;
+// without it, it exits 0 and only renders.
 //
 // Generalizes env-cap's scripts/render-benchmark-summary.mjs and data-cap's
 // benchmarks/render-benchmark-summary.mjs (near-identical; this reconciles
@@ -20,19 +25,22 @@
 //   node render-summary.mjs \
 //     --budgets <path/to/budgets.mjs> \
 //     --marker '<!-- my-benchmark-summary -->' \
-//     --example 'Runtime (`benchmark/performance-runtime`)|<prev-results.json>|<cur-results.json>|<history.json>' \
-//     [--example 'Build-time (...)|...|...|...' ...]
+//     --example 'Runtime (`benchmark/performance-runtime`)|<prev-results.json>|<cur-results.json>|<history.json>|<release-results.json>' \
+//     [--example 'Build-time (...)|...|...|...|...' ...] [--gate]
 //
 // Each --example's fields are pipe-separated: label, previous results.json
 // path (empty string for "no prior run," e.g. first-ever run), current
 // results.json path (required), history.json path (empty string to skip
 // complexity-shift detection for that example -- the ordinary budget table
-// still renders). Any missing/unreadable "previous" file is treated as "no
-// prior data," same as before.
+// still renders), and optionally the results.json of the last release (a
+// fixed reference, so a series of small regressions cannot ratchet the
+// previous run upward unnoticed). Any missing/unreadable "previous" or
+// "release" file is treated as "no prior data."
 
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { detectComplexityShift } from "./classify-complexity.mjs"
+import { evaluateGates } from "./gates.mjs"
 import { collectEntries, primaryMedianMs, latestHistoryEntry, tryReadJson } from "./lib/results.mjs"
 
 function parseArgs(argv) {
@@ -42,19 +50,26 @@ function parseArgs(argv) {
     if (arg === "--budgets") args.budgetsPath = argv[++i]
     else if (arg === "--marker") args.marker = argv[++i]
     else if (arg === "--example") args.examples.push(argv[++i])
+    else if (arg === "--gate") args.gate = true
     else if (arg === "--help" || arg === "-h") args.help = true
   }
   return args
 }
 
 function parseExample(spec) {
-  const [label, prevPath, curPath, historyPath] = spec.split("|")
+  const [label, prevPath, curPath, historyPath, releasePath] = spec.split("|")
   if (!label || !curPath) {
     throw new Error(
-      `--example must be "label|prevResultsPath|curResultsPath|historyPath" (prev/history may be empty); got: ${spec}`,
+      `--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath]" (prev/history/release may be empty); got: ${spec}`,
     )
   }
-  return { label, prevPath: prevPath || undefined, curPath, historyPath: historyPath || undefined }
+  return {
+    label,
+    prevPath: prevPath || undefined,
+    curPath,
+    historyPath: historyPath || undefined,
+    releasePath: releasePath || undefined,
+  }
 }
 
 function renderComplexityShifts(label, current, historyPath) {
@@ -144,8 +159,15 @@ function renderExample(label, previous, current, budgets) {
 
     // A group with no entry of its own falls back to the "*" default, so a suite whose groups are
     // generated (one per function and variant) needs no per-group list.
-    const budget = budgets[name] ?? budgets["*"]
-    const budgetCell = budget ? `${budget.maxRegressionPercent}%` : "(unbudgeted)"
+    // The derived overhead (the difference of two medians) is the noisiest number in a run, so a raw
+    // delta against another run's is not even highlighted; the same-run overhead RATIO is gated instead.
+    const derived = current.results?.[name]?.derived === true
+    const budget = derived ? undefined : (budgets[name] ?? budgets["*"])
+    const budgetCell = derived
+      ? "(gated as a ratio)"
+      : budget
+        ? `${budget.maxRegressionPercent}%`
+        : "(unbudgeted)"
     if (budget && changePercent !== undefined && changePercent > budget.maxRegressionPercent) {
       highlights.push({ name, tier, changePercent, budget: budget.maxRegressionPercent })
     }
@@ -157,7 +179,7 @@ function renderExample(label, previous, current, budgets) {
   lines.push("")
 
   if (highlights.length > 0) {
-    lines.push("**Exceeds budget:**", "")
+    lines.push("**Exceeds budget (raw time against another run — a highlight, not a gate):**", "")
     for (const h of highlights) {
       lines.push(
         `- ⚠️ \`${h.name}.${h.tier}\` +${h.changePercent.toFixed(1)}% (budget: ${h.budget}%) — human review suggested.`,
@@ -169,25 +191,42 @@ function renderExample(label, previous, current, budgets) {
   return lines.join("\n")
 }
 
-async function loadBudgets(budgetsPath) {
-  if (!budgetsPath) return {}
+async function loadBudgetsModule(budgetsPath) {
+  if (!budgetsPath) return { budgets: {}, gates: undefined }
   const mod = await import(pathToFileURL(path.resolve(budgetsPath)).href)
-  return mod.BUDGETS ?? {}
+  return { budgets: mod.BUDGETS ?? {}, gates: mod.GATES }
 }
 
-export async function renderSummary({ examples, budgetsPath, marker }) {
-  const budgets = await loadBudgets(budgetsPath)
+/**
+ * Renders the summary and evaluates the gates.
+ * @param {{ examples: string[], budgetsPath?: string, marker: string }} input
+ * @returns {Promise<{ markdown: string, failures: object[] }>} the Markdown, and every gate that failed.
+ */
+export async function summarize({ examples, budgetsPath, marker }) {
+  const { budgets, gates } = await loadBudgetsModule(budgetsPath)
 
   const allShifts = []
   const sections = []
+  const findings = []
   for (const spec of examples) {
-    const { label, prevPath, curPath, historyPath } = parseExample(spec)
+    const { label, prevPath, curPath, historyPath, releasePath } = parseExample(spec)
     const previous = tryReadJson(prevPath)
     const current = tryReadJson(curPath)
+    const release = tryReadJson(releasePath)
     const { shifts } = renderComplexityShifts(label, current ?? {}, historyPath)
     allShifts.push(...shifts)
     sections.push(renderExample(label, previous, current, budgets))
+    if (current) {
+      findings.push(
+        ...evaluateGates({ previous, release, current, gates }).map((finding) => ({
+          ...finding,
+          label,
+        })),
+      )
+    }
   }
+  const failures = findings.filter((finding) => finding.level === "fail")
+  const notes = findings.filter((finding) => finding.level === "note")
 
   const lines = [marker, "", "# Benchmark summary", ""]
 
@@ -210,23 +249,44 @@ export async function renderSummary({ examples, budgetsPath, marker }) {
     lines.push("")
   }
 
-  lines.push("Highlight-only -- nothing here gates a merge.", "", ...sections)
+  lines.push(
+    failures.length > 0
+      ? `## ❌ ${String(failures.length)} gate${failures.length === 1 ? "" : "s"} failed`
+      : "## ✅ Gates passed",
+    "",
+    "Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, and so survive a change of machine: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.",
+    "",
+    ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
+    ...notes.map((finding) => `- ℹ️ **${finding.label}** — ${finding.message}`),
+    ...(failures.length + notes.length > 0 ? [""] : []),
+    ...sections,
+  )
 
-  return lines.join("\n")
+  return { markdown: lines.join("\n"), failures }
+}
+
+/**
+ * @param {{ examples: string[], budgetsPath?: string, marker: string }} input
+ * @returns {Promise<string>} just the Markdown.
+ */
+export async function renderSummary(input) {
+  return (await summarize(input)).markdown
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help || args.examples.length === 0) {
     console.error(
-      "Usage: node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] --example 'label|prev|cur|history' [--example ...]",
+      "Usage: node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] [--gate] --example 'label|prev|cur|history[|release]' [--example ...]",
     )
     process.exitCode = args.help ? 0 : 1
     return
   }
 
-  const output = await renderSummary(args)
-  process.stdout.write(output + "\n")
+  const { markdown, failures } = await summarize(args)
+  process.stdout.write(markdown + "\n")
+  // The comment is always written; only an explicit --gate turns a failed gate into a failed run.
+  if (args.gate && failures.length > 0) process.exitCode = 1
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href

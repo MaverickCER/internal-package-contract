@@ -12,10 +12,15 @@
 // deriving one hardcoded throughput figure (env-cap's `variablesPerSecond`)
 // and discarding the rest.
 //
-// Usage: node append-history.mjs <results.json> <history.json>
+// Usage: node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]
+//
+// `--commit` and `--pr` say where the run belongs on main: the MERGE commit it measured and the pull
+// request that produced it. Without them an entry would carry the pull-request branch's head, which
+// disappears with a squash merge and so cannot be traced afterwards.
 
 import fs from "node:fs/promises"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { inputTotal } from "./classify-complexity.mjs"
 import { readJson, resultsToMeasurements } from "./lib/results.mjs"
 
@@ -39,10 +44,30 @@ import { readJson, resultsToMeasurements } from "./lib/results.mjs"
  */
 const HISTORY_SCHEMA_VERSION = 2
 
+/**
+ * @param {readonly string[]} argv - the arguments after the script name.
+ * @returns {{ positional: string[], commit?: string, pullRequest?: number }}
+ */
+export function parseAppendArgs(argv) {
+  const parsed = { positional: [] }
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === "--commit") parsed.commit = argv[++i]
+    else if (arg === "--pr") {
+      const number = Number(argv[++i])
+      if (Number.isInteger(number) && number > 0) parsed.pullRequest = number
+    } else parsed.positional.push(arg)
+  }
+  return parsed
+}
+
 async function main() {
-  const [, , resultsPath, historyPath] = process.argv
+  const { positional, commit, pullRequest } = parseAppendArgs(process.argv.slice(2))
+  const [resultsPath, historyPath] = positional
   if (!resultsPath || !historyPath) {
-    console.error("Usage: node append-history.mjs <results.json> <history.json>")
+    console.error(
+      "Usage: node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]",
+    )
     process.exitCode = 1
     return
   }
@@ -95,7 +120,9 @@ async function main() {
   // results.json happens to report, e.g. `entry.versions.dataCapVersion`.
   history.entries.push({
     timestamp: results.metadata?.timing?.finishedAtUtc,
-    gitCommit: results.metadata?.git?.gitCommit,
+    gitCommit: commit ?? results.metadata?.git?.gitCommit,
+    ...(pullRequest === undefined ? {} : { pullRequest }),
+    nodeVersion: results.metadata?.environment?.nodeVersion,
     runner: results.metadata?.environment?.runner,
     versions: { ...results.metadata?.versions },
     measurements,
@@ -108,7 +135,9 @@ async function main() {
   )
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((err) => {
+    console.error(err)
+    process.exitCode = 1
+  })
+}

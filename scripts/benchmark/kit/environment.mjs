@@ -67,7 +67,19 @@ export function collectGit(root) {
       return null
     }
   }
-  const status = run(["status", "--porcelain"])
+  // The benchmark's own outputs are written into the tree before the next suite starts, so they must
+  // not make the tree "dirty": `gitDirty` means the CODE under test had uncommitted changes.
+  const status = run([
+    "status",
+    "--porcelain",
+    "--",
+    ".",
+    ":(exclude)**/results.json",
+    ":(exclude)**/BENCHMARKS.md",
+    ":(exclude)**/history/**",
+    ":(exclude)reports/**",
+    ":(exclude)docs/benchmarks/**",
+  ])
   return {
     gitCommit: run(["rev-parse", "HEAD"]),
     gitBranch: run(["rev-parse", "--abbrev-ref", "HEAD"]),

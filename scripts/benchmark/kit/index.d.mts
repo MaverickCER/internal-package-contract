@@ -4,7 +4,7 @@
 // permissive; `defineSuite` is the real validator.
 
 export type ComplexityClass =
-  "constant" | "logarithmic" | "linear" | "linearithmic" | "quadratic" | "exponential-or-worse"
+  "constant" | "logarithmic" | "linear" | "linearithmic" | "quadratic" | "cubic-or-worse"
 
 export const COMPLEXITY_NOTATION: Readonly<Record<ComplexityClass, string>>
 export function expectationOf(
