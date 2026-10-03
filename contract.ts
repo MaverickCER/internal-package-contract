@@ -33,7 +33,7 @@
  * devDependency instead of hosting its own copy.
  *
  * Not cloned (encode repo-contract's own design, not a general standard):
- * `suppression-governance`, `security-network`, `adr-governance`, and the
+ * `security-network`, `adr-governance`, and the
  * `test-unit/integration/property/e2e` split.
  *
  * `accessibility` *was* on that list until it wasn't: repo-contract's own

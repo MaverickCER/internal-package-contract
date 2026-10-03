@@ -111,7 +111,10 @@ const registrySchema: StandardSchemaV1<unknown, readonly EnvironmentExceptionRec
  * @param now - The clock `expires` is compared against.
  * @returns The names of the problems, in a stable order.
  */
-export function incompleteFields(record: EnvironmentExceptionRecord, now: Date): string[] {
+export function incompleteFields(
+  record: { readonly justification: string } & Partial<ExceptionV2Fields>,
+  now: Date,
+): string[] {
   const flat = record as unknown as Record<string, unknown>
   const missing: string[] = []
   if (record.justification.trim() === "") missing.push("justification")

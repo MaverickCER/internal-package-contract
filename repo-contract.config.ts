@@ -64,6 +64,7 @@ import { securityDeps } from "./checks/security-deps.js"
 import { securityDevDeps } from "./checks/security-dev-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
+import { suppressions } from "./checks/suppressions.js"
 import { tests } from "./checks/tests.js"
 
 /** Replaces the scan-path positional (always index 1: `[tool, path, ...flags]`) a `run` array hardcodes, for a check whose default scan target (`"src"`) does not exist in this repository. */
@@ -156,6 +157,7 @@ export default defineRepoContract({
     SecurityDevDeps: securityDevDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
+    Suppressions: suppressions(),
     DeadCode: deadCode(),
     Commits: commits(),
     Mutation: { ...mutation(), isolated: true },

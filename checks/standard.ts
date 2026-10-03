@@ -33,6 +33,7 @@ import { npmScriptCheck } from "./npm-script.js"
 import { securityDeps } from "./security-deps.js"
 import { securityDevDeps } from "./security-dev-deps.js"
 import { securitySecrets } from "./security-secrets.js"
+import { suppressions } from "./suppressions.js"
 import { codeScanning } from "./code-scanning.js"
 import { securitySocket } from "./security-socket.js"
 import { tests } from "./tests.js"
@@ -120,6 +121,8 @@ export function standardChecks() {
     // Local only (a no-op in CI): rejects open GitHub code-scanning alerts, waiving only the ones in
     // development-only code via a git-ignored registry.
     CodeScanning: codeScanning(),
+    // Every suppression comment is read back as evidence, and must give its reason (or have a record).
+    Suppressions: suppressions(),
     DeadCode: deadCode(),
     Commits: commits(),
     // Declared late among the readers (only `Mutation`'s own barrier follows):
