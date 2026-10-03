@@ -84,6 +84,48 @@ function isDetachedHead(): boolean {
 }
 
 /**
+ * Whether the working tree has staged or tracked uncommitted edits.
+ * @returns `true` if `git status` reports any.
+ */
+function hasUncommittedEdits(): boolean {
+  const result = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], {
+    encoding: "utf8",
+  })
+  return !result.error && result.status === 0 && result.stdout.trim().length > 0
+}
+
+/**
+ * The branch a committed review compares against: `origin/main` when it exists, else `main`.
+ * @returns the ref name.
+ */
+function defaultBaseRef(): string {
+  const remote = spawnSync(
+    "git",
+    ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],
+    {
+      encoding: "utf8",
+    },
+  )
+  return !remote.error && remote.status === 0 ? "origin/main" : "main"
+}
+
+/**
+ * The arguments for one review. Uncommitted edits are reviewed as they are; with a clean tree --
+ * which is the state at pre-push, the one moment findings can still change what is published -- the
+ * committed branch diff against the base branch is reviewed instead. (Reviewing only uncommitted
+ * edits made the check a no-op for exactly the changes about to be pushed.)
+ * @param uncommitted - whether the working tree has uncommitted edits.
+ * @param baseRef - the ref to diff committed work against.
+ * @returns the `coderabbit` arguments.
+ * @internal Exported for direct unit coverage.
+ */
+export function reviewArguments(uncommitted: boolean, baseRef: string): string[] {
+  return uncommitted
+    ? ["review", "--agent", "--uncommitted"]
+    : ["review", "--agent", "--committed", "--base", baseRef]
+}
+
+/**
  * Whether `value` is a non-null, non-array object.
  * @param value - The candidate value to check.
  * @returns `true` if `value` is a plain object.
@@ -251,7 +293,7 @@ function runCoderabbitCli(): CoderabbitCliResult {
     return { status: "unavailable", reason: "git-context-unavailable" }
   }
 
-  const result = spawnSync("coderabbit", ["review", "--agent", "--uncommitted"], {
+  const result = spawnSync("coderabbit", reviewArguments(hasUncommittedEdits(), defaultBaseRef()), {
     encoding: "utf8",
     // A real review of a small local diff completes in ~1-2 min against an observed real run;
     // 10 min is a generous ceiling that still bounds a stalled process so it can never hang

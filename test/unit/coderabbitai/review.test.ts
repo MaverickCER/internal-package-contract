@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parseAgentStream } from "../../../scripts/coderabbitai/review.js"
+import { parseAgentStream, reviewArguments } from "../../../scripts/coderabbitai/review.js"
 
 /**
  * Fixtures are the real `coderabbit review --agent` event stream shapes repo-contract captured
@@ -241,5 +241,18 @@ describe("parseAgentStream", () => {
 
   it("reports completed: false for a wholly empty stream", () => {
     expect(parseAgentStream("")).toEqual({ ok: true, findings: [], completed: false })
+  })
+})
+
+describe("reviewArguments()", () => {
+  it("reviews uncommitted edits as they are, and the committed branch diff when the tree is clean", () => {
+    expect(reviewArguments(true, "origin/main")).toEqual(["review", "--agent", "--uncommitted"])
+    expect(reviewArguments(false, "origin/main")).toEqual([
+      "review",
+      "--agent",
+      "--committed",
+      "--base",
+      "origin/main",
+    ])
   })
 })

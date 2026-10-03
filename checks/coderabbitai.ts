@@ -1,6 +1,6 @@
 /**
  * AI code review via the real, installed CodeRabbit CLI (`coderabbit review --agent
- * --uncommitted`), with every finding gated on a complete, finding-specific waiver in the
+ * --uncommitted`, or the committed branch diff against the base branch when the tree is clean), with every finding gated on a complete, finding-specific waiver in the
  * consumer's own `.repo-contract/exceptions/coderabbit.json` -- a generic recreation of
  * repo-contract's own `coderabbitai` check (`checks/coderabbitai.ts` +
  * `scripts/coderabbitai/{review,evidence-types,policy-config,registry}.ts` in that repo, designed
