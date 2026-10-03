@@ -13,34 +13,6 @@
 // only unparseable output is. Never exits non-zero itself -- the policy decides.
 
 import { sync as spawnSync } from "cross-spawn"
+import { auditBothTrees } from "./dev-deps-audit.mjs"
 
-function audit(extraArgs) {
-  const result = spawnSync("npm", ["audit", ...extraArgs, "--json"], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  if (result.error)
-    return { error: `${result.error.code ?? "spawn error"}: ${result.error.message}` }
-  try {
-    return { value: JSON.parse(result.stdout) }
-  } catch {
-    return {
-      error:
-        `npm audit ${extraArgs.join(" ")} did not print JSON: ${(result.stderr || result.stdout).slice(0, 300)}`.replace(
-          "audit  ",
-          "audit ",
-        ),
-    }
-  }
-}
-
-const all = audit([])
-const production = audit(["--omit=dev"])
-const failed = all.error ?? production.error
-process.stdout.write(
-  JSON.stringify(
-    failed === undefined
-      ? { ok: true, all: all.value, production: production.value }
-      : { ok: false, error: failed },
-  ),
-)
+process.stdout.write(JSON.stringify(auditBothTrees(spawnSync)))

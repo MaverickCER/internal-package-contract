@@ -34,6 +34,10 @@ export function identity<T>(value: T): T {
   return value
 }
 /** @public */
+export function wrap<T>(values: T[], seed: number): T[] {
+  return values.slice(seed)
+}
+/** @public */
 export interface Shape {
   readonly id: string
   size: number
@@ -140,6 +144,31 @@ const rows: Row[] = [
           "pick(value: string | number | boolean): string | number | boolean",
         ),
     kinds: ["overload-added"],
+    impact: "compatible",
+  },
+  {
+    name: "changing a parameter whose type uses the function's own type parameter",
+    edit: (t) =>
+      t.replace(
+        "wrap<T>(values: T[], seed: number)",
+        "wrap<T>(values: readonly T[], seed: number)",
+      ),
+    kinds: ["parameter-type-changed"],
+    impact: "unknown",
+  },
+  {
+    name: "widening a parameter whose type is an exported interface",
+    edit: (t) =>
+      t
+        .replace(
+          "export function pick(value: string | number): string | number {",
+          "export function pick(value: string | number): string | number {",
+        )
+        .replace(
+          "/** @public */\nexport function identity",
+          "/** @public */\nexport function consume(shape: Shape): void {\n  void shape\n}\n/** @public */\nexport function identity",
+        ),
+    kinds: ["export-added"],
     impact: "compatible",
   },
   {

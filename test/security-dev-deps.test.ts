@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { devOnlyFindings, securityDevDeps } from "../checks/security-dev-deps.js"
+import { auditBothTrees } from "../scripts/dev-deps-audit.mjs"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
 const audit = (vulns: Record<string, { severity: string; range: string }>) => ({
@@ -177,4 +178,44 @@ process.stdout.write("npm ERR! something")
       expect(JSON.parse(out.stdout).error).toContain("did not print JSON")
     },
   )
+})
+
+describe("auditBothTrees() with an injected npm", () => {
+  const fake =
+    (
+      outputs: Record<
+        string,
+        { stdout?: string; stderr?: string; error?: Error & { code?: string } }
+      >,
+    ) =>
+    (_command: string, args: string[]) =>
+      outputs[args.includes("--omit=dev") ? "production" : "all"] ?? { stdout: "{}" }
+
+  it("returns both audits when npm prints JSON, whatever its exit code", () => {
+    expect(
+      auditBothTrees(fake({ all: { stdout: '{"a":1}' }, production: { stdout: '{"b":2}' } })),
+    ).toEqual({ ok: true, all: { a: 1 }, production: { b: 2 } })
+  })
+
+  it("reports a spawn failure, with its code, and output that is not JSON, with what npm said", () => {
+    const missing = Object.assign(new Error("not found"), { code: "ENOENT" })
+    expect(auditBothTrees(fake({ all: { error: missing } }))).toEqual({
+      ok: false,
+      error: "ENOENT: not found",
+    })
+    expect(
+      auditBothTrees(
+        fake({ all: { stdout: '{"a":1}' }, production: { stdout: "oops", stderr: "ERR!" } }),
+      ),
+    ).toEqual({ ok: false, error: "npm audit --omit=dev did not print JSON: ERR!" })
+    expect(auditBothTrees(fake({ all: { stdout: "" } }))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("npm audit did not print JSON"),
+    })
+    const noCode = new Error("boom")
+    expect(auditBothTrees(fake({ all: { error: noCode } }))).toEqual({
+      ok: false,
+      error: "spawn error: boom",
+    })
+  })
 })

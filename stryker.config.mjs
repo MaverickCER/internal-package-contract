@@ -4,15 +4,22 @@
  * prefers a consumer's own `stryker.config.*` over the bundled default. This
  * package IS such a consumer of itself for `npm run contract` (see
  * repo-contract.config.ts): this repo has no `src/` (its real code lives in
- * `checks/`, matching `vitest.config.ts`'s coverage scope), so `mutate` is
+ * `checks/`, `scripts/` and `bin/`, the scope in `scope.mjs`), so `mutate` is
  * retargeted there instead of the baseline's `src/**`.
  *
  * @type {import('@stryker-mutator/api/core').PartialStrykerOptions}
  */
 import baseline from "./config/stryker.config.mjs"
 
+import { ENTRY_SHELLS, NON_RUNTIME, SCOPE_DIRS } from "./scope.mjs"
+
 export default {
   ...baseline,
-  mutate: ["checks/**/*.ts", "!checks/**/*.test.ts"],
-  disableTypeChecks: "{checks,test}/**/*.ts",
+  // Everything this package ships and runs, not only `checks/` -- minus the process entry points
+  // (see scope.mjs), whose logic lives in modules this does cover.
+  mutate: [
+    ...SCOPE_DIRS.map((dir) => `${dir}/**/*.{ts,mjs}`),
+    ...[...NON_RUNTIME, ...ENTRY_SHELLS].map((glob) => `!${glob}`),
+  ],
+  disableTypeChecks: "{checks,scripts,bin,test}/**/*.{ts,mjs}",
 }

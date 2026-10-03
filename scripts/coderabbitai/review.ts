@@ -276,39 +276,21 @@ export function parseAgentStream(stdout: string):
   return { ok: true, findings, completed }
 }
 
+/** The outcome of one `spawnSync` of the CLI, as much of it as is read. */
+export interface CliSpawnResult {
+  readonly error?: Error | undefined
+  readonly stdout: string
+  readonly stderr: string
+  readonly status: number | null
+}
+
 /**
- * Runs `coderabbit review --agent` and normalizes its result. Never throws -- every recognized or
- * unrecognized outcome becomes a well-formed `CoderabbitCliResult` value instead.
- * @returns This run's normalized CLI result.
+ * Turns what the spawned CLI did into a normalized result. Never throws.
+ * @param result - The spawn result.
+ * @returns the normalized CLI result.
+ * @internal Exported for direct unit coverage.
  */
-function runCoderabbitCli(): CoderabbitCliResult {
-  // In CI the review is delegated to CodeRabbit's own GitHub App, which posts findings directly on
-  // the pull request -- this local CLI pass is deliberately the narrower, faster layer, never a
-  // duplicate of it (repo-contract ADR 0014).
-  if (process.env["CI"]) {
-    return { status: "not-applicable", reason: "ci", expectedProvider: "coderabbit-github-app" }
-  }
-
-  if (isDetachedHead()) {
-    return { status: "unavailable", reason: "git-context-unavailable" }
-  }
-
-  const result = spawnSync("coderabbit", reviewArguments(hasUncommittedEdits(), defaultBaseRef()), {
-    encoding: "utf8",
-    // A real review of a small local diff completes in ~1-2 min against an observed real run;
-    // 10 min is a generous ceiling that still bounds a stalled process so it can never hang
-    // `runCoderabbitReview`, the consumer's own `npm run contract`, or the pre-push hook
-    // indefinitely. `cross-spawn` forwards this straight to `child_process.spawnSync`.
-    timeout: 10 * 60 * 1000,
-    // `SIGKILL` (not the default `SIGTERM`): a wedged `coderabbit` process that ignores or slowly
-    // handles `SIGTERM` would keep `spawnSync` blocked past the deadline anyway.
-    killSignal: "SIGKILL",
-    // The `--agent` stream is line-delimited JSON, one short object per finding plus a handful of
-    // status lines -- far under the 1 MiB `spawnSync` default, but raised well clear of it so a
-    // verbose review can never be misreported as a spawn failure via `ENOBUFS`.
-    maxBuffer: 32 * 1024 * 1024,
-  })
-
+export function interpretCliResult(result: CliSpawnResult): CoderabbitCliResult {
   if (result.error) {
     const nodeError = result.error as NodeJS.ErrnoException
     if (nodeError.code === "ENOENT") {
@@ -336,16 +318,110 @@ function runCoderabbitCli(): CoderabbitCliResult {
 
   if (!parsed.completed) {
     const stderrDetail = result.stderr.trim()
+    const ended = `coderabbit review --agent ended without a "complete" event (exit code ${String(result.status)})`
     return {
       status: "error",
-      message:
-        stderrDetail.length > 0
-          ? `coderabbit review --agent ended without a "complete" event (exit code ${String(result.status)}): ${stderrDetail}`
-          : `coderabbit review --agent ended without a "complete" event (exit code ${String(result.status)}).`,
+      message: stderrDetail.length > 0 ? `${ended}: ${stderrDetail}` : `${ended}.`,
     }
   }
 
   return { status: "reviewed", findings: parsed.findings }
+}
+
+/** What {@link runCoderabbitCli} reads from its surroundings, injectable so it can be tested without the real CLI, git or CI. */
+export interface CliDependencies {
+  readonly env: Readonly<Record<string, string | undefined>>
+  readonly isDetachedHead: () => boolean
+  readonly hasUncommittedEdits: () => boolean
+  readonly defaultBaseRef: () => string
+  readonly spawn: (command: string, args: string[], options: object) => CliSpawnResult
+}
+
+const REAL_DEPENDENCIES: CliDependencies = {
+  env: process.env,
+  isDetachedHead,
+  hasUncommittedEdits,
+  defaultBaseRef,
+  // The options always request `encoding: "utf8"`, so stdout and stderr are strings.
+  spawn: (command, args, options) => spawnSync(command, args, options) as unknown as CliSpawnResult,
+}
+
+/**
+ * Runs `coderabbit review --agent` and normalizes its result. Never throws -- every recognized or
+ * unrecognized outcome becomes a well-formed `CoderabbitCliResult` value instead.
+ * @param deps - The surroundings it reads; the real ones by default.
+ * @returns This run's normalized CLI result.
+ * @internal Exported for direct unit coverage.
+ */
+export function runCoderabbitCli(deps: CliDependencies = REAL_DEPENDENCIES): CoderabbitCliResult {
+  // In CI the review is delegated to CodeRabbit's own GitHub App, which posts findings directly on
+  // the pull request -- this local CLI pass is deliberately the narrower, faster layer, never a
+  // duplicate of it (repo-contract ADR 0014).
+  if (deps.env["CI"]) {
+    return { status: "not-applicable", reason: "ci", expectedProvider: "coderabbit-github-app" }
+  }
+
+  if (deps.isDetachedHead()) {
+    return { status: "unavailable", reason: "git-context-unavailable" }
+  }
+
+  const result = deps.spawn(
+    "coderabbit",
+    reviewArguments(deps.hasUncommittedEdits(), deps.defaultBaseRef()),
+    {
+      encoding: "utf8",
+      // A real review of a small local diff completes in ~1-2 min against an observed real run;
+      // 10 min is a generous ceiling that still bounds a stalled process so it can never hang
+      // `runCoderabbitReview`, the consumer's own `npm run contract`, or the pre-push hook
+      // indefinitely. `cross-spawn` forwards this straight to `child_process.spawnSync`.
+      timeout: 10 * 60 * 1000,
+      // `SIGKILL` (not the default `SIGTERM`): a wedged `coderabbit` process that ignores or slowly
+      // handles `SIGTERM` would keep `spawnSync` blocked past the deadline anyway.
+      killSignal: "SIGKILL",
+      // The `--agent` stream is line-delimited JSON, one short object per finding plus a handful of
+      // status lines -- far under the 1 MiB `spawnSync` default, but raised well clear of it so a
+      // verbose review can never be misreported as a spawn failure via `ENOBUFS`.
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  )
+  return interpretCliResult(result)
+}
+
+type NotReviewedCli = Exclude<CoderabbitCliResult, { status: "reviewed" }>
+
+/**
+ * The evidence for a run in which no review happened.
+ * @param cli - the non-reviewed CLI result.
+ * @returns the evidence without its registry fields.
+ */
+function notReviewedEvidence(cli: NotReviewedCli) {
+  if (cli.status === "not-applicable") {
+    return {
+      status: cli.status,
+      reason: cli.reason,
+      expectedProvider: cli.expectedProvider,
+      registryPath: REGISTRY_RELATIVE_PATH,
+    }
+  }
+  if (cli.status === "unavailable") {
+    return { status: cli.status, reason: cli.reason, registryPath: REGISTRY_RELATIVE_PATH }
+  }
+  return { status: cli.status, message: cli.message, registryPath: REGISTRY_RELATIVE_PATH }
+}
+
+/**
+ * Adds what the registry said to evidence for a run that did not review.
+ * @param base - the evidence without registry fields.
+ * @param loaded - the registry load result.
+ * @returns the complete evidence.
+ */
+function withRegistry<T extends object>(
+  base: T,
+  loaded: { ok: true; records: readonly unknown[] } | { ok: false; errors: readonly string[] },
+) {
+  return loaded.ok
+    ? { ...base, existingRecordCount: loaded.records.length }
+    : { ...base, existingRecordCount: 0, registryError: loaded.errors }
 }
 
 /**
@@ -356,29 +432,18 @@ function runCoderabbitCli(): CoderabbitCliResult {
  * for exactly this reconcile -> validate -> persist sequence. On `not-applicable` (CI) /
  * `unavailable` / `error` the registry is validated but not reconciled.
  * @param root - Absolute path to the repository being checked (the consumer's own `process.cwd()`).
+ * @param deps - What the CLI run reads from its surroundings; the real ones by default.
  * @returns The full `CoderabbitEvidence` for `output: { format: "json" }`.
  */
-export async function runCoderabbitReview(root: string): Promise<CoderabbitEvidence> {
-  const cli = runCoderabbitCli()
+export async function runCoderabbitReview(
+  root: string,
+  deps?: CliDependencies,
+): Promise<CoderabbitEvidence> {
+  const cli = runCoderabbitCli(deps)
   const registryPath = path.join(root, REGISTRY_RELATIVE_PATH)
   const loaded = await loadExceptionRegistry({ path: registryPath, schema: registrySchema })
 
-  if (cli.status !== "reviewed") {
-    const base =
-      cli.status === "not-applicable"
-        ? {
-            status: cli.status,
-            reason: cli.reason,
-            expectedProvider: cli.expectedProvider,
-            registryPath: REGISTRY_RELATIVE_PATH,
-          }
-        : cli.status === "unavailable"
-          ? { status: cli.status, reason: cli.reason, registryPath: REGISTRY_RELATIVE_PATH }
-          : { status: cli.status, message: cli.message, registryPath: REGISTRY_RELATIVE_PATH }
-    return loaded.ok
-      ? { ...base, existingRecordCount: loaded.records.length }
-      : { ...base, existingRecordCount: 0, registryError: loaded.errors }
-  }
+  if (cli.status !== "reviewed") return withRegistry(notReviewedEvidence(cli), loaded)
 
   // CodeRabbit occasionally streams a byte-identical finding twice; those collapse to one id.
   // Deduping here (not in parseAgentStream) keeps the `complete` event's own findings-count check

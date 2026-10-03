@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { parseAgentStream, reviewArguments } from "../../../scripts/coderabbitai/review.js"
+import {
+  interpretCliResult,
+  parseAgentStream,
+  reviewArguments,
+  runCoderabbitCli,
+} from "../../../scripts/coderabbitai/review.js"
+import type { CliDependencies, CliSpawnResult } from "../../../scripts/coderabbitai/review.js"
 
 /**
  * Fixtures are the real `coderabbit review --agent` event stream shapes repo-contract captured
@@ -254,5 +260,112 @@ describe("reviewArguments()", () => {
       "--base",
       "origin/main",
     ])
+  })
+})
+
+const COMPLETE = JSON.stringify({ type: "complete", status: "review_completed", findings: 1 })
+const result = (over: Partial<CliSpawnResult> = {}): CliSpawnResult => ({
+  stdout: "",
+  stderr: "",
+  status: 0,
+  ...over,
+})
+const failure = (code: string, message = "boom") =>
+  result({ error: Object.assign(new Error(message), { code }) })
+
+describe("interpretCliResult()", () => {
+  it("names each way the CLI can fail to run", () => {
+    expect(interpretCliResult(failure("ENOENT"))).toEqual({
+      status: "unavailable",
+      reason: "cli-not-installed",
+    })
+    expect(interpretCliResult(failure("ETIMEDOUT"))).toEqual({
+      status: "error",
+      message: "The `coderabbit` CLI timed out (exceeded 10 minutes).",
+    })
+    expect(interpretCliResult(failure("ENOBUFS"))).toEqual({
+      status: "error",
+      message: "The `coderabbit` CLI produced more output than its buffer limit.",
+    })
+    expect(interpretCliResult(failure("EACCES", "denied"))).toEqual({
+      status: "error",
+      message: "Failed to spawn the `coderabbit` CLI: denied",
+    })
+  })
+
+  it("reports a stream it cannot parse, and one that never completed, with its exit code and stderr", () => {
+    expect(interpretCliResult(result({ stdout: "not json\n" })).status).toBe("error")
+    expect(interpretCliResult(result({ stdout: REVIEW_CONTEXT, status: 3 }))).toEqual({
+      status: "error",
+      message: 'coderabbit review --agent ended without a "complete" event (exit code 3).',
+    })
+    expect(
+      interpretCliResult(result({ stdout: REVIEW_CONTEXT, status: 2, stderr: " auth expired \n" })),
+    ).toEqual({
+      status: "error",
+      message:
+        'coderabbit review --agent ended without a "complete" event (exit code 2): auth expired',
+    })
+  })
+
+  it("returns the findings of a completed review", () => {
+    const out = interpretCliResult(
+      result({ stdout: [REVIEW_CONTEXT, finding(), COMPLETE].join("\n") }),
+    )
+    expect(out.status).toBe("reviewed")
+    if (out.status === "reviewed") expect(out.findings).toHaveLength(1)
+  })
+})
+
+describe("runCoderabbitCli()", () => {
+  const deps = (over: Partial<CliDependencies> = {}): CliDependencies => ({
+    env: {},
+    isDetachedHead: () => false,
+    hasUncommittedEdits: () => true,
+    defaultBaseRef: () => "origin/main",
+    spawn: () =>
+      result({
+        stdout: [REVIEW_CONTEXT, COMPLETE.replace('"findings":1', '"findings":0')].join("\n"),
+      }),
+    ...over,
+  })
+
+  it("defers to the GitHub App in CI, and cannot review a detached HEAD", () => {
+    expect(runCoderabbitCli(deps({ env: { CI: "true" } }))).toEqual({
+      status: "not-applicable",
+      reason: "ci",
+      expectedProvider: "coderabbit-github-app",
+    })
+    expect(runCoderabbitCli(deps({ isDetachedHead: () => true }))).toEqual({
+      status: "unavailable",
+      reason: "git-context-unavailable",
+    })
+  })
+
+  it("runs the CLI with arguments for the tree's state, a bounded time and a large buffer", () => {
+    const calls: { command: string; args: string[]; options: Record<string, unknown> }[] = []
+    const spawn = (command: string, args: string[], options: object) => {
+      calls.push({ command, args, options: options as Record<string, unknown> })
+      return result({
+        stdout: [REVIEW_CONTEXT, COMPLETE.replace('"findings":1', '"findings":0')].join("\n"),
+      })
+    }
+    expect(runCoderabbitCli(deps({ spawn })).status).toBe("reviewed")
+    expect(runCoderabbitCli(deps({ spawn, hasUncommittedEdits: () => false }))).toMatchObject({
+      status: "reviewed",
+    })
+    expect(calls[0]).toMatchObject({
+      command: "coderabbit",
+      args: ["review", "--agent", "--uncommitted"],
+      options: { encoding: "utf8", timeout: 600_000, killSignal: "SIGKILL", maxBuffer: 33_554_432 },
+    })
+    expect(calls[1]?.args).toEqual(["review", "--agent", "--committed", "--base", "origin/main"])
+  })
+
+  it("normalizes a failing spawn", () => {
+    expect(runCoderabbitCli(deps({ spawn: () => failure("ENOENT") }))).toEqual({
+      status: "unavailable",
+      reason: "cli-not-installed",
+    })
   })
 })
