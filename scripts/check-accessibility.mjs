@@ -33,34 +33,21 @@
 // Tests each page directly via a file:// URL -- none has a build step
 // beyond what already produced it, so nothing needs to run first here.
 //
-// PAGES covers the shared page shell/template mechanically, not every
-// generated page individually: docs/index.html (the site), plus, once the
-// consumer's own docs/api/ HTML API reference has been generated (release-
-// cadence only -- normal for it to be absent between releases), its
-// index.html landing page.
-//
-// repo-contract's own original script additionally scans one representative
-// page containing a real <table> (its API-doc tool emits raw, uncaptioned
-// <table> markup -- a real accessibility risk). That case doesn't transfer
-// here: both env-cap and data-cap generate their HTML API reference with
-// typedoc, whose default theme renders symbol members as <dl>/<div
-// class="tsd-*"> structures, not <table> elements at all (confirmed: zero
-// <table> matches anywhere under a real generated docs/api/ tree). Scanning
-// the landing page is enough to cover the shared template/theme every
-// generated page reuses; add a representative-page entry back here if a
-// future API-doc tool (or typedoc theme) starts emitting raw tables.
+// Which pages are scanned is decided by accessibility-pages.mjs: every top-level docs page and every
+// section's landing page (the site, the API reference, the benchmark history), plus one representative
+// page per kind of generated API page. Two runners check each: HTML_CodeSniffer and axe-core, which
+// disagree about real problems (axe finds contrast and keyboard-focus failures HTML_CodeSniffer
+// misses, and measured 0-213 violations per page where HTML_CodeSniffer reported none).
 
 import pa11y from "pa11y"
 import { sync as spawnSync } from "cross-spawn"
 import { access } from "node:fs/promises"
 import { join, relative } from "node:path"
 import { pathToFileURL } from "node:url"
+import { resolvePages } from "./accessibility-pages.mjs"
 
 const repoRoot = process.cwd()
-const docsApiDir = join(repoRoot, "docs", "api")
-
-const MAIN_SITE_PAGE = join(repoRoot, "docs", "index.html")
-const API_LANDING_PAGE = join(docsApiDir, "index.html")
+const docsDir = join(repoRoot, "docs")
 
 // Every well-known system Chrome/Chromium install location this check knows to look for, in
 // priority order, per platform -- checked only if `PUPPETEER_EXECUTABLE_PATH`/`CHROME_PATH`
@@ -122,28 +109,6 @@ async function findChromeExecutable() {
   return undefined
 }
 
-/**
- * Resolves which pages to scan: docs/index.html only when it exists (not every
- * consumer has built a site yet); docs/api/index.html additionally, only once
- * docs/api/ has actually been generated in this working tree -- but once that
- * directory exists, the landing page must too, or this throws naming exactly
- * what's missing, rather than silently scanning fewer pages.
- * @returns Absolute paths of every page to scan.
- */
-async function resolvePages() {
-  const pages = []
-  if (await pathExists(MAIN_SITE_PAGE)) pages.push(MAIN_SITE_PAGE)
-  if (!(await pathExists(docsApiDir))) return pages
-
-  if (!(await pathExists(API_LANDING_PAGE))) {
-    throw new Error(
-      `docs/api/ exists but the expected landing page ${API_LANDING_PAGE} does not -- check the API-doc generator's own output configuration.`,
-    )
-  }
-  pages.push(API_LANDING_PAGE)
-  return pages
-}
-
 try {
   const executablePath = await findChromeExecutable()
   if (executablePath === undefined) {
@@ -166,11 +131,14 @@ try {
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     }
 
-    const existingPages = await resolvePages()
+    const existingPages = await resolvePages(docsDir)
 
     const perPage = await Promise.all(
       existingPages.map(async (path) => {
-        const result = await pa11y(pathToFileURL(path).href, { chromeLaunchConfig })
+        const result = await pa11y(pathToFileURL(path).href, {
+          chromeLaunchConfig,
+          runners: ["axe", "htmlcs"],
+        })
         // Attach the repo-relative page path to every issue -- with more than one page scanned,
         // a finding's rationale has to say which page it is on to be actionable.
         const page = relative(repoRoot, path)
