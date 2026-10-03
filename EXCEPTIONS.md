@@ -66,7 +66,9 @@ documents its record shape with a complete example.
 | `environment.json`   | any              | `environment:<Check>:<code>`              | a check that could not run (below)             |
 
 Staleness is checked both ways: a finding with no complete record fails, and a record whose finding is
-gone fails as stale -- delete it. The registry therefore always describes the code as it is.
+gone fails as stale -- delete it. The registry therefore always describes the code as it is. (The one
+exception is `skipped-tests.json`: a suite that skips only on Windows has no skip on Linux, so an unused
+record there is not an error.)
 
 ### When a check cannot run
 
