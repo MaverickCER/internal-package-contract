@@ -263,6 +263,30 @@ in [`checks/`](checks/) — raise them there when the whole fleet is ready,
 never per-consumer. `Mutation` has no threshold to raise: it requires zero
 Survived/NoCoverage/Timeout mutants, matching repo-contract's own policy.
 
+## Stability: what a release promises
+
+This package is internal and is consumed at a pinned release, but it is the standard the other
+packages are held to, so changing it is a versioned event. A release's version tells you whether a
+consumer's `npm run contract` can start failing:
+
+- **patch** -- a fix that makes a check more correct for a package that already satisfies the standard;
+- **minor** -- a new check or a stricter rule (a consumer may need changes to pass it), a new export,
+  flag or subcommand; below 1.0.0 a stricter rule is a patch-level bump, as for any 0.x package;
+- **major** -- removing or renaming a check id, a subcommand, a flag or an export; changing the shape
+  of an exception record, the report in `reports/contract/`, or the check ids a consumer's exception
+  records are keyed to.
+
+The promised surface is exactly: the check ids in [`contract.ts`](contract.ts); the `internal-package-contract`
+subcommands and flags (`init`, `exceptions`, `sync-benchmark-guides`, `update-baseline`, `--checks`,
+`--only`, `--skip`, `--strict`); the `./checks/*`, `./config/*`, `./eslint`, `./prettier`, `./tsconfig`
+and `./benchmark` exports; the exception-record format ([EXCEPTIONS.md](EXCEPTIONS.md)); and the
+`evidence.json` / `report.json` written by every run. Everything under `scripts/` that is not named
+above is an implementation detail. A test pins the check ids, so changing them is never accidental.
+
+There is no documentation website: this package is not published and has no end users, so its
+README, [EXCEPTIONS.md](EXCEPTIONS.md) and the guides in `template/` are its documentation. The site
+requirement in the standard applies to the packages that ship to users, which scaffold one.
+
 ## Exceptions
 
 Where a package has a good reason to break a rule, the reason is a committed record in
@@ -306,64 +330,68 @@ pull_request`, gated on `github.head_ref == 'changeset-release/main'`), so the
 committed baseline tracks each release's real version instead of falling one release
 behind on the very next PR.
 
-## Benchmark kit: the foundation for meaningful benchmarks
+## Benchmarks
 
 [`scripts/benchmark/kit/`](scripts/benchmark/kit) is the one self-contained way every package here
 benchmarks itself. A package supplies an **input** -- a `suite.mjs` that imports its real functions and
-documents each one -- and the kit stresses it through a doubling ladder of sizes (each suite declares its own tiers), measures wall
-time, CPU time and memory, infers the big-O and compares it with the documented one, prices the result
-and writes an **output**: `results.json` (a fixed, validated shape) and a cost-first `BENCHMARKS.md`.
+documents each one -- and the kit stresses it through a ladder of doubling sizes (ten by default, each
+suite may declare its own), measures wall time, CPU time and memory, infers the big-O and compares it
+with the documented one, prices the result, and writes an **output**: `results.json` (a fixed,
+validated shape, schema version 4) and a cost-first `BENCHMARKS.md`.
 
-- **Three views:** end-to-end total impact (empty functions, with vs without the package), every function
-  on its own, and which functions make up the end-to-end overhead.
+- **Three views:** end-to-end total impact (empty functions, with vs without the package), every
+  function on its own, and what makes up one operation (nested calls counted once).
 - **Import and run:** `import { defineSuite } from "internal-package-contract/benchmark"`; list functions as
-  `{ call, input }` and the kit calls `call(...input(n))` at every size. `defineSuite` rejects undocumented
-  entries (why, what poor performance means, big-O and its reason, every variable).
+  `{ call, input }` and the kit calls `call(...input(n))` at every size. `defineSuite` rejects
+  undocumented entries (why, what poor performance means, big-O and its reason, every variable).
 - **Commands:** `run-suite.mjs <suite> [--quick] [--check] [--render] [--only ...]`.
 - **`init`** scaffolds `benchmarks/README.md` (input and output shapes), `WRITING-BENCHMARKS.md` and
-  `READING-BENCHMARKS.md`, plus a working `suite.mjs` and the `benchmark` scripts with `--name`.
-- **History and pages** read the same results; the history page links to the package's
-  `benchmarks/README.md` (`render-page.mjs --readme <url>`).
+  `READING-BENCHMARKS.md`, plus a working `suite.mjs` and the `benchmark` scripts with `--name`. The
+  two guides are canonical here; the `BenchmarkGuides` check fails a package whose copy differs, and
+  `internal-package-contract sync-benchmark-guides` rewrites them.
 
-## Shared benchmark engine
+### What is measured, and what may fail a pull request
 
-[`scripts/benchmark/`](scripts/benchmark) is a consumer-agnostic engine for the
-"tiered benchmark + committed history + PR-comment summary + Pages history chart"
-methodology env-cap and data-cap each independently built (`benchmark/`/`benchmarks/`,
-`benchmark-fixtures/scenarios.mjs`, `benchmark-fixtures/budgets.mjs`). It does not
-run benchmarks itself — a consumer keeps its own `run-benchmark.mjs`/tier
-definitions/budgets, exactly as domain judgment they own — it only takes each run's
-`results.json` and turns it into history, a PR summary, and a history page, once,
-instead of every consumer maintaining its own near-identical copy.
+Numbers from different runners, on different days, are not comparable, so a raw millisecond delta
+against another run is a highlight only. What can fail a run is limited to properties of one run and
+ratios between quantities measured in the same run, which survive a change of machine
+([`scripts/benchmark/gates.mjs`](scripts/benchmark/gates.mjs)):
 
-- **`append-history.mjs <results.json> <history.json>`** — appends a compact entry
-  to a committed history file. Schema v2: each tier measurement now carries its full
-  `inputs: Record<string, number>` alongside `medianMs` (a v1 entry without `inputs`
-  stays valid forever — it's just excluded from complexity classification, never
-  force-migrated) plus a generic `unitsPerSecond` throughput figure and a `versions`
-  object copied verbatim from `results.json`'s own metadata (no hardcoded
-  `envCapVersion`/`dataCapVersion`-style field).
-- **`classify-complexity.mjs`** — pure library, no CLI. Infers an algorithmic
-  complexity class (`constant` → `exponential-or-worse`) per named benchmark group
-  from its tiers' `{ medianMs, inputs }`, via a least-squares log-log slope, snapped
-  to the nearest of six fixed classes. Never assumes tier names or count — a tier's
-  "size" is always the sum of its own `inputs` object. See the module's own doc
-  comment for the full algorithm and its documented limitations (constant vs.
-  logarithmic, and linear vs. linearithmic, are both inherently close calls at
-  realistic tier ratios).
-- **`render-summary.mjs`** — renders the Markdown PR-comment summary: a
-  **complexity-shift** section (a group's inferred class changed since the last
-  history entry — a shape change, not just a slope change) leads, ahead of the
-  ordinary per-tier `maxRegressionPercent` budget table. Highlight-only, same as
-  before — nothing here gates a merge.
-- **`render-page.mjs`** — builds a static `docs/benchmarks/index.html`: small-multiples
-  line charts (one per group, tiers as categorical-colored series, ≤200 most-recent
-  entries per history file), each annotated with its currently-inferred complexity
-  class. Generated fresh by a consumer's own `deploy` job, never committed — same
-  treatment `docs/api/` already gets.
+1. a function whose **measured growth class differs** from its documented big-O (the exponent is
+   fitted on the largest sizes, with an R² floor, so a fixed per-call cost does not read as
+   sub-linear growth);
+2. the package's **overhead relative to its own bare baseline** growing past an allowance (50% for
+   millisecond-scale work, 70% for microsecond-scale work) against the last run on `main` _and_ the last
+   release. A package tunes these with a `GATES` export in its `benchmarks/budgets.mjs`.
 
-A consumer wires these up as three thin npm scripts that just forward to this
-package's copies (no consumer-owned logic beyond its own `budgets.mjs`):
+### The workflows
+
+- [`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) (reusable): on a pull request, build, run
+  `npm run benchmark:check` and the benchmarks, render the summary with the gates, post or update the
+  comment, and fail the run if a gate failed. Its token can comment and nothing else: it never pushes
+  to the pull request. The caller lists suites (one `label|directory|history-file` per line) and names
+  `budgets-path`; a caller pins the workflow by commit SHA.
+- [`benchmark-record.yml`](.github/workflows/benchmark-record.yml) (reusable): after a merge, measure
+  the merge commit and open a small pull request recording `results.json`, `BENCHMARKS.md` and a history
+  entry that names the **merge commit**, its **pull request** and the **package version**; CI is
+  dispatched on it and it merges when green.
+
+### History, summaries and the page
+
+[`scripts/benchmark/`](scripts/benchmark) holds the consumer-agnostic scripts that turn results into
+history, a summary and a page:
+
+- **`append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <n>]`** appends a compact
+  entry (each tier's `inputs`, `medianMs` and `unitsPerSecond`, the `versions` copied from the results).
+- **`classify-complexity.mjs`** infers the growth class of a group from its tiers.
+- **`render-summary.mjs`** renders the pull-request comment: gate results first, then complexity shifts
+  since the last history entry, then the per-tier table against each group's budget.
+- **`render-page.mjs`** builds `docs/benchmarks/index.html` fresh on each deploy (never committed): one
+  chart per group with its inferred class and fit, every figure also as a table that links the commit,
+  pull request and version of each run. It needs no script and meets the same WCAG 2.2 AA bar as the
+  rest of a package's site.
+
+A consumer wires the three scripts as thin npm scripts that forward to this package's copies:
 
 ```json
 {
@@ -374,16 +402,6 @@ package's copies (no consumer-owned logic beyond its own `budgets.mjs`):
   }
 }
 ```
-
-[`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) is the reusable `workflow_call`
-counterpart (same "thin per-repo caller, real logic lives in one reusable workflow" pattern as
-`## Release` above): build, run `npm run benchmark:check` and the benchmarks, post or update the PR
-comment, and conditionally commit refreshed results and history, keeping the anti-recursion guard
-(`github.actor != 'github-actions[bot]'`, same-repo PRs only). It assumes nothing about how many suites
-a package has: the caller lists them in `suites` (one `label|directory|history-file` per line), names
-any self-contained suite projects needing their own `npm install` in `install-dirs`, and points
-`budgets-path` at its `benchmarks/budgets.mjs`. A caller pins the workflow by commit SHA and must bump
-that SHA together with its `internal-package-contract` dependency pin.
 
 ## Evolving the standard
 

@@ -36,3 +36,48 @@ describe("README.md's check table", () => {
     expect(new Set(documentedChecks)).toStrictEqual(new Set(actualChecks))
   })
 })
+
+describe("the promised surface", () => {
+  it("pins the check ids: adding, removing or renaming one is a versioned decision, never an accident", () => {
+    expect(Object.keys(contract.checks)).toEqual([
+      "ApiDocs",
+      "ApiDocsReport",
+      "ReadmeExample",
+      "Lint",
+      "Format",
+      "Schema",
+      "Build",
+      "ApiContract",
+      "Typecheck",
+      "Tests",
+      "Architecture",
+      "GithubActions",
+      "GitHygiene",
+      "BranchProtection",
+      "Coverage",
+      "Crap",
+      "Size",
+      "NoMinify",
+      "DistNoUrls",
+      "Duplication",
+      "Packaging",
+      "TypeResolution",
+      "Licenses",
+      "DocsMarkdown",
+      "BenchmarkGuides",
+      "DocsLinks",
+      "DocsFragments",
+      "Accessibility",
+      "SecurityDeps",
+      "SecurityDevDeps",
+      "SecuritySecrets",
+      "SecuritySocket",
+      "CodeScanning",
+      "Suppressions",
+      "DeadCode",
+      "Commits",
+      "CodeRabbit",
+      "Mutation",
+    ])
+  })
+})
