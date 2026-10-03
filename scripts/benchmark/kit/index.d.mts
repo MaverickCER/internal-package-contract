@@ -40,7 +40,7 @@ export interface SuiteBenchmark {
   inEndToEnd?:
     | {
         callsPerOperation: number | ((n: number) => number)
-        includes?: string[]
+        includes?: string[] | undefined
         description: string
         variant?: string
       }
