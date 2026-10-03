@@ -48,7 +48,7 @@ import { defineRepoContract } from "repo-contract"
 import type { CheckDefinitionConfig, PolicyContext } from "repo-contract"
 import { format, license, lint, typecheck } from "repo-contract/presets"
 import { architecture } from "./checks/architecture.js"
-import { branchProtection } from "./checks/branch-protection.js"
+import { createBranchProtection } from "./checks/branch-protection.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
@@ -86,7 +86,9 @@ export default defineRepoContract({
     Architecture: withScanTarget(architecture(), "checks"),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
-    BranchProtection: branchProtection,
+    // This repository's own CI job is `self-check` (see .github/workflows/ci.yml), not the
+    // scaffolded consumer job id `contract`.
+    BranchProtection: createBranchProtection("self-check"),
     Coverage: { ...coverage, dependsOn: ["Tests"] },
     Crap: { ...withScanTarget(crap, "checks"), dependsOn: ["Coverage"] },
     Duplication: withScanTarget(duplication, "checks"),

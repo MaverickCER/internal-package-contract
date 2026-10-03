@@ -14,7 +14,7 @@ import {
   createCoderabbitStub,
   deriveCoderabbitExceptionId,
 } from "../../../scripts/coderabbitai/registry.js"
-import { makeContext, makeJsonResult, makeResult } from "../../support.js"
+import { COMPLETE_V2, makeContext, makeJsonResult, makeResult } from "../../support.js"
 
 const REGISTRY = ".repo-contract/exceptions/coderabbit.json"
 
@@ -33,6 +33,7 @@ const COMPLETE = {
   remediation: "Tracked as a follow-up; not blocking.",
   method: "independent-human-review" as const,
   exceptionType: "accepted-risk" as const,
+  ...COMPLETE_V2,
 }
 
 function record(
@@ -390,7 +391,7 @@ describe("evaluateCoderabbitPolicy", () => {
       outcome: "fail",
       rationale: [
         "2 CodeRabbit finding(s) or stale record(s) need attention:",
-        "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType) -- Consider returning early.",
+        "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen) -- Consider returning early.",
         `- Stale exception in ${REGISTRY}: ${JSON.stringify(gone.id)} -- CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
       ].join("\n"),
     })
@@ -432,10 +433,16 @@ describe("evaluateFinding", () => {
     const stub = evaluateFinding(f, record(f))
     expect(stub.verdict).toBe("insufficient")
     expect([...stub.missing].sort()).toEqual([
+      "attempted",
+      "constraint",
       "exceptionType",
       "justification",
       "method",
       "remediation",
+      "residualRisk",
+      "revisitWhen",
+      "ruleBroken",
+      "whyPreferable",
     ])
   })
 })

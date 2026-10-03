@@ -9,6 +9,7 @@ import { createHash } from "node:crypto"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   isValidNonEmptyStringField,
   validateSecurityExceptionFields,
 } from "../../checks/exception-record.js"
@@ -62,12 +63,13 @@ export function createCoderabbitStub(
 ): CoderabbitExceptionRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     file: finding.file,
     severity: finding.severity,
     summary: finding.summary,

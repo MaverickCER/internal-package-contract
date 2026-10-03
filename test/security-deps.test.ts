@@ -10,7 +10,7 @@ import {
   SECURITY_DEPS_EXCEPTION_SCHEMA,
   securityDeps,
 } from "../checks/security-deps.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, BLANK_V2 } from "./support.js"
 
 function deriveId(finding: { readonly package: string; readonly range: string }): string {
   return `security-deps:${finding.package}@${finding.range}`
@@ -116,7 +116,7 @@ describe("securityDeps()", () => {
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain(
-      "exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
+      "exception incomplete (missing: justification, alternatives, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen)",
     )
 
     const written = readRegistry().exceptions
@@ -181,7 +181,7 @@ describe("securityDeps()", () => {
       outcome: "fail",
       rationale: [
         "2 npm audit finding(s) or stale record(s) need attention:",
-        "- security-deps:vitest@4.0.0 [moderate]: exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
+        "- security-deps:vitest@4.0.0 [moderate]: exception incomplete (missing: justification, alternatives, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen)",
         '- Stale exception in .repo-contract/exceptions/security-deps.json: "security-deps:vitest@3.0.0 - 3.2.7" -- npm audit no longer reports this vulnerability; delete this entry.',
       ].join("\n"),
     })
@@ -262,12 +262,13 @@ describe("createSecurityDepsStub()", () => {
     }
     expect(createSecurityDepsStub(finding, finding.id)).toEqual({
       id: "security-deps:vitest@3.0.0 - 3.2.7",
-      version: 1,
+      version: 2,
       justification: "",
       alternatives: "",
       remediation: "",
       method: "",
       exceptionType: "",
+      ...BLANK_V2,
       package: "vitest",
       range: "3.0.0 - 3.2.7",
       severity: "moderate",

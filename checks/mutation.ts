@@ -63,7 +63,7 @@
  * deliberately leaves unpublished); `resolveExceptionPolicy`/
  * `evaluateExceptionRecord` (`repo-contract/helpers`) decide whether a matched
  * record's `justification` satisfies policy (non-empty, via a single
- * `{ mode: "exception", requirements: ["justification"] }` policy -- there is
+ * `{ mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] }` policy -- there is
  * no severity tier here the way security findings have one).
  *
  * **Matching and staleness are check-owned, and deliberately do NOT use
@@ -115,8 +115,12 @@ import {
   hashRequirementFields,
   loadExceptionRegistry,
 } from "repo-contract/helpers"
-import { validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema } from "./exception-record.js"
+import {
+  EXCEPTION_V2_FIELD_KEYS,
+  recordFieldValue,
+  validateExceptionRegistry,
+} from "./exception-record.js"
+import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
 import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from "./shared.js"
 
 /** Where a consumer's mutation exception registry lives -- the standard `.repo-contract/exceptions/*.json` location every repo-contract v0.4.0+ registry shares. */
@@ -160,9 +164,9 @@ export interface MutationReport {
 }
 
 /** One `.repo-contract/exceptions/mutation.json` record: the shared core plus this registry's own identity fields. @internal Exported for {@link fieldValue}'s own direct-test fixtures. */
-export interface MutationExceptionRecord {
+export interface MutationExceptionRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly file: string
   readonly mutator: string
@@ -245,8 +249,7 @@ function matchesRecord(mutant: ResolvedMutant, record: MutationExceptionRecord):
 
 /** @internal Exported for direct unit coverage -- its `: ""` fallback (a `requirement` naming a non-string field, e.g. the numeric `version`, or a key the record doesn't have at all) is otherwise unreachable through `evaluateExceptionRecord`/`hashRequirementFields`'s own real callers, which only ever request `file`/`mutator`/`original`/`replacement`. */
 export function fieldValue(record: MutationExceptionRecord, requirement: string): string {
-  const value = (record as unknown as Record<string, unknown>)[requirement]
-  return typeof value === "string" ? value : ""
+  return recordFieldValue(record, requirement)
 }
 
 /**
@@ -302,11 +305,16 @@ const MUTATION_EXCEPTION_SCHEMA: ExceptionRegistrySchema<MutationExceptionRecord
   // Stryker restore BlockStatement, ConditionalExpression, EqualityOperator, LogicalOperator, StringLiteral
 }
 
-/** Every mutation exception is `{ mode: "exception", requirements: ["justification"] }` -- there is no severity tier here, unlike security findings. */
+/** Every mutation exception is `{ mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] }` -- there is no severity tier here, unlike security findings. */
 const EXCEPTION_POLICY_CONFIG: ExceptionPolicyConfig = {
-  mutation: { default: { mode: "exception", requirements: ["justification"] } },
+  mutation: {
+    default: { mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] },
+  },
 }
-const GLOBAL_DEFAULT: ExceptionPolicy = { mode: "exception", requirements: ["justification"] }
+const GLOBAL_DEFAULT: ExceptionPolicy = {
+  mode: "exception",
+  requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS],
+}
 const CLASSIFICATION = [{ group: "mutation", category: "waived" }] as const
 
 const SURVIVED_LIKE = new Set(["Survived", "NoCoverage"])

@@ -72,13 +72,45 @@ const raw = (n: number, over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-const skipNote =
-  "local-only check: it reads code-scanning alerts with your own gh login, so it does not run in CI"
-
 describe.skipIf(process.platform === "win32")("code-scanning-alerts.mjs", () => {
-  it("does nothing in CI, for either CI signal", () => {
-    expect(run({ CI: "true" })).toEqual({ ok: true, data: { skipped: skipNote } })
-    expect(run({ GITHUB_ACTIONS: "true" })).toEqual({ ok: true, data: { skipped: skipNote } })
+  it("fails with setup steps in CI when no token is available, for either CI signal", () => {
+    for (const signal of [{ CI: "true" }, { GITHUB_ACTIONS: "true" }]) {
+      const out = run({ ...signal, GH_TOKEN: "", GITHUB_TOKEN: "" })
+      expect(out.ok).toBe(false)
+      expect(out.data["kind"]).toBe("no-token")
+      expect(out.message).toContain("security-events: read")
+    }
+  })
+
+  it("reads the repository and ref being built in CI, using the workflow token", () => {
+    gitRemote(undefined)
+    const calls = installGh({ "1": JSON.stringify([raw(3)]) })
+    const out = run({
+      GITHUB_ACTIONS: "true",
+      GH_TOKEN: "t",
+      GITHUB_REPOSITORY: "acme/widget",
+      GITHUB_REF: "refs/pull/9/merge",
+    })
+    expect(out.ok).toBe(true)
+    expect(out.data["repo"]).toBe("acme/widget")
+    const [url] = readFileLines(calls)
+    expect(url).toContain("repos/acme/widget/code-scanning/alerts")
+    expect(url).toContain("ref=refs%2Fpull%2F9%2Fmerge")
+  })
+
+  it("accepts GITHUB_TOKEN as the CI token, and reads the whole repository when CI names no ref", () => {
+    gitRemote(undefined)
+    const calls = installGh({ "1": "[]" })
+    const out = run({ CI: "true", GITHUB_TOKEN: "t", GITHUB_REPOSITORY: "acme/widget" })
+    expect(out.data["repo"]).toBe("acme/widget")
+    expect(readFileLines(calls)[0]).not.toContain("ref=")
+  })
+
+  it("falls back to the local checkout in CI when GITHUB_REPOSITORY is malformed", () => {
+    gitRemote("https://github.com/acme/local.git")
+    installGh({ "1": "[]" })
+    const out = run({ CI: "true", GH_TOKEN: "t", GITHUB_REPOSITORY: "no-slash" })
+    expect(out.data["repo"]).toBe("acme/local")
   })
 
   it("is not fooled by a false-looking CI value", () => {
@@ -183,13 +215,29 @@ describe.skipIf(process.platform === "win32")("code-scanning-alerts.mjs", () => 
     expect(readFileLines(calls)).toHaveLength(2)
   })
 
-  it("stops after 20 pages even if every page is full", () => {
+  it("refuses to judge a truncated list when every page up to the safety limit is full", () => {
     gitRemote("https://github.com/acme/widget")
     const full = JSON.stringify(Array.from({ length: 100 }, (_, i) => raw(i)))
     const pages = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(i + 1), full]))
     const calls = installGh(pages)
-    run()
-    expect(readFileLines(calls)).toHaveLength(20)
+    const out = run({ CODE_SCANNING_MAX_PAGES: "3" })
+    expect(readFileLines(calls)).toHaveLength(3)
+    expect(out.ok).toBe(false)
+    expect(out.data["kind"]).toBe("truncated")
+    expect(out.message).toContain("refusing to judge a truncated list")
+  })
+
+  it("reads past 20 pages (the old silent cap) when the list is long but finite", () => {
+    gitRemote("https://github.com/acme/widget")
+    const full = JSON.stringify(Array.from({ length: 100 }, (_, i) => raw(i)))
+    const pages: Record<string, string> = Object.fromEntries(
+      Array.from({ length: 21 }, (_, i) => [String(i + 1), full]),
+    )
+    pages["22"] = JSON.stringify([raw(9999)])
+    const calls = installGh(pages)
+    const out = run()
+    expect(readFileLines(calls)).toHaveLength(22)
+    expect(out.data.alerts).toHaveLength(2101)
   })
 
   it("treats 'no analysis found' as no alerts", () => {

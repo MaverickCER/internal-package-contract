@@ -35,14 +35,21 @@ import type {
 import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionMethod, ExceptionType } from "./exception-record.js"
+import type {
+  ExceptionV2Fields,
+  ExceptionRegistrySchema,
+  ExceptionMethod,
+  ExceptionType,
+} from "./exception-record.js"
 import { abnormalTermination } from "./shared.js"
 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/security-deps.json"
@@ -67,9 +74,9 @@ interface NormalizedDepFinding {
 }
 
 /** One `.repo-contract/exceptions/security-deps.json` record: the shared security-family fields plus this registry's own identity fields. */
-interface SecurityDepsExceptionRecord {
+interface SecurityDepsExceptionRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly alternatives: string
   readonly remediation: string
@@ -101,12 +108,13 @@ export function createSecurityDepsStub(
 ): SecurityDepsExceptionRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     package: finding.package,
     range: finding.range,
     severity: finding.severity,
@@ -164,7 +172,14 @@ export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDep
   }
 
 /** Every severity requires the full field set -- see this module's own doc comment for why there is no severity-tiered "forbidden" the way `SecuritySocket` has. */
-const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", "exceptionType"]
+const REQUIREMENTS = [
+  "justification",
+  "alternatives",
+  "remediation",
+  "method",
+  "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
+]
 const SECURITY_DEPS_POLICY: ExceptionPolicyConfig = {
   "security-deps": { default: { mode: "exception", requirements: [...REQUIREMENTS] } },
 }
@@ -178,6 +193,7 @@ const VALID_SECURITY_DEPS_REQUIREMENTS = [
   "remediation",
   "method",
   "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
 ] as const
 
 /** @internal Exported for direct unit coverage -- see this module's own doc comment. */

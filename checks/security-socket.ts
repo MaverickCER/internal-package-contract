@@ -63,7 +63,9 @@ import type {
 import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   SOCKET_EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
@@ -71,6 +73,7 @@ import {
   validateSecurityExceptionFields,
 } from "./exception-record.js"
 import type {
+  ExceptionV2Fields,
   ExceptionRegistrySchema,
   ExceptionMethod,
   ExceptionType,
@@ -100,9 +103,9 @@ interface NormalizedSocketAlert {
 }
 
 /** One `.repo-contract/exceptions/socket.json` record: the shared security-family fields (`./exception-record.js`) plus this registry's own identity fields. */
-interface SocketExceptionRecord {
+interface SocketExceptionRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly alternatives: string
   readonly remediation: string
@@ -133,12 +136,13 @@ export function deriveSocketExceptionId(alert: {
 export function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExceptionRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     package: alert.package,
     packageVersion: alert.version,
     type: alert.type,
@@ -220,6 +224,7 @@ const AUTHORING_REQUIREMENTS_FULL = [
   "remediation",
   "method",
   "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
 ]
 
 /**
@@ -247,6 +252,7 @@ const VALID_SOCKET_REQUIREMENTS = [
   "remediation",
   "method",
   "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
 ] as const
 
 /** @internal Exported for direct unit coverage -- see this module's own doc comment. */
