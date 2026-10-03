@@ -310,3 +310,36 @@ describe("the rendered page is accessible without a script", () => {
     expect(formatMs(250)).toBe("250.0 ms")
   })
 })
+
+describe("chart text contrast (axe cannot verify text inside an svg, so the pairs are checked here)", () => {
+  const luminance = (hex: string): number => {
+    const channels = [1, 3, 5].map((index) => {
+      const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0)
+  }
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05)
+  }
+  const html = renderHtml({ categories: [], generatedAt: "2030-01-01T00:00:00.000Z" } as never)
+
+  /** The token declarations in the first block that follows `marker`. */
+  function tokens(marker: string): Record<string, string> {
+    const block = html.slice(html.indexOf(marker)).split("}")[0] ?? ""
+    return Object.fromEntries(
+      [...block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
+    ) as Record<string, string>
+  }
+
+  it.each([
+    ["light", ":root {"],
+    ["dark (prefers-color-scheme)", ':root:not([data-theme="light"]) {'],
+    ["dark (data-theme)", ':root[data-theme="dark"] {'],
+  ])("axis and series labels meet 4.5:1 on the chart surface in the %s theme", (_name, marker) => {
+    const t = tokens(marker)
+    expect(contrast(t["text-secondary"] ?? "", t["surface-1"] ?? "")).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(t["text-primary"] ?? "", t["surface-1"] ?? "")).toBeGreaterThanOrEqual(4.5)
+  })
+})

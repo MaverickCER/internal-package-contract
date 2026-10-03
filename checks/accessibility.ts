@@ -35,7 +35,14 @@ interface Pa11yFinding {
 }
 
 type ToolResult<T> =
-  | { readonly ok: true; readonly value: T; readonly pagesScanned: number }
+  | {
+      readonly ok: true
+      readonly value: T
+      readonly pagesScanned: number
+      readonly needsReview?: number
+      readonly typedocNavNestedInteractive?: number
+      readonly htmlcsPrototypeIdFalsePositives?: number
+    }
   | { readonly ok: false; readonly error: string }
 
 /** @returns A single-line `page -- selector [code]: message` summary. */
@@ -109,9 +116,26 @@ export const accessibility: CheckDefinitionConfig = {
       }
     }
 
+    const setAside = evidence.needsReview ?? 0
+    const nav = evidence.typedocNavNestedInteractive ?? 0
+    const navNote =
+      nav > 0
+        ? ` ${String(nav)} nested-interactive result(s) in TypeDoc's generated navigation tree were set aside (an upstream TypeDoc defect: the module link is the entry's label).`
+        : ""
+    const htmlcs = evidence.htmlcsPrototypeIdFalsePositives ?? 0
+    const htmlcsNote =
+      htmlcs > 0
+        ? ` ${String(htmlcs)} HTML_CodeSniffer duplicate-id result(s) for ids named like Object.prototype members (e.g. TypeDoc's #constructor) were set aside: the rule tracks ids in a plain object and reports them as duplicates of themselves.`
+        : ""
+    const note =
+      (setAside > 0
+        ? ` ${String(setAside)} axe result(s) that axe itself marks as needing manual review (it could not read the background behind the text, e.g. inside an SVG or under a sticky element) were set aside; the benchmark chart colour pairs are asserted numerically by internal-package-contract's own tests.`
+        : "") +
+      navNote +
+      htmlcsNote
     return {
       outcome: "pass",
-      rationale: `Accessibility: pa11y reported 0 WCAG2AA issues across the scanned pages (${String(evidence.value.length)} finding(s) total, all informational).`,
+      rationale: `Accessibility: pa11y reported 0 WCAG2AA issues across the scanned pages (${String(evidence.value.length)} finding(s) total, all informational).${note}`,
     }
   },
 }

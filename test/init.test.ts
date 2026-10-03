@@ -266,6 +266,24 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     expect(dep).toMatch(/^github:MaverickCER\/internal-package-contract#v\d+\.\d+\.\d+$/)
   })
 
+  it("scaffolds Dependabot for npm and for GitHub Actions, leaving the contract pin to the sync workflow", () => {
+    expect(init("--name", "demo").status).toBe(0)
+    const dependabot = readFileSync(path.join(cwd, ".github/dependabot.yml"), "utf8")
+    expect(dependabot).toContain("package-ecosystem: npm")
+    expect(dependabot).toContain("package-ecosystem: github-actions")
+    expect(dependabot).toContain('dependency-name: "internal-package-contract"')
+  })
+
+  it("proves the declared Node floor in the scaffolded workflow, not just the newest Node", () => {
+    expect(init("--name", "demo").status).toBe(0)
+    const pkg = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")) as {
+      engines: { node: string }
+    }
+    const floor = /(\d+)/.exec(pkg.engines.node)?.[1]
+    const workflow = readFileSync(path.join(cwd, ".github/workflows/contract.yml"), "utf8")
+    expect(workflow).toContain(`node-version: ${String(floor)}.x`)
+  })
+
   it("exits 1 with the problem and usage for a bad name or unknown argument", () => {
     const badName = init("--name", "Bad Name")
     expect(badName.status).toBe(1)

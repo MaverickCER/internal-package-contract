@@ -139,6 +139,7 @@ if (pins.ipcSha === "") {
 } else {
   scaffoldRendered("release.yml", ".github/workflows/release.yml")
 }
+scaffold("dependabot.yml", ".github/dependabot.yml")
 scaffold("codeowners", "CODEOWNERS")
 scaffold("security.md", "SECURITY.md")
 scaffold("contributing.md", "CONTRIBUTING.md")

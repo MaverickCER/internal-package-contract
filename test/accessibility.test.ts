@@ -71,6 +71,43 @@ describe("accessibility", () => {
     })
   })
 
+  it("says how many results axe itself marked as needing manual review were set aside when it passes", async () => {
+    const result = await accessibility.policy(
+      makeContext(makeJsonResult({ ok: true, value: [], pagesScanned: 2, needsReview: 3 })),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "3 axe result(s) that axe itself marks as needing manual review",
+    )
+  })
+
+  it("says how many TypeDoc navigation nested-interactive results were set aside", async () => {
+    const result = await accessibility.policy(
+      makeContext(
+        makeJsonResult({ ok: true, value: [], pagesScanned: 1, typedocNavNestedInteractive: 6 }),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "6 nested-interactive result(s) in TypeDoc's generated navigation tree",
+    )
+  })
+
+  it("says how many HTML_CodeSniffer prototype-named duplicate-id false positives were set aside", async () => {
+    const result = await accessibility.policy(
+      makeContext(
+        makeJsonResult({
+          ok: true,
+          value: [],
+          pagesScanned: 1,
+          htmlcsPrototypeIdFalsePositives: 2,
+        }),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain("2 HTML_CodeSniffer duplicate-id result(s)")
+  })
+
   it("warns (not vacuously passes) when no built docs site existed to scan", async () => {
     const result = accessibility.policy(makeContext(makeFindingsResult([], 0)))
     expect(await result).toEqual({

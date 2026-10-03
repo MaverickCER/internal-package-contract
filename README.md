@@ -15,6 +15,10 @@ It is the "package" row of the layered governance model
 | **`internal-package-contract`** | the standard for a publishable package     | _What_ must every package continuously satisfy? |
 | `env-cap`, `data-cap`, …        | package-specific checks and implementation | _What else_ does this one package require?      |
 
+## Part of the MaverickCER toolkit
+
+`@maverickcer/env-cap` governs configuration and `data-cap` governs application data: siblings that apply the same capability-ownership model. `repo-contract` and `internal-package-contract` are how they are verified. See [the toolkit overview and glossary](https://github.com/MaverickCER/internal-package-contract/blob/main/TOOLKIT.md).
+
 **Not published to npm**, by choice: it is an internal standard whose checks
 change with the fleet, and a git dependency (pinned to a release tag or commit)
 is the only distribution it needs. It does depend on `repo-contract`'s
@@ -216,7 +220,7 @@ Each scan spends Socket API quota (see your token's limits in the Socket dashboa
 ## Bootstrap order
 
 IPC has a deliberate dev-time cycle with `repo-contract`. IPC depends on the _published_
-`repo-contract` (`^0.8.8`) at runtime: every check is a `repo-contract` check. `repo-contract`, in turn,
+`repo-contract` (`~0.8.8`) at runtime: every check is a `repo-contract` check. `repo-contract`, in turn,
 declares IPC as a _development_ dependency (`github:MaverickCER/internal-package-contract#<tag>`) and
 consumes its API-contract engine and benchmark kit. It works because `repo-contract`'s own
 self-contract runs against its freshly built `dist/` while IPC resolves the published package, so

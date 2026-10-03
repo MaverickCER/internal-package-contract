@@ -459,7 +459,7 @@ ${darkExplicit}
   .chart-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px 8px; }
   .chart-card h3 { font-size: 13px; margin: 0 0 2px; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
   .class-badge { display: inline-block; font-size: 11px; color: var(--text-secondary); background: var(--page); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin: 0 0 6px; }
-  svg.chart { width: 100%; height: auto; }
+  svg.chart { width: 100%; height: auto; background: var(--surface-1); }
   .gridline { stroke: var(--gridline); stroke-width: 1; }
   .axis { stroke: var(--baseline); stroke-width: 1; }
   .axis-label { fill: var(--text-secondary); font-size: 9px; }
