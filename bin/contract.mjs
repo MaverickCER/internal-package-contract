@@ -3,6 +3,9 @@
 //
 //   internal-package-contract                 run the whole contract
 //   internal-package-contract --checks a,b    run only checks a, b (and their deps)
+//   internal-package-contract --skip a,b      run every check except a, b
+//   internal-package-contract --strict        also fail on a "not evaluated" result no exception covers
+//                                             (the default under CI; --no-strict turns it off)
 //   internal-package-contract init            scaffold repo files + git wiring
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
 //
@@ -15,10 +18,10 @@
 // consumer's repository. The package owns the contract; the consumer owns the
 // execution context.
 
-import { existsSync, rmSync } from "node:fs"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { planPhases } from "../scripts/contract-phases.mjs"
+import { runContract } from "../scripts/contract-run.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -30,10 +33,10 @@ if (process.argv[2] === "init") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.
 } else {
-  await runContract()
+  await runConsumerContract()
 }
 
-async function runContract() {
+async function runConsumerContract() {
   const { runRepoContract } = await import("repo-contract")
 
   // The checks spawn the executors this package owns (prettier, eslint, tsc,
@@ -57,73 +60,16 @@ async function runContract() {
     process.env.PATH = [...binDirs, process.env.PATH ?? ""].join(path.delimiter)
   }
 
-  // `--checks a,b,c` / `--only a,b,c` -> restrict the run.
-  const checksArg = process.argv.find((a) => a.startsWith("--checks=") || a.startsWith("--only="))
-  let only
-  const flagIdx = process.argv.findIndex((a) => a === "--checks" || a === "--only")
-  if (checksArg) only = checksArg.split("=")[1]
-  else if (flagIdx !== -1) only = process.argv[flagIdx + 1]
-  const checkIds = only
-    ? only
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined
-
   const configUrl = pathToFileURL(path.join(packageRoot, "contract.ts")).href
   const { register } = await import("tsx/esm/api")
   const unregister = register()
   const { default: config } = await import(configUrl)
   await unregister()
 
-  // Checks generate artifacts in the consumer's tree: `reports/`, `coverage/`,
-  // and Stryker's `.stryker-tmp/` (multi-hundred-MB sandbox copy). Left behind,
-  // these trip the NEXT run's Lint/Format/DeadCode and the consumer's own
-  // `prettier --check .`. `.stryker-tmp/` is always removed; `reports/` and
-  // `coverage/` only if the consumer had none before this run.
-  const cwd = process.cwd()
-  const alwaysRemove = [".stryker-tmp"]
-  const removeIfCreated = ["reports", "coverage"].filter((d) => !existsSync(path.join(cwd, d)))
-
-  // Phase 1 is every check but SecuritySocket; the Socket scan (which spends API quota) runs second,
-  // and only if phase 1 passed -- see scripts/contract-phases.mjs.
-  const { first, deferred } = planPhases(Object.keys(config.checks), checkIds)
-  const results = {}
-  let passed
-  let skippedDeferred = false
-  try {
-    const phaseOne = await runRepoContract(
-      config,
-      deferred || checkIds ? { checks: first } : undefined,
-    )
-    Object.assign(results, phaseOne.verdict.checks)
-    passed = phaseOne.verdict.passed
-    if (deferred !== undefined) {
-      if (passed) {
-        const phaseTwo = await runRepoContract(config, { checks: [deferred] })
-        Object.assign(results, phaseTwo.verdict.checks)
-        passed = phaseTwo.verdict.passed
-      } else {
-        skippedDeferred = true
-      }
-    }
-  } finally {
-    for (const dir of [...alwaysRemove, ...removeIfCreated]) {
-      rmSync(path.join(cwd, dir), { recursive: true, force: true })
-    }
-  }
-
-  process.stdout.write(
-    `\ninternal-package-contract${checkIds ? ` (${checkIds.join(", ")})` : ""}\n\n`,
-  )
-  for (const [id, result] of Object.entries(results)) {
-    process.stdout.write(`[${result.outcome.toUpperCase()}] ${id}: ${result.rationale}\n`)
-  }
-  if (skippedDeferred) {
-    process.stdout.write(
-      `[SKIPPED] ${deferred}: not run -- it scans only after every other check has passed, so a change that is already failing never spends Socket quota.\n`,
-    )
-  }
-  process.stdout.write(`\n${passed ? "PASS" : "FAIL"}\n`)
-  process.exitCode = passed ? 0 : 1
+  await runContract({
+    runRepoContract,
+    config,
+    cwd: process.cwd(),
+    title: "internal-package-contract",
+  })
 }

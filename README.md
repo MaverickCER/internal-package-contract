@@ -87,11 +87,11 @@ tool configs.
 **Bundled git hooks** (a local convenience: CI runs the same contract and is the
 gate, so a hook that is skipped locally is still caught before merge):
 
-| Hook         | Runs                                                                  |
-| ------------ | --------------------------------------------------------------------- |
-| `pre-commit` | `Format`, `Lint`                                                      |
-| `commit-msg` | Conventional Commits check on the message                             |
-| `pre-push`   | every check except `PRE_PUSH_SKIP` (see [`contract.ts`](contract.ts)) |
+| Hook         | Runs                                                                 |
+| ------------ | -------------------------------------------------------------------- |
+| `pre-commit` | `Format`, `Lint`                                                     |
+| `commit-msg` | Conventional Commits check on the message                            |
+| `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`) |
 
 ## The checks
 
@@ -207,6 +207,23 @@ Each scan spends Socket API quota (see your token's limits in the Socket dashboa
   persist it with `actions/cache`, because a cache written by a workflow that runs pull-request
   code can be poisoned (CodeQL `actions/cache-poisoning`), and the scaffolded workflows use no
   caches at all for the same reason.
+
+## Bootstrap order
+
+IPC has a deliberate dev-time cycle with `repo-contract`. IPC depends on the _published_
+`repo-contract` (`^0.8.8`) at runtime: every check is a `repo-contract` check. `repo-contract`, in turn,
+declares IPC as a _development_ dependency (`github:MaverickCER/internal-package-contract#<tag>`) and
+consumes its API-contract engine and benchmark kit. It works because `repo-contract`'s own
+self-contract runs against its freshly built `dist/` while IPC resolves the published package, so
+neither ever needs the other's unreleased code.
+
+The upgrade order for a breaking `repo-contract` change follows from that:
+
+1. publish the new `repo-contract`;
+2. bump IPC's `repo-contract` dependency and release IPC (a new tag);
+3. re-pin `repo-contract`'s own IPC devDependency to that tag.
+
+The full rationale is [`repo-contract` ADR 0018](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ipc-bootstrap-cycle.md).
 
 ## Dependency overrides every consumer needs
 

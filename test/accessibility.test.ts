@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { accessibility } from "../checks/accessibility.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 function makeFindingsResult(findings: readonly Record<string, unknown>[], pagesScanned = 1) {
   return makeJsonResult({ ok: true, value: findings, pagesScanned })
@@ -55,8 +55,10 @@ describe("accessibility", () => {
     )
     expect(await result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:Accessibility:no-chrome",
         "Accessibility: no system Chrome/Chromium executable found. Install one, or set PUPPETEER_EXECUTABLE_PATH.",
+      ),
     })
   })
 
@@ -73,8 +75,10 @@ describe("accessibility", () => {
     const result = accessibility.policy(makeContext(makeFindingsResult([], 0)))
     expect(await result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:Accessibility:no-site",
         "Accessibility: no built docs site found to scan (looked for docs/index.html, docs/api/index.html).",
+      ),
     })
   })
 

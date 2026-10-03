@@ -1,7 +1,12 @@
 #!/usr/bin/env node
-// Guarantees every commit on `main` since the last release gets a changeset --
+// Guarantees every RELEASABLE commit on `main` since the last release gets a changeset --
 // either the hand-written one its own PR already added, or one generated here --
-// so `changeset version` never runs with a silent "no changeset needed" gap. Run
+// so `changeset version` never runs with a silent "no changeset needed" gap. A commit is
+// releasable when its Conventional Commit type changes what a user gets (`feat`, `fix`, `perf`,
+// `revert`), when it is marked breaking, or when it carries an explicit `Changeset: <bump>`
+// trailer; `chore`, `ci`, `docs`, `test`, `build`, `refactor`, `style` -- and anything a bot
+// authored, such as a benchmark-results refresh or a dependency re-pin -- never becomes a
+// release, so a changelog lists what changed for users and npm gets no empty releases. Run
 // from a CONSUMER's own repo root (this package is a devDependency; every
 // consumer's release-npm-changesets.yml invokes this exact file from
 // node_modules), never from internal-package-contract's own repo, so nothing
@@ -20,6 +25,7 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 const RECORD_SEP = "\x1e"
 const FIELD_SEP = "\x1f"
@@ -99,12 +105,42 @@ function alreadyCovered(files) {
   return files.some((file) => /^\.changeset\/.*\.md$/.test(file) && !file.endsWith("README.md"))
 }
 
-function bumpFor(subject, body) {
+/** Conventional Commit types that change what a user gets. Everything else is housekeeping. */
+const RELEASABLE_TYPES = new Set(["feat", "fix", "perf", "revert"])
+
+/** An author that is automation: its commits are bookkeeping unless they opt in explicitly. */
+const BOT_AUTHOR = /\[bot\]|^github-actions|^dependabot|^renovate/i
+
+/** `Changeset: patch|minor|major` in a commit body: an explicit, human opt-in to a release. */
+const OPT_IN = /^Changeset:\s*(patch|minor|major)\s*$/im
+
+function parseSubject(subject) {
   const match = subject.match(/^(\w+)(\([^)]*\))?(!)?:/)
-  if (match?.[3] === "!") return "major"
-  if (/BREAKING CHANGE:/.test(body)) return "major"
-  if (match?.[1] === "feat") return "minor"
-  return "patch"
+  return { type: match?.[1], breaking: match?.[3] === "!" }
+}
+
+/**
+ * The bump a commit asks for, or `null` when it is not releasable.
+ *
+ * While the package is below 1.0.0 the bump is DEFLATED one level -- a breaking change is `minor`,
+ * a `feat` is `patch` -- the usual 0.x convention, and the reason a stray `feat!:` can never
+ * publish 1.0.0 by itself. Crossing to 1.0.0 is a decision: it takes a human-authored `major`
+ * changeset (or a `Changeset: major` trailer), and the release workflow then refuses to auto-merge
+ * the version PR.
+ * @param {string} subject
+ * @param {string} body
+ * @param {{ author?: string, preOne?: boolean }} [context]
+ * @returns {"patch" | "minor" | "major" | null}
+ */
+export function bumpFor(subject, body, { author = "", preOne = false } = {}) {
+  const optIn = OPT_IN.exec(body)?.[1]
+  if (optIn) return optIn
+  if (BOT_AUTHOR.test(author)) return null
+  const { type, breaking } = parseSubject(subject)
+  if (breaking || /BREAKING CHANGE:/.test(body)) return preOne ? "minor" : "major"
+  if (type === "feat") return preOne ? "patch" : "minor"
+  if (type !== undefined && RELEASABLE_TYPES.has(type)) return "patch"
+  return null
 }
 
 function listCommits(range) {
@@ -113,7 +149,7 @@ function listCommits(range) {
     "log",
     "--no-merges",
     "--reverse",
-    `--format=%H${FIELD_SEP}%s${FIELD_SEP}%b${RECORD_SEP}`,
+    `--format=%H${FIELD_SEP}%an${FIELD_SEP}%s${FIELD_SEP}%b${RECORD_SEP}`,
     revRange,
   ])
   return raw
@@ -121,8 +157,8 @@ function listCommits(range) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [sha, subject, body = ""] = entry.split(FIELD_SEP)
-      return { sha, subject, body }
+      const [sha, author, subject, body = ""] = entry.split(FIELD_SEP)
+      return { sha, author, subject, body }
     })
 }
 
@@ -154,6 +190,11 @@ function highestSeverityAcrossChangesets() {
   return max
 }
 
+/** Whether the package is still below 1.0.0, where bumps are deflated. */
+export function isPreOne(version) {
+  return Number.parseInt(String(version).split(".")[0], 10) < 1
+}
+
 function main() {
   const range = findRange()
   if (range.skip) {
@@ -162,22 +203,28 @@ function main() {
   }
 
   const pkgName = readPackageName()
+  const preOne = isPreOne(JSON.parse(readFileSync("package.json", "utf8")).version)
   const commits = listCommits(range)
   let generated = 0
 
-  for (const { sha, subject, body } of commits) {
+  for (const { sha, author, subject, body } of commits) {
     const files = changedFiles(sha)
     if (files.length === 0) continue
     if (isExempt(files)) continue
     if (alreadyCovered(files)) continue
 
-    const bump = bumpFor(subject, body)
+    const bump = bumpFor(subject, body, { author, preOne })
+    if (bump === null) {
+      console.log(`Skipped ${sha.slice(0, 12)} (not a release): ${subject}`)
+      continue
+    }
     const file = writeChangeset(pkgName, sha, bump, subject)
     generated++
     console.log(`Generated ${file} (${bump}) for ${sha.slice(0, 12)}: ${subject}`)
   }
 
   console.log(`Generated ${generated} changeset(s) from ${commits.length} commit(s) since anchor.`)
+  if (preOne) console.log("Below 1.0.0: breaking changes bump minor, features bump patch.")
 
   const overallBump = highestSeverityAcrossChangesets()
   if (overallBump) {
@@ -186,4 +233,7 @@ function main() {
   }
 }
 
-main()
+// Run only as a script, so the bump rules above can be imported and tested.
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main()
+}

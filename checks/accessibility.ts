@@ -9,12 +9,14 @@
  * `puppeteer-core` via package.json's `overrides`, so no Chromium-download postinstall script
  * ever runs (a Socket.dev "Install scripts" finding directly hurts a public package's own
  * supply-chain score). `puppeteer-core` bundles no browser, so the scan script auto-detects a
- * system Chrome/Chromium instead; not finding one is a `warn`, exactly like `SecuritySocket`'s
- * own `@socketsecurity/cli`-not-authenticated case -- this check cannot distinguish "genuinely
- * clean" from "never ran," so it never fails closed on absence alone.
+ * system Chrome/Chromium instead; not finding one (or a built site) means nothing was scanned, which
+ * this check cannot tell apart from "genuinely clean" -- so it is recorded as a degradation
+ * (`checks/environment-exceptions.ts`): a `warn` locally, accepted only by a written exception, and
+ * a failure under the CI gate (`--strict`) without one.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import { degraded } from "./environment-exceptions.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const accessibilityScript = path.join(packageRoot, "scripts", "check-accessibility.mjs")
@@ -48,7 +50,7 @@ function formatFinding(finding: Pa11yFinding): string {
 export const accessibility: CheckDefinitionConfig = {
   run: ["node", accessibilityScript],
   output: { format: "json" },
-  policy: ({ result }): PolicyResult => {
+  policy: async ({ result }): Promise<PolicyResult> => {
     const envelope = parseToolEnvelope<ToolResult<readonly Pa11yFinding[]>>(
       result,
       "pa11y",
@@ -59,7 +61,11 @@ export const accessibility: CheckDefinitionConfig = {
     const evidence = envelope.value
     if (!evidence.ok) {
       if (evidence.error.startsWith("no system Chrome/Chromium executable found")) {
-        return { outcome: "warn", rationale: `Accessibility: ${evidence.error}` }
+        return degraded({
+          check: "Accessibility",
+          code: "no-chrome",
+          rationale: `Accessibility: ${evidence.error}`,
+        })
       }
       return {
         outcome: "fail",
@@ -72,11 +78,12 @@ export const accessibility: CheckDefinitionConfig = {
     // "0 issues" here would be false confidence, not a real pass. Distinct from the 0-pages
     // case, a real scan that finds 0 issues across N pages still reports `pass` below.
     if (evidence.pagesScanned === 0) {
-      return {
-        outcome: "warn",
+      return degraded({
+        check: "Accessibility",
+        code: "no-site",
         rationale:
           "Accessibility: no built docs site found to scan (looked for docs/index.html, docs/api/index.html).",
-      }
+      })
     }
 
     const errors = evidence.value.filter((finding) => finding.type === "error")

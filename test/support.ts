@@ -94,3 +94,8 @@ export const COMPLETE_V2 = {
   revisitWhen: "The condition under which this record is reopened.",
   expires: "",
 } as const
+
+/** The rationale a check gives for a degradation no exception record covers (see `checks/environment-exceptions.ts`). */
+export function unexcepted(id: string, rationale: string): string {
+  return `Not evaluated (no exception recorded; add or complete in .repo-contract/exceptions/environment.json: ${id} (no record)): ${rationale}`
+}

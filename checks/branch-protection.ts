@@ -7,15 +7,15 @@
  * through the bundled `scripts/check-branch-protection.mjs`, which shells out
  * to the `gh` CLI (see that script's own doc comment for why).
  *
- * Warns, never fails, when `gh` isn't installed/authenticated or the origin
- * remote isn't a recognizable GitHub URL -- this check cannot tell
- * "genuinely unprotected" apart from "couldn't check" in that case, matching
- * the same fail-open-to-warn posture `Accessibility`/`SecuritySocket` already
- * take for their own environment-dependent preconditions.
+ * When `gh` isn't installed/authenticated or the origin remote isn't a recognizable GitHub URL
+ * this check cannot tell "genuinely unprotected" apart from "couldn't check", so it records a
+ * degradation (`checks/environment-exceptions.ts`) instead of failing: a `warn` locally, accepted
+ * only by a written exception, and a failure under the CI gate (`--strict`) without one.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { REQUIRED_STATUS_CHECK_CONTEXT } from "../scripts/github-repo.mjs"
+import { degraded } from "./environment-exceptions.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const branchProtectionScript = path.join(packageRoot, "scripts", "check-branch-protection.mjs")
@@ -46,13 +46,17 @@ export function createBranchProtection(
   return {
     run: ["node", branchProtectionScript],
     output: { format: "json" },
-    policy: ({ result }): PolicyResult => {
+    policy: async ({ result }): Promise<PolicyResult> => {
       const envelope = parseToolEnvelope<ToolResult>(result, "gh", "Branch protection: gh")
       if (!envelope.ok) return envelope.result
 
       const status = envelope.value
       if (!status.ok) {
-        return { outcome: "warn", rationale: `Branch protection: ${status.error}` }
+        return degraded({
+          check: "BranchProtection",
+          code: "gh-unavailable",
+          rationale: `Branch protection: ${status.error}`,
+        })
       }
 
       const missing: string[] = []

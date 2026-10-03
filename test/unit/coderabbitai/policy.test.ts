@@ -14,7 +14,7 @@ import {
   createCoderabbitStub,
   deriveCoderabbitExceptionId,
 } from "../../../scripts/coderabbitai/registry.js"
-import { COMPLETE_V2, makeContext, makeJsonResult, makeResult } from "../../support.js"
+import { COMPLETE_V2, makeContext, makeJsonResult, makeResult, unexcepted } from "../../support.js"
 
 const REGISTRY = ".repo-contract/exceptions/coderabbit.json"
 
@@ -490,7 +490,13 @@ describe("coderabbitai()", () => {
 
   it("delegates a well-formed evidence value straight to evaluateCoderabbitPolicy", async () => {
     const result = await coderabbitai().policy(makeContext(makeJsonResult(NOT_APPLICABLE)))
-    expect(result).toEqual(evaluateCoderabbitPolicy({ evidence: NOT_APPLICABLE }))
+    expect(result).toEqual({
+      outcome: "warn",
+      rationale: unexcepted(
+        "environment:CodeRabbit:not-applicable",
+        evaluateCoderabbitPolicy({ evidence: NOT_APPLICABLE }).rationale,
+      ),
+    })
     expect(result.outcome).toBe("warn")
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { branchProtection, createBranchProtection } from "../checks/branch-protection.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 describe("branch-protection", () => {
   it("fails when gh terminated abnormally, naming gh (not a blank tool name) in the rationale", async () => {
@@ -37,8 +37,10 @@ describe("branch-protection", () => {
     )
     expect(result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:BranchProtection:gh-unavailable",
         "Branch protection: gh CLI not found -- install it to check GitHub branch protection.",
+      ),
     })
   })
 
