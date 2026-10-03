@@ -37,12 +37,15 @@ const EXEMPT_PATH_PREFIXES = [".github/", ".vscode/"]
 
 const SEVERITY = { patch: 0, minor: 1, major: 2 }
 
+/** The repository being processed; set by {@link generateChangesets} so the script is testable in-process. */
+let root = process.cwd()
+
 function git(args) {
-  return execFileSync("git", args, { encoding: "utf8" })
+  return execFileSync("git", args, { encoding: "utf8", cwd: root })
 }
 
 function readPackageName() {
-  return JSON.parse(readFileSync("package.json", "utf8")).name
+  return JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).name
 }
 
 // A squash merge (this workflow's own auto-merge step uses `gh pr merge --squash`)
@@ -163,16 +166,16 @@ function listCommits(range) {
 }
 
 function writeChangeset(pkgName, sha, bump, subject) {
-  const dir = ".changeset"
+  const dir = path.join(root, ".changeset")
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const file = path.join(dir, `auto-${sha.slice(0, 12)}.md`)
+  const name = `auto-${sha.slice(0, 12)}.md`
   const content = `---\n"${pkgName}": ${bump}\n---\n\n${subject}\n`
-  writeFileSync(file, content)
-  return file
+  writeFileSync(path.join(dir, name), content)
+  return path.join(".changeset", name)
 }
 
 function highestSeverityAcrossChangesets() {
-  const dir = ".changeset"
+  const dir = path.join(root, ".changeset")
   if (!existsSync(dir)) return null
   const files = readdirSync(dir).filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
   let max = null
@@ -195,45 +198,62 @@ export function isPreOne(version) {
   return Number.parseInt(String(version).split(".")[0], 10) < 1
 }
 
-function main() {
+/**
+ * Generates a changeset for each releasable commit that lacks one.
+ * @param {string} [cwd] - the repository root.
+ * @param {(line: string) => void} [log]
+ * @returns {{ generated: number, files: string[] }}
+ */
+export function generateChangesets(cwd = process.cwd(), log = console.log) {
+  root = cwd
+  return main(log)
+}
+
+function main(log) {
   const range = findRange()
   if (range.skip) {
-    console.log("HEAD is the release commit itself -- nothing to generate.")
-    return
+    log("HEAD is the release commit itself -- nothing to generate.")
+    return { generated: 0, files: [] }
   }
 
   const pkgName = readPackageName()
-  const preOne = isPreOne(JSON.parse(readFileSync("package.json", "utf8")).version)
+  const preOne = isPreOne(JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version)
   const commits = listCommits(range)
-  let generated = 0
+  const files = []
 
   for (const { sha, author, subject, body } of commits) {
-    const files = changedFiles(sha)
-    if (files.length === 0) continue
-    if (isExempt(files)) continue
-    if (alreadyCovered(files)) continue
+    const changed = changedFiles(sha)
+    if (changed.length === 0) continue
+    if (isExempt(changed)) continue
+    if (alreadyCovered(changed)) continue
 
     const bump = bumpFor(subject, body, { author, preOne })
     if (bump === null) {
-      console.log(`Skipped ${sha.slice(0, 12)} (not a release): ${subject}`)
+      log(`Skipped ${sha.slice(0, 12)} (not a release): ${subject}`)
       continue
     }
     const file = writeChangeset(pkgName, sha, bump, subject)
-    generated++
-    console.log(`Generated ${file} (${bump}) for ${sha.slice(0, 12)}: ${subject}`)
+    files.push(file)
+    log(`Generated ${file} (${bump}) for ${sha.slice(0, 12)}: ${subject}`)
   }
 
-  console.log(`Generated ${generated} changeset(s) from ${commits.length} commit(s) since anchor.`)
-  if (preOne) console.log("Below 1.0.0: breaking changes bump minor, features bump patch.")
+  log(
+    `Generated ${String(files.length)} changeset(s) from ${String(commits.length)} commit(s) since anchor.`,
+  )
+  if (preOne) log("Below 1.0.0: breaking changes bump minor, features bump patch.")
 
   const overallBump = highestSeverityAcrossChangesets()
   if (overallBump) {
-    writeFileSync(".changeset/.release-bump.json", `{ "bump": "${overallBump}" }\n`)
-    console.log(`Recorded overall bump severity: ${overallBump}`)
+    writeFileSync(
+      path.join(root, ".changeset", ".release-bump.json"),
+      `{ "bump": "${overallBump}" }\n`,
+    )
+    log(`Recorded overall bump severity: ${overallBump}`)
   }
+  return { generated: files.length, files }
 }
 
 // Run only as a script, so the bump rules above can be imported and tested.
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main()
+  generateChangesets()
 }
