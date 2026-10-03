@@ -897,7 +897,11 @@ describe("analyze()", () => {
           functions: [
             {
               ...base.functions[0]!,
-              inEndToEnd: { callsPerOperation: 1, description: "A real description.", includes },
+              inEndToEnd: {
+                callsPerOperation: 1,
+                description: "A real description.",
+                includes: includes as string[] | undefined,
+              },
             },
           ],
         })

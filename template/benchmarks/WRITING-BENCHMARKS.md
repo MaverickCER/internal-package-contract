@@ -60,7 +60,7 @@ a function whose cost nobody can see.
 Every function is measured at **20, 40, 80, 160, 320, 640, 1280, 2560, 5120 and 10240** units of
 `n`. `n` is whatever one suite declares as its workload unit (a record, a variable, a file, a call).
 
-Ten doubling points are not arbitrary. Big-O is estimated by fitting a line through
+The default ladder of ten doubling points is not arbitrary. Big-O is estimated by fitting a line through
 `log(time)` against `log(size)`; its slope is the growth exponent. Three points cannot tell `O(n)`
 from `O(n log n)` or `O(1)` from `O(log n)`. A ladder spanning more than two orders of magnitude, with
 ten points, can. `typicalN` (default 640) marks the size the cost summary quotes -- choose the size a
@@ -124,14 +124,14 @@ capacity, cloud spend, cold-start time, memory pressure.
 
 Pick the class you **expect from reading the code** before you run anything:
 
-| Class                  | Notation       | Typical cause                                                               |
-| ---------------------- | -------------- | --------------------------------------------------------------------------- |
-| `constant`             | O(1)           | A lookup or a fixed amount of work regardless of size.                      |
-| `logarithmic`          | O(log n)       | Binary search, balanced-tree operations.                                    |
-| `linear`               | O(n)           | One pass over the input.                                                    |
-| `linearithmic`         | O(n log n)     | Sorting, or a pass that does a log-cost operation per item.                 |
-| `quadratic`            | O(n²)          | A pass inside a pass (nested loops, repeated scans, repeated array copies). |
-| `exponential-or-worse` | O(n³) or worse | Anything faster-growing than quadratic.                                     |
+| Class            | Notation       | Typical cause                                                               |
+| ---------------- | -------------- | --------------------------------------------------------------------------- |
+| `constant`       | O(1)           | A lookup or a fixed amount of work regardless of size.                      |
+| `logarithmic`    | O(log n)       | Binary search, balanced-tree operations.                                    |
+| `linear`         | O(n)           | One pass over the input.                                                    |
+| `linearithmic`   | O(n log n)     | Sorting, or a pass that does a log-cost operation per item.                 |
+| `quadratic`      | O(n²)          | A pass inside a pass (nested loops, repeated scans, repeated array copies). |
+| `cubic-or-worse` | O(n³) or worse | Anything faster-growing than quadratic.                                     |
 
 The reason is one or two sentences that **name the mechanism**, so a reader can check it against the
 code: "walks every newly arrived item once to freeze it" is a reason; "it is linear" is not. After the
@@ -164,7 +164,9 @@ keeps no shared state"). A reader should never wonder whether something was forg
 
 State how often one end-to-end operation calls this function (`callsPerOperation`, a number or a
 function of `n`) and describe the call. This is what lets section 3 of the report attribute the
-overhead to the functions that cause it.
+time of one operation to the functions that cause it. A function measured alone includes everything
+it calls: when one attributed function calls another, list the callee's id in `includes` so its time is
+subtracted from the caller and counted once.
 
 ### The end-to-end block
 

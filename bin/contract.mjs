@@ -8,6 +8,7 @@
 //                                             (the default under CI; --no-strict turns it off)
 //   internal-package-contract init            scaffold repo files + git wiring
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
+//   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
 //
 // A consuming package's package.json only needs
@@ -35,6 +36,16 @@ if (process.argv[2] === "init") {
     pathToFileURL(path.join(packageRoot, "scripts", "exceptions-inventory.mjs")).href
   )
   runInventory(process.argv.slice(3), process.cwd(), process.stdout)
+} else if (process.argv[2] === "sync-benchmark-guides") {
+  const { syncGuides } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "benchmark-guides.mjs")).href
+  )
+  const written = syncGuides(process.cwd())
+  process.stdout.write(
+    written.length === 0
+      ? "Benchmark guides are already identical to the canonical ones.\n"
+      : `Updated ${written.join(", ")}.\n`,
+  )
 } else if (process.argv[2] === "update-baseline") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.

@@ -13,6 +13,7 @@ import { format, license, lint, publint, typecheck } from "repo-contract/presets
 import { accessibility } from "./accessibility.js"
 import { apiContract } from "./api-contract.js"
 import { architecture } from "./architecture.js"
+import { benchmarkGuides } from "./benchmark-guides.js"
 import { arethetypeswrong } from "./arethetypeswrong.js"
 import { branchProtection } from "./branch-protection.js"
 import { coderabbitai } from "./coderabbitai.js"
@@ -107,6 +108,7 @@ export function standardChecks() {
     TypeResolution: { ...arethetypeswrong, dependsOn: ["Tests"] as const },
     Licenses: license,
     DocsMarkdown: docsMarkdown(),
+    BenchmarkGuides: benchmarkGuides(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     // No explicit dependsOn needed: declaration-order phasing (writers,
