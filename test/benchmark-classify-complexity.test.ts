@@ -4,6 +4,9 @@ import {
   classifyGroup,
   detectComplexityShift,
   estimateGrowthExponent,
+  FIT_WINDOW,
+  fitGrowth,
+  MIN_R_SQUARED,
   inputTotal,
   snapExponentToClass,
   type TierMeasurements,
@@ -122,14 +125,14 @@ describe("estimateGrowthExponent + snapExponentToClass (ground-truth synthetic s
     expect(snapExponentToClass(exponent!)).toBe("linearithmic")
   })
 
-  it("a series far worse than quadratic (medianMs = size^4) classifies as exponential-or-worse", () => {
+  it("a series far worse than quadratic (medianMs = size^4) classifies as cubic-or-worse", () => {
     const series = [
       { size: 100, medianMs: 1 },
       { size: 200, medianMs: 16 }, // 2^4
     ]
     const exponent = estimateGrowthExponent(series)
     expect(exponent).toBeCloseTo(4, 10)
-    expect(snapExponentToClass(exponent!)).toBe("exponential-or-worse")
+    expect(snapExponentToClass(exponent!)).toBe("cubic-or-worse")
   })
 
   it("returns null for fewer than 2 points", () => {
@@ -152,12 +155,12 @@ describe("snapExponentToClass tie-breaking", () => {
     expect(snapExponentToClass(0.15)).toBe("constant")
   })
 
-  it("an exact midpoint between quadratic(2) and exponential-or-worse(3) -- 2.5 -- breaks toward the lower/simpler class (quadratic)", () => {
+  it("an exact midpoint between quadratic(2) and cubic-or-worse(3) -- 2.5 -- breaks toward the lower/simpler class (quadratic)", () => {
     expect(snapExponentToClass(2.5)).toBe("quadratic")
   })
 
   it("a near-tie just above the midpoint snaps to the higher class", () => {
-    expect(snapExponentToClass(2.50001)).toBe("exponential-or-worse")
+    expect(snapExponentToClass(2.50001)).toBe("cubic-or-worse")
   })
 
   it("a near-tie just below the midpoint snaps to the lower class", () => {
@@ -253,5 +256,70 @@ describe("detectComplexityShift", () => {
     expect(shift.shifted).toBe(false)
     expect(shift.previousClass).toBeNull()
     expect(shift.currentClass).toBe("linear")
+  })
+})
+
+describe("fitGrowth() and the asymptotic fit", () => {
+  const ladder = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240]
+  const tiers = (cost: (n: number) => number): TierMeasurements =>
+    Object.fromEntries(ladder.map((n) => [`n${String(n)}`, { medianMs: cost(n), inputs: { n } }]))
+
+  it("fits only the largest sizes once the ladder is longer than the window", () => {
+    expect(FIT_WINDOW).toBe(5)
+    const series = ladder.map((size) => ({ size, medianMs: size }))
+    expect(fitGrowth(series)?.points).toBe(FIT_WINDOW)
+    expect(fitGrowth(series.slice(0, 4))?.points).toBe(4)
+  })
+
+  it("reports a function that is linear for large inputs as linear despite a large fixed per-call cost", () => {
+    // 0.5 ms of fixed overhead plus 0.001 ms per item: a single power law across all ten sizes reads this
+    // as sub-linear ("logarithmic") because the overhead dominates the small end.
+    const cost = (n: number) => 0.5 + 0.001 * n
+    const wholeLadder = estimateGrowthExponent(
+      ladder.map((size) => ({ size, medianMs: cost(size) })),
+    )
+    expect(wholeLadder).toBeLessThan(0.7)
+    expect(classifyGroup(tiers(cost)).complexityClass).toBe("linear")
+  })
+
+  it("classifies quadratic and constant series correctly, with their fit quality", () => {
+    const quadratic = classifyGroup(tiers((n) => (n * n) / 1e6))
+    expect(quadratic.complexityClass).toBe("quadratic")
+    expect(quadratic.rSquared).toBeCloseTo(1, 6)
+    const constant = classifyGroup(tiers(() => 0.05))
+    expect(constant.complexityClass).toBe("constant")
+  })
+
+  it("treats noise around a flat line as flat (constant), whatever its R-squared", () => {
+    const noisy = classifyGroup(tiers((n) => 0.05 * (1 + 0.2 * Math.sin(n))))
+    expect(noisy.complexityClass).toBe("constant")
+  })
+
+  it("gives no class, saying why, when the cost moves but not along a power law", () => {
+    // A cliff: flat, then 50x at the largest size (a cache or GC cliff), not a growth rate.
+    const cliff = classifyGroup(tiers((n) => (n < 5000 ? 1 : n < 10000 ? 1.05 : 50)))
+    expect(MIN_R_SQUARED).toBe(0.8)
+    expect(cliff.complexityClass).toBeNull()
+    expect(cliff).toMatchObject({ reason: "poor-fit" })
+    expect(cliff.rSquared).toBeLessThan(MIN_R_SQUARED)
+  })
+
+  it("fitGrowth is null with no size variation, and R-squared is 1 for a perfectly flat series", () => {
+    expect(fitGrowth([{ size: 10, medianMs: 1 }])).toBeNull()
+    expect(
+      fitGrowth([
+        { size: 10, medianMs: 1 },
+        { size: 10, medianMs: 2 },
+      ]),
+    ).toBeNull()
+    expect(
+      fitGrowth([
+        { size: 10, medianMs: 2 },
+        { size: 20, medianMs: 2 },
+      ]),
+    ).toMatchObject({
+      rSquared: 1,
+      flat: true,
+    })
   })
 })

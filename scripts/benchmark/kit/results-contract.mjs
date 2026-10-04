@@ -2,7 +2,7 @@
 // that reads results (history, PR summary, history page, dashboards, a CTO's spreadsheet) can rely on
 // this shape; `validateResults` checks a results object against it and returns every violation.
 //
-// results.json (schemaVersion 3)
+// results.json (schemaVersion 4)
 // {
 //   metadata: {
 //     schemaVersion: 3,
@@ -26,9 +26,9 @@
 //     }
 //   },
 //   analysis: {
-//     complexity: { "<group>": { class, exponent, notation, points, expected?, expectedNotation?, agreement? } },
+//     complexity: { "<group>": { class, exponent, rSquared, reason?, notation, points, expected?, expectedNotation?, agreement? } },
 //     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCpuMs, overheadHeapBytes, cost } ],
-//     contribution: [ { id, group, description, rows: [ { n, calls, estimatedMs, shareOfOverhead, shareOfTotal } ] } ],
+//     contribution: [ { id, group, description, rows: [ { n, calls, estimatedMs, exclusiveMs, shareOfTotal } ] } ],
 //     cost: { typicalN, typical, largest }
 //   }
 // }

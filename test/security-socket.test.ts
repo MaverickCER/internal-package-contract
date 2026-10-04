@@ -26,7 +26,8 @@ import {
   securitySocket,
   SOCKET_EXCEPTION_SCHEMA,
 } from "../checks/security-socket.js"
-import { makeContext, makeResult } from "./support.js"
+import { SOCKET_EXCEPTION_TYPES } from "../checks/exception-record.js"
+import { makeContext, makeResult, BLANK_V2 } from "./support.js"
 
 // The guidance builder asks git for this repository's remote, running it with the (temp) working
 // directory; on Windows a lingering git process locks that directory against cleanup.
@@ -155,7 +156,7 @@ describe("securitySocket()", () => {
     const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain(
-      "exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
+      "exception incomplete (missing: justification, alternatives, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen)",
     )
     const written = readRegistry().exceptions
     expect(written).toHaveLength(1)
@@ -254,12 +255,24 @@ describe("securitySocket()", () => {
     }
   })
 
-  it("rejects any exception type other than required-for-package-to-exist as a malformed registry", async () => {
-    writeRegistry([completeRecord({ exceptionType: "accepted-risk" })])
+  it("accepts every exception type that says what is actually true about a waived alert", async () => {
+    for (const exceptionType of SOCKET_EXCEPTION_TYPES) {
+      const method =
+        exceptionType === "validated-false-positive"
+          ? "mechanical-reverification"
+          : "independent-human-review"
+      writeRegistry([completeRecord({ exceptionType, method })])
+      const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
+      expect(result.outcome, exceptionType).toBe("pass")
+    }
+  })
+
+  it("rejects an exception type Socket waivers may not use as a malformed registry", async () => {
+    writeRegistry([completeRecord({ exceptionType: "dev-only-not-shipped" })])
     const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain(
-      'exceptions[0].exceptionType must be "" or one of "required-for-package-to-exist" (got "accepted-risk").',
+      'exceptions[0].exceptionType must be "" or one of "validated-false-positive", "tooling-limitation", "accepted-risk", "required-for-package-to-exist" (got "dev-only-not-shipped").',
     )
   })
 
@@ -554,12 +567,13 @@ describe("createSocketStub()", () => {
     }
     expect(createSocketStub(alert, "socket:left-pad@1.0.0:unmaintained")).toEqual({
       id: "socket:left-pad@1.0.0:unmaintained",
-      version: 1,
+      version: 2,
       justification: "",
       alternatives: "",
       remediation: "",
       method: "",
       exceptionType: "",
+      ...BLANK_V2,
       package: "left-pad",
       packageVersion: "1.0.0",
       type: "unmaintained",

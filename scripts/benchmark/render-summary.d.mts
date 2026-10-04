@@ -8,3 +8,14 @@ export interface RenderSummaryOptions {
 }
 
 export function renderSummary(options: RenderSummaryOptions): Promise<string>
+
+export interface GateFailure {
+  readonly level: "fail"
+  readonly kind: string
+  readonly message: string
+  readonly label: string
+}
+
+export function summarize(
+  options: RenderSummaryOptions,
+): Promise<{ markdown: string; failures: GateFailure[] }>

@@ -26,9 +26,29 @@
 // does not declare `typedoc` as its own dependency.
 import { JSX } from "typedoc"
 
+// Also turns the permalink icons inside an accordion `<summary>` into inert spans: a link nested in the
+// summary (itself a control) is axe's `nested-interactive` violation -- and a negative `tabindex` does
+// not cure it, axe says so explicitly -- and TypeDoc's default theme renders one in every section
+// heading. The heading keeps its `id`, so `#section` URLs still work; only the little permalink icon
+// inside the collapsible header stops being a link.
 const LABEL_SCRIPT = [
   'document.getElementById("tsd-search-input")',
   '?.setAttribute("aria-label", "Search the documentation");',
+  // The navigation tree is built by script after load, so the permalinks inside its summaries appear later
+  // than the page's own: run once now and again whenever the DOM changes.
+  "function fixSummaryLinks() {",
+  'document.querySelectorAll("summary a.tsd-anchor-icon").forEach(function (a) {',
+  'var s = document.createElement("span");',
+  's.className = a.className; s.setAttribute("aria-hidden", "true"); s.innerHTML = a.innerHTML;',
+  "a.replaceWith(s); });",
+  // TypeDoc gives a class's constructor section and its constructor signature the same id; a duplicate id is an
+  // HTML error (and makes `#constructor` ambiguous). The first keeps the id, later ones get a numeric suffix.
+  "var seen = Object.create(null);",
+  'document.querySelectorAll("[id]").forEach(function (el) {',
+  "var id = el.id; if (seen[id] === undefined) { seen[id] = 1; return; }",
+  'seen[id] += 1; el.id = id + "-" + seen[id]; }); }',
+  "fixSummaryLinks();",
+  "new MutationObserver(fixSummaryLinks).observe(document.body, { childList: true, subtree: true });",
 ].join("")
 
 /** @param {import("typedoc").Application} app */

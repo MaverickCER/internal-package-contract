@@ -140,7 +140,8 @@ interface Reconstruction {
  * @param char - One character (or `undefined`, past either end of the string) to classify.
  * @returns Whether `char` is a "word" character (`[A-Za-z0-9_]`) -- the same class regex `\b` boundaries are defined against.
  */
-function isWordChar(char: string | undefined): boolean {
+/** @internal Exported for direct unit coverage. */
+export function isWordChar(char: string | undefined): boolean {
   if (char === undefined) return false
   return (
     (char >= "a" && char <= "z") ||
@@ -158,7 +159,8 @@ function isWordChar(char: string | undefined): boolean {
  * @param word - The exact word to search for, matched only where it isn't adjacent to another word character.
  * @returns Whether `word` occurs in `haystack` as a whole word.
  */
-function containsWholeWord(haystack: string, word: string): boolean {
+/** @internal Exported for direct unit coverage. */
+export function containsWholeWord(haystack: string, word: string): boolean {
   if (word.length === 0) return false
 
   let index = haystack.indexOf(word)

@@ -1,5 +1,5 @@
 // Pure algorithm: infers an algorithmic-complexity CLASS ("constant" through
-// "exponential-or-worse") from a named benchmark's per-tier {medianMs, inputs}
+// "cubic-or-worse") from a named benchmark's per-tier {medianMs, inputs}
 // measurements, and diffs two such classifications to flag a "complexity
 // shift" -- the headline signal this whole feature exists for (see
 // render-summary.mjs / render-page.mjs, which are the only consumers of this
@@ -63,14 +63,14 @@
 //   `detectComplexityShift` reports `shifted: false` -- there is nothing to
 //   diff against, not a claim that nothing changed.
 
-/** In size order, cheapest ("constant") to worst ("exponential-or-worse"). */
+/** In size order, cheapest ("constant") to worst ("cubic-or-worse"). */
 export const COMPLEXITY_CLASSES = Object.freeze([
   "constant",
   "logarithmic",
   "linear",
   "linearithmic",
   "quadratic",
-  "exponential-or-worse",
+  "cubic-or-worse",
 ])
 
 /**
@@ -78,9 +78,9 @@ export const COMPLEXITY_CLASSES = Object.freeze([
  * class would produce. `linearithmic`'s 1.2 (rather than n*log(n)'s
  * theoretical non-power-law shape) is a deliberately chosen representative
  * value for typical benchmark tier ratios (5x-20x) -- see the module
- * comment's "linear vs linearithmic" limitation. `exponential-or-worse`'s 3
+ * comment's "linear vs linearithmic" limitation. `cubic-or-worse`'s 3
  * is an anchor, not a ceiling: nearest-anchor classification means anything
- * with `p` past the quadratic/exponential midpoint (2.5) snaps here
+ * with `p` past the quadratic/cubic midpoint (2.5) snaps here
  * regardless of how much higher it actually is.
  */
 const CLASS_ANCHORS = Object.freeze([
@@ -89,7 +89,7 @@ const CLASS_ANCHORS = Object.freeze([
   { complexityClass: "linear", exponent: 1 },
   { complexityClass: "linearithmic", exponent: 1.2 },
   { complexityClass: "quadratic", exponent: 2 },
-  { complexityClass: "exponential-or-worse", exponent: 3 },
+  { complexityClass: "cubic-or-worse", exponent: 3 },
 ])
 
 /**
@@ -161,6 +161,50 @@ export function estimateGrowthExponent(series) {
 }
 
 /**
+ * How many of the LARGEST sizes the exponent is fitted on once a ladder is longer than this. A real
+ * cost is `fixed overhead + work(n)`; a single power law fitted across every size is dominated by the
+ * fixed per-call overhead at the small end and reports a function that is linear for large inputs as
+ * "logarithmic". The large end is where the algorithm shows, so that is what is fitted.
+ */
+export const FIT_WINDOW = 5
+
+/** The lowest R-squared of the log-log fit that still counts as a measurement of a growth rate. */
+export const MIN_R_SQUARED = 0.8
+
+/**
+ * A ratio between the slowest and fastest tier below which the group is simply flat: with that little
+ * movement, noise rather than growth dominates the fit and R-squared is meaningless.
+ */
+const FLAT_RATIO = 1.5
+
+/**
+ * Fits the growth exponent on the largest {@link FIT_WINDOW} sizes of `series` (all of them when the
+ * ladder is not longer), and says how well a power law describes them.
+ * @param {readonly { size: number, medianMs: number }[]} series - ascending by size, positive values.
+ * @returns {{ exponent: number, rSquared: number, flat: boolean, points: number } | null} `null` when no slope exists.
+ */
+export function fitGrowth(series) {
+  const window = series.length > FIT_WINDOW ? series.slice(series.length - FIT_WINDOW) : series
+  const exponent = estimateGrowthExponent(window)
+  if (exponent === null) return null
+  const xs = window.map((point) => Math.log(point.size))
+  const ys = window.map((point) => Math.log(point.medianMs))
+  const xMean = xs.reduce((a, b) => a + b, 0) / xs.length
+  const yMean = ys.reduce((a, b) => a + b, 0) / ys.length
+  const intercept = yMean - exponent * xMean
+  let residual = 0
+  let total = 0
+  for (let i = 0; i < xs.length; i++) {
+    residual += (ys[i] - (intercept + exponent * xs[i])) ** 2
+    total += (ys[i] - yMean) ** 2
+  }
+  const rSquared = total === 0 ? 1 : 1 - residual / total
+  const times = window.map((point) => point.medianMs)
+  const flat = Math.max(...times) / Math.min(...times) < FLAT_RATIO
+  return { exponent, rSquared, flat, points: window.length }
+}
+
+/**
  * Nearest-anchor snap of a growth exponent to one of COMPLEXITY_CLASSES.
  * CLASS_ANCHORS is ascending, and ties are broken toward the FIRST (lower,
  * simpler) anchor found at the minimum distance -- an exact midpoint between
@@ -200,8 +244,8 @@ export function classifyGroup(tiers) {
     }
   }
 
-  const exponent = estimateGrowthExponent(series)
-  if (exponent === null) {
+  const fit = fitGrowth(series)
+  if (fit === null) {
     return {
       complexityClass: null,
       exponent: null,
@@ -210,7 +254,24 @@ export function classifyGroup(tiers) {
     }
   }
 
-  return { complexityClass: snapExponentToClass(exponent), exponent, points: series.length }
+  // A group that barely moves is flat, whatever its R-squared; one that moves but not along a power
+  // law (a step, a cache cliff) is not given a class the data does not support.
+  if (!fit.flat && fit.rSquared < MIN_R_SQUARED) {
+    return {
+      complexityClass: null,
+      exponent: fit.exponent,
+      points: series.length,
+      rSquared: fit.rSquared,
+      reason: "poor-fit",
+    }
+  }
+
+  return {
+    complexityClass: snapExponentToClass(fit.exponent),
+    exponent: fit.exponent,
+    points: series.length,
+    rSquared: fit.rSquared,
+  }
 }
 
 /**

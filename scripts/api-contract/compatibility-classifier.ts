@@ -155,15 +155,14 @@ function compareParameters(
 }
 
 /**
+ * Release tag, deprecation, type parameters and heritage.
  * @param baselineMember - The member's normalized form on the baseline side.
  * @param currentMember - The same member's normalized form on the current side.
- * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
  * @param changes - The accumulator array to append any detected changes onto.
  */
-function compareMatchedMember(
+function compareMetadata(
   baselineMember: NormalizedMember,
   currentMember: NormalizedMember,
-  resolve: ResolveAssignability,
   changes: ApiContractChange[],
 ): void {
   if (baselineMember.releaseTag !== currentMember.releaseTag) {
@@ -221,7 +220,21 @@ function compareMatchedMember(
       `${currentMember.scopedName}'s extends/implements clause changed -- inheritance changes are not safely classified automatically.`,
     )
   }
+}
 
+/**
+ * An enum member's value and a type alias's definition.
+ * @param baselineMember - The member's normalized form on the baseline side.
+ * @param currentMember - The same member's normalized form on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareEnumAndAlias(
+  baselineMember: NormalizedMember,
+  currentMember: NormalizedMember,
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
   if (
     currentMember.kind === "EnumMember" &&
     baselineMember.initializerExcerptText !== currentMember.initializerExcerptText
@@ -255,7 +268,21 @@ function compareMatchedMember(
       )
     }
   }
+}
 
+/**
+ * A property's optionality, mutability and type.
+ * @param baselineMember - The member's normalized form on the baseline side.
+ * @param currentMember - The same member's normalized form on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareProperty(
+  baselineMember: NormalizedMember,
+  currentMember: NormalizedMember,
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
   if (
     baselineMember.propertyTypeExcerptText !== undefined &&
     currentMember.propertyTypeExcerptText !== undefined
@@ -295,7 +322,21 @@ function compareMatchedMember(
       )
     }
   }
+}
 
+/**
+ * An exported variable's type.
+ * @param baselineMember - The member's normalized form on the baseline side.
+ * @param currentMember - The same member's normalized form on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareVariable(
+  baselineMember: NormalizedMember,
+  currentMember: NormalizedMember,
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
   if (
     baselineMember.variableTypeExcerptText !== undefined &&
     currentMember.variableTypeExcerptText !== undefined
@@ -317,7 +358,21 @@ function compareMatchedMember(
       )
     }
   }
+}
 
+/**
+ * Parameters and the return type.
+ * @param baselineMember - The member's normalized form on the baseline side.
+ * @param currentMember - The same member's normalized form on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareSignature(
+  baselineMember: NormalizedMember,
+  currentMember: NormalizedMember,
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
   if (baselineMember.parameters !== undefined && currentMember.parameters !== undefined) {
     compareParameters(baselineMember, currentMember, resolve, changes)
   }
@@ -342,6 +397,25 @@ function compareMatchedMember(
       )
     }
   }
+}
+
+/**
+ * @param baselineMember - The member's normalized form on the baseline side.
+ * @param currentMember - The same member's normalized form on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareMatchedMember(
+  baselineMember: NormalizedMember,
+  currentMember: NormalizedMember,
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
+  compareMetadata(baselineMember, currentMember, changes)
+  compareEnumAndAlias(baselineMember, currentMember, resolve, changes)
+  compareProperty(baselineMember, currentMember, resolve, changes)
+  compareVariable(baselineMember, currentMember, resolve, changes)
+  compareSignature(baselineMember, currentMember, resolve, changes)
 }
 
 const OVERLOAD_KINDS = new Set([
@@ -372,6 +446,108 @@ function groupKey(member: NormalizedMember): string {
 }
 
 /**
+ * Groups every overloadable member of `map` by the overload set it belongs to.
+ * @param map - All normalized members on one side, keyed by canonical reference.
+ * @param handled - Canonical references of overloadable members, recorded so the caller's later, position-based pass skips them.
+ * @returns The members of each overload set, keyed by {@link groupKey}.
+ */
+function groupOverloads(
+  map: ReadonlyMap<string, NormalizedMember>,
+  handled: Set<string>,
+): Map<string, NormalizedMember[]> {
+  const groups = new Map<string, NormalizedMember[]>()
+  for (const member of map.values()) {
+    if (member.overloadIndex === undefined || !OVERLOAD_KINDS.has(member.kind)) continue
+    handled.add(member.canonicalReference)
+    const key = groupKey(member)
+    const group = groups.get(key) ?? []
+    group.push(member)
+    groups.set(key, group)
+  }
+  return groups
+}
+
+/**
+ * Compares two multi-overload sets, matching overloads by exact parameter-list signature.
+ * @param baselineGroup - The overloads on the baseline side.
+ * @param currentGroup - The overloads on the current side.
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function compareOverloadSets(
+  baselineGroup: readonly NormalizedMember[],
+  currentGroup: readonly NormalizedMember[],
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
+  const baselineBySignature = new Map(baselineGroup.map((m) => [parameterSignature(m), m]))
+  const currentBySignature = new Map(currentGroup.map((m) => [parameterSignature(m), m]))
+
+  for (const [signature, oldMember] of baselineBySignature) {
+    const newMember = currentBySignature.get(signature)
+    if (!newMember) {
+      push(
+        changes,
+        oldMember,
+        "overload-removed",
+        "breaking",
+        `Removed overload ${oldMember.scopedName}(${signature}).`,
+      )
+      continue
+    }
+    // A signature-matched overload is compared with the full per-member comparison, not only its
+    // return type: a release-tag narrowing (@public -> @internal), a new @deprecated, or a
+    // type-parameter change on a single overload of a multi-overload set is just as breaking as it
+    // is on a non-overloaded function.
+    compareMatchedMember(oldMember, newMember, resolve, changes)
+  }
+  for (const [signature, newMember] of currentBySignature) {
+    if (!baselineBySignature.has(signature)) {
+      push(
+        changes,
+        newMember,
+        "overload-added",
+        "compatible",
+        `Added overload ${newMember.scopedName}(${signature}).`,
+      )
+    }
+  }
+}
+
+/**
+ * Compares one overload set across baseline and current.
+ * @param baselineGroup - The overloads on the baseline side (possibly none).
+ * @param currentGroup - The overloads on the current side (possibly none).
+ * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
+ * @param changes - The accumulator array to append any detected changes onto.
+ */
+function classifyOverloadSet(
+  baselineGroup: readonly NormalizedMember[],
+  currentGroup: readonly NormalizedMember[],
+  resolve: ResolveAssignability,
+  changes: ApiContractChange[],
+): void {
+  // An entirely-new (or entirely-removed) overload set is reported once, for the whole
+  // function/method, regardless of how many overloads it has -- not as N bare `overload-added`
+  // entries with no `export-added` among them.
+  const first = currentGroup[0]
+  const removed = baselineGroup[0]
+  if (baselineGroup.length === 0 && first) {
+    push(changes, first, "export-added", "compatible", `Added ${first.scopedName}.`)
+    return
+  }
+  if (currentGroup.length === 0 && removed) {
+    push(changes, removed, "export-removed", "breaking", `Removed ${removed.scopedName}.`)
+    return
+  }
+  if (baselineGroup.length === 1 && currentGroup.length === 1 && removed && first) {
+    compareMatchedMember(removed, first, resolve, changes)
+    return
+  }
+  compareOverloadSets(baselineGroup, currentGroup, resolve, changes)
+}
+
+/**
  * Handles every member with `overloadIndex !== undefined`. The overwhelmingly common case -- a
  * single (non-overloaded) function/method on each side -- is compared directly by position, so an
  * ordinary parameter/return-type change is reported with the normal, specific change kinds rather
@@ -392,95 +568,15 @@ function classifyOverloadable(
   changes: ApiContractChange[],
   handled: Set<string>,
 ): void {
-  const baselineByGroup = new Map<string, NormalizedMember[]>()
-  const currentByGroup = new Map<string, NormalizedMember[]>()
-
-  for (const member of baselineMap.values()) {
-    if (member.overloadIndex === undefined || !OVERLOAD_KINDS.has(member.kind)) continue
-    handled.add(member.canonicalReference)
-    const key = groupKey(member)
-    const group = baselineByGroup.get(key) ?? []
-    group.push(member)
-    baselineByGroup.set(key, group)
-  }
-  for (const member of currentMap.values()) {
-    if (member.overloadIndex === undefined || !OVERLOAD_KINDS.has(member.kind)) continue
-    handled.add(member.canonicalReference)
-    const key = groupKey(member)
-    const group = currentByGroup.get(key) ?? []
-    group.push(member)
-    currentByGroup.set(key, group)
-  }
-
-  const allKeys = new Set([...baselineByGroup.keys(), ...currentByGroup.keys()])
-
-  for (const key of allKeys) {
-    const baselineGroup = baselineByGroup.get(key) ?? []
-    const currentGroup = currentByGroup.get(key) ?? []
-
-    // An entirely-new (or entirely-removed) overload set is reported once,
-    // for the whole function/method, regardless of how many overloads it
-    // has -- not as N bare `overload-added` entries with no `export-added`
-    // among them, which the size-exactly-1 checks used to produce for a
-    // 2+-overload addition.
-    if (baselineGroup.length === 0 && currentGroup.length >= 1) {
-      const member = currentGroup[0]
-      if (member) {
-        push(changes, member, "export-added", "compatible", `Added ${member.scopedName}.`)
-      }
-      continue
-    }
-    if (currentGroup.length === 0 && baselineGroup.length >= 1) {
-      const member = baselineGroup[0]
-      if (member) {
-        push(changes, member, "export-removed", "breaking", `Removed ${member.scopedName}.`)
-      }
-      continue
-    }
-
-    if (baselineGroup.length === 1 && currentGroup.length === 1) {
-      const oldMember = baselineGroup[0]
-      const newMember = currentGroup[0]
-      if (oldMember && newMember) {
-        compareMatchedMember(oldMember, newMember, resolve, changes)
-      }
-      continue
-    }
-
-    const baselineBySignature = new Map(baselineGroup.map((m) => [parameterSignature(m), m]))
-    const currentBySignature = new Map(currentGroup.map((m) => [parameterSignature(m), m]))
-
-    for (const [signature, oldMember] of baselineBySignature) {
-      const newMember = currentBySignature.get(signature)
-      if (!newMember) {
-        push(
-          changes,
-          oldMember,
-          "overload-removed",
-          "breaking",
-          `Removed overload ${oldMember.scopedName}(${signature}).`,
-        )
-        continue
-      }
-      // A signature-matched overload is compared with the full per-member
-      // comparison, not only its return type: a release-tag narrowing
-      // (@public -> @internal), a new @deprecated, or a type-parameter
-      // change on a single overload of a multi-overload set is just as
-      // breaking as it is on a non-overloaded function and was previously
-      // dropped entirely here.
-      compareMatchedMember(oldMember, newMember, resolve, changes)
-    }
-    for (const [signature, newMember] of currentBySignature) {
-      if (!baselineBySignature.has(signature)) {
-        push(
-          changes,
-          newMember,
-          "overload-added",
-          "compatible",
-          `Added overload ${newMember.scopedName}(${signature}).`,
-        )
-      }
-    }
+  const baselineByGroup = groupOverloads(baselineMap, handled)
+  const currentByGroup = groupOverloads(currentMap, handled)
+  for (const key of new Set([...baselineByGroup.keys(), ...currentByGroup.keys()])) {
+    classifyOverloadSet(
+      baselineByGroup.get(key) ?? [],
+      currentByGroup.get(key) ?? [],
+      resolve,
+      changes,
+    )
   }
 }
 

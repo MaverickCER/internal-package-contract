@@ -115,12 +115,20 @@ describe("deriveCodeScanningId() / createDevStub()", () => {
       createDevStub({ id: "i", rule: "js/x", path: "test/a.ts" }, "code-scanning:js/x@test/a.ts"),
     ).toEqual({
       id: "code-scanning:js/x@test/a.ts",
-      version: 1,
+      version: 2,
       justification: DEV_TEXT,
       alternatives: "Rewrite the flagged code to satisfy the rule.",
       remediation: "None needed while the code stays development-only.",
-      method: "independent-human-review",
+      // No person reviewed this record: the location rule did, and the record says so.
+      method: "policy-rule",
       exceptionType: "dev-only-not-shipped",
+      ruleBroken: expect.stringContaining("code-scanning alert must be fixed"),
+      attempted: expect.stringContaining("Judged by location"),
+      constraint: expect.stringContaining("only exists to test") as unknown,
+      whyPreferable: expect.any(String) as unknown,
+      residualRisk: expect.stringContaining("None for users"),
+      revisitWhen: expect.stringContaining("package.json `files`"),
+      expires: "",
       rule: "js/x",
       path: "test/a.ts",
     })
@@ -312,7 +320,7 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
     ])
     expect(records[0]).toMatchObject({
       justification: DEV_TEXT,
-      method: "independent-human-review",
+      method: "policy-rule",
       exceptionType: "dev-only-not-shipped",
     })
   })
@@ -359,7 +367,7 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
       ".repo-contract/exceptions/code-scanning.json failed to load and was left unchanged:",
     )
     expect(result.rationale).toContain(
-      "- exceptions[0].version must be the number 1 (got undefined).",
+      "- exceptions[0].version must be the number 2 (or the legacy 1) (got undefined).",
     )
     expect(readFileSync(registryPath(), "utf8")).toBe(before)
   })

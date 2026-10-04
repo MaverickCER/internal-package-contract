@@ -2,13 +2,24 @@
 # npm OIDC trusted publishing. Centralizes the release logic previously duplicated
 # verbatim across every consumer's own .github/workflows/release.yml (env-cap,
 # data-cap, ...) -- see template/release.yml for the thin per-repo caller this
-# expects `internal-package-contract init` to scaffold. A change here (a
-# changesets/action version bump, a new publish flag, ...) reaches every consumer on
-# their next push to main, with zero per-repo edits.
+# expects `internal-package-contract init` to scaffold. A change here reaches a consumer
+# when it bumps the commit SHA it pins this workflow at (dependency-pin-sync.yml does that
+# together with the devDependency pin), never silently.
 #
 # `on: workflow_call` (not `workflow_dispatch`/`push`) is what makes this reusable --
 # it has no trigger of its own and only ever runs invoked from a caller's own `uses:`
 # job, per https://docs.github.com/actions/using-workflows/reusing-workflows.
+#
+# THREE JOBS, so that nothing holding the npm publishing identity ever runs repository code:
+#
+#   version  contents/pull-requests/actions write, NO id-token. Generates changesets, opens or
+#            updates the "chore: version packages" PR, dispatches CI on it and auto-merges it once
+#            green -- except a PR that crosses a major version, which a human must merge.
+#   build    contents read only. Installs with `--ignore-scripts` (no dependency install script runs),
+#            runs the package's own `verify` gate, and packs the tarball that will be published.
+#   publish  id-token + contents write, but checks out nothing and installs nothing: it downloads the
+#            tarball `build` made, publishes exactly that file with provenance, and creates the git
+#            tags through the API. The only code it runs is a version-pinned npm.
 name: Release (reusable)
 
 on:
@@ -16,75 +27,71 @@ on:
     inputs:
       roll-floating-major-tag:
         description: >-
-          Force the floating `v1` git tag forward to the release commit on every
-          successful publish (for a consumer whose README/action.yml documents a
-          `uses: owner/repo@v1`-style floating major tag, e.g. a composite GitHub
-          Action). Defaults to true since every current consumer needs it; a future
-          npm-only consumer with no composite Action should pass false.
+          After a successful publish, move the floating `v<major>` git tag (`v0` while the package
+          is 0.x, `v1` from 1.0.0, ...) to the release commit, for a consumer whose
+          README/action.yml documents a `uses: owner/repo@v<major>`-style floating tag, e.g. a
+          composite GitHub Action. The tag is named for the major of the version just published, so
+          a 2.0.0 release creates `v2` and never moves `v1`. An npm-only consumer with no composite
+          Action should pass false.
         type: boolean
         default: true
+      npm-version:
+        description: >-
+          The exact npm CLI the publish job installs (OIDC trusted publishing needs >= 11.5.1). Pinned
+          rather than `latest` because this job holds the publishing identity.
+        type: string
+        default: "11.21.0"
     outputs:
       version:
         description: The version just published by this run; empty if nothing was published.
-        value: ${{ jobs.release.outputs.version }}
+        value: ${{ jobs.publish.outputs.version }}
       bump-type:
         description: >-
           major/minor/patch of the version just published, derived from the
           highest-severity changeset actually consumed to produce it. Empty if
           nothing was published.
-        value: ${{ jobs.release.outputs.bump-type }}
+        value: ${{ jobs.publish.outputs.bump-type }}
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-      # Enables npm's OIDC trusted publishing (GA since July 2025) -- no NPM_TOKEN
-      # secret exists or is needed. npm verifies this exact workflow/repo against a
-      # trusted-publisher registration made once, manually, on npmjs.com (see each
-      # consumer's own RELEASING.md/CONTRIBUTING.md). The caller workflow's own job
-      # must also grant this same permission -- GitHub caps a called workflow's
-      # effective permissions at the intersection of what the caller grants and what
-      # this file declares.
-      id-token: write
       # Dispatches the consumer's own ci.yml on the release PR's branch below, and
       # watches that run to auto-merge once it's green -- see those steps' own
       # comments for why this is needed at all.
       actions: write
     outputs:
-      version: ${{ steps.publish-info.outputs.version }}
-      bump-type: ${{ steps.publish-info.outputs.bump-type }}
+      has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          # changesets/action pushes with GITHUB_TOKEN itself; a credential left in .git/config
+          # would be readable by every script the version step runs.
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.x
 
-      - run: npm ci
+      # No dependency install script runs in a job that can write to the repository.
+      - run: npm ci --ignore-scripts
 
-      # OIDC trusted publishing requires npm CLI >=11.5.1 and Node >=22.14 -- don't
-      # rely on whatever version happens to be bundled.
-      - run: npm install -g npm@latest
-
-      # Guarantees every commit since the last release carries a changeset -- either
+      # Guarantees every user-visible change since the last release carries a changeset -- either
       # the hand-written one its own PR already added, or one generated here from its
-      # Conventional Commit subject (part B of the "Standardize npm release + Pages
-      # deploy" plan). Self-skips when HEAD is itself the release commit (a
-      # publish-triggered run), so it never reintroduces pending changesets into a
-      # run that should just publish. Invoked from the consumer's own installed
-      # devDependency -- one implementation shared by every consumer, no per-repo copy.
+      # Conventional Commit subject (feat/fix/perf/breaking only; chore, ci, docs, test and bot
+      # commits never become a release). Self-skips when HEAD is itself the release commit.
+      # Invoked from the consumer's own installed devDependency -- one implementation shared by
+      # every consumer, no per-repo copy.
       - name: Auto-generate changesets for any commit missing one
         run: node node_modules/internal-package-contract/scripts/generate-changeset-from-commits.mjs
 
-      - name: Create Release Pull Request or Publish
+      - name: Create or update the Release Pull Request
         id: changesets
         uses: changesets/action@ce079ea084e08a340947ed4d6ecedb2433c8f293 # v1
         with:
-          publish: npm run release
           version: npm run version
           # changesets/action's own default commit/PR-title ("Version Packages") is not a
           # Conventional Commit -- every consumer's own `commits` check (bundled from
@@ -100,39 +107,54 @@ jobs:
       # GITHUB_TOKEN, which GitHub deliberately never lets trigger `push`/
       # `pull_request`-based workflows (anti-recursion guard) -- so without this,
       # the release PR sits with zero CI checks until a human pushes a real
-      # commit to it (confirmed directly: this is exactly what happened to real
-      # release PRs before this step existed). `gh workflow run` is explicitly
-      # exempted from that restriction, and its run's checks attach to the given
-      # ref's head SHA exactly as a normal `pull_request` run's would, so the
-      # branch's required status checks end up satisfied by the time the merge
+      # commit to it. `gh workflow run` is explicitly exempted from that restriction, and its
+      # run's checks attach to the given ref's head SHA exactly as a normal `pull_request` run's
+      # would, so the branch's required status checks are satisfied by the time the merge
       # step below runs.
       - name: Dispatch the consumer's CI on the release PR's branch
         id: dispatch
         if: steps.changesets.outputs.pullRequestNumber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.changesets.outputs.pullRequestNumber }}
         run: |
-          BRANCH=$(gh pr view "${{ steps.changesets.outputs.pullRequestNumber }}" --json headRefName -q .headRefName)
-          SHA=$(gh pr view "${{ steps.changesets.outputs.pullRequestNumber }}" --json headRefOid -q .headRefOid)
+          BRANCH=$(gh pr view "$PR" --json headRefName -q .headRefName)
+          SHA=$(gh pr view "$PR" --json headRefOid -q .headRefOid)
           gh workflow run ci.yml --ref "$BRANCH"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-      # Closes the loop the dispatch step above only half-finished: without this, a
-      # human still has to notice the release PR is green and click merge by hand --
-      # exactly the "someone has to remember to cut the release" step the design
-      # principle rules out. Branch protection on every consumer requires 0 approving
-      # reviews (confirmed live via `gh api .../rulesets`), so once the dispatched run
-      # this same job just kicked off reports success, nothing else stands between
-      # this PR and npm. Not a new risk category: repo-contract's own `badges` job
-      # already auto-merged a bot-authored PR with zero review before this plan.
-      - name: Wait for the dispatched CI run, then merge the release PR
+      # A release that crosses a major version (0.x -> 1.0.0, 1.x -> 2.0.0) is a decision about
+      # what the package promises, never something automation takes. The PR is opened and CI runs
+      # on it as usual; a human reads it and merges it.
+      - name: Detect a release that crosses a major version
+        id: boundary
         if: steps.changesets.outputs.pullRequestNumber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.dispatch.outputs.branch }}
         run: |
-          BRANCH="${{ steps.dispatch.outputs.branch }}"
-          SHA="${{ steps.dispatch.outputs.sha }}"
+          BASE_MAJOR=$(node -p "require('./package.json').version.split('.')[0]")
+          NEXT=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$BRANCH" --jq .content | base64 -d | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          if [ "${NEXT%%.*}" != "$BASE_MAJOR" ]; then
+            echo "crosses=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Major release needs a human::This release PR bumps the major version to $NEXT. It is not auto-merged -- review it and merge it yourself."
+          else
+            echo "crosses=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Closes the loop the dispatch step above only half-finished: without this, a human still has
+      # to notice the release PR is green and click merge by hand. Branch protection requires the
+      # contract check and 0 approving reviews, so once the dispatched run reports success, nothing
+      # else stands between this PR and npm. Skipped for a major-version crossing.
+      - name: Wait for the dispatched CI run, then merge the release PR
+        if: steps.changesets.outputs.pullRequestNumber && steps.boundary.outputs.crosses != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.dispatch.outputs.branch }}
+          SHA: ${{ steps.dispatch.outputs.sha }}
+          PR: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
           RUN_ID=""
           for _ in $(seq 1 30); do
             RUN_ID=$(gh run list --workflow=ci.yml --branch "$BRANCH" --json databaseId,headSha \
@@ -145,35 +167,137 @@ jobs:
             exit 1
           fi
           gh run watch "$RUN_ID" --exit-status
-          gh pr merge "${{ steps.changesets.outputs.pullRequestNumber }}" --squash --delete-branch
+          gh pr merge "$PR" --squash --delete-branch
 
-      # Surfaces what this run actually published, for a caller (repo-contract's
-      # notify-internal-package-contract job, part E) to act on. bump-type comes from
-      # `.changeset/.release-bump.json`, written by the auto-generation step above
-      # during the VERSION run that produced this exact version bump -- not by
-      # diffing version strings, which is ambiguous pre-1.0 (a 0.3.0 -> 0.4.0 bump
-      # can be either a real "minor" or the pre-1.0 stand-in for "major"). That file
-      # is not a `.changeset/*.md` changeset itself, so `changeset version` leaves it
-      # alone, and it rides along in the same commit as the version bump it describes.
-      - name: Surface what this run published
-        id: publish-info
-        if: steps.changesets.outputs.published == 'true'
+  build:
+    needs: version
+    # Nothing left to version: HEAD is a release commit (or an ordinary push with no releasable
+    # change), so the version in package.json is either already on npm or about to be.
+    if: needs.version.outputs.has-changesets != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should-publish: ${{ steps.info.outputs.should-publish }}
+      version: ${{ steps.info.outputs.version }}
+      bump-type: ${{ steps.info.outputs.bump-type }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+
+      - run: npm ci --ignore-scripts
+
+      - name: Is this version already on npm?
+        id: info
         run: |
-          VERSION=$(node -p "JSON.parse(process.argv[1])[0].version" '${{ steps.changesets.outputs.publishedPackages }}')
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          PRIVATE=$(node -p "require('./package.json').private === true")
+          # bump-type comes from `.changeset/.release-bump.json`, written by the auto-generation
+          # step during the VERSION run that produced this exact version bump -- not by diffing
+          # version strings, which is ambiguous pre-1.0. It rides along in the release commit.
           BUMP=$(node -p "require('./.changeset/.release-bump.json').bump" 2>/dev/null || echo "")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "bump-type=$BUMP" >> "$GITHUB_OUTPUT"
+          if [ "$PRIVATE" = "true" ]; then
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            echo "$NAME is private; nothing to publish."
+          elif npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is already on npm."
+          else
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      # Rolls the floating `v1` tag documented in a composite Action's own
-      # README/action.yml example (standard GitHub Actions convention, e.g.
-      # `actions/checkout@v4`) forward to this commit. This versions the composite
-      # Action's own interface (action.yml's inputs/outputs), independent of the npm
-      # package's own pre-1.0 semver -- it only needs to move when action.yml itself
-      # has a breaking change, which every successful publish unconditionally
-      # assumes has not happened (see `roll-floating-major-tag`'s own description
-      # above for the opt-out a future npm-only consumer would use instead).
-      - name: Roll floating v1 Action tag
-        if: steps.changesets.outputs.published == 'true' && inputs.roll-floating-major-tag
+      # The gate that used to run as `prepublishOnly` inside the publishing job. Running it here, with
+      # no credentials, keeps the same bar without handing the publishing identity to it.
+      - name: Verify
+        if: steps.info.outputs.should-publish == 'true'
         run: |
-          git tag -f v1
-          git push origin v1 --force
+          if node -e "process.exit(require('./package.json').scripts?.verify ? 0 : 1)"; then
+            npm run verify
+          else
+            npm run build --if-present
+          fi
+
+      - name: Pack the tarball to publish
+        if: steps.info.outputs.should-publish == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/release"
+          ls -l "$RUNNER_TEMP/release"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.info.outputs.should-publish == 'true'
+        with:
+          name: release-tarball
+          path: ${{ runner.temp }}/release/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    if: needs.build.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # Enables npm's OIDC trusted publishing (GA since July 2025) -- no NPM_TOKEN
+      # secret exists or is needed. npm verifies this exact workflow/repo against a
+      # trusted-publisher registration made once, manually, on npmjs.com. The caller workflow's
+      # own job must grant this same permission -- GitHub caps a called workflow's effective
+      # permissions at the intersection of what the caller grants and what this file declares.
+      id-token: write
+      # Creates the release tag and moves the floating major tag through the API.
+      contents: write
+    outputs:
+      version: ${{ needs.build.outputs.version }}
+      bump-type: ${{ needs.build.outputs.bump-type }}
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-tarball
+          path: ${{ runner.temp }}/release
+
+      # Pinned, not `latest`: this job holds the publishing identity.
+      - name: Install the pinned npm
+        env:
+          NPM_VERSION: ${{ inputs.npm-version }}
+        run: npm install -g "npm@$NPM_VERSION"
+
+      - name: Publish exactly the tarball the build job made
+        run: |
+          set -eu
+          set -- "$RUNNER_TEMP"/release/*.tgz
+          [ "$#" -eq 1 ] || { echo "::error::Expected exactly one tarball, found $#."; exit 1; }
+          npm publish "$1" --provenance --access public --ignore-scripts
+
+      - name: Tag the release, and move the floating major tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          ROLL: ${{ inputs.roll-floating-major-tag }}
+        run: |
+          set -eu
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA" > /dev/null
+          if [ "$ROLL" = "true" ]; then
+            # Named for the major of the version just published: a 2.0.0 release creates `v2` and
+            # never moves `v1`, and while the package is 0.x the tag is `v0` -- `@v1` only ever
+            # points at a 1.x release.
+            MAJOR_TAG="v${VERSION%%.*}"
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$MAJOR_TAG" > /dev/null 2>&1; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR_TAG" \
+                -f sha="$GITHUB_SHA" -F force=true > /dev/null
+            else
+              gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                -f ref="refs/tags/$MAJOR_TAG" -f sha="$GITHUB_SHA" > /dev/null
+            fi
+          fi

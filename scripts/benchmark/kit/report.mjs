@@ -44,6 +44,24 @@ const range = (a, b) => {
     ? formatUsd(low)
     : `${formatUsd(low)} – ${formatUsd(high)}`
 }
+/**
+ * A price shown only to the nearest power of ten, so no one quotes a precision the measurement does
+ * not have.
+ * @param {number} a - one end of the bracket, USD per million operations.
+ * @param {number} b - the other end.
+ * @returns {string} e.g. `~$0.1`, or `~$0.01 – $1` when the bracket spans orders of magnitude.
+ */
+export function orderOfMagnitudeUsd(a, b) {
+  const [low, high] = a <= b ? [a, b] : [b, a]
+  const nearest = (value) => {
+    if (!(value > 0)) return "$0"
+    const exponent = Math.round(Math.log10(value))
+    return `$${(10 ** exponent).toFixed(Math.max(0, -exponent))}`
+  }
+  const lo = nearest(low)
+  const hi = nearest(high)
+  return lo === hi ? `~${lo}` : `~${lo} – ${hi}`
+}
 const row = (cells) => `| ${cells.join(" | ")} |`
 const table = (header, rows) => [row(header), row(header.map(() => "---")), ...rows.map(row)]
 const AGREEMENT_LABEL = {
@@ -72,9 +90,9 @@ function glance(results) {
   }
   const overheadComplexity = analysis.complexity["end-to-end:with-package"]
   lines.push(
-    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds **${formatMs(typical.overheadMs)}** per operation compared with a bare-minimum baseline (${percent(typical.overheadPercent)}), about **${range(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute. Overall, ${growthSentence(overheadComplexity)}.`,
+    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds **${formatMs(typical.overheadMs)}** per operation compared with a bare-minimum baseline (**${percent(typical.overheadPercent)}** of the baseline). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
     "",
-    "> Dollar figures are **estimates** from published list prices (see _Cost model_ below) and are for comparing orders of magnitude, not for budgeting to the cent.",
+    "> The relative figure and the growth class are the dependable ones: both come from the same run, so they survive a change of machine. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
     "",
   )
   const bundle = Object.values(metadata.bundleSizes ?? {}).reduce(
@@ -102,9 +120,9 @@ function glance(results) {
           formatBytes(largest.overheadHeapBytes),
         ],
         [
-          "Estimated compute cost per 1M operations",
-          range(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion),
-          range(largest.cost.lowUsdPerMillion, largest.cost.highUsdPerMillion),
+          "Compute cost per 1M operations (order of magnitude)",
+          orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion),
+          orderOfMagnitudeUsd(largest.cost.lowUsdPerMillion, largest.cost.highUsdPerMillion),
         ],
         [
           "Single-core throughput ceiling of the overhead alone",
@@ -335,7 +353,7 @@ function functionsSection(results, suite) {
 function contributionSection(results) {
   const { analysis, metadata } = results
   const unit = metadata.workload.unit
-  const lines = ["## 3. What makes up the end-to-end overhead", ""]
+  const lines = ["## 3. What makes up one end-to-end operation", ""]
   if (analysis.contribution.length === 0) {
     lines.push(
       "_No function declared how it is used in the end-to-end run (`inEndToEnd`), so there is nothing to attribute._",
@@ -344,7 +362,7 @@ function contributionSection(results) {
     return lines
   }
   lines.push(
-    "Each function's measured cost is multiplied by how many times one end-to-end operation calls it, then compared with the total overhead from section 1. This shows where the cost actually lives, so effort goes to the function that matters. Shares are estimates: they can sum to slightly more or less than 100% because the two measurements were taken separately (the remainder is shown as _unattributed_).",
+    "Each function's measured cost is multiplied by how many times one end-to-end operation calls it. A function measured on its own includes everything it calls, so where one attributed function calls another, the nested time is subtracted from the caller (its _exclusive_ time): every moment of the operation belongs to at most one row. Shares are measured against the whole operation with the package, a figure measured directly -- not against the _added_ time, which is the small difference of two noisy medians. They are estimates (each function was measured separately); the remainder is shown as _unattributed_.",
     "",
   )
   for (const n of [analysis.cost.typicalN, metadata.tiers[metadata.tiers.length - 1]]) {
@@ -353,16 +371,20 @@ function contributionSection(results) {
     const rows = analysis.contribution
       .map((c) => ({ c, r: c.rows.find((x) => x.n === n) }))
       .filter((x) => x.r)
-      .sort((a, b) => b.r.estimatedMs - a.r.estimatedMs)
-    const attributed = rows.reduce((sum, x) => sum + x.r.estimatedMs, 0)
-    lines.push(`**At ${String(n)} ${unit}s** (total added: ${formatMs(total.overheadMs)})`, "")
+      .sort((a, b) => b.r.exclusiveMs - a.r.exclusiveMs)
+    const attributed = rows.reduce((sum, x) => sum + x.r.exclusiveMs, 0)
+    const unattributed = Math.max(0, total.withPackageMs - attributed)
+    lines.push(
+      `**At ${String(n)} ${unit}s** (whole operation: ${formatMs(total.withPackageMs)})`,
+      "",
+    )
     lines.push(
       ...table(
         [
           "Function",
           "Calls / operation",
-          "Estimated time",
-          "Share of added time",
+          "Time if called that often",
+          "Exclusive time",
           "Share of operation",
         ],
         [
@@ -370,19 +392,15 @@ function contributionSection(results) {
             `\`${x.c.id}\``,
             String(x.r.calls),
             formatMs(x.r.estimatedMs),
-            percent(x.r.shareOfOverhead === null ? null : x.r.shareOfOverhead * 100),
+            formatMs(x.r.exclusiveMs),
             percent(x.r.shareOfTotal === null ? null : x.r.shareOfTotal * 100),
           ]),
           [
             "_unattributed_",
             "",
-            formatMs(Math.max(0, total.overheadMs - attributed)),
-            percent(
-              total.overheadMs > 0
-                ? (Math.max(0, total.overheadMs - attributed) / total.overheadMs) * 100
-                : null,
-            ),
             "",
+            formatMs(unattributed),
+            percent(total.withPackageMs > 0 ? (unattributed / total.withPackageMs) * 100 : null),
           ],
         ],
       ),

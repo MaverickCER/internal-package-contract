@@ -1,8 +1,9 @@
 /**
  * Reviews the open GitHub code-scanning alerts of the branch you are on and rejects each one
  * explicitly (a branch with no analysis yet has none, so a branch carrying a fix is never blocked by
- * the default branch's still-open alert). LOCAL ONLY: it reads them with the developer's own `gh` login (see
- * {@link file://../scripts/code-scanning-alerts.mjs}) and does nothing in CI.
+ * the default branch's still-open alert). Locally it reads them with the developer's own `gh` login;
+ * in CI with the workflow's `GH_TOKEN` (`permissions: security-events: read`), scoped to the ref
+ * being built (see {@link file://../scripts/code-scanning-alerts.mjs}).
  *
  * ## Policy
  *
@@ -16,10 +17,13 @@
  * - **Anything that builds, runs or ships** (`src/`, `bin/`, published package files, ...): the alert
  *   must be FIXED. There is no exception for it; the check fails until GitHub no longer reports it.
  *
- * ## The registry is git-ignored on purpose
+ * ## The registry is committed
  *
- * `.repo-contract/exceptions/code-scanning.json` lists weaknesses in the code, so it is never
- * committed and every clone builds its own. Add it to `.gitignore` (`init` does).
+ * `.repo-contract/exceptions/code-scanning.json` is committed like every other registry, so the
+ * decision to reject a development-only alert is reviewed in the pull request that introduces it and
+ * CI sees the same records a developer does. It only ever names alerts in development-only code
+ * (tests, scripts, docs, CI configuration), which are low-sensitivity by definition; an alert in code
+ * that ships can never be recorded here at all.
  *
  * Example record (id is `code-scanning:<rule>@<path>`; one record covers every alert of a rule in a file):
  *
@@ -28,12 +32,19 @@
  *   "exceptions": [
  *     {
  *       "id": "code-scanning:js/bad-tag-filter@test/build/banner.test.ts",
- *       "version": 1,
+ *       "version": 2,
  *       "justification": "Development-only code (tests, scripts, docs, CI configuration) is never built, run by users or published, so a finding in it cannot reach anyone.",
  *       "alternatives": "Rewrite the flagged code to satisfy the rule.",
  *       "remediation": "None needed while the code stays development-only.",
- *       "method": "independent-human-review",
+ *       "method": "policy-rule",
  *       "exceptionType": "dev-only-not-shipped",
+ *       "ruleBroken": "Every open code-scanning alert must be fixed before merge.",
+ *       "attempted": "Judged by location, not by alert: ...",
+ *       "constraint": "The flagged code only exists to test, document, configure or automate the package; ...",
+ *       "whyPreferable": "Rewriting test and tooling code ...",
+ *       "residualRisk": "None for users, since the file is never built or published.",
+ *       "revisitWhen": "The file is added to package.json `files`, or moves under src/ or bin/.",
+ *       "expires": "",
  *       "rule": "js/bad-tag-filter",
  *       "path": "test/build/banner.test.ts"
  *     }
@@ -51,14 +62,21 @@ import type {
 } from "repo-contract/helpers"
 import {
   CODE_SCANNING_EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
-import type { ExceptionMethod, ExceptionRegistrySchema, ExceptionType } from "./exception-record.js"
+import type {
+  ExceptionMethod,
+  ExceptionRegistrySchema,
+  ExceptionType,
+  ExceptionV2Fields,
+} from "./exception-record.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const scriptPath = path.join(packageRoot, "scripts", "code-scanning-alerts.mjs")
@@ -70,6 +88,17 @@ const DEV_JUSTIFICATION =
   "Development-only code (tests, scripts, docs, CI configuration) is never built, run by users or published, so a finding in it cannot reach anyone."
 const DEV_ALTERNATIVES = "Rewrite the flagged code to satisfy the rule."
 const DEV_REMEDIATION = "None needed while the code stays development-only."
+const DEV_RULE_BROKEN = "Every open code-scanning alert must be fixed before merge."
+const DEV_ATTEMPTED =
+  "Judged by location, not by alert: the file is development-only (a dev directory or file pattern, and not covered by package.json `files`). No per-alert fix was attempted."
+const DEV_CONSTRAINT =
+  "The flagged code only exists to test, document, configure or automate the package; it often contains the flagged pattern on purpose (a fixture, an example)."
+const DEV_WHY_PREFERABLE =
+  "Rewriting test and tooling code to satisfy a rule meant for shipped code costs more than the nothing it protects: no user ever runs it."
+const DEV_RESIDUAL_RISK =
+  "None for users, since the file is never built or published. A contributor running the code locally could still exercise the flagged behavior."
+const DEV_REVISIT_WHEN =
+  "The file is added to package.json `files`, or moves under src/ or bin/ (the check then rejects the alert with no exception)."
 
 /** Where development-only code lives; a path anywhere else builds, runs or ships. */
 const DEV_PREFIXES = [
@@ -115,9 +144,9 @@ interface Finding {
   readonly path: string
 }
 
-interface CodeScanningRecord {
+interface CodeScanningRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly alternatives: string
   readonly remediation: string
@@ -155,12 +184,20 @@ export function isDevPath(filePath: string, publishedEntries: readonly string[])
 export function createDevStub(finding: Finding, id: string): CodeScanningRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: DEV_JUSTIFICATION,
     alternatives: DEV_ALTERNATIVES,
     remediation: DEV_REMEDIATION,
-    method: "independent-human-review",
+    // No person reviewed this: the standing location rule in this check decided it, and the record says so.
+    method: "policy-rule",
     exceptionType: "dev-only-not-shipped",
+    ...emptyV2Fields(),
+    ruleBroken: DEV_RULE_BROKEN,
+    attempted: DEV_ATTEMPTED,
+    constraint: DEV_CONSTRAINT,
+    whyPreferable: DEV_WHY_PREFERABLE,
+    residualRisk: DEV_RESIDUAL_RISK,
+    revisitWhen: DEV_REVISIT_WHEN,
     rule: finding.rule,
     path: finding.path,
   }
@@ -214,33 +251,50 @@ const registrySchema: StandardSchemaV1<unknown, readonly CodeScanningRecord[]> =
   },
 }
 
-const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", "exceptionType"]
+const REQUIREMENTS = [
+  "justification",
+  "alternatives",
+  "remediation",
+  "method",
+  "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
+]
 const POLICY: ExceptionPolicyConfig = {
   "code-scanning": {
     rules: { dev: { mode: "exception", requirements: [...REQUIREMENTS] } },
   },
 }
 
-/** Steps for the one situation each failure kind means; always local, since this check never runs in CI. */
+/** Steps for the one situation each failure kind means. */
 function guidance(kind: string | undefined, message: string | undefined): string {
   const steps =
-    kind === "gh-not-installed"
+    kind === "no-token"
       ? [
-          "Install the GitHub CLI: https://cli.github.com (macOS: `brew install gh`).",
-          "Sign in: `gh auth login`.",
-          "Allow it to read code scanning: `gh auth refresh -s security_events`.",
+          "In the contract workflow job add `permissions: { contents: read, security-events: read }`.",
+          "Pass the token to the step that runs the contract: `env: { GH_TOKEN: ${{ github.token }} }`.",
         ]
-      : kind === "not-authenticated"
+      : kind === "truncated"
         ? [
-            "Sign in: `gh auth login`.",
-            "Allow it to read code scanning: `gh auth refresh -s security_events`.",
+            message ?? "The alert list is too long to read in full.",
+            "Triage the open alerts on GitHub first.",
           ]
-        : kind === "no-access"
+        : kind === "gh-not-installed"
           ? [
-              "Your gh login cannot read this repository's code-scanning alerts.",
-              "Allow it: `gh auth refresh -s security_events`, and use an account with access to the repository.",
+              "Install the GitHub CLI: https://cli.github.com (macOS: `brew install gh`).",
+              "Sign in: `gh auth login`.",
+              "Allow it to read code scanning: `gh auth refresh -s security_events`.",
             ]
-          : [`GitHub's answer could not be read${message ? `: ${message}` : "."}`]
+          : kind === "not-authenticated"
+            ? [
+                "Sign in: `gh auth login`.",
+                "Allow it to read code scanning: `gh auth refresh -s security_events`.",
+              ]
+            : kind === "no-access"
+              ? [
+                  "Your gh login cannot read this repository's code-scanning alerts.",
+                  "Allow it: `gh auth refresh -s security_events`, and use an account with access to the repository.",
+                ]
+              : [`GitHub's answer could not be read${message ? `: ${message}` : "."}`]
   return [
     "Code scanning could not be reviewed:",
     ...steps.map((step, index) => `  ${String(index + 1)}. ${step}`),
