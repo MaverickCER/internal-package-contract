@@ -22,20 +22,13 @@
  * `Tests` for the real evidence dependency (they read artifacts `Tests`
  * produces), the same as `contract.ts`.
  *
- * This repository has no `src/` -- its real code lives in `checks/` (mirrored
- * by `vitest.config.ts`'s `coverage.include` and `stryker.config.mjs`'s
- * `mutate`, both at this package's own root). `Architecture`/`Crap`/
- * `Duplication` all hardcode a `"src"` scan-path positional in their `run`
- * (the same shape every consumer's own `src/` would occupy) -- `withScanTarget`
- * below retargets that one positional at `checks` for each, exactly the "run
- * override is the escape hatch" pattern `contract.ts` itself documents for a
- * consumer that needs to differ from a preset's generic default. `bin/` and
- * `scripts/` (this package's CLI/tooling entry points, not its tested library
- * surface -- no coverage instrumentation, no mutation testing) are
- * deliberately excluded from that scan for the same reason: `Crap` reads
- * `coverage/coverage-final.json`, which has no entries for either, and
- * scoring an uninstrumented function against 0% coverage would be a false
- * CRAP-threshold failure, not a real one.
+ * This repository has no `src/` -- its real code lives in `checks/`, `scripts/` and `bin/` (the scope
+ * in `scope.mjs`, mirrored by `vitest.config.ts`'s coverage scope and `stryker.config.mjs`'s `mutate`).
+ * `Architecture`/`Crap`/`Duplication` all hardcode a `"src"` scan-path positional in their `run` (the
+ * same shape every consumer's own `src/` would occupy) -- the `...OverScope` helpers below retarget it
+ * at those trees, leaving out only the process entry points `scope.mjs` names, exactly the "run
+ * override is the escape hatch" pattern `contract.ts` itself documents for a consumer that needs to
+ * differ from a preset's generic default.
  *
  * `Mutation` is `isolated: true` and declared last, same reasoning and same
  * position as `contract.ts`'s own `Mutation` -- Stryker spawns its own worker
@@ -47,8 +40,9 @@ import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import type { CheckDefinitionConfig, PolicyContext } from "repo-contract"
 import { format, license, lint, typecheck } from "repo-contract/presets"
+import { ENTRY_SHELLS, NON_RUNTIME, SCOPE_DIRS } from "./scope.mjs"
 import { architecture } from "./checks/architecture.js"
-import { branchProtection } from "./checks/branch-protection.js"
+import { createBranchProtection } from "./checks/branch-protection.js"
 import { commits } from "./checks/commits.js"
 import { coverage } from "./checks/coverage.js"
 import { crap } from "./checks/crap.js"
@@ -61,15 +55,47 @@ import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
 import { securityDeps } from "./checks/security-deps.js"
+import { securityDevDeps } from "./checks/security-dev-deps.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
+import { suppressions } from "./checks/suppressions.js"
 import { tests } from "./checks/tests.js"
 
-/** Replaces the scan-path positional (always index 1: `[tool, path, ...flags]`) a `run` array hardcodes, for a check whose default scan target (`"src"`) does not exist in this repository. */
-function withScanTarget(check: CheckDefinitionConfig, target: string): CheckDefinitionConfig {
-  const run = [...(check.run as readonly string[])]
-  run[1] = target
-  return { ...check, run }
+/** A check's `run` array, which every check here writes as `[tool, "src", ...flags]`; `[tool, ...flags]` is what is left after the scan path. */
+function flagsOf(check: CheckDefinitionConfig): string[] {
+  return (check.run as readonly string[]).slice(2)
+}
+
+/** Retargets `crap4ts` from the consumer's `src/` at this repository's own trees, leaving out the entry shells (see scope.mjs). */
+function crapOverScope(check: CheckDefinitionConfig): CheckDefinitionConfig {
+  return {
+    ...check,
+    run: [
+      "crap4ts",
+      ...SCOPE_DIRS,
+      ...[...NON_RUNTIME, ...ENTRY_SHELLS].flatMap((glob) => ["--ignore", glob]),
+      ...flagsOf(check),
+    ],
+  }
+}
+
+/** Retargets `jscpd`, which takes the ignore globs as one comma-separated option. */
+function duplicationOverScope(check: CheckDefinitionConfig): CheckDefinitionConfig {
+  return {
+    ...check,
+    run: [
+      "jscpd",
+      ...SCOPE_DIRS,
+      "--ignore",
+      [...NON_RUNTIME, ...ENTRY_SHELLS].join(","),
+      ...flagsOf(check),
+    ],
+  }
+}
+
+/** Retargets `depcruise`. */
+function architectureOverScope(check: CheckDefinitionConfig): CheckDefinitionConfig {
+  return { ...check, run: ["depcruise", ...SCOPE_DIRS, ...flagsOf(check)] }
 }
 
 export default defineRepoContract({
@@ -83,13 +109,15 @@ export default defineRepoContract({
     // `isolated` -- the single heaviest check (Vitest with V8 coverage
     // instrumentation), same reasoning as `contract.ts`'s own `Tests`.
     Tests: { ...tests(), isolated: true },
-    Architecture: withScanTarget(architecture(), "checks"),
+    Architecture: architectureOverScope(architecture()),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
-    BranchProtection: branchProtection,
+    // This repository's own CI job is `self-check` (see .github/workflows/ci.yml), not the
+    // scaffolded consumer job id `contract`.
+    BranchProtection: createBranchProtection("self-check"),
     Coverage: { ...coverage, dependsOn: ["Tests"] },
-    Crap: { ...withScanTarget(crap, "checks"), dependsOn: ["Coverage"] },
-    Duplication: withScanTarget(duplication, "checks"),
+    Crap: { ...crapOverScope(crap), dependsOn: ["Coverage"] },
+    Duplication: duplicationOverScope(duplication),
     // `run` override (`contract.ts`'s own "Preset options are the preferred
     // way...; a direct run override is an escape hatch"): the published
     // `license` preset's default `run` passes `--osi` on the CLI, which
@@ -150,8 +178,10 @@ export default defineRepoContract({
     // Same reviewed-exceptions filter contract.ts's own SecurityDeps uses (see
     // checks/security-deps.ts) -- dogfooded here rather than duplicated.
     SecurityDeps: securityDeps(),
+    SecurityDevDeps: securityDevDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
+    Suppressions: suppressions(),
     DeadCode: deadCode(),
     Commits: commits(),
     Mutation: { ...mutation(), isolated: true },

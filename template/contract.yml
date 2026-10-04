@@ -1,11 +1,17 @@
 # internal-package-contract caller workflow. Runs the full contract on every
 # push and PR. Replace nothing -- the standard lives in the shared package.
+#
+# The job id is `contract`: it is the status check the default branch's ruleset requires before a
+# merge (`internal-package-contract init` configures that), so renaming it unprotects the branch.
 name: Contract
 
 on:
   pull_request:
   push:
     branches: [main]
+  # A bot-opened pull request (the dependency-pin sync, the release PR) does not start CI by itself;
+  # those workflows dispatch it on the PR's branch.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,18 +19,53 @@ permissions:
 jobs:
   contract:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # CodeScanning reads this ref's code-scanning alerts with the workflow token.
+      security-events: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0 # commitlint needs the base branch
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.x
       - run: npm ci
       # SecuritySocket scores the package on Socket.dev and FAILS without a token. Create one at
       # socket.dev (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings >
       # Secrets and variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
+      #
+      # In CI the contract runs `--strict`: a check that could not run here and has no recorded
+      # exception (.repo-contract/exceptions/environment.json) fails the job instead of passing yellow.
       - run: npm run contract
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+      # The contract's own record of the run -- evidence.json (what each check executed), report.json
+      # (the verdict, every result classified, per-check timing) and summary.md (also written to the
+      # job summary above).
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: contract-report
+          path: reports/contract
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The package declares `engines.node >=22`; the contract above runs on 24, so prove the declared
+  # floor itself by building and testing on it.
+  node-floor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.x
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test

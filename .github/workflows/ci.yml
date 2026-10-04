@@ -20,16 +20,29 @@ permissions:
 jobs:
   self-check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.x
       - run: npm ci
       - run: npm run contract
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: contract-report
+          path: reports/contract
+          if-no-files-found: ignore
+          retention-days: 30
 
   # bin/init.mjs does path/file-I/O and git-hook wiring -- verify it (and the
   # unit suite) actually work on Windows, not just macOS/Linux. Not the full
@@ -38,10 +51,10 @@ jobs:
   windows-smoke:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.x
       - run: npm ci

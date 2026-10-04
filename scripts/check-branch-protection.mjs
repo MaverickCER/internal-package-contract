@@ -7,6 +7,10 @@
 // anything GitHub-API-shaped, and this package has no other network
 // dependency to justify adding one.
 //
+// Reports `deletion`, `non_fast_forward`, `pull_request` (and whether it requires review threads
+// to be resolved) and `required_status_checks` (and which contexts it requires) -- the last is the
+// rule that stops a red CI run from being merged and, through the release pipeline, published.
+//
 // Read-only: never creates or modifies a ruleset. `bin/init.mjs`'s own `init`
 // command does that, sharing this script's owner/repo resolution
 // (scripts/github-repo.mjs).
@@ -76,12 +80,25 @@ function main() {
     .map((r) => r.id)
 
   const ruleTypes = new Set()
+  const requiredChecks = new Set()
+  let requiresThreadResolution = false
   for (const id of activeBranchRulesetIds) {
     const detail = gh(["api", `repos/${owner}/${repo}/rulesets/${String(id)}`])
     if (detail.status !== 0) continue
     const ruleset = JSON.parse(detail.stdout || "{}")
     if (!rulesetCoversBranch(ruleset, defaultBranch)) continue
-    for (const rule of ruleset.rules ?? []) ruleTypes.add(rule.type)
+    for (const rule of ruleset.rules ?? []) {
+      ruleTypes.add(rule.type)
+      if (
+        rule.type === "pull_request" &&
+        rule.parameters?.required_review_thread_resolution === true
+      ) {
+        requiresThreadResolution = true
+      }
+      if (rule.type === "required_status_checks") {
+        for (const c of rule.parameters?.required_status_checks ?? []) requiredChecks.add(c.context)
+      }
+    }
   }
 
   report({
@@ -92,6 +109,9 @@ function main() {
     hasDeletion: ruleTypes.has("deletion"),
     hasNonFastForward: ruleTypes.has("non_fast_forward"),
     hasPullRequest: ruleTypes.has("pull_request"),
+    hasRequiredStatusChecks: ruleTypes.has("required_status_checks"),
+    requiredChecks: [...requiredChecks],
+    requiresThreadResolution,
   })
 }
 

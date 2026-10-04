@@ -12,16 +12,21 @@
  * this package's own dev tooling (npm's own arborist/pacote/sigstore chain via `licensee`,
  * Vitest's coverage internals, markdownlint-cli2's TOML parser, adm-zip via `github-actionlint`)
  * when npm's own `--omit` filtering doesn't cleanly separate a hoisted/deduplicated package from
- * every path that reaches it. Every one of those has a real, standing exception record in
+ * every path that reaches it. Each such finding is a record in
  * `.repo-contract/exceptions/security-deps.json` (id, justification, alternatives considered,
- * remediation status, method, exceptionType) -- reviewable and revisable like any other
- * exception, never a name silently dropped from a Set.
+ * remediation status, method, exceptionType, and the structured v2 fields) -- reviewable and
+ * revisable like any other exception, never a name silently dropped from a Set. A repository with
+ * nothing to excuse has an empty registry.
  *
- * Every severity requires the full field set (no severity-tiered "forbidden above medium" the
- * way `SecuritySocket` has): a dependency vulnerability, unlike a Socket supply-chain-behavior
- * alert about a package you're generally free to swap, is very often deep in a *required*
- * tooling chain with no real alternative -- the exception system exists precisely to make that
- * judgment call reviewable, not to forbid it outright regardless of severity.
+ * A critical advisory is forbidden outright: a published package must not ship a known critical
+ * vulnerability in what users install, and "critical, but excused" is the inverted ordering
+ * `SecuritySocket` (which forbids critical and high alike) never had. Every lower severity needs the
+ * full field set -- a dependency vulnerability is often deep in a *required* chain with no patched
+ * release yet, and the exception system exists to make that judgment call reviewable.
+ *
+ * `--omit=dev` scopes this to what users install. The published packages here have no runtime
+ * dependencies, so this check is vacuous for them by design; the development and CI tooling --
+ * where the real exposure of a CI-centric ecosystem is -- is audited by `SecurityDevDeps`.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
@@ -35,14 +40,21 @@ import type {
 import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionMethod, ExceptionType } from "./exception-record.js"
+import type {
+  ExceptionV2Fields,
+  ExceptionRegistrySchema,
+  ExceptionMethod,
+  ExceptionType,
+} from "./exception-record.js"
 import { abnormalTermination } from "./shared.js"
 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/security-deps.json"
@@ -67,9 +79,9 @@ interface NormalizedDepFinding {
 }
 
 /** One `.repo-contract/exceptions/security-deps.json` record: the shared security-family fields plus this registry's own identity fields. */
-interface SecurityDepsExceptionRecord {
+interface SecurityDepsExceptionRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly alternatives: string
   readonly remediation: string
@@ -101,12 +113,13 @@ export function createSecurityDepsStub(
 ): SecurityDepsExceptionRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     package: finding.package,
     range: finding.range,
     severity: finding.severity,
@@ -163,10 +176,24 @@ export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDep
     },
   }
 
-/** Every severity requires the full field set -- see this module's own doc comment for why there is no severity-tiered "forbidden" the way `SecuritySocket` has. */
-const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", "exceptionType"]
+/**
+ * A critical runtime advisory is never waivable -- a vulnerability that bad in what users install is
+ * fixed or removed, not excused. Every lower severity (a `high` advisory with no patched release yet is
+ * common in a required chain) needs a complete, finding-specific exception.
+ */
+const REQUIREMENTS = [
+  "justification",
+  "alternatives",
+  "remediation",
+  "method",
+  "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
+]
 const SECURITY_DEPS_POLICY: ExceptionPolicyConfig = {
-  "security-deps": { default: { mode: "exception", requirements: [...REQUIREMENTS] } },
+  "security-deps": {
+    default: { mode: "exception", requirements: [...REQUIREMENTS] },
+    rules: { critical: { mode: "forbidden" } },
+  },
 }
 const SECURITY_DEPS_GLOBAL_DEFAULT_POLICY: ExceptionPolicy = {
   mode: "exception",
@@ -178,6 +205,7 @@ const VALID_SECURITY_DEPS_REQUIREMENTS = [
   "remediation",
   "method",
   "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
 ] as const
 
 /** @internal Exported for direct unit coverage -- see this module's own doc comment. */

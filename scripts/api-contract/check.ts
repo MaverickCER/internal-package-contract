@@ -32,7 +32,7 @@ import {
 import type { AssignabilityQuery, ResolveAssignability } from "./compatibility-classifier.js"
 import { classifyContractChanges } from "./compatibility-classifier.js"
 import { declaredLevelFromChangesets } from "./changesets.js"
-import { maxLevel, rankAtLeast } from "./levels.js"
+import { maxLevel, rankAtLeast, requiredLevelFor } from "./levels.js"
 import type {
   ApiContractEvidence,
   ApiContractSnapshot,
@@ -244,23 +244,16 @@ async function runSingleTargetCheck(
   const impact: ContractImpact = schemaVersionChanges.length > 0 ? "breaking" : classifierImpact
   const baselineVersion = parseVersion(baseline.meta.packageVersion)
 
-  let requiredLevel: RequiredReleaseLevel | undefined
-  if (impact === "unknown") {
-    requiredLevel = undefined
-  } else if (impact === "breaking") {
-    requiredLevel = "major"
-  } else if (impact === "compatible") {
-    // A compatible change needs a minor bump when it *widens* the public surface: a new
-    // export/member/overload/enum-member (`*-added`), and also a `release-tag-changed` -- which,
-    // being compatible rather than breaking, can only mean a tag was widened (e.g. `@beta` ->
-    // `@public`), newly exposing API. Everything else compatible (a doc-only edit, an optionality
-    // relaxation) is a patch.
-    const widensSurface = (kind: (typeof diff)[number]["kind"]): boolean =>
-      kind.endsWith("-added") || kind === "release-tag-changed"
-    requiredLevel = diff.some((change) => widensSurface(change.kind)) ? "minor" : "patch"
-  } else {
-    requiredLevel = "none"
-  }
+  // Below 1.0.0 the required level is deflated -- see `requiredLevelFor`.
+  const preOne = parseVersion(packageJson.version)?.major === 0
+
+  // A compatible change widens the public surface when it adds an export/member/overload/enum-member
+  // (`*-added`), and also on a `release-tag-changed` -- which, being compatible rather than breaking,
+  // can only mean a tag was widened (e.g. `@beta` -> `@public`), newly exposing API.
+  const widensSurface = diff.some(
+    (change) => change.kind.endsWith("-added") || change.kind === "release-tag-changed",
+  )
+  const requiredLevel = requiredLevelFor(impact, widensSurface, preOne)
 
   const minimumRequiredVersion =
     requiredLevel === undefined
@@ -303,6 +296,7 @@ export async function runApiContractCheck(
 ): Promise<ApiContractEvidence> {
   const [packageJson, targets] = await Promise.all([readPackageJson(root), readTargets(root)])
 
+  const preOneRoot = parseVersion(packageJson.version)?.major === 0
   const targetResults: ApiContractTargetResult[] = []
   // Sequential, not `Promise.all`: each target invokes API Extractor's own programmatic API, which
   // is not safe to run concurrently against the same process (it mutates shared compiler-host
@@ -324,7 +318,9 @@ export async function runApiContractCheck(
     }
     requiredLevel = maxLevel(requiredLevel, result.requiredLevel ?? "none")
   }
-  if (hasUnknownTarget && requiredLevel !== "major") requiredLevel = undefined
+  if (hasUnknownTarget && requiredLevel !== (preOneRoot ? "minor" : "major")) {
+    requiredLevel = undefined
+  }
 
   // All targets share one package.json version; pick baselineVersion from any target that has a
   // historical baseline (they should all agree) to compute the one minimumRequiredVersion.

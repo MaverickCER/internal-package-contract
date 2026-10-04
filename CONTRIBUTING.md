@@ -18,12 +18,14 @@
 3. `npm run contract` locally before opening a PR.
 4. Open a PR. CI re-runs the same contract; merge once it's green.
 
-## Keeping `contract.ts` in sync with `repo-contract`'s own config
+## One standard, not two copies
 
-`contract.ts` is a hand-maintained clone of `repo-contract`'s own `repo-contract.config.ts` (see
-that file's own doc comment for exactly what is and isn't cloned) -- an improvement or a new check
-upstream in `repo-contract` does **not** propagate here automatically. Re-diff the two whenever
-bumping the `repo-contract` dependency version in `package.json`, and bring over anything relevant.
+The standard lives once, in `checks/` (`checks/standard.ts`'s `standardChecks()` is the map of every
+check). `contract.ts` wraps it for a consuming package, and `repo-contract`'s own self-contract
+composes the same map -- overriding only what it must and adding what is its alone -- so a fix to a
+check lands once and "a MaverickCER package" means one thing. When you change a check, you are changing
+it for every package; when `repo-contract` needs something different, make it an explicit override
+there (with a reason), not a fork.
 
 ## Releasing
 
@@ -33,3 +35,7 @@ merging the automated "Version Packages" PR that accumulates is what actually bu
 `package.json`/`CHANGELOG.md` and tags a release (see `.github/workflows/release.yml`). This
 package is never published to npm (see README/SECURITY.md), so "release" here means a version bump,
 a CHANGELOG entry, and a git tag only -- no `npm publish` ever runs.
+
+Tag scheme: every release is tagged `v<major>.<minor>.<patch>`, and the floating `v<major>` tag
+(`v0` while this is 0.x) is moved to the newest release of that major -- never across a major
+boundary. Consumers pin a release tag, or better the commit it points at (see SECURITY.md).

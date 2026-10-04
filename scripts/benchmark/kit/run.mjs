@@ -4,7 +4,8 @@
 // those measurements into the three things a platform engineer asks:
 //   1. endToEnd     -- what does adopting the package add to one operation, at every size?
 //   2. functions    -- how does each function scale, and does it match its documented big-O?
-//   3. contribution -- which functions make up the end-to-end overhead, and how much each?
+//   3. contribution -- which functions make up the end-to-end operation, and how much time each is
+//                      responsible for (nested calls counted once, against the operation's total)?
 
 import { classifyGroup } from "../classify-complexity.mjs"
 import { estimateCost, DEFAULT_RATES } from "./cost-model.mjs"
@@ -13,9 +14,22 @@ import { computeDurationStats, sample } from "./measure.mjs"
 import { COMPLEXITY_NOTATION, expectationOf } from "./define.mjs"
 import { QUICK_TIERS, tierName } from "./tiers.mjs"
 
-export const RESULTS_SCHEMA_VERSION = 3
+export const RESULTS_SCHEMA_VERSION = 4
 
 const CLASS_ORDER = Object.keys(COMPLEXITY_NOTATION)
+
+/**
+ * Which process produced a results file: the workflow and run in CI (so a number can be traced back to
+ * the job that measured it), else the local command.
+ * @param {Record<string, string | undefined>} env
+ * @returns {string}
+ */
+export function generatedBy(env) {
+  if (!env["CI"]) return "npm run benchmark"
+  const workflow = env["GITHUB_WORKFLOW"]
+  const run = env["GITHUB_RUN_ID"]
+  return workflow && run ? `ci: ${workflow} (run ${run})` : "ci"
+}
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
@@ -123,7 +137,7 @@ function completedAt(group, n) {
 /**
  * @param {object} suite - a suite returned by defineSuite.
  * @param {{ quick?: boolean, only?: readonly string[], sampling?: object, rates?: object, root?: string, bundleFiles?: readonly string[], onProgress?: (message: string) => void, now?: () => Date }} [options] - run controls.
- * @returns {Promise<object>} the complete results object (schema version 3).
+ * @returns {Promise<object>} the complete results object (schema version 4).
  */
 export async function runSuite(suite, options = {}) {
   const now = options.now ?? (() => new Date())
@@ -225,7 +239,7 @@ export async function runSuite(suite, options = {}) {
         finishedAtUtc: finishedAt.toISOString(),
         totalSuiteDurationMs: finishedAt.getTime() - startedAt.getTime(),
       },
-      generatedBy: process.env["CI"] ? "ci" : "npm run benchmark",
+      generatedBy: generatedBy(process.env),
       versions: {
         ...(suite.package.version ? { [suite.package.name]: suite.package.version } : {}),
       },
@@ -255,6 +269,8 @@ export function analyze({ suite, results, tiers, rates }) {
     complexity[group] = {
       class: classification.complexityClass,
       exponent: classification.exponent,
+      rSquared: classification.rSquared ?? null,
+      ...(classification.reason ? { reason: classification.reason } : {}),
       notation: classification.complexityClass
         ? COMPLEXITY_NOTATION[classification.complexityClass]
         : null,
@@ -292,12 +308,18 @@ export function analyze({ suite, results, tiers, rates }) {
     })
   }
 
-  const contribution = []
+  // What each function costs per operation (its own measured time x how often one operation calls
+  // it). A function measured on its own includes everything it calls, so a function that calls
+  // another attributed one names it in `inEndToEnd.includes` and the nested time is subtracted from
+  // it: every moment of the operation is then attributed to at most one function, and the shares are
+  // measured against the operation's total -- a figure measured directly -- never against the
+  // difference of two medians, which is noisy and can be zero or negative.
+  const inclusive = new Map()
   for (const fn of suite.functions) {
     if (!fn.inEndToEnd) continue
     const variant = fn.inEndToEnd.variant ?? fn.variants?.[0]?.name
     const group = variant ? `fn:${fn.id}@${variant}` : `fn:${fn.id}`
-    const rows = []
+    const rows = new Map()
     for (const row of endToEnd) {
       const entry = completedAt(results[group], row.n)
       if (!entry) continue
@@ -305,16 +327,29 @@ export function analyze({ suite, results, tiers, rates }) {
         typeof fn.inEndToEnd.callsPerOperation === "function"
           ? fn.inEndToEnd.callsPerOperation(row.n)
           : fn.inEndToEnd.callsPerOperation
-      const estimatedMs = entry.durationMs.medianMs * calls
-      rows.push({
-        n: row.n,
+      rows.set(row.n, { calls, estimatedMs: entry.durationMs.medianMs * calls })
+    }
+    inclusive.set(fn.id, { fn, group, rows })
+  }
+  const contribution = []
+  for (const { fn, group, rows } of inclusive.values()) {
+    const out = []
+    for (const [n, { calls, estimatedMs }] of rows) {
+      const row = endToEnd.find((candidate) => candidate.n === n)
+      const nested = (fn.inEndToEnd.includes ?? []).reduce(
+        (sum, id) => sum + (inclusive.get(id)?.rows.get(n)?.estimatedMs ?? 0),
+        0,
+      )
+      const exclusiveMs = Math.max(0, estimatedMs - nested)
+      out.push({
+        n,
         calls,
         estimatedMs,
-        shareOfOverhead: row.overheadMs > 0 ? estimatedMs / row.overheadMs : null,
-        shareOfTotal: row.withPackageMs > 0 ? estimatedMs / row.withPackageMs : null,
+        exclusiveMs,
+        shareOfTotal: row && row.withPackageMs > 0 ? exclusiveMs / row.withPackageMs : null,
       })
     }
-    contribution.push({ id: fn.id, group, description: fn.inEndToEnd.description, rows })
+    contribution.push({ id: fn.id, group, description: fn.inEndToEnd.description, rows: out })
   }
 
   // The tier nearest the declared typical size (a quick run may not include it).

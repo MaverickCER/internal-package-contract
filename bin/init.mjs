@@ -6,13 +6,20 @@ import { sync as spawnSync } from "cross-spawn"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { resolveOwnerRepo, rulesetCoversBranch } from "../scripts/github-repo.mjs"
 import {
+  REQUIRED_STATUS_CHECK_CONTEXT,
+  mergeRequiredRules,
+  resolveOwnerRepo,
+  rulesetCoversBranch,
+} from "../scripts/github-repo.mjs"
+import {
+  buildPinVars,
   buildVars,
   listTemplateFiles,
   parseInitArgs,
   render,
   renderJson,
+  shaFromLockfile,
   validatePackageName,
 } from "../scripts/init-lib.mjs"
 
@@ -32,6 +39,27 @@ const USAGE = `Usage: internal-package-contract init [--name <package-name> [--o
                   --owner defaults to the origin remote's owner, else MaverickCER.
   --force:        overwrite files that already exist.
 `
+
+/**
+ * The commit of this package to pin scaffolded workflows at: what the consumer's lockfile resolved,
+ * else the checkout this CLI is running from. `undefined` when neither is known.
+ */
+function resolveIpcSha() {
+  let lockText
+  try {
+    lockText = readFileSync(path.join(cwd, "package-lock.json"), "utf8")
+  } catch {
+    lockText = undefined
+  }
+  const fromLock = shaFromLockfile(lockText)
+  if (fromLock !== undefined) return fromLock
+  const head = spawnSync("git", ["-C", packageRoot, "rev-parse", "HEAD"], { encoding: "utf8" })
+  const sha = head.status === 0 ? head.stdout.trim() : ""
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : undefined
+}
+
+const ipcVersion = JSON.parse(readFileSync(path.join(packageRoot, "package.json"), "utf8")).version
+const pins = buildPinVars({ version: ipcVersion, sha: resolveIpcSha() })
 
 const nameProblem = args.name === undefined ? undefined : validatePackageName(args.name)
 if (args.errors.length > 0 || nameProblem !== undefined) {
@@ -62,8 +90,14 @@ function scaffoldPackageFile(rel, vars) {
 
 if (args.name !== undefined) {
   const owner = args.owner ?? resolveOwnerRepo(cwd)?.owner ?? "MaverickCER"
-  const vars = buildVars({ name: args.name, owner, description: args.description })
+  const vars = buildVars({ name: args.name, owner, description: args.description, ...pins })
   for (const rel of listTemplateFiles(path.join(packageRoot, "template", "package"))) {
+    // A workflow that calls one of this repository's reusable workflows is pinned by commit SHA; with
+    // no SHA to pin it to, writing it would only produce a workflow that cannot run.
+    if (pins.ipcSha === "" && rel.endsWith("sync-internal-package-contract.yml")) {
+      skipped.push(`${rel} (no commit of internal-package-contract to pin it to -- see below)`)
+      continue
+    }
     scaffoldPackageFile(rel, vars)
   }
 }
@@ -80,12 +114,32 @@ function scaffold(from, to) {
   done.push(to)
 }
 
+/** Like {@link scaffold}, with the pin placeholders (`{{ipcRef}}`, `{{ipcSha}}`) rendered. */
+function scaffoldRendered(from, to) {
+  const dest = path.join(cwd, to)
+  if (existsSync(dest) && !force) {
+    skipped.push(`${to} (exists)`)
+    return
+  }
+  mkdirSync(path.dirname(dest), { recursive: true })
+  const text = readFileSync(path.join(packageRoot, "template", from), "utf8")
+  writeFileSync(dest, render(text, { ipcRef: pins.ipcRef, ipcSha: pins.ipcSha }))
+  done.push(to)
+}
+
 scaffold("gitignore", ".gitignore")
 scaffold("gitattributes", ".gitattributes")
 scaffold("editorconfig", ".editorconfig")
 scaffold("gitmessage", ".gitmessage")
 scaffold("contract.yml", ".github/workflows/contract.yml")
-scaffold("release.yml", ".github/workflows/release.yml")
+if (pins.ipcSha === "") {
+  skipped.push(
+    ".github/workflows/release.yml (it is pinned to a commit of internal-package-contract, and none could be resolved: run `npm install` so the lockfile pins one, then `init` again)",
+  )
+} else {
+  scaffoldRendered("release.yml", ".github/workflows/release.yml")
+}
+scaffold("dependabot.yml", ".github/dependabot.yml")
 scaffold("codeowners", "CODEOWNERS")
 scaffold("security.md", "SECURITY.md")
 scaffold("contributing.md", "CONTRIBUTING.md")
@@ -145,31 +199,15 @@ if (inRepo) {
 // GitHub branch protection -- idempotently ensure the default branch blocks
 // deletion, blocks force-pushes, and cannot be merged into without a PR
 // (`required_approving_review_count: 0` -- still forces every change through
-// a PR, without requiring a second reviewer on a solo-maintained repo).
+// a PR, without requiring a second reviewer on a solo-maintained repo), requires
+// the `contract` status check (strict) before a merge, and requires review
+// threads to be resolved (so CodeRabbit's and humans' findings block until answered).
 // Best-effort, like everything else here: skipped with a warning, never a
 // hard failure, when `gh` isn't installed/authenticated or the remote isn't
 // a recognizable GitHub repo. `checks/branch-protection.ts` verifies this
 // same state on every `npm run contract`, so it can't silently regress once
 // set up. See that check's companion `scripts/check-branch-protection.mjs`
 // for the read-only equivalent of the resolution logic below.
-const REQUIRED_RULE_TYPES = ["deletion", "non_fast_forward", "pull_request"]
-
-function defaultRuleFor(type) {
-  if (type === "pull_request") {
-    return {
-      type,
-      parameters: {
-        required_approving_review_count: 0,
-        dismiss_stale_reviews_on_push: false,
-        require_code_owner_review: false,
-        require_last_push_approval: false,
-        required_review_thread_resolution: false,
-      },
-    }
-  }
-  return { type }
-}
-
 function ghApi(args) {
   return spawnSync("gh", ["api", ...args], { cwd, encoding: "utf8" })
 }
@@ -222,17 +260,14 @@ function upsertBranchProtection() {
     }
   }
 
-  const existingTypes = new Set((existing?.rules ?? []).map((r) => r.type))
-  const missingTypes = REQUIRED_RULE_TYPES.filter((t) => !existingTypes.has(t))
+  const { rules: mergedRules, changes } = mergeRequiredRules(existing?.rules ?? [])
   const alreadyActive = existing?.enforcement === "active"
-  if (existing && missingTypes.length === 0 && alreadyActive) {
+  if (existing && changes.length === 0 && alreadyActive) {
     skipped.push(
-      `GitHub branch protection (${owner}/${repo}#${defaultBranch} already has deletion, force-push, and PR-required rules)`,
+      `GitHub branch protection (${owner}/${repo}#${defaultBranch} already requires deletion, force-push and PR protection, the ${REQUIRED_STATUS_CHECK_CONTEXT} check, and resolved review threads)`,
     )
     return
   }
-
-  const mergedRules = [...(existing?.rules ?? []), ...missingTypes.map(defaultRuleFor)]
 
   if (existing) {
     // GitHub's ruleset-update endpoint is PUT, not PATCH -- it also replaces the
@@ -263,7 +298,7 @@ function upsertBranchProtection() {
       return
     }
     const summary = [
-      ...(missingTypes.length > 0 ? [`added ${missingTypes.join(", ")}`] : []),
+      ...(changes.length > 0 ? [changes.join(", ")] : []),
       ...(alreadyActive ? [] : ["reactivated it"]),
     ].join(", ")
     done.push(
@@ -294,7 +329,7 @@ function upsertBranchProtection() {
     return
   }
   done.push(
-    `GitHub branch protection: created a ruleset on ${owner}/${repo}#${defaultBranch} (deletion, force-push, and PR-required)`,
+    `GitHub branch protection: created a ruleset on ${owner}/${repo}#${defaultBranch} (deletion, force-push, PR-required, the ${REQUIRED_STATUS_CHECK_CONTEXT} check, resolved review threads)`,
   )
 }
 

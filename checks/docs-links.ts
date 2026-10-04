@@ -14,8 +14,10 @@
  *     `--markdown` flag;
  *   - external (`http(s)://`) links are filtered in this policy, not via
  *     linkinator's `--skip` (whose regex handling zeroes the whole crawl for
- *     several common patterns). External link rot is best-effort, not a
- *     release gate; a broken *local* link is always blocking.
+ *     several common patterns). An unreachable external link is not proof the
+ *     link is dead (rate limiting, bot walls), so it is a recorded degradation,
+ *     accepted per URL in `.repo-contract/exceptions/environment.json`
+ *     (`environment:DocsLinks:<url>`); a broken *local* link is always blocking.
  *   - a local link that resolves to an existing file OR directory on disk is
  *     not counted broken -- linkinator 404s a bare directory link (`specs/`)
  *     that a git host (GitHub, GitLab) renders fine.
@@ -23,6 +25,7 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import { degraded } from "./environment-exceptions.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const docsLinksScript = path.join(packageRoot, "scripts", "check-docs-links.mjs")
@@ -42,7 +45,7 @@ type ToolResult<T> =
 export const docsLinks: CheckDefinitionConfig = {
   run: ["node", docsLinksScript],
   output: { format: "json" },
-  policy: ({ result }): PolicyResult => {
+  policy: async ({ result }): Promise<PolicyResult> => {
     const hasReadme = existsSync(path.join(process.cwd(), "README.md"))
     const hasDocsSite = existsSync(path.join(process.cwd(), "docs", "index.html"))
     if (!hasReadme && !hasDocsSite) {
@@ -106,14 +109,16 @@ export const docsLinks: CheckDefinitionConfig = {
     const brokenExternal = broken.filter((l) => isExternal(l.url))
 
     if (brokenLocal.length === 0) {
-      const note =
-        brokenExternal.length > 0
-          ? ` (${String(brokenExternal.length)} external link(s) also unreachable -- not blocking)`
-          : ""
-      return {
-        outcome: brokenExternal.length > 0 ? "warn" : "pass",
-        rationale: `Docs (links): 0 broken local link(s) across ${String(links.length)} checked${note}.`,
-      }
+      const base = `Docs (links): 0 broken local link(s) across ${String(links.length)} checked`
+      if (brokenExternal.length === 0) return { outcome: "pass", rationale: `${base}.` }
+      // An external link linkinator could not reach is not proof the link is dead (rate limiting,
+      // a bot wall): it is a degradation, accepted per URL by `environment:DocsLinks:<url>`.
+      const urls = [...new Set(brokenExternal.map((l) => l.url))]
+      return degraded({
+        check: "DocsLinks",
+        codes: urls,
+        rationale: `${base} (${String(urls.length)} external link(s) unreachable: ${urls.join(", ")}).`,
+      })
     }
 
     return {
