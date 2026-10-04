@@ -52,7 +52,9 @@ function baselineDir(target: string): string {
  * @returns The hex-encoded sha256 digest of `content`.
  */
 export function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex")
+  // Line endings are not content: a Windows checkout with `core.autocrlf` rewrites a committed LF
+  // baseline to CRLF, which must not read as "manually edited".
+  return createHash("sha256").update(content.replace(/\r\n/g, "\n")).digest("hex")
 }
 
 /**
