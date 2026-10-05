@@ -35,7 +35,7 @@ const FIELD_SEP = "\x1f"
 // loophole" instruction) so it can never quietly swallow a real behavior change.
 const EXEMPT_PATH_PREFIXES = [".github/", ".vscode/"]
 
-const SEVERITY = { patch: 0, minor: 1, major: 2 }
+const SEVERITIES_HIGHEST_FIRST = ["major", "minor", "patch"]
 
 /** The repository being processed; set by {@link generateChangesets} so the script is testable in-process. */
 let root = process.cwd()
@@ -44,8 +44,8 @@ function git(args) {
   return execFileSync("git", args, { encoding: "utf8", cwd: root })
 }
 
-function readPackageName() {
-  return JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).name
+function readPackage() {
+  return JSON.parse(readFileSync(path.join(root, "package.json")).toString())
 }
 
 // A squash merge (this workflow's own auto-merge step uses `gh pr merge --squash`)
@@ -70,7 +70,6 @@ function findRange() {
   }
 
   const history = git(["log", "--format=%H" + FIELD_SEP + "%s", "HEAD"])
-    .trim()
     .split("\n")
     .filter(Boolean)
     .map((line) => line.split(FIELD_SEP))
@@ -86,18 +85,14 @@ function findRange() {
   // so history predating this mechanism (already versioned some other way,
   // e.g. release-please) is never retroactively re-bumped.
   const adoptionLog = git(["log", "--diff-filter=A", "--format=%H", "--", ".changeset/config.json"])
-    .trim()
     .split("\n")
     .filter(Boolean)
-  const anchor = adoptionLog.length > 0 ? adoptionLog[adoptionLog.length - 1] : null
-  return { anchor }
+  // The first commit to have added it is the last one listed; none at all leaves no anchor.
+  return { anchor: adoptionLog.at(-1) }
 }
 
 function changedFiles(sha) {
-  return git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha])
-    .trim()
-    .split("\n")
-    .filter(Boolean)
+  return git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split("\n").filter(Boolean)
 }
 
 function isExempt(files) {
@@ -135,14 +130,19 @@ function parseSubject(subject) {
  * @param {{ author?: string, preOne?: boolean }} [context]
  * @returns {"patch" | "minor" | "major" | null}
  */
-export function bumpFor(subject, body, { author = "", preOne = false } = {}) {
+export function bumpFor(
+  subject,
+  body,
+  // Stryker disable next-line StringLiteral: any author that is not a bot's behaves the same as none
+  { author = "", preOne = false } = {},
+) {
   const optIn = OPT_IN.exec(body)?.[1]
   if (optIn) return optIn
   if (BOT_AUTHOR.test(author)) return null
   const { type, breaking } = parseSubject(subject)
   if (breaking || /BREAKING CHANGE:/.test(body)) return preOne ? "minor" : "major"
   if (type === "feat") return preOne ? "patch" : "minor"
-  if (type !== undefined && RELEASABLE_TYPES.has(type)) return "patch"
+  if (RELEASABLE_TYPES.has(type)) return "patch"
   return null
 }
 
@@ -160,14 +160,14 @@ function listCommits(range) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [sha, author, subject, body = ""] = entry.split(FIELD_SEP)
+      const [sha, author, subject, body] = entry.split(FIELD_SEP)
       return { sha, author, subject, body }
     })
 }
 
 function writeChangeset(pkgName, sha, bump, subject) {
   const dir = path.join(root, ".changeset")
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  mkdirSync(dir, { recursive: true })
   const name = `auto-${sha.slice(0, 12)}.md`
   const content = `---\n"${pkgName}": ${bump}\n---\n\n${subject}\n`
   writeFileSync(path.join(dir, name), content)
@@ -178,19 +178,17 @@ function highestSeverityAcrossChangesets() {
   const dir = path.join(root, ".changeset")
   if (!existsSync(dir)) return null
   const files = readdirSync(dir).filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
-  let max = null
+  const bumps = new Set()
   for (const file of files) {
-    const content = readFileSync(path.join(dir, file), "utf8")
+    const content = readFileSync(path.join(dir, file)).toString()
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
     if (!frontmatterMatch) continue
     for (const line of frontmatterMatch[1].split("\n")) {
       const bumpMatch = line.match(/:\s*(major|minor|patch)\s*$/)
-      if (bumpMatch && (max === null || SEVERITY[bumpMatch[1]] > SEVERITY[max])) {
-        max = bumpMatch[1]
-      }
+      if (bumpMatch) bumps.add(bumpMatch[1])
     }
   }
-  return max
+  return SEVERITIES_HIGHEST_FIRST.find((level) => bumps.has(level)) ?? null
 }
 
 /** Whether the package is still below 1.0.0, where bumps are deflated. */
@@ -216,14 +214,15 @@ function main(log) {
     return { generated: 0, files: [] }
   }
 
-  const pkgName = readPackageName()
-  const preOne = isPreOne(JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version)
+  const pkg = readPackage()
+  const pkgName = pkg.name
+  const preOne = isPreOne(pkg.version)
   const commits = listCommits(range)
   const files = []
 
   for (const { sha, author, subject, body } of commits) {
+    // A commit with no changed files is exempt too: `every` over nothing is true.
     const changed = changedFiles(sha)
-    if (changed.length === 0) continue
     if (isExempt(changed)) continue
     if (alreadyCovered(changed)) continue
 
@@ -254,6 +253,8 @@ function main(log) {
 }
 
 // Run only as a script, so the bump rules above can be imported and tested.
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression: process entry point, exercised only by spawning the script
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   generateChangesets()
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression
