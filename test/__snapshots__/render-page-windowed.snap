@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Benchmark history</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --gridline: #e1e0d9;
+    --baseline: #8a897f;
+    --border: rgba(11, 11, 11, 0.10);
+    --link: #1a55a8;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --gridline: #2c2c2a;
+      --baseline: #7b7a72;
+      --border: rgba(255, 255, 255, 0.10);
+      --link: #8ab4f8;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --series-7: #9085e9;
+      --series-8: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --gridline: #2c2c2a;
+    --baseline: #7b7a72;
+    --border: rgba(255, 255, 255, 0.10);
+    --link: #8ab4f8;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 2px; }
+  a { color: var(--link); }
+  p.lede, p.sub { color: var(--text-secondary); max-width: 72ch; }
+  p.sub { margin: 0 0 4px; font-size: 12px; }
+  section.methodology { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 16px 0 28px; }
+  section.methodology p { margin: 6px 0; color: var(--text-secondary); }
+  section.methodology strong { color: var(--text-primary); }
+  .category { margin-bottom: 40px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 16px; padding: 0; list-style: none; }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .chart-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px 8px; }
+  .chart-card h3 { font-size: 13px; margin: 0 0 2px; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+  .class-badge { display: inline-block; font-size: 11px; color: var(--text-secondary); background: var(--page); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin: 0 0 6px; }
+  svg.chart { width: 100%; height: auto; background: var(--surface-1); }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .axis { stroke: var(--baseline); stroke-width: 1; }
+  .axis-label { fill: var(--text-secondary); font-size: 9px; }
+  .series-label { fill: var(--text-primary); font-size: 9px; }
+  .series-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .series-dot { stroke-width: 2; }
+  .s1 { stroke: var(--series-1); }
+  .series-dot.s1 { fill: var(--series-1); stroke: var(--surface-1); }
+  .s2 { stroke: var(--series-2); }
+  .series-dot.s2 { fill: var(--series-2); stroke: var(--surface-1); }
+  .s3 { stroke: var(--series-3); }
+  .series-dot.s3 { fill: var(--series-3); stroke: var(--surface-1); }
+  .s4 { stroke: var(--series-4); }
+  .series-dot.s4 { fill: var(--series-4); stroke: var(--surface-1); }
+  .s5 { stroke: var(--series-5); }
+  .series-dot.s5 { fill: var(--series-5); stroke: var(--surface-1); }
+  .s6 { stroke: var(--series-6); }
+  .series-dot.s6 { fill: var(--series-6); stroke: var(--surface-1); }
+  .s7 { stroke: var(--series-7); }
+  .series-dot.s7 { fill: var(--series-7); stroke: var(--surface-1); }
+  .s8 { stroke: var(--series-8); }
+  .series-dot.s8 { fill: var(--series-8); stroke: var(--surface-1); }
+  .empty { color: var(--text-secondary); font-size: 12px; padding: 20px 0; }
+  details.data { margin: 6px 0 4px; font-size: 12px; }
+  details.data summary { cursor: pointer; color: var(--link); padding: 4px 0; }
+  details.data summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  details.data table { border-collapse: collapse; width: 100%; margin-top: 6px; display: block; overflow-x: auto; }
+  details.data caption { text-align: left; color: var(--text-secondary); padding: 2px 0 6px; }
+  details.data th, details.data td { text-align: left; padding: 2px 8px 2px 0; font-variant-numeric: tabular-nums; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  footer { color: var(--text-secondary); font-size: 11px; margin-top: 32px; }
+  @media (forced-colors: active) {
+    .series-line { stroke: CanvasText; }
+    .series-dot { fill: CanvasText; stroke: Canvas; }
+    .gridline { stroke: GrayText; }
+    .axis { stroke: CanvasText; }
+    .axis-label, .series-label { fill: CanvasText; }
+    .chart-card, section.methodology, .class-badge { border-color: CanvasText; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Benchmark history</h1>
+  <p class="lede">Committed benchmark history, rendered fresh on every deploy. Each chart names the version and date of its first and last run, and every figure is also available as a table that links the commit and pull request it was measured at.</p>
+  
+
+  <section class="methodology" aria-label="How to read these charts">
+    <p><strong>What's measured:</strong> the median wall-clock time of each named benchmark group, at each of its declared input-size tiers, recorded after each merge that touches benchmarked code.</p>
+    <p><strong>Absolute timing is not comparable machine-to-machine:</strong> these numbers come from whatever CI runner measured a given commit, and runner hardware varies. A single point moving a little is expected noise, not necessarily a regression.</p>
+    <p><strong>What IS trustworthy regardless of machine: the inferred complexity class</strong> shown under each chart's title, and the package's overhead relative to its own baseline. They describe the shape of the cost curve, not its level. A class change (for example linear to quadratic) is the signal worth investigating; a wiggling line within the same class usually is not.</p>
+  </section>
+
+<section class="category" aria-labelledby="cat0"><h2 id="cat0">Runtime</h2><p class="sub">2 of 3 recorded run(s) shown (most recent 2 max). Each chart's data is available as a table beneath it.</p><ul class="legend" aria-label="Series"><li class="legend-item"><svg class="key" width="26" height="10" aria-hidden="true"><line class="series-line s1" x1="1" x2="25" y1="5" y2="5" stroke-dasharray="none"/></svg>baseline</li><li class="legend-item"><svg class="key" width="26" height="10" aria-hidden="true"><line class="series-line s2" x1="1" x2="25" y1="5" y2="5" stroke-dasharray="6 3"/></svg>stress</li><li class="legend-item"><svg class="key" width="26" height="10" aria-hidden="true"><line class="series-line s3" x1="1" x2="25" y1="5" y2="5" stroke-dasharray="2 3"/></svg>extreme</li><li class="legend-item"><svg class="key" width="26" height="10" aria-hidden="true"><line class="series-line s4" x1="1" x2="25" y1="5" y2="5" stroke-dasharray="8 3 2 3"/></svg>custom</li></ul><div class="grid"><article class="chart-card"><h3>fn:flat</h3><p class="class-badge">Inferred complexity: constant (R² 1.00)</p><svg class="chart" role="img" aria-labelledby="c0g0-t c0g0-d" viewBox="0 0 300 150"><title id="c0g0-t">fn:flat: median time per run</title><desc id="c0g0-d">baseline: 5.00 ms → 5.00 ms over 1 run; stress: 5.00 ms → 5.00 ms over 1 run. From run 1, 2026-02-01 to run 2, –. Inferred complexity constant.</desc><line class="gridline" x1="38" x2="246" y1="8.0" y2="8.0"/><text class="axis-label" x="2" y="11.0">5.40 ms</text><line class="gridline" x1="38" x2="246" y1="69.0" y2="69.0"/><text class="axis-label" x="2" y="72.0">2.70 ms</text><line class="gridline" x1="38" x2="246" y1="130.0" y2="130.0"/><text class="axis-label" x="2" y="133.0">0.00 µs</text><line class="axis" x1="38" x2="246" y1="130" y2="130"/><text class="axis-label" x="38" y="144">run 1, 2026-02-01</text><text class="axis-label" x="246" y="144" text-anchor="end">run 2, –</text><path class="series-line s1" d="M142.0 17.0" stroke-dasharray="none"/><path class="series-line s2" d="M142.0 17.0" stroke-dasharray="6 3"/><circle class="series-dot s1" cx="142.0" cy="17.0" r="3.5"/><text class="series-label" x="149.0" y="20.0">baseline</text><circle class="series-dot s2" cx="142.0" cy="17.0" r="3.5"/><text class="series-label" x="149.0" y="30.0">stress</text></svg><details class="data"><summary>Data table for fn:flat</summary><table><caption>fn:flat: median time per recorded run</caption><thead><tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th><th scope="col">baseline (median)</th><th scope="col">stress (median)</th><th scope="col">extreme (median)</th><th scope="col">custom (median)</th></tr></thead><tbody><tr><th scope="row">1</th><td>2026-02-01</td><td>–</td><td>1234567</td><td>–</td><td>5.00 ms</td><td>5.00 ms</td><td>–</td><td>–</td></tr><tr><th scope="row">2</th><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr></tbody></table></details></article><article class="chart-card"><h3>fn:gappy</h3><p class="class-badge">Inferred complexity: linear (R² 0.92)</p><svg class="chart" role="img" aria-labelledby="c0g1-t c0g1-d" viewBox="0 0 300 150"><title id="c0g1-t">fn:gappy: median time per run</title><desc id="c0g1-d">baseline: 2.00 ms → 2.00 ms over 2 runs; stress: 21.00 ms → 21.00 ms over 1 run; custom: 3.50 ms → 4.00 ms over 2 runs. From run 1, 2026-02-01 to run 2, –. Inferred complexity linear.</desc><line class="gridline" x1="38" x2="246" y1="8.0" y2="8.0"/><text class="axis-label" x="2" y="11.0">22.68 ms</text><line class="gridline" x1="38" x2="246" y1="69.0" y2="69.0"/><text class="axis-label" x="2" y="72.0">11.34 ms</text><line class="gridline" x1="38" x2="246" y1="130.0" y2="130.0"/><text class="axis-label" x="2" y="133.0">0.00 µs</text><line class="axis" x1="38" x2="246" y1="130" y2="130"/><text class="axis-label" x="38" y="144">run 1, 2026-02-01</text><text class="axis-label" x="246" y="144" text-anchor="end">run 2, –</text><path class="series-line s1" d="M38.0 119.2 L246.0 119.2" stroke-dasharray="none"/><path class="series-line s2" d="M246.0 17.0" stroke-dasharray="6 3"/><path class="series-line s4" d="M38.0 111.2 L246.0 108.5" stroke-dasharray="8 3 2 3"/><circle class="series-dot s2" cx="246.0" cy="17.0" r="3.5"/><text class="series-label" x="253.0" y="20.0">stress</text><circle class="series-dot s4" cx="246.0" cy="108.5" r="3.5"/><text class="series-label" x="253.0" y="111.5">custom</text><circle class="series-dot s1" cx="246.0" cy="119.2" r="3.5"/><text class="series-label" x="253.0" y="122.2">baseline</text></svg><details class="data"><summary>Data table for fn:gappy</summary><table><caption>fn:gappy: median time per recorded run</caption><thead><tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th><th scope="col">baseline (median)</th><th scope="col">stress (median)</th><th scope="col">extreme (median)</th><th scope="col">custom (median)</th></tr></thead><tbody><tr><th scope="row">1</th><td>2026-02-01</td><td>–</td><td>1234567</td><td>–</td><td>2.00 ms</td><td>–</td><td>–</td><td>3.50 ms</td></tr><tr><th scope="row">2</th><td>–</td><td>–</td><td>–</td><td>–</td><td>2.00 ms</td><td>21.00 ms</td><td>–</td><td>4.00 ms</td></tr></tbody></table></details></article><article class="chart-card"><h3>fn:linear</h3><p class="class-badge">Inferred complexity: linear (R² 1.00)</p><svg class="chart" role="img" aria-labelledby="c0g2-t c0g2-d" viewBox="0 0 300 150"><title id="c0g2-t">fn:linear: median time per run</title><desc id="c0g2-d">baseline: 1.20 ms → 150.0 ms over 2 runs; stress: 12.00 ms → 1500.0 ms over 2 runs; extreme: 120.0 ms → 15000.0 ms over 2 runs. From run 1, 2026-02-01 to run 2, –. Inferred complexity linear.</desc><line class="gridline" x1="38" x2="246" y1="8.0" y2="8.0"/><text class="axis-label" x="2" y="11.0">16200.0 ms</text><line class="gridline" x1="38" x2="246" y1="69.0" y2="69.0"/><text class="axis-label" x="2" y="72.0">8100.0 ms</text><line class="gridline" x1="38" x2="246" y1="130.0" y2="130.0"/><text class="axis-label" x="2" y="133.0">0.00 µs</text><line class="axis" x1="38" x2="246" y1="130" y2="130"/><text class="axis-label" x="38" y="144">run 1, 2026-02-01</text><text class="axis-label" x="246" y="144" text-anchor="end">run 2, –</text><path class="series-line s1" d="M38.0 130.0 L246.0 128.9" stroke-dasharray="none"/><path class="series-line s2" d="M38.0 129.9 L246.0 118.7" stroke-dasharray="6 3"/><path class="series-line s3" d="M38.0 129.1 L246.0 17.0" stroke-dasharray="2 3"/><circle class="series-dot s3" cx="246.0" cy="17.0" r="3.5"/><text class="series-label" x="253.0" y="20.0">extreme</text><circle class="series-dot s2" cx="246.0" cy="118.7" r="3.5"/><text class="series-label" x="253.0" y="121.7">stress</text><circle class="series-dot s1" cx="246.0" cy="128.9" r="3.5"/><text class="series-label" x="253.0" y="131.9">baseline</text></svg><details class="data"><summary>Data table for fn:linear</summary><table><caption>fn:linear: median time per recorded run</caption><thead><tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th><th scope="col">baseline (median)</th><th scope="col">stress (median)</th><th scope="col">extreme (median)</th><th scope="col">custom (median)</th></tr></thead><tbody><tr><th scope="row">1</th><td>2026-02-01</td><td>–</td><td>1234567</td><td>–</td><td>1.20 ms</td><td>12.00 ms</td><td>120.0 ms</td><td>–</td></tr><tr><th scope="row">2</th><td>–</td><td>–</td><td>–</td><td>–</td><td>150.0 ms</td><td>1500.0 ms</td><td>15000.0 ms</td><td>–</td></tr></tbody></table></details></article><article class="chart-card"><h3>fn:single</h3><p class="class-badge unknown">Inferred complexity: unavailable (fewer than 2 tiers with recorded inputs)</p><svg class="chart" role="img" aria-labelledby="c0g3-t c0g3-d" viewBox="0 0 300 150"><title id="c0g3-t">fn:single: median time per run</title><desc id="c0g3-d">baseline: 0.500 ms → 0.500 ms over 1 run. From run 1, 2026-02-01 to run 2, –. Inferred complexity unavailable.</desc><line class="gridline" x1="38" x2="246" y1="8.0" y2="8.0"/><text class="axis-label" x="2" y="11.0">0.540 ms</text><line class="gridline" x1="38" x2="246" y1="69.0" y2="69.0"/><text class="axis-label" x="2" y="72.0">0.270 ms</text><line class="gridline" x1="38" x2="246" y1="130.0" y2="130.0"/><text class="axis-label" x="2" y="133.0">0.00 µs</text><line class="axis" x1="38" x2="246" y1="130" y2="130"/><text class="axis-label" x="38" y="144">run 1, 2026-02-01</text><text class="axis-label" x="246" y="144" text-anchor="end">run 2, –</text><path class="series-line s1" d="M142.0 17.0" stroke-dasharray="none"/><circle class="series-dot s1" cx="142.0" cy="17.0" r="3.5"/><text class="series-label" x="149.0" y="20.0">baseline</text></svg><details class="data"><summary>Data table for fn:single</summary><table><caption>fn:single: median time per recorded run</caption><thead><tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th><th scope="col">baseline (median)</th><th scope="col">stress (median)</th><th scope="col">extreme (median)</th><th scope="col">custom (median)</th></tr></thead><tbody><tr><th scope="row">1</th><td>2026-02-01</td><td>–</td><td>1234567</td><td>–</td><td>0.500 ms</td><td>–</td><td>–</td><td>–</td></tr><tr><th scope="row">2</th><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr></tbody></table></details></article><article class="chart-card"><h3>fn:step</h3><p class="class-badge unknown">Inferred complexity: unavailable (the cost does not follow a power law across the largest sizes)</p><svg class="chart" role="img" aria-labelledby="c0g4-t c0g4-d" viewBox="0 0 300 150"><title id="c0g4-t">fn:step: median time per run</title><desc id="c0g4-d">baseline: 1.00 ms → 1.00 ms over 1 run; stress: 1.00 ms → 1.00 ms over 1 run; extreme: 50.00 ms → 50.00 ms over 1 run. From run 1, 2026-02-01 to run 2, –. Inferred complexity unavailable.</desc><line class="gridline" x1="38" x2="246" y1="8.0" y2="8.0"/><text class="axis-label" x="2" y="11.0">54.00 ms</text><line class="gridline" x1="38" x2="246" y1="69.0" y2="69.0"/><text class="axis-label" x="2" y="72.0">27.00 ms</text><line class="gridline" x1="38" x2="246" y1="130.0" y2="130.0"/><text class="axis-label" x="2" y="133.0">0.00 µs</text><line class="axis" x1="38" x2="246" y1="130" y2="130"/><text class="axis-label" x="38" y="144">run 1, 2026-02-01</text><text class="axis-label" x="246" y="144" text-anchor="end">run 2, –</text><path class="series-line s1" d="M142.0 127.7" stroke-dasharray="none"/><path class="series-line s2" d="M142.0 127.7" stroke-dasharray="6 3"/><path class="series-line s3" d="M142.0 17.0" stroke-dasharray="2 3"/><circle class="series-dot s3" cx="142.0" cy="17.0" r="3.5"/><text class="series-label" x="149.0" y="20.0">extreme</text><circle class="series-dot s1" cx="142.0" cy="127.7" r="3.5"/><text class="series-label" x="149.0" y="130.7">baseline</text><circle class="series-dot s2" cx="142.0" cy="127.7" r="3.5"/><text class="series-label" x="149.0" y="140.7">stress</text></svg><details class="data"><summary>Data table for fn:step</summary><table><caption>fn:step: median time per recorded run</caption><thead><tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th><th scope="col">baseline (median)</th><th scope="col">stress (median)</th><th scope="col">extreme (median)</th><th scope="col">custom (median)</th></tr></thead><tbody><tr><th scope="row">1</th><td>2026-02-01</td><td>–</td><td>1234567</td><td>–</td><td>1.00 ms</td><td>1.00 ms</td><td>50.00 ms</td><td>–</td></tr><tr><th scope="row">2</th><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td><td>–</td></tr></tbody></table></details></article></div></section>
+
+  <footer>Generated 2026-03-01T00:00:00.000Z.</footer>
+</main>
+</body>
+</html>

@@ -60,15 +60,21 @@ const CATEGORICAL_SLOTS = [
 // regardless of which group happens to declare them first.
 const PREFERRED_TIER_ORDER = ["baseline", "stress", "extreme", "enterprise", "fixed"]
 
-function parseArgs(argv) {
+/**
+ * @param {string[]} argv - the command-line arguments after the script name.
+ * @returns {{ histories: string[], maxEntries: number, out?: string, readme?: string, repo?: string, help?: boolean }}
+ */
+export function parseArgs(argv) {
   const args = { histories: [], maxEntries: DEFAULT_MAX_ENTRIES }
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--out") args.out = argv[++i]
-    else if (arg === "--history") args.histories.push(argv[++i])
-    else if (arg === "--max-entries") args.maxEntries = Number(argv[++i])
-    else if (arg === "--readme") args.readme = argv[++i]
-    else if (arg === "--repo") args.repo = argv[++i]
+  // An iterator, so a flag takes the next argument as its value without any index to advance.
+  const items = argv[Symbol.iterator]()
+  const value = () => items.next().value
+  for (const arg of items) {
+    if (arg === "--out") args.out = value()
+    else if (arg === "--history") args.histories.push(value())
+    else if (arg === "--max-entries") args.maxEntries = Number(value())
+    else if (arg === "--readme") args.readme = value()
+    else if (arg === "--repo") args.repo = value()
     else if (arg === "--help" || arg === "-h") args.help = true
   }
   return args
@@ -121,16 +127,9 @@ function buildGroupData(group, entries, tierOrder) {
     }),
   }))
 
-  let latestClassification = { complexityClass: null, reason: "insufficient-data" }
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const tiers = entries[i].measurements?.[group]
-    if (tiers) {
-      latestClassification = classifyGroup(tiers)
-      break
-    }
-  }
-
-  return { group, series, ...latestClassification }
+  // A group is only discovered from an entry that measured it, so there is always one.
+  const latest = entries.findLast((entry) => entry.measurements?.[group])
+  return { group, series, ...classifyGroup(latest.measurements[group]) }
 }
 
 /** The version of the package an entry was measured at: the first recorded version that is not the suite's own. */
@@ -264,7 +263,7 @@ export function renderChartSvg(group, tierOrder, tierColorIndex, runs, idPrefix)
     `<title id="${idPrefix}-t">${escapeHtml(group.group)}: median time per run</title>`,
     `<desc id="${idPrefix}-d">${escapeHtml(describeGroup(group, runs))}</desc>`,
   ]
-  for (let g = 0; g <= 2; g++) {
+  for (const g of [0, 1, 2]) {
     const gy = PAD.top + (plotH / 2) * g
     parts.push(
       `<line class="gridline" x1="${String(PAD.left)}" x2="${String(WIDTH - PAD.right)}" y1="${gy.toFixed(1)}" y2="${gy.toFixed(1)}"/>`,
@@ -280,7 +279,6 @@ export function renderChartSvg(group, tierOrder, tierColorIndex, runs, idPrefix)
   const used = []
   for (const tier of tierOrder) {
     const series = group.series.find((s) => s.tier === tier)
-    if (!series) continue
     const segments = []
     let current = []
     for (const point of series.points) {
@@ -337,7 +335,7 @@ export function renderDataTable(group, tierOrder, runs, repoUrl) {
   const head = `<tr><th scope="col">Run</th><th scope="col">Date</th><th scope="col">Version</th><th scope="col">Commit</th><th scope="col">PR</th>${tiers.map((t) => `<th scope="col">${escapeHtml(t)} (median)</th>`).join("")}</tr>`
   const rows = runs.map((run, index) => {
     const cells = tiers.map((tier) => {
-      const point = group.series.find((s) => s.tier === tier)?.points[index]
+      const point = group.series.find((s) => s.tier === tier).points[index]
       return `<td>${point ? escapeHtml(formatMs(point.medianMs)) : "–"}</td>`
     })
     return `<tr><th scope="row">${String(index + 1)}</th><td>${escapeHtml(dateOf(run.timestamp))}</td><td>${run.version ? escapeHtml(run.version) : "–"}</td><td>${run.commit ? link(run.commit.slice(0, 7), `/commit/${run.commit}`) : "–"}</td><td>${run.pullRequest ? link(`#${String(run.pullRequest)}`, `/pull/${String(run.pullRequest)}`) : "–"}</td>${cells.join("")}</tr>`
@@ -506,14 +504,19 @@ ${body}
 `
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2))
+/**
+ * Runs the command: parses `argv`, builds the model from the history files and writes the page.
+ * @param {string[]} argv - the command-line arguments after the script name.
+ * @param {{ log: (text: string) => void, error: (text: string) => void }} io - where messages go.
+ * @returns {Promise<number>} the process exit code.
+ */
+export async function run(argv, io) {
+  const args = parseArgs(argv)
   if (args.help || !args.out || args.histories.length === 0) {
-    console.error(
+    io.error(
       "Usage: node render-page.mjs --out <docs/benchmarks/index.html> --history 'label|path/to/history.json' [--history ...] [--max-entries 200] [--readme <url of the package's benchmarks/README.md>] [--repo <https://github.com/owner/repo, to link commits and pull requests>]",
     )
-    process.exitCode = args.help ? 0 : 1
-    return
+    return args.help ? 0 : 1
   }
   if (!Number.isFinite(args.maxEntries) || args.maxEntries <= 0)
     args.maxEntries = DEFAULT_MAX_ENTRIES
@@ -522,14 +525,23 @@ async function main() {
   const html = renderHtml(model)
 
   await fs.mkdir(path.dirname(args.out), { recursive: true })
-  await fs.writeFile(args.out, html, "utf8")
-  console.log(`[render-page] wrote ${args.out} (${model.categories.length} categories)`)
+  await fs.writeFile(args.out, html)
+  io.log(`[render-page] wrote ${args.out} (${model.categories.length} categories)`)
+  return 0
 }
 
+// The process entry point: three lines that hand argv to `run` (tested in-process) and turn its result
+// into an exit code. Its test spawns the script, which coverage cannot attribute to this file.
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, ObjectLiteral: process entry point, exercised only by spawning the script
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
 if (isMain) {
-  main().catch((err) => {
-    console.error(err)
-    process.exitCode = 1
-  })
+  run(process.argv.slice(2), { log: console.log, error: console.error })
+    .then((code) => {
+      process.exitCode = code
+    })
+    .catch((err) => {
+      console.error(err)
+      process.exitCode = 1
+    })
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, ObjectLiteral

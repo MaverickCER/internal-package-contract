@@ -65,3 +65,17 @@ export function renderDataTable(
   repoUrl?: string,
 ): string
 export function renderHtml(model: PageModel): string
+
+export interface ParsedArgs {
+  histories: string[]
+  maxEntries: number
+  out?: string
+  readme?: string
+  repo?: string
+  help?: boolean
+}
+export function parseArgs(argv: readonly string[]): ParsedArgs
+export function run(
+  argv: readonly string[],
+  io: { log: (text: string) => void; error: (text: string) => void },
+): Promise<number>
