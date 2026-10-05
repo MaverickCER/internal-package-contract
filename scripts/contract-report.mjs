@@ -122,7 +122,7 @@ function seconds(ms) {
 /** @param {string} text */
 function firstLine(text) {
   // Always matches: the pattern accepts the empty string.
-  return /^[^\n]*/.exec(text)[0]
+  return /[^\n]*/.exec(text)[0]
 }
 
 /**

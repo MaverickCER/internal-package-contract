@@ -13,10 +13,10 @@ const HTTPS_PATTERN = /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/
  * @returns {{ owner: string, repo: string } | undefined}
  */
 export function resolveOwnerRepo(cwd = process.cwd()) {
-  const result = spawnSync("git", ["remote", "get-url", "origin"], { cwd, encoding: "utf8" })
-  if (result.status !== 0) return undefined
-
-  const url = result.stdout.trim()
+  const result = spawnSync("git", ["remote", "get-url", "origin"], { cwd })
+  // A failed `git` prints nothing on stdout (and a missing one has none), which no pattern matches.
+  // `String` turns the output buffer into text.
+  const url = String(result.stdout).trim()
   const match = SSH_PATTERN.exec(url) ?? HTTPS_PATTERN.exec(url)
   if (!match) return undefined
 
@@ -32,12 +32,8 @@ export function resolveOwnerRepo(cwd = process.cwd()) {
  * @returns {boolean}
  */
 export function rulesetCoversBranch(ruleset, branch) {
-  const include = ruleset.conditions?.ref_name?.include ?? []
-  return (
-    include.includes("~ALL") ||
-    include.includes("~DEFAULT_BRANCH") ||
-    include.includes(`refs/heads/${branch}`)
-  )
+  const include = ruleset.conditions?.ref_name?.include
+  return ["~ALL", "~DEFAULT_BRANCH", `refs/heads/${branch}`].some((ref) => include?.includes(ref))
 }
 
 /** The status-check context every consumer's default branch must require before a merge. */

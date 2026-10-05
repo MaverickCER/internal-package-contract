@@ -95,7 +95,7 @@ export function collectInventory(cwd, now = new Date()) {
     .sort()) {
     const name = file.replace(/\.json$/, "")
     try {
-      const parsed = JSON.parse(readFileSync(path.join(dir, file), "utf8"))
+      const parsed = JSON.parse(readFileSync(path.join(dir, file)).toString())
       const records = Array.isArray(parsed?.exceptions) ? parsed.exceptions : undefined
       if (records === undefined) throw new Error('no "exceptions" array')
       registries.push({ name, records })
@@ -148,6 +148,8 @@ export function runInventory(argv, cwd, out) {
   )
 }
 
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression: process entry point, exercised only by spawning the script
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   runInventory(process.argv.slice(2), process.cwd(), process.stdout)
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression
