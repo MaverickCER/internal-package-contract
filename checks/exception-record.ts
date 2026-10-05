@@ -125,7 +125,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
  * @returns `true` only for a valid date strictly before today's date.
  */
 export function isExpired(expires: string, now: Date = new Date()): boolean {
-  if (expires === "" || !ISO_DATE.test(expires)) return false
+  // An empty string is not a date either, so it is never expired.
+  if (!ISO_DATE.test(expires)) return false
   return expires < now.toISOString().slice(0, 10)
 }
 

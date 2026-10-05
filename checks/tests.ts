@@ -98,11 +98,13 @@ export function skippedByFile(
   root: string,
 ): ReadonlyMap<string, { skipped: number; todo: number }> {
   const byFile = new Map<string, { skipped: number; todo: number }>()
+  // Stryker disable next-line ArrayDeclaration: the stand-in element the mutant adds has no fields, so it counts for nothing
   for (const result of report.testResults ?? []) {
     const file = path
       .relative(root, result.name ?? "")
       .split(path.sep)
       .join("/")
+    // Stryker disable next-line ArrayDeclaration: the stand-in element the mutant adds has no fields, so it counts for nothing
     for (const assertion of result.assertionResults ?? []) {
       if (
         assertion.status !== "pending" &&

@@ -122,6 +122,7 @@ export function incompleteFields(
     const value = flat[key]
     if (typeof value !== "string" || value.trim() === "") missing.push(key)
   }
+  // Stryker disable next-line ConditionalExpression: `isExpired` is false for anything that is not a date string, so the type check only narrows the type
   if (typeof record.expires === "string" && isExpired(record.expires, now)) {
     missing.push(`expires (${record.expires} has passed)`)
   }

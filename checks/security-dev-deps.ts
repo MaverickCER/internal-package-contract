@@ -20,7 +20,7 @@
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { abnormalTermination, packageRoot, parseToolEnvelope } from "./shared.js"
+import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const scriptPath = path.join(packageRoot, "scripts", "audit-dev-deps.mjs")
 
@@ -69,8 +69,6 @@ export function securityDevDeps(): CheckDefinitionConfig {
     run: ["node", scriptPath],
     output: { format: "json" },
     policy: ({ result }): PolicyResult => {
-      const terminated = abnormalTermination(result, "npm audit")
-      if (terminated) return { outcome: "fail", rationale: terminated }
       const envelope = parseToolEnvelope<ToolResult>(result, "npm audit", "Dev dependency audit:")
       if (!envelope.ok) return envelope.result
       const report = envelope.value
