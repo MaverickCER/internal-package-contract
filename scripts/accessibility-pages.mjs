@@ -20,11 +20,8 @@ export const MAX_PAGES = 40
 
 /** @param {string} path @returns {Promise<boolean>} */
 async function isDirectory(path) {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch {
-    return false
-  }
+  const stats = await stat(path).catch(() => undefined)
+  return stats?.isDirectory() === true
 }
 
 /** @param {string} dir @returns {Promise<string[]>} entry names, sorted; empty when unreadable. */
@@ -32,6 +29,7 @@ async function list(dir) {
   try {
     return (await readdir(dir)).sort()
   } catch {
+    // Stryker disable next-line ArrayDeclaration: an unreadable folder holds no page, and the stand-in name the mutant puts here matches nothing
     return []
   }
 }
@@ -47,10 +45,8 @@ export async function resolvePages(docsDir) {
   for (const entry of entries) {
     const full = join(docsDir, entry)
     if (entry.endsWith(".html")) pages.push(full)
-    else if (await isDirectory(full)) {
-      const landing = join(full, "index.html")
-      if ((await list(full)).includes("index.html")) pages.push(landing)
-    }
+    // A file is "unreadable" as a directory, which `list` reports as empty.
+    else if ((await list(full)).includes("index.html")) pages.push(join(full, "index.html"))
   }
 
   const apiDir = join(docsDir, "api")
@@ -64,7 +60,6 @@ export async function resolvePages(docsDir) {
       // A page directly under api/ (the module index, say) is its own template.
       if (kind.endsWith(".html")) pages.push(join(apiDir, kind))
       const kindDir = join(apiDir, kind)
-      if (!(await isDirectory(kindDir))) continue
       const names = (await list(kindDir)).filter((name) => name.endsWith(".html"))
       const first = names.find((name) => name !== "index.html") ?? names[0]
       if (first !== undefined) pages.push(join(kindDir, first))

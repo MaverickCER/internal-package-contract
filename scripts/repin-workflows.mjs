@@ -63,7 +63,7 @@ export function repinWorkflows(dir, dependency, sha, ref) {
   }
   for (const entry of entries.filter((name) => /\.ya?ml$/.test(name))) {
     const file = path.join(workflows, entry)
-    const before = readFileSync(file, "utf8")
+    const before = readFileSync(file).toString()
     const { text, changed } = repinWorkflowText(before, dependency, sha, ref)
     if (changed > 0) {
       writeFileSync(file, text)
@@ -73,17 +73,33 @@ export function repinWorkflows(dir, dependency, sha, ref) {
   return rewritten
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const [dependency, sha, ref] = process.argv.slice(2)
+/**
+ * The command's body.
+ * @param {readonly string[]} argv - `<dependency> <commit-sha> <release-tag>`.
+ * @param {string} dir - the repository root.
+ * @param {{ out: (text: string) => void, err: (text: string) => void }} io - where output goes.
+ * @returns {number} the process exit code.
+ */
+export function run(argv, dir, io) {
+  const [dependency, sha, ref] = argv
   if (!dependency || !sha || !ref) {
-    process.stderr.write("Usage: repin-workflows.mjs <dependency> <commit-sha> <release-tag>\n")
-    process.exitCode = 1
-  } else {
-    const files = repinWorkflows(process.cwd(), dependency, sha, ref)
-    process.stdout.write(
-      files.length === 0
-        ? "No workflow pins this dependency; nothing re-pinned.\n"
-        : `Re-pinned ${files.join(", ")} to ${sha.slice(0, 7)} (${ref}).\n`,
-    )
+    io.err("Usage: repin-workflows.mjs <dependency> <commit-sha> <release-tag>\n")
+    return 1
   }
+  const files = repinWorkflows(dir, dependency, sha, ref)
+  io.out(
+    files.length === 0
+      ? "No workflow pins this dependency; nothing re-pinned.\n"
+      : `Re-pinned ${files.join(", ")} to ${sha.slice(0, 7)} (${ref}).\n`,
+  )
+  return 0
 }
+
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression, ArrowFunction, ObjectLiteral: process entry point, exercised only by spawning the script
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  process.exitCode = run(process.argv.slice(2), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+}
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression, ArrowFunction, ObjectLiteral

@@ -34,7 +34,9 @@ export function compareGuides(cwd, canonicalDir = CANONICAL_DIR) {
   for (const guide of GUIDES) {
     const copy = path.join(dir, guide)
     if (!existsSync(copy)) missing.push(guide)
-    else if (readFileSync(copy, "utf8") !== readFileSync(path.join(canonicalDir, guide), "utf8")) {
+    else if (
+      readFileSync(copy).toString() !== readFileSync(path.join(canonicalDir, guide)).toString()
+    ) {
       differing.push(guide)
     }
   }
@@ -48,8 +50,8 @@ export function compareGuides(cwd, canonicalDir = CANONICAL_DIR) {
  * @returns {string[]} the guides written.
  */
 export function syncGuides(cwd, canonicalDir = CANONICAL_DIR) {
-  const { applicable, missing, differing } = compareGuides(cwd, canonicalDir)
-  if (!applicable) return []
+  // Not applicable (no benchmarks directory) reports nothing missing or differing, so nothing is written.
+  const { missing, differing } = compareGuides(cwd, canonicalDir)
   const written = [...missing, ...differing]
   for (const guide of written) {
     copyFileSync(path.join(canonicalDir, guide), path.join(cwd, "benchmarks", guide))
@@ -57,15 +59,27 @@ export function syncGuides(cwd, canonicalDir = CANONICAL_DIR) {
   return written
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  if (process.argv.includes("--write")) {
-    const written = syncGuides(process.cwd())
-    process.stdout.write(
+/**
+ * The command's body.
+ * @param {readonly string[]} argv - the arguments after the script name (`--write` copies; otherwise it compares).
+ * @param {string} cwd - the package's root.
+ * @param {(text: string) => void} write - where output goes.
+ */
+export function run(argv, cwd, write) {
+  if (argv.includes("--write")) {
+    const written = syncGuides(cwd)
+    write(
       written.length === 0
         ? "Benchmark guides are already identical to the canonical ones.\n"
         : `Updated ${written.join(", ")}.\n`,
     )
   } else {
-    process.stdout.write(JSON.stringify({ ok: true, ...compareGuides(process.cwd()) }))
+    write(JSON.stringify({ ok: true, ...compareGuides(cwd) }))
   }
 }
+
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression, ArrowFunction: process entry point, exercised only by spawning the script
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  run(process.argv.slice(2), process.cwd(), (text) => process.stdout.write(text))
+}
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression, ArrowFunction

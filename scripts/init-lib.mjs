@@ -19,25 +19,30 @@ const VALUE_FLAGS = ["name", "owner", "description"]
  */
 export function parseInitArgs(argv) {
   const result = { force: false, errors: [] }
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
+  let consumed = false
+  for (const [index, arg] of argv.entries()) {
+    // The previous flag took this argument as its value.
+    if (consumed) {
+      consumed = false
+      continue
+    }
     if (arg === "--force") {
       result.force = true
       continue
     }
-    const match = /^--([a-z]+)(?:=(.*))?$/.exec(arg ?? "")
+    const match = /^--([a-z]+)(?:=(.*))?$/.exec(arg)
     const flag = match?.[1]
-    if (flag === undefined || !VALUE_FLAGS.includes(flag)) {
+    if (!VALUE_FLAGS.includes(flag)) {
       result.errors.push(`Unknown argument ${JSON.stringify(arg)}.`)
       continue
     }
-    const inline = match?.[2]
+    const inline = match[2]
     const value = inline ?? argv[index + 1]
     if (value === undefined || value === "" || (inline === undefined && value.startsWith("--"))) {
       result.errors.push(`--${flag} needs a value.`)
       continue
     }
-    if (inline === undefined) index += 1
+    if (inline === undefined) consumed = true
     result[flag] = value
   }
   return result
@@ -71,7 +76,8 @@ export function buildVars({
 }) {
   return {
     name,
-    repo: name.includes("/") ? name.slice(name.indexOf("/") + 1) : name,
+    // Without a slash `indexOf` is -1, so the whole name is kept.
+    repo: name.slice(name.indexOf("/") + 1),
     owner,
     description: description ?? `TODO: describe ${name}.`,
     year: String(year),
@@ -89,15 +95,17 @@ const FULL_SHA = /#([0-9a-f]{40})\b/
  * @returns {string | undefined} the 40-hex commit, or `undefined` when the lockfile does not pin one.
  */
 export function shaFromLockfile(lockText) {
-  if (lockText === undefined) return undefined
   try {
+    // No lockfile (`undefined`) fails to parse, which is the same answer as no pin.
     const lock = JSON.parse(lockText)
+    // Stryker disable next-line OptionalChaining: this whole block answers `undefined` for any failure, so a missing level that throws and one that is skipped are the same
     const entry = lock?.packages?.["node_modules/internal-package-contract"]
-    const resolved = typeof entry?.resolved === "string" ? entry.resolved : ""
-    return FULL_SHA.exec(resolved)?.[1]
+    // Stryker disable next-line OptionalChaining: as above
+    return FULL_SHA.exec(entry?.resolved)?.[1]
   } catch {
-    return undefined
+    // Not JSON: no pin to read, below.
   }
+  return undefined
 }
 
 /**
