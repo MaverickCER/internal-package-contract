@@ -232,7 +232,7 @@ The upgrade order for a breaking `repo-contract` change follows from that:
 2. bump IPC's `repo-contract` dependency and release IPC (a new tag);
 3. re-pin `repo-contract`'s own IPC devDependency to that tag.
 
-The full rationale is [`repo-contract` ADR 0018](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ipc-bootstrap-cycle.md).
+The full rationale is [`repo-contract` ADR 0018](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md).
 
 ## Dependency overrides every consumer needs
 

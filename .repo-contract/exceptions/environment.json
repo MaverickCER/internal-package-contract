@@ -15,11 +15,11 @@
       "expires": "2026-11-05"
     },
     {
-      "id": "environment:DocsLinks:https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ipc-bootstrap-cycle.md",
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md",
       "version": 2,
       "justification": "repo-contract's ADR 0018 is added by this very pull request, so it does not exist on the default branch the link points at until the pull request merges.",
       "check": "DocsLinks",
-      "code": "https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ipc-bootstrap-cycle.md",
+      "code": "https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md",
       "ruleBroken": "Docs (links): every external link must be reachable.",
       "attempted": "Linking the file by relative path instead; the link is deliberately absolute because the text is copied into other repositories' READMEs.",
       "constraint": "An absolute GitHub link to a new file cannot resolve before the file is on the default branch.",
