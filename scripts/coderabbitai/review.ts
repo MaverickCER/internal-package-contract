@@ -67,16 +67,37 @@ const registrySchema: StandardSchemaV1<unknown, readonly CoderabbitExceptionReco
 /** The severity values the CLI itself may report -- anything else normalizes to `"unknown"`. */
 const SEVERITY_VALUES = new Set(["critical", "major", "minor"])
 
+/** What one `git` invocation reported -- the parts of a spawn result these helpers read. */
+export interface GitResult {
+  readonly error?: Error | undefined
+  readonly status: number | null
+  readonly stdout: string
+}
+
+/** Runs `git` with the given arguments. */
+export type GitRunner = (args: string[]) => GitResult
+
+/**
+ * @param cwd - The directory to run git in; the process's own by default.
+ * @returns A runner that spawns the real `git` there.
+ * @internal Exported for direct unit coverage.
+ */
+export function gitIn(cwd?: string): GitRunner {
+  return (args) => spawnSync("git", args, { encoding: "utf8", cwd }) as unknown as GitResult
+}
+
 /**
  * Whether the current git checkout is on a detached `HEAD` -- `coderabbit review`'s own base-
  * branch comparison needs a real branch to diff from/to, and a detached checkout (a CI runner mid-
  * rebase, a tag checkout, a bisect) is a genuine "can't establish git context" condition this
  * wrapper recognizes itself, up front, rather than trying to parse it back out of whatever error
  * text a future CLI version happens to print for the same underlying problem.
+ * @param git - Runs git; the real one in the current directory by default.
  * @returns `true` if `HEAD` is detached (not on a named branch).
+ * @internal Exported for direct unit coverage.
  */
-function isDetachedHead(): boolean {
-  const result = spawnSync("git", ["symbolic-ref", "-q", "HEAD"], { encoding: "utf8" })
+export function isDetachedHead(git: GitRunner = gitIn()): boolean {
+  const result = git(["symbolic-ref", "-q", "HEAD"])
   // A real spawn failure (git itself missing) is not this function's concern -- `coderabbit`
   // itself would fail identically and far more informatively; only a *successful* git invocation
   // that reports "no symbolic ref" (a non-zero exit with no spawn error) means detached HEAD.
@@ -85,27 +106,23 @@ function isDetachedHead(): boolean {
 
 /**
  * Whether the working tree has staged or tracked uncommitted edits.
+ * @param git - Runs git; the real one in the current directory by default.
  * @returns `true` if `git status` reports any.
+ * @internal Exported for direct unit coverage.
  */
-function hasUncommittedEdits(): boolean {
-  const result = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], {
-    encoding: "utf8",
-  })
+export function hasUncommittedEdits(git: GitRunner = gitIn()): boolean {
+  const result = git(["status", "--porcelain", "--untracked-files=no"])
   return !result.error && result.status === 0 && result.stdout.trim().length > 0
 }
 
 /**
  * The branch a committed review compares against: `origin/main` when it exists, else `main`.
+ * @param git - Runs git; the real one in the current directory by default.
  * @returns the ref name.
+ * @internal Exported for direct unit coverage.
  */
-function defaultBaseRef(): string {
-  const remote = spawnSync(
-    "git",
-    ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],
-    {
-      encoding: "utf8",
-    },
-  )
+export function defaultBaseRef(git: GitRunner = gitIn()): string {
+  const remote = git(["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"])
   return !remote.error && remote.status === 0 ? "origin/main" : "main"
 }
 
@@ -123,15 +140,6 @@ export function reviewArguments(uncommitted: boolean, baseRef: string): string[]
   return uncommitted
     ? ["review", "--agent", "--uncommitted"]
     : ["review", "--agent", "--committed", "--base", baseRef]
-}
-
-/**
- * Whether `value` is a non-null, non-array object.
- * @param value - The candidate value to check.
- * @returns `true` if `value` is a plain object.
- */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -197,14 +205,15 @@ export function parseAgentStream(stdout: string):
       }
     }
 
-    let parsed: unknown
+    let parsed: Record<string, unknown> | null
     try {
-      parsed = JSON.parse(line)
+      parsed = JSON.parse(line) as Record<string, unknown> | null
     } catch {
       return { ok: false, error: `coderabbit review --agent produced a non-JSON line: ${line}` }
     }
 
-    if (!isPlainObject(parsed) || typeof parsed["type"] !== "string") {
+    // A primitive, an array and `{}` all have no string `type`; only `null` needs its own check.
+    if (parsed === null || typeof parsed["type"] !== "string") {
       return {
         ok: false,
         error: 'coderabbit review --agent produced an event with no recognized "type" field.',
@@ -244,12 +253,7 @@ export function parseAgentStream(stdout: string):
       // clean `reviewed` result); claiming fewer means an event this parser recognized that the
       // CLI itself didn't count. Either way the stream is malformed -- fail closed, exactly as a
       // bad status does.
-      if (
-        typeof parsed["findings"] !== "number" ||
-        !Number.isInteger(parsed["findings"]) ||
-        parsed["findings"] < 0 ||
-        parsed["findings"] !== findings.length
-      ) {
+      if (parsed["findings"] !== findings.length) {
         return {
           ok: false,
           error: `coderabbit review --agent produced a "complete" event whose findings count (${JSON.stringify(parsed["findings"])}) does not match the ${String(findings.length)} finding event(s) actually streamed.`,
@@ -339,9 +343,9 @@ export interface CliDependencies {
 
 const REAL_DEPENDENCIES: CliDependencies = {
   env: process.env,
-  isDetachedHead,
-  hasUncommittedEdits,
-  defaultBaseRef,
+  isDetachedHead: () => isDetachedHead(),
+  hasUncommittedEdits: () => hasUncommittedEdits(),
+  defaultBaseRef: () => defaultBaseRef(),
   // The options always request `encoding: "utf8"`, so stdout and stderr are strings.
   spawn: (command, args, options) => spawnSync(command, args, options) as unknown as CliSpawnResult,
 }
@@ -490,7 +494,9 @@ export async function runCoderabbitReview(
 // output), `parseAgentStream`/`runCoderabbitReview` are imported directly by the unit and
 // integration suites, so the module body must stay import-safe. Mirrors repo-contract's own
 // scripts/coderabbitai/review.ts guard.
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, LogicalOperator, EqualityOperator, MethodExpression: process entry point, exercised only by spawning the script
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const evidence = await runCoderabbitReview(process.cwd())
   process.stdout.write(JSON.stringify(evidence))
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, LogicalOperator, EqualityOperator, MethodExpression
