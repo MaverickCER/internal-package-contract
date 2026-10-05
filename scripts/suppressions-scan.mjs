@@ -291,7 +291,7 @@ function blockReasonAbove(lines, index) {
   const collected = []
   for (let i = index - 1; i >= 0; i -= 1) {
     const trimmed = lines[i].trim()
-    const comment = /^(?:\/\/+|\/\*+|\*+\/?|<!--)\s?(.*?)(?:\*\/|-->)?$/.exec(trimmed)
+    const comment = /^(?:\/\/+|\/\*+|\*+\/?|<!--)\s?([\s\S]*?)(?:\*\/|-->)?$/.exec(trimmed)
     if (comment === null) break
     const content = comment[1]
     if (parseText(content.trimStart()).length > 0) break

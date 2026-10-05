@@ -159,15 +159,10 @@ const rows: Row[] = [
   {
     name: "widening a parameter whose type is an exported interface",
     edit: (t) =>
-      t
-        .replace(
-          "export function pick(value: string | number): string | number {",
-          "export function pick(value: string | number): string | number {",
-        )
-        .replace(
-          "/** @public */\nexport function identity",
-          "/** @public */\nexport function consume(shape: Shape): void {\n  void shape\n}\n/** @public */\nexport function identity",
-        ),
+      t.replace(
+        "/** @public */\nexport function identity",
+        "/** @public */\nexport function consume(shape: Shape): void {\n  void shape\n}\n/** @public */\nexport function identity",
+      ),
     kinds: ["export-added"],
     impact: "compatible",
   },
