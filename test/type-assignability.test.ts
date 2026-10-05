@@ -5,8 +5,8 @@ describe("isWordChar()", () => {
   it("accepts letters, digits and underscore, and nothing else", () => {
     for (const char of ["a", "z", "A", "Z", "0", "9", "_"])
       expect(isWordChar(char), char).toBe(true)
-    for (const char of ["-", " ", "<", "$", "é", "", undefined])
-      expect(isWordChar(char), String(char)).toBe(false)
+    for (const char of ["-", " ", "<", "$", "é", "", "ab"])
+      expect(isWordChar(char), char).toBe(false)
   })
 
   it("treats the characters just outside each range as non-word", () => {
