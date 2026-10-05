@@ -154,17 +154,33 @@ export async function runUpdateBaseline(root: string): Promise<readonly TargetUp
   return outcomes
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outcomes = await runUpdateBaseline(process.cwd())
-  let failed = false
-  for (const outcome of outcomes) {
-    const line = `[${outcome.target}] ${outcome.message}`
-    if (outcome.status === "updated" || outcome.status === "current") {
-      process.stdout.write(`${line}\n`)
-    } else {
-      failed = true
-      process.stderr.write(`${line}\n`)
-    }
-  }
-  if (failed) process.exitCode = 1
+/**
+ * The command's body: updates every target and reports each outcome -- `updated`/`current` on
+ * stdout, `refused`/`failed` on stderr.
+ * @param root - Absolute path to the consumer's project root whose baselines are being updated.
+ * @param io - Where the per-target lines go.
+ * @param io.stdout - Receives the line for each target that was updated or already current.
+ * @param io.stderr - Receives the line for each target that was refused or failed.
+ * @returns The process exit code: non-zero iff any target was refused or failed.
+ */
+export async function main(
+  root: string,
+  io: { readonly stdout: (text: string) => void; readonly stderr: (text: string) => void },
+): Promise<number> {
+  const outcomes = await runUpdateBaseline(root)
+  const lines = outcomes.map((outcome) => ({
+    ok: outcome.status === "updated" || outcome.status === "current",
+    text: `[${outcome.target}] ${outcome.message}\n`,
+  }))
+  for (const line of lines) (line.ok ? io.stdout : io.stderr)(line.text)
+  return lines.every((line) => line.ok) ? 0 : 1
 }
+
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, LogicalOperator, MethodExpression, ObjectLiteral: process entry point, exercised only by spawning the script
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = await main(process.cwd(), {
+    stdout: (text) => process.stdout.write(text),
+    stderr: (text) => process.stderr.write(text),
+  })
+}
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, LogicalOperator, MethodExpression, ObjectLiteral
