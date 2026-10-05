@@ -1,5 +1,5 @@
 import type { ApiContractChange, ChangeKind, ContractImpact } from "./evidence-types.js"
-import type { NormalizedMember, ReleaseTagLevel } from "./model-normalizer.js"
+import type { NormalizedMember, NormalizedParameter, ReleaseTagLevel } from "./model-normalizer.js"
 
 /**
  * Ported from repo-contract's own `scripts/api-contract/compatibility-classifier.ts` -- this engine
@@ -82,46 +82,34 @@ function push(
 /**
  * @param baselineMember - The member's normalized form on the baseline side.
  * @param currentMember - The same member's normalized form on the current side.
+ * @param oldParams - The baseline member's parameters.
+ * @param newParams - The current member's parameters.
  * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
  * @param changes - The accumulator array to append any parameter changes onto.
  */
 function compareParameters(
   baselineMember: NormalizedMember,
   currentMember: NormalizedMember,
+  oldParams: readonly NormalizedParameter[],
+  newParams: readonly NormalizedParameter[],
   resolve: ResolveAssignability,
   changes: ApiContractChange[],
 ): void {
-  const oldParams = baselineMember.parameters ?? []
-  const newParams = currentMember.parameters ?? []
-  const maxLength = Math.max(oldParams.length, newParams.length)
+  const at = (i: number) => `#param-${String(i)}`
 
-  for (let i = 0; i < maxLength; i++) {
+  for (const [i, newParam] of newParams.entries()) {
     const oldParam = oldParams[i]
-    const newParam = newParams[i]
-
-    if (!oldParam && newParam) {
+    if (!oldParam) {
       push(
         changes,
         currentMember,
         "parameter-added",
         newParam.isOptional ? "compatible" : "breaking",
         `Added ${newParam.isOptional ? "optional" : "required"} parameter \`${newParam.name}\` to ${currentMember.scopedName}.`,
-        `#param-${String(i)}`,
+        at(i),
       )
       continue
     }
-    if (oldParam && !newParam) {
-      push(
-        changes,
-        currentMember,
-        "parameter-removed",
-        "breaking",
-        `Removed parameter \`${oldParam.name}\` from ${currentMember.scopedName}.`,
-        `#param-${String(i)}`,
-      )
-      continue
-    }
-    if (!oldParam || !newParam) continue
 
     if (oldParam.isOptional !== newParam.isOptional) {
       push(
@@ -130,7 +118,7 @@ function compareParameters(
         "parameter-optionality-changed",
         newParam.isOptional ? "compatible" : "breaking",
         `Parameter \`${newParam.name}\` of ${currentMember.scopedName} became ${newParam.isOptional ? "optional" : "required"}.`,
-        `#param-${String(i)}`,
+        at(i),
       )
     }
 
@@ -148,9 +136,20 @@ function compareParameters(
         "parameter-type-changed",
         result,
         `Parameter \`${newParam.name}\` of ${currentMember.scopedName} changed from \`${oldParam.typeExcerptText}\` to \`${newParam.typeExcerptText}\`.`,
-        `#param-${String(i)}`,
+        at(i),
       )
     }
+  }
+
+  for (const [offset, oldParam] of oldParams.slice(newParams.length).entries()) {
+    push(
+      changes,
+      currentMember,
+      "parameter-removed",
+      "breaking",
+      `Removed parameter \`${oldParam.name}\` from ${currentMember.scopedName}.`,
+      at(newParams.length + offset),
+    )
   }
 }
 
@@ -166,8 +165,10 @@ function compareMetadata(
   changes: ApiContractChange[],
 ): void {
   if (baselineMember.releaseTag !== currentMember.releaseTag) {
+    // Stryker disable EqualityOperator: this branch only runs when the two tags differ, and every tag has its own rank, so `<` and `<=` cannot disagree
     const narrowed =
       RELEASE_TAG_RANK[currentMember.releaseTag] < RELEASE_TAG_RANK[baselineMember.releaseTag]
+    // Stryker restore EqualityOperator
     push(
       changes,
       currentMember,
@@ -374,7 +375,14 @@ function compareSignature(
   changes: ApiContractChange[],
 ): void {
   if (baselineMember.parameters !== undefined && currentMember.parameters !== undefined) {
-    compareParameters(baselineMember, currentMember, resolve, changes)
+    compareParameters(
+      baselineMember,
+      currentMember,
+      baselineMember.parameters,
+      currentMember.parameters,
+      resolve,
+      changes,
+    )
   }
 
   if (
@@ -442,7 +450,7 @@ function parameterSignature(member: NormalizedMember): string {
  * @returns A key identifying the overload set `member` belongs to (its parent, name, and kind).
  */
 function groupKey(member: NormalizedMember): string {
-  return `${member.parentCanonicalReference ?? ""}::${member.name ?? ""}::${member.kind}`
+  return JSON.stringify([member.parentCanonicalReference, member.name, member.kind])
 }
 
 /**
@@ -530,17 +538,17 @@ function classifyOverloadSet(
   // An entirely-new (or entirely-removed) overload set is reported once, for the whole
   // function/method, regardless of how many overloads it has -- not as N bare `overload-added`
   // entries with no `export-added` among them.
-  const first = currentGroup[0]
-  const removed = baselineGroup[0]
-  if (baselineGroup.length === 0 && first) {
-    push(changes, first, "export-added", "compatible", `Added ${first.scopedName}.`)
+  const [removed, ...moreRemoved] = baselineGroup
+  const [first, ...moreAdded] = currentGroup
+  if (!removed) {
+    if (first) push(changes, first, "export-added", "compatible", `Added ${first.scopedName}.`)
     return
   }
-  if (currentGroup.length === 0 && removed) {
+  if (!first) {
     push(changes, removed, "export-removed", "breaking", `Removed ${removed.scopedName}.`)
     return
   }
-  if (baselineGroup.length === 1 && currentGroup.length === 1 && removed && first) {
+  if (moreRemoved.length === 0 && moreAdded.length === 0) {
     compareMatchedMember(removed, first, resolve, changes)
     return
   }
