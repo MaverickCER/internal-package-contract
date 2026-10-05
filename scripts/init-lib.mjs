@@ -100,7 +100,7 @@ export function shaFromLockfile(lockText) {
     const lock = JSON.parse(lockText)
     // Stryker disable next-line OptionalChaining: this whole block answers `undefined` for any failure, so a missing level that throws and one that is skipped are the same
     const entry = lock?.packages?.["node_modules/internal-package-contract"]
-    // Stryker disable next-line OptionalChaining: as above
+    // Stryker disable next-line OptionalChaining: the match may be null, and a missing match throws here and is caught, which answers undefined just as the skipped access does
     return FULL_SHA.exec(entry?.resolved)?.[1]
   } catch {
     // Not JSON: no pin to read, below.
