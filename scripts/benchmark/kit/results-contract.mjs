@@ -35,6 +35,15 @@
 
 import { RESULTS_SCHEMA_VERSION } from "./run.mjs"
 
+/**
+ * Reads `key` off `value`, tolerating a missing value -- a results file under validation may be
+ * anything, and every departure from the contract must be reported, not crash the validator.
+ * @param {any} value - what to read from.
+ * @param {string} key - the property to read.
+ * @returns {any} the property, or `undefined`.
+ */
+const get = (value, key) => value?.[key]
+
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value)
 const STAT_KEYS = [
   "minMs",
@@ -52,7 +61,8 @@ function checkStats(stats, at, problems) {
     return
   }
   for (const key of STAT_KEYS) {
-    if (typeof stats[key] !== "number" || !Number.isFinite(stats[key])) {
+    // `Number.isFinite` is false for anything that is not a finite number, strings included.
+    if (!Number.isFinite(stats[key])) {
       problems.push(`${at}.${key} must be a finite number.`)
     }
   }
@@ -72,9 +82,9 @@ export function validateResults(results) {
     if (metadata["schemaVersion"] !== RESULTS_SCHEMA_VERSION) {
       problems.push(`metadata.schemaVersion must be ${String(RESULTS_SCHEMA_VERSION)}.`)
     }
-    if (typeof metadata["package"]?.name !== "string")
+    if (typeof get(metadata["package"], "name") !== "string")
       problems.push("metadata.package.name must be a string.")
-    if (typeof metadata["workload"]?.unit !== "string")
+    if (typeof get(metadata["workload"], "unit") !== "string")
       problems.push("metadata.workload.unit must be a string.")
     if (!Array.isArray(metadata["tiers"]) || metadata["tiers"].length === 0)
       problems.push("metadata.tiers must list the measured sizes.")
@@ -86,21 +96,22 @@ export function validateResults(results) {
   if (!isObject(groups)) problems.push("results must map each group to its tiers.")
   else {
     for (const [group, value] of Object.entries(groups)) {
-      if (!["end-to-end", "function"].includes(value?.area))
+      if (!["end-to-end", "function"].includes(get(value, "area")))
         problems.push(`results["${group}"].area must be "end-to-end" or "function".`)
-      if (!isObject(value?.tiers)) {
+      if (!isObject(get(value, "tiers"))) {
         problems.push(`results["${group}"].tiers must be an object.`)
         continue
       }
       for (const [tier, entry] of Object.entries(value.tiers)) {
         const at = `results["${group}"].tiers.${tier}`
         if (!/^n\d+$/.test(tier)) problems.push(`${at}: tier names look like "n640".`)
-        if (typeof entry?.id !== "string") problems.push(`${at}.id must be a string.`)
-        if (!isObject(entry?.inputs)) problems.push(`${at}.inputs must be an object.`)
-        if (entry?.status === "completed") {
+        if (typeof get(entry, "id") !== "string") problems.push(`${at}.id must be a string.`)
+        if (!isObject(get(entry, "inputs"))) problems.push(`${at}.inputs must be an object.`)
+        const status = get(entry, "status")
+        if (status === "completed") {
           if (entry.derived) {
             // A derived entry (the overhead) carries only the figure computed from other groups.
-            if (typeof entry.durationMs?.medianMs !== "number") {
+            if (typeof get(entry.durationMs, "medianMs") !== "number") {
               problems.push(`${at}.durationMs.medianMs must be a number.`)
             }
           } else {
@@ -109,8 +120,8 @@ export function validateResults(results) {
             if (typeof entry.heapDeltaBytes !== "number")
               problems.push(`${at}.heapDeltaBytes must be a number.`)
           }
-        } else if (entry?.status === "failed") {
-          if (typeof entry.error?.message !== "string")
+        } else if (status === "failed") {
+          if (typeof get(entry.error, "message") !== "string")
             problems.push(`${at}.error.message must be a string.`)
         } else {
           problems.push(`${at}.status must be "completed" or "failed".`)
