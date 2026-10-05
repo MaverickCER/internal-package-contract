@@ -44,81 +44,68 @@ import { readJson, resultsToMeasurements } from "./lib/results.mjs"
  */
 const HISTORY_SCHEMA_VERSION = 2
 
+const USAGE =
+  "Usage: node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]"
+
 /**
  * @param {readonly string[]} argv - the arguments after the script name.
  * @returns {{ positional: string[], commit?: string, pullRequest?: number }}
  */
 export function parseAppendArgs(argv) {
   const parsed = { positional: [] }
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--commit") parsed.commit = argv[++i]
+  const items = argv[Symbol.iterator]()
+  const value = () => items.next().value
+  for (const arg of items) {
+    if (arg === "--commit") parsed.commit = value()
     else if (arg === "--pr") {
-      const number = Number(argv[++i])
+      const number = Number(value())
       if (Number.isInteger(number) && number > 0) parsed.pullRequest = number
     } else parsed.positional.push(arg)
   }
   return parsed
 }
 
-async function main() {
-  const { positional, commit, pullRequest } = parseAppendArgs(process.argv.slice(2))
-  const [resultsPath, historyPath] = positional
-  if (!resultsPath || !historyPath) {
-    console.error(
-      "Usage: node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]",
-    )
-    process.exitCode = 1
-    return
+/**
+ * Intentionally compact: medianMs + inputs + a generic derived throughput figure per completed
+ * (group, tier), not the full per-run detail (min/max/stdDev/memory) already reachable via
+ * `gitCommit` in that commit's own results.json. Duplicating all of that here would make this file
+ * grow unboundedly for no benefit.
+ * @param {{ medianMs: number, inputs?: Record<string, number> }} measurement - one tier's result.
+ * @returns {object} the compact tier entry.
+ */
+function summarizeTier(measurement) {
+  const size = inputTotal(measurement.inputs)
+  return {
+    medianMs: measurement.medianMs,
+    ...(measurement.inputs ? { inputs: measurement.inputs } : {}),
+    ...(size !== undefined && measurement.medianMs > 0
+      ? { unitsPerSecond: Math.round((size / (measurement.medianMs / 1000)) * 100) / 100 }
+      : {}),
   }
+}
 
-  const results = readJson(resultsPath)
-
-  let history
-  try {
-    history = JSON.parse(await fs.readFile(historyPath, "utf8"))
-  } catch {
-    history = { historySchemaVersion: HISTORY_SCHEMA_VERSION, entries: [] }
-  }
-  // A file that already exists (schema v1, or a v2 file from an earlier
-  // append) keeps its own `entries`; only the version marker is bumped to
-  // reflect what THIS (newest) entry's shape actually is -- a reader already
-  // has to tolerate older entries lacking `inputs` (see above), so the
-  // top-level marker tracking "the newest writer's schema" rather than "the
-  // oldest entry's schema" is the more useful signal.
-  history.historySchemaVersion = HISTORY_SCHEMA_VERSION
-  history.entries = Array.isArray(history.entries) ? history.entries : []
-
-  const rawMeasurements = resultsToMeasurements(results)
-
-  // Intentionally compact: medianMs + inputs + a generic derived throughput
-  // figure per completed (group, tier), not the full per-run detail (min/
-  // max/stdDev/memory) already reachable via `gitCommit` in that commit's
-  // own results.json. Duplicating all of that here would make this file
-  // grow unboundedly for no benefit.
-  const measurements = {}
-  for (const [group, tiers] of Object.entries(rawMeasurements)) {
-    measurements[group] = {}
-    for (const [tier, measurement] of Object.entries(tiers)) {
-      const size = inputTotal(measurement.inputs)
-      measurements[group][tier] = {
-        medianMs: measurement.medianMs,
-        ...(measurement.inputs ? { inputs: measurement.inputs } : {}),
-        ...(size !== undefined && measurement.medianMs > 0
-          ? { unitsPerSecond: Math.round((size / (measurement.medianMs / 1000)) * 100) / 100 }
-          : {}),
-      }
-    }
-  }
-
-  // `versions` is copied verbatim from results.metadata.versions rather than
-  // singling out one "the package's own version" field by a hardcoded key
-  // (env-cap's `envCapVersion`, data-cap's `dataCapVersion`, and any future
-  // consumer's own naming would each need a special case otherwise) -- see
-  // this repo's PR description for the full reasoning. A reader wanting "the
-  // package version at this point in history" reads whichever key its own
-  // results.json happens to report, e.g. `entry.versions.dataCapVersion`.
-  history.entries.push({
+/**
+ * Builds the history entry for one results.json.
+ *
+ * `versions` is copied verbatim from results.metadata.versions rather than singling out one "the
+ * package's own version" field by a hardcoded key (env-cap's `envCapVersion`, data-cap's
+ * `dataCapVersion`, and any future consumer's own naming would each need a special case
+ * otherwise). A reader wanting "the package version at this point in history" reads whichever key
+ * its own results.json happens to report, e.g. `entry.versions.dataCapVersion`.
+ * @param {object} results - a parsed results.json.
+ * @param {{ commit?: string, pullRequest?: number }} where - the merge commit and pull request this run belongs to.
+ * @returns {object} the entry to append.
+ */
+export function buildEntry(results, { commit, pullRequest }) {
+  const measurements = Object.fromEntries(
+    Object.entries(resultsToMeasurements(results)).map(([group, tiers]) => [
+      group,
+      Object.fromEntries(
+        Object.entries(tiers).map(([tier, entry]) => [tier, summarizeTier(entry)]),
+      ),
+    ]),
+  )
+  return {
     timestamp: results.metadata?.timing?.finishedAtUtc,
     gitCommit: commit ?? results.metadata?.git?.gitCommit,
     ...(pullRequest === undefined ? {} : { pullRequest }),
@@ -126,18 +113,65 @@ async function main() {
     runner: results.metadata?.environment?.runner,
     versions: { ...results.metadata?.versions },
     measurements,
-  })
+  }
+}
+
+/**
+ * A file that already exists (schema v1, or a v2 file from an earlier append) keeps its own
+ * `entries`; only the version marker is bumped to reflect what THIS (newest) entry's shape actually
+ * is -- a reader already has to tolerate older entries lacking `inputs` (see above), so the
+ * top-level marker tracking "the newest writer's schema" rather than "the oldest entry's schema" is
+ * the more useful signal.
+ * @param {any} history - the parsed history file, or a fresh one.
+ * @param {object} entry - the entry to append.
+ * @returns {any} the same history, updated.
+ */
+export function appendEntry(history, entry) {
+  history.historySchemaVersion = HISTORY_SCHEMA_VERSION
+  history.entries = [...(Array.isArray(history.entries) ? history.entries : []), entry]
+  return history
+}
+
+/**
+ * @param {readonly string[]} argv - the arguments after the script name.
+ * @param {{ log: (text: string) => void, error: (text: string) => void }} io - where output goes.
+ * @returns {Promise<number>} the process exit code.
+ */
+export async function run(argv, io) {
+  const { positional, commit, pullRequest } = parseAppendArgs(argv)
+  const [resultsPath, historyPath] = positional
+  if (!resultsPath || !historyPath) {
+    io.error(USAGE)
+    return 1
+  }
+
+  const results = readJson(resultsPath)
+
+  let history
+  try {
+    history = JSON.parse((await fs.readFile(historyPath)).toString())
+  } catch {
+    history = {}
+  }
+  appendEntry(history, buildEntry(results, { commit, pullRequest }))
 
   await fs.mkdir(path.dirname(historyPath), { recursive: true })
-  await fs.writeFile(historyPath, `${JSON.stringify(history, null, 2)}\n`, "utf8")
-  console.log(
+  await fs.writeFile(historyPath, `${JSON.stringify(history, null, 2)}\n`)
+  io.log(
     `[append-history] appended entry to ${historyPath} (${String(history.entries.length)} total, schema v${String(HISTORY_SCHEMA_VERSION)})`,
   )
+  return 0
 }
 
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, LogicalOperator, ObjectLiteral: process entry point, exercised only by spawning the script
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main().catch((err) => {
-    console.error(err)
-    process.exitCode = 1
-  })
+  run(process.argv.slice(2), { log: console.log, error: console.error })
+    .then((code) => {
+      process.exitCode = code
+    })
+    .catch((err) => {
+      console.error(err)
+      process.exitCode = 1
+    })
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, LogicalOperator, ObjectLiteral
