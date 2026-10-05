@@ -82,27 +82,18 @@ function squash(text) {
  */
 function splitRulesAndReason(rest, colonSeparates) {
   const flat = squash(rest)
-  const dash = flat.indexOf(" -- ")
-  const dashAtStart = flat.startsWith("-- ")
-  const colon = colonSeparates ? flat.indexOf(":") : -1
-  let cut = -1
-  let skip = 0
-  if (dashAtStart) {
-    cut = 0
-    skip = 3
-  } else if (dash !== -1 && (colon === -1 || dash < colon)) {
-    cut = dash
-    skip = 4
-  } else if (colon !== -1) {
-    cut = colon
-    skip = 1
-  }
+  // The earliest separator wins: a leading `-- `, then ` -- `, then (Stryker only) a colon.
+  const [cut, skip] = flat.startsWith("-- ")
+    ? [0, 3]
+    : ([
+        [flat.indexOf(" -- "), 4],
+        [colonSeparates ? flat.indexOf(":") : -1, 1],
+      ]
+        .filter(([at]) => at !== -1)
+        .sort((a, b) => a[0] - b[0])[0] ?? [-1, 0])
   const head = cut === -1 ? flat : flat.slice(0, cut)
   const reason = cut === -1 ? "" : flat.slice(cut + skip).trim()
-  const rules = head
-    .split(/[,\s]+/)
-    .map((r) => r.trim())
-    .filter(Boolean)
+  const rules = head.match(/[^,\s]+/g) ?? []
   return { rules, reason }
 }
 
@@ -114,13 +105,20 @@ function splitRulesAndReason(rest, colonSeparates) {
  */
 export function parseDirective(body, kind) {
   // A block comment's lines may carry a leading `*`; the directive is the first thing in the comment.
-  const text = (kind === "block" ? body.replace(/^\s*\*+/, "") : body).replace(/^\s+/, "")
+  return parseText((kind === "block" ? body.replace(/^\s*\*+/, "") : body).replace(/^\s+/, ""))
+}
+
+/**
+ * @param {string} text - a comment's text, delimiters and leading whitespace removed.
+ * @returns {ReturnType<typeof parseDirective>}
+ */
+function parseText(text) {
   /** @type {RegExpExecArray | null} */
   let m
 
-  if ((m = /^eslint-(disable-next-line|disable-line|disable|enable)\b([\s\S]*)$/.exec(text))) {
+  if ((m = /^eslint-(disable-next-line|disable-line|disable|enable)\b([\s\S]*)/.exec(text))) {
     const directive = `eslint-${m[1]}`
-    const { rules, reason } = splitRulesAndReason(m[2] ?? "", false)
+    const { rules, reason } = splitRulesAndReason(m[2], false)
     return [
       {
         domain: "eslint",
@@ -133,13 +131,13 @@ export function parseDirective(body, kind) {
     ]
   }
 
-  if ((m = /^@ts-(expect-error|ignore|nocheck)\b([\s\S]*)$/.exec(text))) {
+  if ((m = /^@ts-(expect-error|ignore|nocheck)\b([\s\S]*)/.exec(text))) {
     return [
       {
         domain: "typescript",
         directive: `@ts-${m[1]}`,
         rules: [`ts-${m[1]}`],
-        reason: squash(m[2] ?? "").replace(/^(--|:)\s*/, ""),
+        reason: squash(m[2]).replace(/^(--|:)\s*/, ""),
         // `@ts-ignore` goes quiet when the error goes away and `@ts-nocheck` silences a whole file:
         // neither says what it excuses. `@ts-expect-error` fails the build once it stops being needed.
         blanket: m[1] !== "expect-error",
@@ -148,25 +146,26 @@ export function parseDirective(body, kind) {
     ]
   }
 
-  if ((m = /^Stryker\s+(disable|restore)\b([\s\S]*)$/.exec(text))) {
+  if ((m = /^Stryker\s+(disable|restore)\b([\s\S]*)/.exec(text))) {
     const restore = m[1] === "restore"
-    let rest = squash(m[2] ?? "")
+    let rest = squash(m[2])
     let directive = `Stryker ${m[1]}`
-    if (/^next-line\b/.test(rest)) {
+    const nextLine = /^next-line\b\s*/.exec(rest)
+    if (nextLine) {
       directive += " next-line"
-      rest = rest.replace(/^next-line\s*/, "")
+      rest = rest.slice(nextLine[0].length)
     }
     const { rules, reason } = splitRulesAndReason(rest, true)
     return [{ domain: "stryker", directive, rules, reason, blanket: false, closing: restore }]
   }
 
-  if ((m = /^(v8|c8|istanbul)\s+ignore\s+(next|start|stop|file|if|else)\b([\s\S]*)$/.exec(text))) {
-    const { reason } = splitRulesAndReason(m[3] ?? "", false)
+  if ((m = /^(v8|c8|istanbul)\s+ignore\s+(next|start|stop|file|if|else)\b([\s\S]*)/.exec(text))) {
+    const { reason } = splitRulesAndReason(m[3], false)
     return [
       {
         domain: "coverage",
         directive: `${m[1]} ignore ${m[2]}`,
-        rules: [m[1] ?? "coverage"],
+        rules: [m[1]],
         reason,
         blanket: false,
         closing: m[2] === "stop",
@@ -174,8 +173,8 @@ export function parseDirective(body, kind) {
     ]
   }
 
-  if ((m = /^jscpd:ignore-(start|end)\b([\s\S]*)$/.exec(text))) {
-    const { reason } = splitRulesAndReason(m[2] ?? "", false)
+  if ((m = /^jscpd:ignore-(start|end)\b([\s\S]*)/.exec(text))) {
+    const { reason } = splitRulesAndReason(m[2], false)
     return [
       {
         domain: "jscpd",
@@ -188,26 +187,26 @@ export function parseDirective(body, kind) {
     ]
   }
 
-  if ((m = /^prettier-ignore\b([\s\S]*)$/.exec(text))) {
+  if ((m = /^prettier-ignore\b([\s\S]*)/.exec(text))) {
     return [
       {
         domain: "prettier",
         directive: "prettier-ignore",
         rules: ["format"],
-        reason: squash(m[1] ?? "").replace(/^(--|:)\s*/, ""),
+        reason: squash(m[1]).replace(/^(--|:)\s*/, ""),
         blanket: false,
         closing: false,
       },
     ]
   }
 
-  if ((m = /^secretlint-(disable-next-line|disable-line|disable|enable)\b([\s\S]*)$/.exec(text))) {
-    const { rules, reason } = splitRulesAndReason(m[2] ?? "", false)
+  if ((m = /^secretlint-(disable-next-line|disable-line|disable|enable)\b([\s\S]*)/.exec(text))) {
+    const { rules, reason } = splitRulesAndReason(m[2], false)
     return [
       {
         domain: "secretlint",
         directive: `secretlint-${m[1]}`,
-        rules: rules.length > 0 ? rules : [],
+        rules,
         reason,
         blanket: m[1] !== "enable" && rules.length === 0,
         closing: m[1] === "enable",
@@ -229,7 +228,7 @@ function markdownComments(text) {
   let m
   while ((m = pattern.exec(text)) !== null) {
     const line = text.slice(0, m.index).split("\n").length
-    found.push({ line, body: m[1] ?? "" })
+    found.push({ line, body: m[1] })
   }
   return found
 }
@@ -241,12 +240,12 @@ function markdownComments(text) {
 function parseMarkdownDirective(body) {
   const text = body.trim()
   const m =
-    /^markdownlint-(disable-next-line|disable-line|disable-file|disable|enable-file|enable|capture|restore|configure-file)\b([\s\S]*)$/.exec(
+    /^markdownlint-(disable-next-line|disable-line|disable-file|disable|enable-file|enable|capture|restore|configure-file)\b([\s\S]*)/.exec(
       text,
     )
   if (!m) return []
   if (m[1] === "capture" || m[1] === "restore" || m[1] === "configure-file") return []
-  const { rules, reason } = splitRulesAndReason(m[2] ?? "", false)
+  const { rules, reason } = splitRulesAndReason(m[2], false)
   const closing = m[1] === "enable" || m[1] === "enable-file"
   return [
     {
@@ -258,6 +257,21 @@ function parseMarkdownDirective(body) {
       closing,
     },
   ]
+}
+
+/**
+ * What a multi-line comment says on the lines after the one that holds its directive -- where a reason
+ * continued below the directive is written.
+ * @param {string} body - the comment text, delimiters removed.
+ * @returns {string}
+ */
+function linesAfterDirective(body) {
+  const lead = body.slice(0, body.search(/[^\s*]/))
+  const directiveLine = lead.split("\n").length - 1
+  return body
+    .split("\n")
+    .slice(directiveLine + 1)
+    .join("\n")
 }
 
 /** @param {string} value @returns {string} */
@@ -276,11 +290,11 @@ function hash(value) {
 function blockReasonAbove(lines, index) {
   const collected = []
   for (let i = index - 1; i >= 0; i -= 1) {
-    const trimmed = (lines[i] ?? "").trim()
+    const trimmed = lines[i].trim()
     const comment = /^(?:\/\/+|\/\*+|\*+\/?|<!--)\s?(.*?)(?:\*\/|-->)?$/.exec(trimmed)
-    if (comment === null || trimmed === "") break
-    const content = (comment[1] ?? "").trim()
-    if (parseDirective(content, "line").length > 0) break
+    if (comment === null) break
+    const content = comment[1]
+    if (parseText(content.trimStart()).length > 0) break
     collected.unshift(content)
   }
   return squash(collected.join(" "))
@@ -294,13 +308,8 @@ function blockReasonAbove(lines, index) {
  */
 export function scanSource(file, text, ts) {
   const lines = text.split("\n")
-  const sourceFile = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    /\.[cm]?[jt]sx?$/.test(file) && file.endsWith("x") ? ts.ScriptKind.TSX : undefined,
-  )
+  // TypeScript picks the script kind (TS, TSX, JS, JSX) from the file name.
+  const sourceFile = ts.createSourceFile(file, text, ts.ScriptTarget.Latest)
   const seen = new Set()
   /** @type {{ pos: number, end: number, kind: "line" | "block" }[]} */
   const ranges = []
@@ -328,15 +337,14 @@ export function scanSource(file, text, ts) {
   const found = []
   for (const range of ranges.sort((a, b) => a.pos - b.pos)) {
     const raw = text.slice(range.pos, range.end)
+    // Past the opening slashes, or the opening `/*` and the closing `*/`; parseDirective strips a block's leading stars.
     const body =
       range.kind === "line"
-        ? raw.replace(/^\/\/+/, "")
-        : raw.replace(/^\/\*+/, "").replace(/\*+\/$/, "")
+        ? raw.slice(raw.search(/[^/]/))
+        : (raw.endsWith("*/") ? raw.slice(2, -2) : raw.slice(2)).replace(/\*+$/, "")
     const line = sourceFile.getLineAndCharacterOfPosition(range.pos).line
     for (const directive of parseDirective(body, range.kind)) {
-      found.push(
-        toSuppression(file, lines, line, directive, range.kind === "block" ? body : undefined),
-      )
+      found.push(toSuppression(file, lines, line, directive, linesAfterDirective(body)))
     }
   }
   return found
@@ -352,7 +360,7 @@ export function scanMarkdown(file, text) {
   const found = []
   for (const { line, body } of markdownComments(text)) {
     for (const directive of parseMarkdownDirective(body)) {
-      found.push(toSuppression(file, lines, line - 1, directive, body, false))
+      found.push(toSuppression(file, lines, line - 1, directive, linesAfterDirective(body), false))
     }
   }
   return found
@@ -363,7 +371,7 @@ export function scanMarkdown(file, text) {
  * @param {string[]} lines
  * @param {number} line - 0-indexed.
  * @param {ReturnType<typeof parseDirective>[number]} directive
- * @param {string | undefined} blockBody - a block comment's full text, whose OWN other lines may hold the reason.
+ * @param {string | undefined} blockBody - the lines of a block comment after the directive's own, which may hold the reason.
  * @param {boolean} [allowBlockReason] - whether the comment block above may supply the reason (not in Markdown, where the only comments are HTML directives).
  * @returns {Suppression}
  */
@@ -371,9 +379,8 @@ function toSuppression(file, lines, line, directive, blockBody, allowBlockReason
   const rule = directive.rules.length > 0 ? directive.rules.join(",") : "*"
   // A multi-line block comment can put its reason on the lines after the directive.
   let reason = directive.reason
-  if (reason === "" && blockBody !== undefined) {
-    const after = blockBody.split("\n").slice(1).join(" ").replace(/\*/g, " ")
-    reason = squash(after)
+  if (reason === "") {
+    reason = squash(blockBody.replace(/\*/g, " "))
   }
   const blockReason = reason === "" && allowBlockReason ? blockReasonAbove(lines, line) : ""
   const documented =
@@ -383,7 +390,7 @@ function toSuppression(file, lines, line, directive, blockBody, allowBlockReason
   // form, the line itself otherwise. Edits elsewhere in the file leave the id alone.
   const covered = directive.directive.includes("next")
     ? (lines.slice(line + 1).find((l) => l.trim() !== "" && !/^\s*(\/\/|\/\*|\*)/.test(l)) ?? "")
-    : (lines[line] ?? "")
+    : lines[line]
   const anchor = hash(`${directive.directive}|${rule}|${squash(covered)}`)
   return {
     id: `suppression:${directive.domain}:${rule}:${file}:${anchor}`,
@@ -412,10 +419,9 @@ export function listScannableFiles(cwd) {
       cwd,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
+      // Stryker disable next-line ArrayDeclaration, StringLiteral: only keeps git's "not a repository" message off the terminal; nothing observable changes
       stdio: ["ignore", "pipe", "ignore"],
-    })
-      .split("\n")
-      .filter(Boolean)
+    }).split("\n")
   } catch {
     files = walk(cwd, "")
   }
@@ -433,14 +439,13 @@ export function listScannableFiles(cwd) {
 
 /** @param {string} root @param {string} rel @returns {string[]} */
 function walk(root, rel) {
-  const out = []
-  for (const entry of readdirSync(path.join(root, rel))) {
-    if (entry === "node_modules" || entry === ".git") continue
-    const next = rel === "" ? entry : `${rel}/${entry}`
-    if (statSync(path.join(root, next)).isDirectory()) out.push(...walk(root, next))
-    else out.push(next)
-  }
-  return out
+  return readdirSync(path.join(root, rel)).flatMap((entry) => {
+    // Skipping these is only a saving: the exclusion filter in listScannableFiles drops node_modules anyway.
+    // Stryker disable next-line ConditionalExpression, StringLiteral, ArrayDeclaration: a pure optimisation, as the line above says (.git is covered by a test); a stray string in the result would be dropped by the extension filter
+    if (entry === "node_modules" || entry === ".git") return []
+    const next = path.posix.join(rel, entry)
+    return statSync(path.join(root, next)).isDirectory() ? walk(root, next) : [next]
+  })
 }
 
 /**
