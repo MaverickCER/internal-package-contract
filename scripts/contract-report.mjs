@@ -121,7 +121,8 @@ function seconds(ms) {
 
 /** @param {string} text */
 function firstLine(text) {
-  return text.split("\n", 1)[0] ?? ""
+  // Always matches: the pattern accepts the empty string.
+  return /^[^\n]*/.exec(text)[0]
 }
 
 /**
