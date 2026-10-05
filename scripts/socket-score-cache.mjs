@@ -59,9 +59,8 @@ export function isTrustedDir(dir) {
  * @returns {boolean}
  */
 export function isValidEntry(entry, name, version) {
-  if (typeof entry !== "object" || entry === null) return false
-  const data = entry.data
-  if (typeof data !== "object" || data === null) return false
+  const data = entry?.data
+  if (!data) return false
   return (
     typeof entry.savedAt === "number" &&
     data.package === name &&
@@ -84,25 +83,28 @@ function entryPath(dir, name, version) {
  * @returns {object | undefined} the cached `data` payload, or undefined when absent, stale or unreadable.
  */
 export function readCached(dir, name, version, ttlMs, now) {
-  if (dir === undefined || !isTrustedDir(dir)) return undefined
+  // No directory is never trusted: `statSync(undefined)` throws, which `isTrustedDir` reports as untrusted.
+  if (!isTrustedDir(dir)) return undefined
   try {
-    const entry = JSON.parse(readFileSync(entryPath(dir, name, version), "utf8"))
+    const entry = JSON.parse(readFileSync(entryPath(dir, name, version)).toString())
     return isValidEntry(entry, name, version) && now - entry.savedAt <= ttlMs
       ? entry.data
       : undefined
   } catch {
-    return undefined
+    // Unreadable, or not JSON: treated as absent, below.
   }
+  return undefined
 }
 
 /** Stores one successful score; a write failure is ignored (the cache is an optimization only). */
 export function writeCached(dir, name, version, data, now) {
+  // Stryker disable next-line ConditionalExpression: with no directory `mkdirSync` throws and the catch below swallows it, so this guard only skips that
   if (dir === undefined) return
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     if (!isTrustedDir(dir)) return
     const file = entryPath(dir, name, version)
-    writeFileSync(`${file}.tmp`, JSON.stringify({ savedAt: now, data }), "utf8")
+    writeFileSync(`${file}.tmp`, JSON.stringify({ savedAt: now, data }))
     renameSync(`${file}.tmp`, file)
   } catch {
     // Read-only or full disk: the next run simply scans again.

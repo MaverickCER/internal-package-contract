@@ -21,7 +21,7 @@ export function audit(spawn, extraArgs) {
     return { error: `${result.error.code ?? "spawn error"}: ${result.error.message}` }
   }
   try {
-    return { value: JSON.parse(result.stdout ?? "") }
+    return { value: JSON.parse(result.stdout) }
   } catch {
     const label = extraArgs.length > 0 ? `npm audit ${extraArgs.join(" ")}` : "npm audit"
     return {

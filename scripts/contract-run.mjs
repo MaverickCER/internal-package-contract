@@ -44,7 +44,7 @@ export function cleanUp(cwd, created) {
   const reports = path.join(cwd, "reports")
   if (created.reports && existsSync(reports)) {
     for (const entry of readdirSync(reports)) {
-      if (entry !== "contract") rmSync(path.join(reports, entry), { recursive: true, force: true })
+      if (entry !== "contract") rmSync(path.join(reports, entry), { recursive: true })
     }
   }
 }
@@ -111,7 +111,7 @@ export async function runContract({
   const report = buildReport({
     results,
     evidenceChecks: evidence.checks,
-    skipped: skippedDeferred && deferred !== undefined ? [deferred] : [],
+    skipped: skippedDeferred ? [deferred] : [],
     strict,
     generatedAt: new Date().toISOString(),
   })
