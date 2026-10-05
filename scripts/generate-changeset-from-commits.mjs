@@ -171,7 +171,8 @@ function writeChangeset(pkgName, sha, bump, subject) {
   const name = `auto-${sha.slice(0, 12)}.md`
   const content = `---\n"${pkgName}": ${bump}\n---\n\n${subject}\n`
   writeFileSync(path.join(dir, name), content)
-  return path.join(".changeset", name)
+  // Always forward slashes: this is a repository-relative path that is logged and returned.
+  return path.posix.join(".changeset", name)
 }
 
 function highestSeverityAcrossChangesets() {

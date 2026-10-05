@@ -19,6 +19,7 @@ import {
   writeCached,
 } from "../scripts/socket-score-cache.mjs"
 
+const posixOnly = it.skipIf(process.platform === "win32")
 let root: string
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), "ipc-score-cache-exact-"))
@@ -56,46 +57,52 @@ describe("isTrustedDir()", () => {
     expect(isTrustedDir(dir)).toBe(true)
   })
 
-  it("distrusts one that group or others can write, and one that is not a directory or does not exist", () => {
-    const dir = path.join(root, "d")
-    mkdirSync(dir)
-    for (const mode of [0o775, 0o757, 0o777, 0o770, 0o707]) {
-      chmodSync(dir, mode)
-      expect(isTrustedDir(dir), mode.toString(8)).toBe(false)
-    }
-    const file = path.join(root, "f")
-    writeFileSync(file, "x")
-    expect(isTrustedDir(file)).toBe(false)
-    expect(isTrustedDir(path.join(root, "missing"))).toBe(false)
-  })
+  posixOnly(
+    "distrusts one that group or others can write, and one that is not a directory or does not exist",
+    () => {
+      const dir = path.join(root, "d")
+      mkdirSync(dir)
+      for (const mode of [0o775, 0o757, 0o777, 0o770, 0o707]) {
+        chmodSync(dir, mode)
+        expect(isTrustedDir(dir), mode.toString(8)).toBe(false)
+      }
+      const file = path.join(root, "f")
+      writeFileSync(file, "x")
+      expect(isTrustedDir(file)).toBe(false)
+      expect(isTrustedDir(path.join(root, "missing"))).toBe(false)
+    },
+  )
 
-  it("distrusts a directory owned by someone else", () => {
+  posixOnly("distrusts a directory owned by someone else", () => {
     const dir = path.join(root, "d")
     mkdirSync(dir, { mode: 0o700 })
     vi.spyOn(process, "getuid").mockReturnValue((process.getuid?.() ?? 0) + 1)
     expect(isTrustedDir(dir)).toBe(false)
   })
 
-  it("trusts any directory on a platform with no POSIX ownership, or when there is no uid to compare", () => {
-    const dir = path.join(root, "d")
-    mkdirSync(dir)
-    chmodSync(dir, 0o777)
-    expect(isTrustedDir(dir)).toBe(false)
-    const platform = Object.getOwnPropertyDescriptor(process, "platform")
-    Object.defineProperty(process, "platform", { value: "win32" })
-    try {
-      expect(isTrustedDir(dir)).toBe(true)
-    } finally {
-      if (platform) Object.defineProperty(process, "platform", platform)
-    }
-    const original = Object.getOwnPropertyDescriptor(process, "getuid")
-    Object.defineProperty(process, "getuid", { value: undefined, configurable: true })
-    try {
-      expect(isTrustedDir(dir)).toBe(true)
-    } finally {
-      if (original) Object.defineProperty(process, "getuid", original)
-    }
-  })
+  posixOnly(
+    "trusts any directory on a platform with no POSIX ownership, or when there is no uid to compare",
+    () => {
+      const dir = path.join(root, "d")
+      mkdirSync(dir)
+      chmodSync(dir, 0o777)
+      expect(isTrustedDir(dir)).toBe(false)
+      const platform = Object.getOwnPropertyDescriptor(process, "platform")
+      Object.defineProperty(process, "platform", { value: "win32" })
+      try {
+        expect(isTrustedDir(dir)).toBe(true)
+      } finally {
+        if (platform) Object.defineProperty(process, "platform", platform)
+      }
+      const original = Object.getOwnPropertyDescriptor(process, "getuid")
+      Object.defineProperty(process, "getuid", { value: undefined, configurable: true })
+      try {
+        expect(isTrustedDir(dir)).toBe(true)
+      } finally {
+        if (original) Object.defineProperty(process, "getuid", original)
+      }
+    },
+  )
 })
 
 describe("isValidEntry() shapes", () => {
@@ -148,7 +155,7 @@ describe("readCached() and writeCached()", () => {
     expect(readCached(dir(), "left-pad", "1.0.0", 5000, 2000)).toEqual(score())
   })
 
-  it("creates the directory, nested, readable only by its owner", () => {
+  posixOnly("creates the directory, nested, readable only by its owner", () => {
     const nested = path.join(root, "a", "b", "cache")
     writeCached(nested, "left-pad", "1.0.0", score(), 1)
     expect(readdirSync(nested)).toEqual(["left-pad@1.0.0.json"])
@@ -198,23 +205,26 @@ describe("readCached() and writeCached()", () => {
     expect(readCached(dir(), "wrong", "1", 5000, 1000)).toBeUndefined()
   })
 
-  it("never reads from an untrusted directory, or when there is none", () => {
+  posixOnly("never reads from an untrusted directory, or when there is none", () => {
     writeCached(trusted(), "left-pad", "1.0.0", score(), 1000)
     chmodSync(dir(), 0o777)
     expect(readCached(dir(), "left-pad", "1.0.0", 5000, 1000)).toBeUndefined()
     expect(readCached(undefined, "left-pad", "1.0.0", 5000, 1000)).toBeUndefined()
   })
 
-  it("does not write into an untrusted directory, or when there is none, and never throws", () => {
-    mkdirSync(dir(), { mode: 0o700 })
-    chmodSync(dir(), 0o777)
-    writeCached(dir(), "left-pad", "1.0.0", score(), 1)
-    expect(readdirSync(dir())).toEqual([])
-    expect(() => writeCached(undefined, "left-pad", "1.0.0", score(), 1)).not.toThrow()
-    const blocker = path.join(root, "file")
-    writeFileSync(blocker, "x")
-    expect(() =>
-      writeCached(path.join(blocker, "inside"), "left-pad", "1.0.0", score(), 1),
-    ).not.toThrow()
-  })
+  posixOnly(
+    "does not write into an untrusted directory, or when there is none, and never throws",
+    () => {
+      mkdirSync(dir(), { mode: 0o700 })
+      chmodSync(dir(), 0o777)
+      writeCached(dir(), "left-pad", "1.0.0", score(), 1)
+      expect(readdirSync(dir())).toEqual([])
+      expect(() => writeCached(undefined, "left-pad", "1.0.0", score(), 1)).not.toThrow()
+      const blocker = path.join(root, "file")
+      writeFileSync(blocker, "x")
+      expect(() =>
+        writeCached(path.join(blocker, "inside"), "left-pad", "1.0.0", score(), 1),
+      ).not.toThrow()
+    },
+  )
 })

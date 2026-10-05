@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import {
   main,
@@ -19,7 +20,7 @@ const tsc = path.join(
   path.dirname(createRequire(import.meta.url).resolve("typescript/package.json")),
   "bin/tsc",
 )
-const tsx = path.resolve(import.meta.dirname, "../node_modules/.bin/tsx")
+const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve("tsx/esm")).href
 const checkScript = path.resolve(import.meta.dirname, "../scripts/api-contract/check.ts")
 
 const INDEX = `/** @public */
@@ -365,7 +366,7 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
       ),
     )
     const cli = (...args: string[]) =>
-      execFileSync(tsx, [checkScript, ...args], {
+      execFileSync(process.execPath, ["--import", tsxLoader, checkScript, ...args], {
         cwd: fx.root,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],

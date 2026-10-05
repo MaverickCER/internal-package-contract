@@ -332,7 +332,7 @@ describe("runCoderabbitReview()", () => {
     expect(evidence.scaffoldedIds).toEqual([])
   })
 
-  it.skipIf(process.getuid?.() === 0)(
+  it.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
     "reports a registry it can read but not write back, keeping the findings",
     async () => {
       const root = scratch()
