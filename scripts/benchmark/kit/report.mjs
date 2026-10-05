@@ -32,14 +32,15 @@ export function formatBytes(bytes) {
 }
 
 const percent = (value) => {
-  if (value === null || !Number.isFinite(value)) return "n/a"
+  if (!Number.isFinite(value)) return "n/a" // also null: the baseline took no time
   // Against an empty baseline the relative overhead is huge by construction; show a multiple instead.
   if (value >= 1000) return `${Math.round(value / 100 + 1).toLocaleString("en-US")}× baseline`
   return `${value.toFixed(value < 10 ? 1 : 0)}%`
 }
 /** A price range, smallest first (CPU time can exceed wall time, so "low" is not always lower). */
 const range = (a, b) => {
-  const [low, high] = a <= b ? [a, b] : [b, a]
+  const low = Math.min(a, b)
+  const high = Math.max(a, b)
   return formatUsd(low) === formatUsd(high)
     ? formatUsd(low)
     : `${formatUsd(low)} – ${formatUsd(high)}`
@@ -52,7 +53,8 @@ const range = (a, b) => {
  * @returns {string} e.g. `~$0.1`, or `~$0.01 – $1` when the bracket spans orders of magnitude.
  */
 export function orderOfMagnitudeUsd(a, b) {
-  const [low, high] = a <= b ? [a, b] : [b, a]
+  const low = Math.min(a, b)
+  const high = Math.max(a, b)
   const nearest = (value) => {
     if (!(value > 0)) return "$0"
     const exponent = Math.round(Math.log10(value))
@@ -72,7 +74,7 @@ const AGREEMENT_LABEL = {
 }
 
 function growthSentence(complexity) {
-  if (!complexity?.class) return "its growth rate could not be determined from this run"
+  if (!complexity.class) return "its growth rate could not be determined from this run"
   return `it grows ${complexity.notation} with workload size (measured exponent ${complexity.exponent.toFixed(2)})`
 }
 
@@ -156,21 +158,20 @@ function endToEndSection(results, suite) {
     "Both sides use empty or minimal functions on purpose, so the difference is the package's own cost -- not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.",
     "",
   )
-  if (suite.endToEnd.variables?.length) {
-    lines.push(
-      "**Variables that could change this result**",
-      "",
-      ...table(
-        ["Variable", "How it is handled", "What it is"],
-        suite.endToEnd.variables.map((v) => [
-          v.name,
-          v.how === "fixed" ? `fixed at ${JSON.stringify(v.value)}` : v.how,
-          v.description,
-        ]),
-      ),
-      "",
-    )
-  }
+  // defineSuite requires at least one variable, so this table is always present.
+  lines.push(
+    "**Variables that could change this result**",
+    "",
+    ...table(
+      ["Variable", "How it is handled", "What it is"],
+      suite.endToEnd.variables.map((v) => [
+        v.name,
+        v.how === "fixed" ? `fixed at ${JSON.stringify(v.value)}` : v.how,
+        v.description,
+      ]),
+    ),
+    "",
+  )
   lines.push(
     "The baseline is an empty or minimal function, so it costs almost nothing and the _relative_ overhead can look enormous (shown as a multiple of the baseline). Read the absolute columns -- time, CPU and dollars added -- they are what a bill and a latency budget are made of.",
     "",
@@ -279,7 +280,7 @@ function functionsSection(results, suite) {
     "",
   )
   const differing = Object.entries(analysis.complexity).filter(
-    ([group, value]) => group.startsWith("fn:") && value.agreement === "differs",
+    ([, value]) => value.agreement === "differs", // only documented functions carry an agreement
   )
   if (differing.length > 0) {
     lines.push(
@@ -400,7 +401,7 @@ function contributionSection(results) {
             "",
             "",
             formatMs(unattributed),
-            percent(total.withPackageMs > 0 ? (unattributed / total.withPackageMs) * 100 : null),
+            percent((unattributed / total.withPackageMs) * 100), // 0 / 0 is not finite, so it shows n/a
           ],
         ],
       ),
