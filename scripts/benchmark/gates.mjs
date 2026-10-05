@@ -97,7 +97,7 @@ export function complexityFindings(current) {
  */
 export function overheadFindings(current, references, gates) {
   const now = typicalOverhead(current)
-  if (!now || now.overheadPercent === null || !(now.overheadPercent >= 0)) return []
+  if (!now) return []
   if (now.baselineMs < gates.noiseFloorBaselineMs) return []
   const limits = gates.normalizedOverheadMaxIncreasePercent
   const allowed =
@@ -105,7 +105,7 @@ export function overheadFindings(current, references, gates) {
   const findings = []
   for (const { name, results } of references) {
     const then = typicalOverhead(results)
-    if (!then || then.overheadPercent === null || !(then.overheadPercent > 0)) continue
+    if (!then || !(then.overheadPercent > 0)) continue
     if (then.baselineMs < gates.noiseFloorBaselineMs) continue
     const increase = (now.overheadPercent / then.overheadPercent - 1) * 100
     if (increase > allowed) {
@@ -131,10 +131,7 @@ export function environmentNotes(previous, current) {
   const b = current?.metadata?.environment
   if (!a || !b) return []
   const notes = []
-  const major = (version) =>
-    String(version ?? "")
-      .replace(/^v/, "")
-      .split(".")[0]
+  const major = (version) => String(version).replace("v", "").split(".")[0]
   if (a.nodeVersion && b.nodeVersion && major(a.nodeVersion) !== major(b.nodeVersion)) {
     notes.push({
       level: "note",

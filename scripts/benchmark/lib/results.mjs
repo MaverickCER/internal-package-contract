@@ -24,21 +24,13 @@ import { readFileSync } from "node:fs"
  */
 export function primaryMedianMs(entry) {
   if (entry?.totalMs?.medianMs !== undefined) return entry.totalMs.medianMs
-  if (
-    entry?.durationMs &&
-    typeof entry.durationMs === "object" &&
-    entry.durationMs.medianMs !== undefined
-  ) {
-    return entry.durationMs.medianMs
-  }
-  return undefined
+  return entry?.durationMs?.medianMs
 }
 
 /** Reads and JSON-parses a file, returning `null` on any read/parse failure (a missing "previous" results.json on a first-ever run, say) instead of throwing. */
 export function tryReadJson(filePath) {
-  if (!filePath) return null
   try {
-    return JSON.parse(readFileSync(filePath, "utf8"))
+    return JSON.parse(readFileSync(filePath).toString())
   } catch {
     return null
   }
@@ -46,7 +38,7 @@ export function tryReadJson(filePath) {
 
 /** Reads and JSON-parses a file, throwing a clear error on failure -- for a path the caller has already decided is required (unlike `tryReadJson`'s "missing is fine"). */
 export function readJson(filePath) {
-  return JSON.parse(readFileSync(filePath, "utf8"))
+  return JSON.parse(readFileSync(filePath).toString())
 }
 
 /** Flattens a raw results.json's `results` map into a flat `{ name, tier, entry }` list, regardless of how many named benchmarks or tiers it declares. */
@@ -90,6 +82,5 @@ export function resultsToMeasurements(results) {
 /** The most recent entry in a history file (`entries` is append-ordered), or `undefined` for an empty/missing history. */
 export function latestHistoryEntry(history) {
   const entries = history?.entries
-  if (!Array.isArray(entries) || entries.length === 0) return undefined
-  return entries[entries.length - 1]
+  return Array.isArray(entries) ? entries[entries.length - 1] : undefined
 }

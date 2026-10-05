@@ -41,15 +41,27 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { detectComplexityShift } from "./classify-complexity.mjs"
 import { evaluateGates } from "./gates.mjs"
-import { collectEntries, primaryMedianMs, latestHistoryEntry, tryReadJson } from "./lib/results.mjs"
+import {
+  collectEntries,
+  latestHistoryEntry,
+  primaryMedianMs,
+  resultsToMeasurements,
+  tryReadJson,
+} from "./lib/results.mjs"
 
-function parseArgs(argv) {
+/**
+ * @param {string[]} argv - the command-line arguments after the script name.
+ * @returns {{ examples: string[], marker: string, budgetsPath?: string, gate?: boolean, help?: boolean }}
+ */
+export function parseArgs(argv) {
   const args = { examples: [], marker: "<!-- benchmark-summary -->" }
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--budgets") args.budgetsPath = argv[++i]
-    else if (arg === "--marker") args.marker = argv[++i]
-    else if (arg === "--example") args.examples.push(argv[++i])
+  // An iterator, so a flag takes the next argument as its value without any index to advance.
+  const items = argv[Symbol.iterator]()
+  const value = () => items.next().value
+  for (const arg of items) {
+    if (arg === "--budgets") args.budgetsPath = value()
+    else if (arg === "--marker") args.marker = value()
+    else if (arg === "--example") args.examples.push(value())
     else if (arg === "--gate") args.gate = true
     else if (arg === "--help" || arg === "-h") args.help = true
   }
@@ -72,29 +84,15 @@ function parseExample(spec) {
   }
 }
 
-function renderComplexityShifts(label, current, historyPath) {
-  if (!historyPath) return { lines: [], shifts: [] }
-  const history = tryReadJson(historyPath)
-  const previousEntry = latestHistoryEntry(history)
-  if (!previousEntry) return { lines: [], shifts: [] }
+/** Every group whose inferred complexity class differs from the latest history entry's. */
+function complexityShifts(label, current, historyPath) {
+  const previousEntry = latestHistoryEntry(tryReadJson(historyPath))
+  if (!previousEntry) return []
 
-  const currentGroups = {}
-  for (const { name, tier, entry } of collectEntries(current)) {
-    if (entry.status !== "completed") continue
-    const medianMs = primaryMedianMs(entry)
-    if (medianMs === undefined) continue
-    currentGroups[name] = currentGroups[name] ?? {}
-    currentGroups[name][tier] = { medianMs, inputs: entry.inputs }
-  }
-
-  const shifts = []
-  for (const [group, tiers] of Object.entries(currentGroups)) {
-    const previousTiers = previousEntry.measurements?.[group]
-    if (!previousTiers) continue
-    const shift = detectComplexityShift(previousTiers, tiers)
-    if (shift.shifted) shifts.push({ label, group, ...shift })
-  }
-  return { shifts }
+  return Object.entries(resultsToMeasurements(current)).flatMap(([group, tiers]) => {
+    const shift = detectComplexityShift(previousEntry.measurements?.[group], tiers)
+    return shift.shifted ? [{ label, group, ...shift }] : []
+  })
 }
 
 /** Finds the first `medianMs`-bearing field on an entry, for a simple regression-percent story. Not every benchmark shape has one -- those are reported without a percent. */
@@ -117,7 +115,7 @@ function renderExample(label, previous, current, budgets) {
       current.metadata?.versions?.benchmarkSuiteVersion
   ) {
     lines.push(
-      `> ⚠️ **Suite version mismatch**: previous run used \`s${previous.metadata?.versions?.benchmarkSuiteVersion}\`, ` +
+      `> ⚠️ **Suite version mismatch**: previous run used \`s${previous.metadata.versions?.benchmarkSuiteVersion}\`, ` +
         `current run used \`s${current.metadata?.versions?.benchmarkSuiteVersion}\`. Numbers below are not directly comparable.`,
       "",
     )
@@ -152,7 +150,7 @@ function renderExample(label, previous, current, budgets) {
 
     let changeCell = "—"
     let changePercent
-    if (medianMs !== undefined && previousMedianMs !== undefined && previousMedianMs > 0) {
+    if (medianMs !== undefined && previousMedianMs > 0) {
       changePercent = ((medianMs - previousMedianMs) / previousMedianMs) * 100
       changeCell = `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(1)}%`
     }
@@ -161,14 +159,14 @@ function renderExample(label, previous, current, budgets) {
     // generated (one per function and variant) needs no per-group list.
     // The derived overhead (the difference of two medians) is the noisiest number in a run, so a raw
     // delta against another run's is not even highlighted; the same-run overhead RATIO is gated instead.
-    const derived = current.results?.[name]?.derived === true
+    const derived = current.results[name].derived === true
     const budget = derived ? undefined : (budgets[name] ?? budgets["*"])
     const budgetCell = derived
       ? "(gated as a ratio)"
       : budget
         ? `${budget.maxRegressionPercent}%`
         : "(unbudgeted)"
-    if (budget && changePercent !== undefined && changePercent > budget.maxRegressionPercent) {
+    if (budget && changePercent > budget.maxRegressionPercent) {
       highlights.push({ name, tier, changePercent, budget: budget.maxRegressionPercent })
     }
 
@@ -205,26 +203,24 @@ async function loadBudgetsModule(budgetsPath) {
 export async function summarize({ examples, budgetsPath, marker }) {
   const { budgets, gates } = await loadBudgetsModule(budgetsPath)
 
-  const allShifts = []
-  const sections = []
-  const findings = []
-  for (const spec of examples) {
+  const perExample = examples.map((spec) => {
     const { label, prevPath, curPath, historyPath, releasePath } = parseExample(spec)
     const previous = tryReadJson(prevPath)
     const current = tryReadJson(curPath)
     const release = tryReadJson(releasePath)
-    const { shifts } = renderComplexityShifts(label, current ?? {}, historyPath)
-    allShifts.push(...shifts)
-    sections.push(renderExample(label, previous, current, budgets))
-    if (current) {
-      findings.push(
-        ...evaluateGates({ previous, release, current, gates }).map((finding) => ({
-          ...finding,
-          label,
-        })),
-      )
+    return {
+      shifts: complexityShifts(label, current ?? {}, historyPath),
+      section: renderExample(label, previous, current, budgets),
+      // With no current results there is nothing to judge: every gate returns no findings.
+      findings: evaluateGates({ previous, release, current, gates }).map((finding) => ({
+        ...finding,
+        label,
+      })),
     }
-  }
+  })
+  const allShifts = perExample.flatMap((example) => example.shifts)
+  const sections = perExample.map((example) => example.section)
+  const findings = perExample.flatMap((example) => example.findings)
   const failures = findings.filter((finding) => finding.level === "fail")
   const notes = findings.filter((finding) => finding.level === "note")
 
@@ -273,26 +269,42 @@ export async function renderSummary(input) {
   return (await summarize(input)).markdown
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2))
+/**
+ * Runs the command: renders the summary, writes it and, only under `--gate`, turns a failed gate into a failure.
+ * @param {string[]} argv - the command-line arguments after the script name.
+ * @param {{ out: (text: string) => void, error: (text: string) => void }} io - where output goes.
+ * @returns {Promise<number>} the process exit code.
+ */
+export async function run(argv, io) {
+  const args = parseArgs(argv)
   if (args.help || args.examples.length === 0) {
-    console.error(
+    io.error(
       "Usage: node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] [--gate] --example 'label|prev|cur|history[|release]' [--example ...]",
     )
-    process.exitCode = args.help ? 0 : 1
-    return
+    return args.help ? 0 : 1
   }
 
   const { markdown, failures } = await summarize(args)
-  process.stdout.write(markdown + "\n")
+  io.out(markdown + "\n")
   // The comment is always written; only an explicit --gate turns a failed gate into a failed run.
-  if (args.gate && failures.length > 0) process.exitCode = 1
+  return args.gate && failures.length > 0 ? 1 : 0
 }
 
+// The process entry point: hands argv to `run` (tested in-process) and turns its result into an exit
+// code. Its test spawns the script, which coverage cannot attribute to this file.
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, ObjectLiteral: process entry point, exercised only by spawning the script
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
 if (isMain) {
-  main().catch((err) => {
-    console.error(err)
-    process.exitCode = 1
+  run(process.argv.slice(2), {
+    out: (text) => process.stdout.write(text),
+    error: (text) => console.error(text),
   })
+    .then((code) => {
+      process.exitCode = code
+    })
+    .catch((err) => {
+      console.error(err)
+      process.exitCode = 1
+    })
 }
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression, ObjectLiteral
