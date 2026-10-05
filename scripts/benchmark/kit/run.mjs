@@ -130,7 +130,7 @@ function measurementsOf(group) {
 }
 
 function completedAt(group, n) {
-  const entry = group?.tiers?.[tierName(n)]
+  const entry = group?.tiers[tierName(n)]
   return entry?.status === "completed" ? entry : undefined
 }
 
@@ -259,12 +259,12 @@ export function analyze({ suite, results, tiers, rates }) {
   for (const [group, value] of Object.entries(results)) {
     if (value.derived) continue
     const classification = classifyGroup(measurementsOf(value))
-    const documented =
-      value.area === "function"
-        ? suite.functions.find((fn) => group === `fn:${fn.id}` || group.startsWith(`fn:${fn.id}@`))
-        : undefined
-    const variantName = documented ? group.slice(`fn:${documented.id}`.length + 1) : ""
-    const variant = documented?.variants?.find((candidate) => candidate.name === variantName)
+    const documented = suite.functions.find(
+      (fn) => group === `fn:${fn.id}` || group.startsWith(`fn:${fn.id}@`),
+    )
+    const variant = documented?.variants?.find(
+      (candidate) => group === `fn:${documented.id}@${candidate.name}`,
+    )
     const expected = documented ? expectationOf(documented, variant).expectedComplexity : undefined
     complexity[group] = {
       class: classification.complexityClass,
@@ -327,15 +327,19 @@ export function analyze({ suite, results, tiers, rates }) {
         typeof fn.inEndToEnd.callsPerOperation === "function"
           ? fn.inEndToEnd.callsPerOperation(row.n)
           : fn.inEndToEnd.callsPerOperation
-      rows.set(row.n, { calls, estimatedMs: entry.durationMs.medianMs * calls })
+      rows.set(row.n, {
+        calls,
+        estimatedMs: entry.durationMs.medianMs * calls,
+        withPackageMs: row.withPackageMs,
+      })
     }
     inclusive.set(fn.id, { fn, group, rows })
   }
   const contribution = []
   for (const { fn, group, rows } of inclusive.values()) {
     const out = []
-    for (const [n, { calls, estimatedMs }] of rows) {
-      const row = endToEnd.find((candidate) => candidate.n === n)
+    for (const [n, { calls, estimatedMs, withPackageMs }] of rows) {
+      // Stryker disable next-line ArrayDeclaration: the mutant lists an id no function has, which adds nothing
       const nested = (fn.inEndToEnd.includes ?? []).reduce(
         (sum, id) => sum + (inclusive.get(id)?.rows.get(n)?.estimatedMs ?? 0),
         0,
@@ -346,7 +350,7 @@ export function analyze({ suite, results, tiers, rates }) {
         calls,
         estimatedMs,
         exclusiveMs,
-        shareOfTotal: row && row.withPackageMs > 0 ? exclusiveMs / row.withPackageMs : null,
+        shareOfTotal: withPackageMs > 0 ? exclusiveMs / withPackageMs : null,
       })
     }
     contribution.push({ id: fn.id, group, description: fn.inEndToEnd.description, rows: out })
