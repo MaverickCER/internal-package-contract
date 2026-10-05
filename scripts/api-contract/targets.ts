@@ -19,14 +19,18 @@ import path from "node:path"
  */
 export function exportedApiSubpaths(exportsField: unknown): readonly string[] {
   if (typeof exportsField !== "object" || exportsField === null) return []
-  const hasTypes = (value: unknown): boolean => {
-    if (typeof value !== "object" || value === null) return false
-    return Object.entries(value).some(
-      ([key, inner]) => (key === "types" && typeof inner === "string") || hasTypes(inner),
+  // Only objects are searched, and only objects are recursed into, so a string value can never loop.
+  const isObject = (value: unknown): value is object => typeof value === "object" && value !== null
+  const hasTypes = (value: object): boolean =>
+    Object.entries(value).some(
+      ([key, inner]) =>
+        (key === "types" && typeof inner === "string") || (isObject(inner) && hasTypes(inner)),
     )
-  }
   return Object.entries(exportsField)
-    .filter(([key, value]) => key.startsWith(".") && !key.includes("*") && hasTypes(value))
+    .filter(
+      ([key, value]) =>
+        key.startsWith(".") && !key.includes("*") && isObject(value) && hasTypes(value),
+    )
     .map(([key]) => key)
 }
 
@@ -106,7 +110,7 @@ export async function readTargets(root: string): Promise<readonly ApiContractTar
 
   let raw: string
   try {
-    raw = await readFile(typedocConfigPath, "utf8")
+    raw = (await readFile(typedocConfigPath)).toString()
   } catch (error) {
     throw new Error(
       `Could not read ${typedocConfigPath} -- the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
@@ -155,7 +159,7 @@ async function assertEveryExportIsGuarded(
     "internal-package-contract"?: { apiTargets?: Record<string, string> }
   }
   try {
-    pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as typeof pkg
+    pkg = JSON.parse((await readFile(path.join(root, "package.json"))).toString()) as typeof pkg
   } catch {
     return
   }

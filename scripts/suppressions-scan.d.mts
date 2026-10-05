@@ -1,4 +1,4 @@
-import type * as TypeScript from "typescript"
+import type TypeScript from "typescript"
 
 export const DOMAINS: readonly string[]
 export const MIN_REASON_LENGTH: number

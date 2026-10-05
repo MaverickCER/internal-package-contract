@@ -19,3 +19,16 @@ export interface GateFailure {
 export function summarize(
   options: RenderSummaryOptions,
 ): Promise<{ markdown: string; failures: GateFailure[] }>
+
+export interface ParsedArgs {
+  examples: string[]
+  marker: string
+  budgetsPath?: string
+  gate?: boolean
+  help?: boolean
+}
+export function parseArgs(argv: readonly string[]): ParsedArgs
+export function run(
+  argv: readonly string[],
+  io: { out: (text: string) => void; error: (text: string) => void },
+): Promise<number>

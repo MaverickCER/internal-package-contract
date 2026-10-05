@@ -26,8 +26,8 @@ describe("primaryMedianMs", () => {
     expect(primaryMedianMs({ totalMs: {}, durationMs: { medianMs: 9 } })).toBe(9)
     expect(primaryMedianMs({ durationMs: {} })).toBeUndefined()
     expect(primaryMedianMs({ durationMs: 5 })).toBeUndefined()
-    expect(primaryMedianMs({ durationMs: null })).toBeUndefined()
-    expect(primaryMedianMs({ durationMs: "5" })).toBeUndefined()
+    expect(primaryMedianMs({ durationMs: null } as never)).toBeUndefined()
+    expect(primaryMedianMs({ durationMs: "5" } as never)).toBeUndefined()
     expect(primaryMedianMs({})).toBeUndefined()
     expect(primaryMedianMs(undefined)).toBeUndefined()
   })
@@ -63,7 +63,9 @@ describe("collectEntries and resultsToMeasurements", () => {
     expect(collectEntries({})).toEqual([])
     expect(collectEntries({ results: { a: {} } })).toEqual([])
     expect(
-      collectEntries({ results: { a: { tiers: { t: { x: 1 } } }, b: { tiers: { u: 2, v: 3 } } } }),
+      collectEntries({
+        results: { a: { tiers: { t: { x: 1 } } }, b: { tiers: { u: 2, v: 3 } } },
+      } as never),
     ).toEqual([
       { name: "a", tier: "t", entry: { x: 1 } },
       { name: "b", tier: "u", entry: 2 },
@@ -89,7 +91,7 @@ describe("collectEntries and resultsToMeasurements", () => {
           },
           empty: { tiers: { failed: { status: "failed" } } },
         },
-      }),
+      } as never),
     ).toEqual({
       g: {
         ok: { medianMs: 1, inputs: { n: 5 } },
@@ -105,10 +107,10 @@ describe("collectEntries and resultsToMeasurements", () => {
 
 describe("latestHistoryEntry", () => {
   it("is the last entry, or undefined when there is none to be had", () => {
-    expect(latestHistoryEntry({ entries: [{ a: 1 }, { b: 2 }] })).toEqual({ b: 2 })
+    expect(latestHistoryEntry({ entries: [{ a: 1 }, { b: 2 }] } as never)).toEqual({ b: 2 })
     expect(latestHistoryEntry({ entries: [] })).toBeUndefined()
-    expect(latestHistoryEntry({ entries: "abc" })).toBeUndefined()
-    expect(latestHistoryEntry({ entries: { 0: 1 } })).toBeUndefined()
+    expect(latestHistoryEntry({ entries: "abc" } as never)).toBeUndefined()
+    expect(latestHistoryEntry({ entries: { 0: 1 } } as never)).toBeUndefined()
     expect(latestHistoryEntry({})).toBeUndefined()
     expect(latestHistoryEntry(null)).toBeUndefined()
     expect(latestHistoryEntry(undefined)).toBeUndefined()

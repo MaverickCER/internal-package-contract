@@ -25,9 +25,8 @@ export function maxLevel(
   a: RequiredReleaseLevel | undefined,
   b: RequiredReleaseLevel | undefined,
 ): RequiredReleaseLevel | undefined {
-  if (a === undefined) return b
-  if (b === undefined) return a
-  return LEVEL_RANK[a] >= LEVEL_RANK[b] ? a : b
+  const present = [a, b].filter((level) => level !== undefined)
+  return present.sort((x, y) => LEVEL_RANK[y] - LEVEL_RANK[x])[0]
 }
 
 /**

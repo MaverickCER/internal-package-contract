@@ -196,8 +196,6 @@ describe("gates -- evaluateGates", () => {
   })
 
   it("finds nothing for no current results", () => {
-    expect(
-      evaluateGates({ previous: run(100, 10), release: run(100, 10), current: undefined }),
-    ).toEqual([])
+    expect(evaluateGates({ previous: run(100, 10), release: run(100, 10) })).toEqual([])
   })
 })
