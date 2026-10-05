@@ -48,6 +48,15 @@ function run(env: Record<string, string> = {}) {
   const base: Record<string, string> = { ...(process.env as Record<string, string>) }
   delete base["CI"]
   delete base["GITHUB_ACTIONS"]
+  // The CI runner running these tests sets these itself; each test supplies what it needs.
+  for (const key of [
+    "GITHUB_REF",
+    "GITHUB_REPOSITORY",
+    "GITHUB_HEAD_REF",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+  ])
+    delete base[key]
   const result = spawnSync(process.execPath, [script], {
     cwd,
     encoding: "utf8",
