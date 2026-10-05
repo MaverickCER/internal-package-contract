@@ -42,6 +42,21 @@ export class SuiteDefinitionError extends Error {
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
+/**
+ * @param {unknown} value - a candidate identifier.
+ * @returns {boolean} whether it is a kebab-case string (a number or an object never is).
+ */
+const isKebab = (value) => typeof value === "string" && KEBAB.test(value)
+
+/**
+ * Reads `key` off `value`, tolerating a missing value -- a definition under validation may be
+ * anything, and every gap in it must be reported, not crash the validator.
+ * @param {any} value - what to read from.
+ * @param {string} key - the property to read.
+ * @returns {any} the property, or `undefined`.
+ */
+const get = (value, key) => value?.[key]
+
 function text(value, at, problems, minLength = 20) {
   if (typeof value !== "string" || value.trim().length < minLength) {
     problems.push(
@@ -59,15 +74,16 @@ function validateVariables(variables, at, problems) {
   }
   variables.forEach((variable, index) => {
     const here = `${at}.variables[${String(index)}]`
-    if (typeof variable?.name !== "string" || variable.name.trim() === "")
-      problems.push(`${here}.name is required.`)
-    text(variable?.description, `${here}.description`, problems, 10)
-    if (!["swept", "variant", "fixed"].includes(variable?.how)) {
+    const name = get(variable, "name")
+    if (typeof name !== "string" || name.trim() === "") problems.push(`${here}.name is required.`)
+    text(get(variable, "description"), `${here}.description`, problems, 10)
+    const how = get(variable, "how")
+    if (!["swept", "variant", "fixed"].includes(how)) {
       problems.push(
         `${here}.how must be "swept" (the tier axis), "variant" (a measured variant) or "fixed" (held constant on purpose).`,
       )
     }
-    if (variable?.how === "fixed" && typeof variable?.value === "undefined") {
+    if (how === "fixed" && get(variable, "value") === undefined) {
       problems.push(`${here}.value is required for a "fixed" variable -- say what it was held at.`)
     }
   })
@@ -75,7 +91,7 @@ function validateVariables(variables, at, problems) {
 
 /** A runnable is EITHER `{ call, input }` (an imported function and the arguments to give it) OR `{ setup?, run }`. */
 function validateRunnable(runnable, at, problems) {
-  const hasCall = runnable?.call !== undefined
+  const hasCall = get(runnable, "call") !== undefined
   if (hasCall) {
     if (typeof runnable.call !== "function")
       problems.push(`${at}.call must be the function to benchmark.`)
@@ -87,9 +103,10 @@ function validateRunnable(runnable, at, problems) {
     }
     return
   }
-  if (typeof runnable?.run !== "function")
+  if (typeof get(runnable, "run") !== "function")
     problems.push(`${at}.run must be a function (or give call and input).`)
-  if (runnable?.setup !== undefined && typeof runnable.setup !== "function")
+  const setup = get(runnable, "setup")
+  if (setup !== undefined && typeof setup !== "function")
     problems.push(`${at}.setup must be a function.`)
 }
 
@@ -99,46 +116,46 @@ function validateRunnable(runnable, at, problems) {
  * build their arguments at size n.
  */
 function normalizeRunnable(runnable) {
-  if (runnable?.call === undefined) return runnable
+  if (runnable.call === undefined) return runnable
   const { call, input, ...rest } = runnable
   return { ...rest, setup: (n, options) => input(n, options), run: (args) => call(...args) }
 }
 
 function validateBenchmark(benchmark, at, problems, { needsId }) {
-  if (needsId && !KEBAB.test(benchmark?.id ?? ""))
+  if (needsId && !isKebab(get(benchmark, "id")))
     problems.push(`${at}.id must be kebab-case (letters, digits, "-").`)
-  text(benchmark?.why, `${at}.why (why this is benchmarked)`, problems)
+  text(get(benchmark, "why"), `${at}.why (why this is benchmarked)`, problems)
   text(
-    benchmark?.poorPerformanceMeans,
+    get(benchmark, "poorPerformanceMeans"),
     `${at}.poorPerformanceMeans (what slow would mean for a user)`,
     problems,
   )
-  if (!Object.hasOwn(COMPLEXITY_NOTATION, benchmark?.expectedComplexity ?? "")) {
+  if (!Object.hasOwn(COMPLEXITY_NOTATION, get(benchmark, "expectedComplexity"))) {
     problems.push(
       `${at}.expectedComplexity must be one of: ${Object.keys(COMPLEXITY_NOTATION).join(", ")}.`,
     )
   }
-  text(benchmark?.complexityReason, `${at}.complexityReason (why that big-O)`, problems)
-  validateVariables(benchmark?.variables, at, problems)
+  text(get(benchmark, "complexityReason"), `${at}.complexityReason (why that big-O)`, problems)
+  validateVariables(get(benchmark, "variables"), at, problems)
   validateRunnable(benchmark, at, problems)
-  if (benchmark?.tiers !== undefined) {
-    problems.push(...validateTiers(benchmark.tiers, 4).map((problem) => `${at}.tiers: ${problem}.`))
+  const tiers = get(benchmark, "tiers")
+  if (tiers !== undefined) {
+    problems.push(...validateTiers(tiers, 4).map((problem) => `${at}.tiers: ${problem}.`))
     text(
-      benchmark?.tiersReason,
+      get(benchmark, "tiersReason"),
       `${at}.tiersReason (why this function cannot be measured on the standard ladder)`,
       problems,
     )
   }
-  if (benchmark?.setup !== undefined && typeof benchmark.setup !== "function")
-    problems.push(`${at}.setup must be a function.`)
-  for (const [index, variant] of (benchmark?.variants ?? []).entries()) {
+  for (const [index, variant] of (get(benchmark, "variants") ?? []).entries()) {
     const here = `${at}.variants[${String(index)}]`
-    if (!KEBAB.test(variant?.name ?? "")) problems.push(`${here}.name must be kebab-case.`)
-    text(variant?.description, `${here}.description`, problems, 10)
+    if (!isKebab(get(variant, "name"))) problems.push(`${here}.name must be kebab-case.`)
+    text(get(variant, "description"), `${here}.description`, problems, 10)
     // A variant may follow a different growth curve than the function as a whole (a scoped run that
     // ignores most of the input, say); it then states its own expectation and the mechanism.
-    if (variant?.expectedComplexity !== undefined) {
-      if (!Object.hasOwn(COMPLEXITY_NOTATION, variant.expectedComplexity)) {
+    const expected = get(variant, "expectedComplexity")
+    if (expected !== undefined) {
+      if (!Object.hasOwn(COMPLEXITY_NOTATION, expected)) {
         problems.push(
           `${here}.expectedComplexity must be one of: ${Object.keys(COMPLEXITY_NOTATION).join(", ")}.`,
         )
@@ -150,11 +167,12 @@ function validateBenchmark(benchmark, at, problems, { needsId }) {
       )
     }
   }
-  for (const [index, excluded] of (benchmark?.notCovered ?? []).entries()) {
+  for (const [index, excluded] of (get(benchmark, "notCovered") ?? []).entries()) {
+    const reason = get(excluded, "reason")
     if (
-      typeof excluded?.name !== "string" ||
-      typeof excluded?.reason !== "string" ||
-      excluded.reason.length < 10
+      typeof get(excluded, "name") !== "string" ||
+      typeof reason !== "string" ||
+      reason.length < 10
     ) {
       problems.push(`${at}.notCovered[${String(index)}] needs a name and a reason it is excluded.`)
     }
@@ -168,49 +186,53 @@ function validateBenchmark(benchmark, at, problems, { needsId }) {
  */
 export function defineSuite(suite) {
   const problems = []
-  if (typeof suite?.package?.name !== "string" || suite.package.name === "")
+  const packageName = get(get(suite, "package"), "name")
+  if (typeof packageName !== "string" || packageName === "")
     problems.push("package.name is required.")
-  text(suite?.workload?.description, "workload.description (what one unit of `n` is)", problems, 10)
-  if (typeof suite?.workload?.unit !== "string" || suite.workload.unit === "")
+  const workload = get(suite, "workload")
+  text(get(workload, "description"), "workload.description (what one unit of `n` is)", problems, 10)
+  const unit = get(workload, "unit")
+  if (typeof unit !== "string" || unit === "")
     problems.push('workload.unit is required (e.g. "record").')
 
-  const tiers = suite?.tiers ?? STANDARD_TIERS
+  const tiers = get(suite, "tiers") ?? STANDARD_TIERS
   problems.push(...validateTiers(tiers).map((problem) => `tiers: ${problem}.`))
-  const typicalN = suite?.workload?.typicalN ?? 640
+  const typicalN = get(workload, "typicalN") ?? 640
   if (!tiers.includes(typicalN))
     problems.push(`workload.typicalN (${String(typicalN)}) must be one of the tiers.`)
 
-  const endToEnd = suite?.endToEnd
+  const endToEnd = get(suite, "endToEnd")
   text(
-    endToEnd?.purpose,
+    get(endToEnd, "purpose"),
     "endToEnd.purpose (what the end-to-end benchmark shows and why it matters)",
     problems,
   )
   text(
-    endToEnd?.baseline?.description,
+    get(get(endToEnd, "baseline"), "description"),
     "endToEnd.baseline.description (the minimal work done WITHOUT the package)",
     problems,
   )
   text(
-    endToEnd?.withPackage?.description,
+    get(get(endToEnd, "withPackage"), "description"),
     "endToEnd.withPackage.description (the same work routed THROUGH the package)",
     problems,
   )
   for (const side of ["baseline", "withPackage"]) {
-    validateRunnable(endToEnd?.[side], `endToEnd.${side}`, problems)
+    validateRunnable(get(endToEnd, side), `endToEnd.${side}`, problems)
   }
-  validateVariables(endToEnd?.variables, "endToEnd", problems)
+  validateVariables(get(endToEnd, "variables"), "endToEnd", problems)
 
   const seen = new Set()
-  const functions = suite?.functions ?? []
+  const functions = get(suite, "functions") ?? []
   if (functions.length === 0)
     problems.push("functions must list at least one benchmarked function.")
   functions.forEach((benchmark, index) => {
-    const at = `functions[${String(index)}]${benchmark?.id ? ` (${benchmark.id})` : ""}`
+    const id = get(benchmark, "id")
+    const at = `functions[${String(index)}]${id ? ` (${id})` : ""}`
     validateBenchmark(benchmark, at, problems, { needsId: true })
-    if (seen.has(benchmark?.id)) problems.push(`${at}.id is duplicated.`)
-    seen.add(benchmark?.id)
-    if (benchmark?.inEndToEnd !== undefined) {
+    if (seen.has(id)) problems.push(`${at}.id is duplicated.`)
+    seen.add(id)
+    if (get(benchmark, "inEndToEnd") !== undefined) {
       text(
         benchmark.inEndToEnd.description,
         `${at}.inEndToEnd.description (how the end-to-end run calls it)`,
@@ -231,7 +253,7 @@ export function defineSuite(suite) {
         } else {
           for (const id of includes) {
             if (id === benchmark.id) problems.push(`${at}.inEndToEnd.includes cannot list itself.`)
-            else if (!functions.some((other) => other?.id === id)) {
+            else if (!functions.some((other) => get(other, "id") === id)) {
               problems.push(
                 `${at}.inEndToEnd.includes names "${id}", which is not a function in this suite.`,
               )

@@ -12,6 +12,7 @@ export function expectationOf(
   variant?: any,
 ): { expectedComplexity: ComplexityClass; complexityReason: string }
 export class SuiteDefinitionError extends Error {
+  constructor(problems: readonly string[])
   readonly problems: readonly string[]
 }
 
