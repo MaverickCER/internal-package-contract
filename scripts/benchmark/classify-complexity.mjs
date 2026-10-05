@@ -101,10 +101,9 @@ const CLASS_ANCHORS = Object.freeze([
  * `inputs`, or one with no finite-numeric values at all.
  */
 export function inputTotal(inputs) {
-  if (!inputs || typeof inputs !== "object") return undefined
-  const values = Object.values(inputs).filter(
-    (value) => typeof value === "number" && Number.isFinite(value),
-  )
+  if (!inputs) return undefined
+  // `Number.isFinite` is false for anything that is not a finite number, strings included.
+  const values = Object.values(inputs).filter((value) => Number.isFinite(value))
   if (values.length === 0) return undefined
   return values.reduce((sum, value) => sum + value, 0)
 }
@@ -123,8 +122,8 @@ export function buildSizeSeries(tiers) {
   for (const [tier, measurement] of Object.entries(tiers ?? {})) {
     const size = inputTotal(measurement?.inputs)
     const medianMs = measurement?.medianMs
-    if (size === undefined || !(size > 0)) continue
-    if (typeof medianMs !== "number" || !Number.isFinite(medianMs) || !(medianMs > 0)) continue
+    if (!(size > 0)) continue
+    if (!Number.isFinite(medianMs) || !(medianMs > 0)) continue
     points.push({ tier, size, medianMs })
   }
   points.sort((a, b) => a.size - b.size)
@@ -140,7 +139,7 @@ export function buildSizeSeries(tiers) {
  * the single pairwise ratio `ln(T2/T1) / ln(N2/N1)`.
  */
 export function estimateGrowthExponent(series) {
-  if (!Array.isArray(series) || series.length < 2) return null
+  if (!Array.isArray(series)) return null
 
   const xs = series.map((point) => Math.log(point.size))
   const ys = series.map((point) => Math.log(point.medianMs))
@@ -148,13 +147,10 @@ export function estimateGrowthExponent(series) {
   const xMean = xs.reduce((a, b) => a + b, 0) / n
   const yMean = ys.reduce((a, b) => a + b, 0) / n
 
-  let numerator = 0
-  let denominator = 0
-  for (let i = 0; i < n; i++) {
-    const dx = xs[i] - xMean
-    numerator += dx * (ys[i] - yMean)
-    denominator += dx * dx
-  }
+  // Fewer than two points, or every point at one size, leaves no x-axis variance to fit a slope to.
+  // The y deviations sum to zero, so weighting them by x gives the same covariance as by x - xMean.
+  const numerator = xs.reduce((sum, x, i) => sum + x * (ys[i] - yMean), 0)
+  const denominator = xs.reduce((sum, x) => sum + (x - xMean) ** 2, 0)
 
   if (denominator === 0) return null
   return numerator / denominator
@@ -184,7 +180,7 @@ const FLAT_RATIO = 1.5
  * @returns {{ exponent: number, rSquared: number, flat: boolean, points: number } | null} `null` when no slope exists.
  */
 export function fitGrowth(series) {
-  const window = series.length > FIT_WINDOW ? series.slice(series.length - FIT_WINDOW) : series
+  const window = series.slice(-FIT_WINDOW)
   const exponent = estimateGrowthExponent(window)
   if (exponent === null) return null
   const xs = window.map((point) => Math.log(point.size))
@@ -192,12 +188,8 @@ export function fitGrowth(series) {
   const xMean = xs.reduce((a, b) => a + b, 0) / xs.length
   const yMean = ys.reduce((a, b) => a + b, 0) / ys.length
   const intercept = yMean - exponent * xMean
-  let residual = 0
-  let total = 0
-  for (let i = 0; i < xs.length; i++) {
-    residual += (ys[i] - (intercept + exponent * xs[i])) ** 2
-    total += (ys[i] - yMean) ** 2
-  }
+  const residual = xs.reduce((sum, x, i) => sum + (ys[i] - (intercept + exponent * x)) ** 2, 0)
+  const total = ys.reduce((sum, y) => sum + (y - yMean) ** 2, 0)
   const rSquared = total === 0 ? 1 : 1 - residual / total
   const times = window.map((point) => point.medianMs)
   const flat = Math.max(...times) / Math.min(...times) < FLAT_RATIO
@@ -214,16 +206,9 @@ export function fitGrowth(series) {
  * earlier/lower anchor as the incumbent on a tie).
  */
 export function snapExponentToClass(exponent) {
-  let best = CLASS_ANCHORS[0]
-  let bestDistance = Math.abs(exponent - best.exponent)
-  for (const anchor of CLASS_ANCHORS.slice(1)) {
-    const distance = Math.abs(exponent - anchor.exponent)
-    if (distance < bestDistance) {
-      best = anchor
-      bestDistance = distance
-    }
-  }
-  return best.complexityClass
+  const distance = (anchor) => Math.abs(exponent - anchor.exponent)
+  return CLASS_ANCHORS.reduce((best, anchor) => (distance(anchor) < distance(best) ? anchor : best))
+    .complexityClass
 }
 
 /**
@@ -256,6 +241,7 @@ export function classifyGroup(tiers) {
 
   // A group that barely moves is flat, whatever its R-squared; one that moves but not along a power
   // law (a step, a cache cliff) is not given a class the data does not support.
+  // Stryker disable next-line EqualityOperator: an R-squared computed from logarithms of real timings is never exactly MIN_R_SQUARED, so `<` and `<=` cannot disagree
   if (!fit.flat && fit.rSquared < MIN_R_SQUARED) {
     return {
       complexityClass: null,

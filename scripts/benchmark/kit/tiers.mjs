@@ -34,7 +34,7 @@ export function validateTiers(tiers) {
   if (!tiers.every((size) => Number.isInteger(size) && size > 0)) {
     problems.push("tiers must all be positive integers")
   }
-  if (tiers.some((size, index) => index > 0 && size <= tiers[index - 1])) {
+  if (tiers.some((size, index) => size <= tiers[index - 1])) {
     problems.push("tiers must be strictly ascending")
   }
   return problems
