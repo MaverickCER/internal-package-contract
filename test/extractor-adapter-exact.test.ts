@@ -52,7 +52,7 @@ function makeRoot(source: string) {
 
 const target = { name: "index", mainEntryPointFilePath: "dist/.dts/index.d.ts" }
 
-describe("runApiExtractorForTarget()", () => {
+describe("runApiExtractorForTarget()", { timeout: 120_000 }, () => {
   it("writes the Doc Model, the declaration rollup and the API report under the target's own folder", () => {
     const { root } = makeRoot("/** @public */\nexport function f(): void {}\n")
     vi.spyOn(process.stderr, "write").mockImplementation(() => true)

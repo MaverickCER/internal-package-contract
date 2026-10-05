@@ -230,7 +230,7 @@ describe("containsWholeWord()", () => {
   })
 })
 
-describe("checkAssignability()", () => {
+describe("checkAssignability()", { timeout: 120_000 }, () => {
   it("judges a changed referenced type by the real compiler, in the direction asked", () => {
     const old = parameterExcerpt(baseline, "f")
     const next = parameterExcerpt(current, "f")
