@@ -6,6 +6,9 @@
 
 import type { ContractImpact, RequiredReleaseLevel } from "./evidence-types.js"
 
+/** Every release level, largest bump first. */
+const LEVELS_DESCENDING: readonly RequiredReleaseLevel[] = ["major", "minor", "patch", "none"]
+
 /** Ranks a release level by bump magnitude. `"none"` ranks below `"patch"`. */
 const LEVEL_RANK: Record<RequiredReleaseLevel, number> = {
   none: 0,
@@ -25,8 +28,7 @@ export function maxLevel(
   a: RequiredReleaseLevel | undefined,
   b: RequiredReleaseLevel | undefined,
 ): RequiredReleaseLevel | undefined {
-  const present = [a, b].filter((level) => level !== undefined)
-  return present.sort((x, y) => LEVEL_RANK[y] - LEVEL_RANK[x])[0]
+  return LEVELS_DESCENDING.find((level) => level === a || level === b)
 }
 
 /**
