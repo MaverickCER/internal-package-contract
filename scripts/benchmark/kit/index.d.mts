@@ -117,6 +117,12 @@ export function sample(
     minSampleMs?: number
     prepare?: () => unknown
     release?: () => unknown
+    instruments?: {
+      now: () => number
+      cpuUsage: (previous?: { user: number; system: number }) => { user: number; system: number }
+      heapUsed: () => number
+      gc: (() => void) | undefined
+    }
   },
 ): Promise<{
   wallMs: number[]
