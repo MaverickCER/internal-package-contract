@@ -81,7 +81,7 @@
     "@eslint/js": "^10.0.1",
     "@microsoft/api-extractor": "^7.58.13",
     "@microsoft/api-extractor-model": "^7.33.12",
-    "@secretlint/secretlint-rule-preset-recommend": "^9.0.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.7",
     "@socketsecurity/cli": "^1.1.169",
     "@stryker-mutator/api": "^10.0.0",
     "@stryker-mutator/core": "^10.0.0",
@@ -107,14 +107,14 @@
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
     "repo-contract": "~0.8.8",
-    "secretlint": "^9.0.0",
+    "secretlint": "^13.0.7",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1"
+    "@changesets/cli": "^3.0.3"
   },
   "overrides": {
     "tar": "^7.5.22",
