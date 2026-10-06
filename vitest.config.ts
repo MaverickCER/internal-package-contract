@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config"
+import { ENTRY_SHELLS, NON_RUNTIME } from "./scope.mjs"
 
 export default defineConfig({
   test: {
@@ -9,7 +10,10 @@ export default defineConfig({
     testTimeout: 20_000,
     coverage: {
       provider: "v8",
-      include: ["checks/**/*.ts"],
+      // Everything this package ships and runs -- see scope.mjs for the one exclusion (process entry
+      // points) and why.
+      include: ["checks/**/*.ts", "scripts/**/*.{ts,mjs}", "bin/**/*.mjs"],
+      exclude: [...NON_RUNTIME, ...ENTRY_SHELLS],
       reporter: ["text", "html", "lcov", "json-summary"],
       thresholds: {
         branches: 80,

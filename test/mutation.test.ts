@@ -1,9 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { hashRequirementFields } from "repo-contract/helpers"
 import {
+  MUTATION_EXCEPTION_SCHEMA,
+  describeIgnored,
   extractSpan,
   fieldValue,
   formatOffendingMutants,
@@ -12,7 +14,8 @@ import {
   truncateSnippet,
 } from "../checks/mutation.js"
 import type { MutantLocation, MutationExceptionRecord, ResolvedMutant } from "../checks/mutation.js"
-import { makeContext, makeResult } from "./support.js"
+import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { BLANK_V2, makeContext, makeResult } from "./support.js"
 
 /** Mirrors mutation.ts's own private `deriveMutationId` exactly -- a registry record's `id` must match this, or the schema validator rejects it as an integrity failure before the policy ever gets to evaluate it. */
 function deriveMutationId(mutant: {
@@ -317,7 +320,9 @@ describe("mutation()", () => {
     expect(result.rationale).toContain("did not produce reports/mutation/mutation.json")
   })
 
-  it("warns (does not fail) when run-mutation.mjs deliberately skipped Stryker -- no own config, IPC_MUTATION unset", async () => {
+  it("never treats a run that printed the old 'skipped' notice as a skipped mutation run", async () => {
+    // A package cannot satisfy the contract by omitting a stryker.config.*: the runner no longer
+    // skips, so there is no skip marker to recognise and the absent report is a plain failure.
     const check = mutation()
     const result = await check.policy(
       makeContext(
@@ -327,9 +332,41 @@ describe("mutation()", () => {
         }),
       ),
     )
-    expect(result.outcome).toBe("warn")
-    expect(result.rationale).toContain("Mutation skipped")
-    expect(result.rationale).toContain("IPC_MUTATION=1")
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("did not produce reports/mutation/mutation.json")
+  })
+
+  it("reports mutants Stryker was told to ignore, naming where they are, without letting them move the score", async () => {
+    const source = "const a = 1\nconst b = 2\n"
+    const at = {
+      start: { line: 1, column: 11 },
+      end: { line: 1, column: 12 },
+    }
+    writeReport({
+      files: {
+        "src/a.ts": {
+          source,
+          mutants: [
+            { status: "Killed", mutatorName: "NumberLiteral", replacement: "0", location: at },
+            { status: "Ignored", mutatorName: "NumberLiteral", replacement: "2", location: at },
+            { status: "Ignored", mutatorName: "NumberLiteral", replacement: "3", location: at },
+          ],
+        },
+        "src/b.ts": {
+          source,
+          mutants: [
+            { status: "Ignored", mutatorName: "NumberLiteral", replacement: "4", location: at },
+          ],
+        },
+      },
+    })
+    writeRegistry([])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain("score 100.00%")
+    expect(result.rationale).toContain(
+      "3 ignored by Stryker disable comments or ignoreStatic (src/a.ts 2, src/b.ts 1)",
+    )
   })
 
   it("fails when Stryker's report contains 0 valid mutants", async () => {
@@ -1134,5 +1171,191 @@ describe("mutation()", () => {
       rationale:
         "Mutation: every mutant in the report (1) was excluded by a known Stryker false positive, see .repo-contract/exceptions/mutation.json.",
     })
+  })
+})
+
+describe("describeIgnored()", () => {
+  const mutant = (file: string, status: string) => ({
+    file,
+    status,
+    mutator: "M",
+    original: "o",
+    replacement: "r",
+    line: 1,
+  })
+
+  it("is empty when nothing was ignored", () => {
+    expect(describeIgnored([mutant("a.ts", "Killed"), mutant("b.ts", "Survived")])).toBe("")
+    expect(describeIgnored([])).toBe("")
+  })
+
+  it("totals the ignored mutants and names the files holding the most, ties by name", () => {
+    const mutants = [
+      ...Array.from({ length: 3 }, () => mutant("big.ts", "Ignored")),
+      mutant("b.ts", "Ignored"),
+      mutant("a.ts", "Ignored"),
+      mutant("a.ts", "Killed"),
+    ]
+    expect(describeIgnored(mutants)).toBe(
+      "; 5 ignored by Stryker disable comments or ignoreStatic (big.ts 3, a.ts 1, b.ts 1)",
+    )
+  })
+
+  it("lists at most five files and counts the rest", () => {
+    const mutants = ["a", "b", "c", "d", "e", "f", "g"].map((f) => mutant(`${f}.ts`, "Ignored"))
+    expect(describeIgnored(mutants)).toBe(
+      "; 7 ignored by Stryker disable comments or ignoreStatic (a.ts 1, b.ts 1, c.ts 1, d.ts 1, e.ts 1, +2 more file(s))",
+    )
+  })
+})
+
+describe("mutation() -- wiring", () => {
+  it("runs the bundled runner script, which exists, with the bundled baseline as its fallback config", () => {
+    const run = mutation().run as readonly string[]
+    expect(run[0]).toBe("node")
+    expect(existsSync(run[1] as string)).toBe(true)
+    expect(path.basename(run[1] as string)).toBe("run-mutation.mjs")
+    expect(path.basename(path.dirname(run[1] as string))).toBe("scripts")
+    expect(run[2]).toBe("--fallback-config")
+    expect(existsSync(run[3] as string)).toBe(true)
+  })
+})
+
+describe("MUTATION_EXCEPTION_SCHEMA", () => {
+  const identity = {
+    file: "src/a.ts",
+    mutator: "BooleanLiteral",
+    original: "true",
+    replacement: "false",
+  }
+  const record = (over: Record<string, unknown> = {}) => ({
+    id: deriveMutationId({ ...identity, ...(over as typeof identity) }),
+    version: 1,
+    justification: "j",
+    ...identity,
+    ...over,
+  })
+  const validate = (entry: unknown) => validateExceptionRegistry([entry], MUTATION_EXCEPTION_SCHEMA)
+
+  it("accepts a well-formed record, including an empty replacement (a deletion)", () => {
+    expect(validate(record())).toEqual({ ok: true, records: [record()] })
+    expect(validate(record({ replacement: "" })).ok).toBe(true)
+  })
+
+  it("lives in the mutation: namespace", () => {
+    const wrong = { ...record(), id: "other:src/a.ts:BooleanLiteral:abc" }
+    const result = validate(wrong)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors.join("\n")).toContain('beginning with "mutation:"')
+  })
+
+  it.each([
+    ["file", ""],
+    ["file", 3],
+    ["mutator", ""],
+    ["mutator", null],
+    ["original", ""],
+    ["original", 1],
+  ])("rejects a record whose %s is %j, saying which field and where", (field, value) => {
+    const result = validate({ ...record(), [field]: value })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors).toEqual([`exceptions[0].${field} must be a non-empty string.`])
+    }
+  })
+
+  it("rejects a non-string replacement", () => {
+    const result = validate({ ...record(), replacement: 7 })
+    expect(result).toEqual({ ok: false, errors: ["exceptions[0].replacement must be a string."] })
+  })
+
+  it("reports every invalid field of one record, not just the first", () => {
+    const result = validate({ ...record(), file: "", mutator: "", original: "", replacement: 1 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors).toHaveLength(4)
+  })
+
+  it("rejects an id that does not derive from the record's own identity", () => {
+    const result = validate({ ...record(), original: "false" })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors[0]).toContain("does not match the id derived")
+  })
+})
+
+describe("mutation() -- an insufficient record", () => {
+  it("names the record and exactly which fields are missing, and where to fill them in", async () => {
+    const source = "const x = true\n"
+    writeReport(
+      makeReport("src/a.ts", source, [
+        {
+          status: "Survived",
+          mutatorName: "BooleanLiteral",
+          replacement: "false",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 15 },
+        },
+      ]),
+    )
+    const identity = {
+      file: "src/a.ts",
+      mutator: "BooleanLiteral",
+      original: "true",
+      replacement: "false",
+    }
+    const id = deriveMutationId(identity)
+    writeRegistry([{ id, version: 1, justification: "", ...identity }])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "Mutation: .repo-contract/exceptions/mutation.json has 1 problem(s):",
+        `- ${id} -- missing: justification. Fill those fields in .repo-contract/exceptions/mutation.json.`,
+      ].join("\n"),
+    })
+  })
+})
+
+describe("mutation() -- a blank version 2 record", () => {
+  it("lists every missing field, comma-separated", async () => {
+    const source = "const x = true\n"
+    writeReport(
+      makeReport("src/a.ts", source, [
+        {
+          status: "Survived",
+          mutatorName: "BooleanLiteral",
+          replacement: "false",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 15 },
+        },
+      ]),
+    )
+    const identity = {
+      file: "src/a.ts",
+      mutator: "BooleanLiteral",
+      original: "true",
+      replacement: "false",
+    }
+    const id = deriveMutationId(identity)
+    writeRegistry([{ id, version: 2, justification: "", ...BLANK_V2, ...identity }])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.rationale).toContain(
+      "missing: justification, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen. Fill those fields",
+    )
+  })
+})
+
+describe("describeIgnored() -- the file-list boundary", () => {
+  it("does not claim more files when exactly the listed maximum hold ignored mutants", () => {
+    const mutants = ["a", "b", "c", "d", "e"].map((f) => ({
+      file: `${f}.ts`,
+      status: "Ignored",
+      mutator: "M",
+      original: "o",
+      replacement: "r",
+      line: 1,
+    }))
+    expect(describeIgnored(mutants)).toBe(
+      "; 5 ignored by Stryker disable comments or ignoreStatic (a.ts 1, b.ts 1, c.ts 1, d.ts 1, e.ts 1)",
+    )
   })
 })

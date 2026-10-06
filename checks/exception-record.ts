@@ -3,13 +3,15 @@
  * file in a CONSUMER repository shares -- the layer `repo-contract/helpers`' own
  * specs/decisions/0013-reusable-exception-policy-helper.md deliberately leaves unpublished
  * ("Not published; an outside consumer wanting it writes their own"), ported here so every check
- * in this package that adopts the registry model (currently `Mutation`; a future check follows the
- * same shape) shares one tested core instead of re-deriving it.
+ * in this package that adopts the registry model (`Mutation`, `SecuritySocket`, `SecurityDeps`,
+ * `CodeScanning`, `DistNoUrls`, `CodeRabbit` and the environment-precondition registry) shares one
+ * tested core instead of re-deriving it.
  *
- * Owns the three-field core every record carries (`id`/`version`/`justification`), the record's id
- * namespace, unknown-own-key rejection, and id uniqueness across the whole registry array. A
- * per-registry `ExceptionRegistrySchema` fills in everything registry-specific -- see
- * `checks/mutation.ts` for the `Mutation` check's own schema.
+ * Owns the core every record carries (`id`/`version`/`justification`, plus -- on a `version: 2`
+ * record -- the structured fields in {@link EXCEPTION_V2_FIELD_KEYS} that say what rule is being
+ * broken and why), the record's id namespace, unknown-own-key rejection, and id uniqueness across
+ * the whole registry array. A per-registry `ExceptionRegistrySchema` fills in everything
+ * registry-specific -- see `checks/mutation.ts` for the `Mutation` check's own schema.
  */
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
@@ -55,6 +57,103 @@ export interface ExceptionRegistrySchema<TRecord extends { readonly id: string }
   ) => TRecord | undefined
 }
 
+/**
+ * The fields a `version: 2` exception record carries on top of `id`/`version`/`justification`
+ * (and any registry-specific ones). Together they are what makes an exception auditable: which
+ * rule is being broken, what was tried first, the technical constraint that forced the exception,
+ * why the chosen outcome is preferable to the alternatives, what risk remains, and the condition
+ * under which the record must be reopened. `expires` is an optional hard date (`YYYY-MM-DD`, or
+ * `""` for none) after which the record no longer counts.
+ */
+export const EXCEPTION_V2_FIELD_KEYS = [
+  "ruleBroken",
+  "attempted",
+  "constraint",
+  "whyPreferable",
+  "residualRisk",
+  "revisitWhen",
+] as const
+
+/** The {@link EXCEPTION_V2_FIELD_KEYS} plus the optional `expires` date -- every key a v2 record may carry beyond its registry's own. */
+const EXCEPTION_V2_ALL_KEYS = [...EXCEPTION_V2_FIELD_KEYS, "expires"] as const
+
+/** The version-2 fields of an exception record; every one is an empty string on a freshly scaffolded stub until a human writes it. */
+export interface ExceptionV2Fields {
+  readonly ruleBroken: string
+  readonly attempted: string
+  readonly constraint: string
+  readonly whyPreferable: string
+  readonly residualRisk: string
+  readonly revisitWhen: string
+  readonly expires: string
+}
+
+/** Every v2 field blank -- what a newly scaffolded stub starts with. */
+export function emptyV2Fields(): ExceptionV2Fields {
+  return {
+    ruleBroken: "",
+    attempted: "",
+    constraint: "",
+    whyPreferable: "",
+    residualRisk: "",
+    revisitWhen: "",
+    expires: "",
+  }
+}
+
+/**
+ * A record that carries the optional version-2 structure. `version: 1` records (the legacy shape)
+ * have none of the {@link ExceptionV2Fields}; both versions are accepted so a registry can migrate
+ * record by record, and the inventory reports how many legacy records remain.
+ */
+export interface VersionedExceptionRecord {
+  readonly id: string
+  readonly version: 1 | 2
+}
+
+/** Whether `record` is a legacy `version: 1` record. */
+export function isLegacyRecord(record: { readonly version: 1 | 2 }): boolean {
+  return record.version === 1
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Whether an `expires` value (`YYYY-MM-DD`) is in the past relative to `now`.
+ * @param expires - The record's `expires` string (`""` means it never expires).
+ * @param now - The clock to compare against.
+ * @returns `true` only for a valid date strictly before today's date.
+ */
+export function isExpired(expires: string, now: Date = new Date()): boolean {
+  // An empty string is not a date either, so it is never expired.
+  if (!ISO_DATE.test(expires)) return false
+  return expires < now.toISOString().slice(0, 10)
+}
+
+function validateV2Fields(
+  entry: Readonly<Record<string, unknown>>,
+  index: number,
+  errors: string[],
+): ExceptionV2Fields | undefined {
+  const at = `exceptions[${String(index)}]`
+  let ok = true
+  for (const key of EXCEPTION_V2_FIELD_KEYS) {
+    if (typeof entry[key] !== "string") {
+      errors.push(`${at}.${key} must be a string (a version 2 record carries it).`)
+      ok = false
+    }
+  }
+  const expires = entry["expires"]
+  if (typeof expires !== "string" || (expires !== "" && !ISO_DATE.test(expires))) {
+    errors.push(`${at}.expires must be "" or a YYYY-MM-DD date (got ${JSON.stringify(expires)}).`)
+    ok = false
+  }
+  if (!ok) return undefined
+  return Object.fromEntries(
+    EXCEPTION_V2_ALL_KEYS.map((key) => [key, entry[key] as string]),
+  ) as unknown as ExceptionV2Fields
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -71,6 +170,7 @@ function validateOneExceptionRecord<TRecord extends { readonly id: string }>(
   }
 
   const allowedKeys = new Set<string>(["id", "version", "justification", ...schema.metadataKeys])
+  if (entry["version"] === 2) for (const key of EXCEPTION_V2_ALL_KEYS) allowedKeys.add(key)
   const unknownKeys = Object.keys(entry).filter((key) => !allowedKeys.has(key))
   if (unknownKeys.length > 0) {
     errors.push(
@@ -88,10 +188,10 @@ function validateOneExceptionRecord<TRecord extends { readonly id: string }>(
     )
   }
 
-  const versionValid = version === 1
+  const versionValid = version === 1 || version === 2
   if (!versionValid) {
     errors.push(
-      `exceptions[${String(index)}].version must be the number 1 (got ${JSON.stringify(version)}).`,
+      `exceptions[${String(index)}].version must be the number 2 (or the legacy 1) (got ${JSON.stringify(version)}).`,
     )
   }
 
@@ -104,7 +204,14 @@ function validateOneExceptionRecord<TRecord extends { readonly id: string }>(
     return undefined
   }
 
-  return schema.validateRecord({ id, version: 1, justification }, entry, index, errors)
+  const v2 = version === 2 ? validateV2Fields(entry, index, errors) : undefined
+  if (version === 2 && v2 === undefined) return undefined
+
+  const record = schema.validateRecord({ id, version: 1, justification }, entry, index, errors)
+  if (record === undefined || v2 === undefined) return record
+  // The registry's own validator rebuilds the record at version 1; a v2 record keeps its version
+  // and carries its structured fields alongside the registry-specific ones.
+  return { ...record, version: 2, ...v2 } as unknown as TRecord
 }
 
 /**
@@ -189,8 +296,20 @@ export const EXCEPTION_TYPES = [
 
 export type ExceptionType = (typeof EXCEPTION_TYPES)[number]
 
-/** The only exception type `SecuritySocket` accepts: the flagged code is why the package exists. */
-export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = ["required-for-package-to-exist"]
+/**
+ * The exception types `SecuritySocket` accepts. Critical and high alerts are never waivable at
+ * all (policy, not type); for everything else the type must say what is actually true -- the
+ * alert is a heuristic that does not apply (`validated-false-positive`, re-verified mechanically),
+ * an artifact of the scanner (`tooling-limitation`), a real but tolerated property
+ * (`accepted-risk`), or the dependency is why the package exists
+ * (`required-for-package-to-exist`).
+ */
+export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = [
+  "validated-false-positive",
+  "tooling-limitation",
+  "accepted-risk",
+  "required-for-package-to-exist",
+]
 
 /** The only exception type `CodeScanning` accepts: the finding is in code that is never shipped. */
 export const CODE_SCANNING_EXCEPTION_TYPES: readonly ExceptionType[] = ["dev-only-not-shipped"]
@@ -205,8 +324,15 @@ export const CODE_SCANNING_EXCEPTION_TYPES: readonly ExceptionType[] = ["dev-onl
  * - `"independent-human-review"`: a human's own accountable judgment call -- covers everything
  *   mechanical re-verification cannot reach (an accepted-risk decision on a real, unfixable
  *   finding).
+ * - `"policy-rule"`: no individual judged this record -- a standing rule of this standard decided
+ *   it (for example `CodeScanning` rejecting every alert in development-only code by location).
+ *   The record says so rather than asserting a review that never happened.
  */
-const EXCEPTION_METHODS = ["mechanical-reverification", "independent-human-review"] as const
+const EXCEPTION_METHODS = [
+  "mechanical-reverification",
+  "independent-human-review",
+  "policy-rule",
+] as const
 
 export type ExceptionMethod = (typeof EXCEPTION_METHODS)[number]
 
@@ -317,11 +443,23 @@ export function isValidNonEmptyStringField(
   return valid
 }
 
-/** Reads one of `record`'s own string fields -- the `fieldValue` accessor both `evaluateExceptionRecord` and {@link evaluateFindingVerdict} take. Every exception record here is a flat, string-keyed shape, so this one generic accessor covers all of them. */
-function genericFieldValue<TRecord>(record: TRecord, requirement: string): string {
-  const value = (record as unknown as Record<string, unknown>)[requirement]
-  return typeof value === "string" ? value : ""
+/**
+ * Reads one of `record`'s own string fields -- the `fieldValue` accessor both `evaluateExceptionRecord`
+ * and {@link evaluateFindingVerdict} take. Every exception record here is a flat, string-keyed shape,
+ * so this one generic accessor covers all of them. A legacy `version: 1` record has none of the
+ * structured {@link EXCEPTION_V2_FIELD_KEYS}; for those it answers {@link LEGACY_FIELD_VALUE} so the
+ * record stays valid until it is migrated, while a `version: 2` record must really have written them.
+ */
+export function recordFieldValue<TRecord>(record: TRecord, requirement: string): string {
+  const flat = record as unknown as Record<string, unknown>
+  const value = flat[requirement]
+  if (typeof value === "string") return value
+  const isV2Field = (EXCEPTION_V2_FIELD_KEYS as readonly string[]).includes(requirement)
+  return isV2Field && flat["version"] === 1 ? LEGACY_FIELD_VALUE : ""
 }
+
+/** What a legacy record reports for a structured field it never had (non-empty, so a v1 record still satisfies a v2 requirement). */
+export const LEGACY_FIELD_VALUE = "(legacy version 1 record)"
 
 /** Widens typed records to the flat shape `writeExceptionRegistry` (`repo-contract/helpers`) accepts -- TypeScript will not infer the implicit index signature through an `interface`. */
 function asFlatExceptionRecords<TRecord extends { readonly id: string }>(
@@ -355,7 +493,7 @@ export function evaluateFindingVerdict<TRecord>(
     classifications,
     config,
     globalDefault,
-    fieldValue: genericFieldValue,
+    fieldValue: recordFieldValue,
   })
   return { verdict: determinant.verdict, missing: determinant.missing }
 }

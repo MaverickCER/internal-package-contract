@@ -5,6 +5,7 @@ export interface BuildPageModelOptions {
   readonly histories: readonly string[]
   readonly maxEntries: number
   readonly readme?: string | undefined
+  readonly repo?: string | undefined
 }
 
 export interface PageModelGroup {
@@ -17,6 +18,14 @@ export interface PageModelGroup {
   readonly exponent?: number | null
   readonly points?: number
   readonly reason?: string
+  readonly rSquared?: number
+}
+
+export interface PageRun {
+  readonly timestamp: string | null
+  readonly commit: string | null
+  readonly pullRequest: number | null
+  readonly version: string | null
 }
 
 export interface PageModelCategory {
@@ -25,14 +34,48 @@ export interface PageModelCategory {
   readonly entryCount: number
   readonly totalEntryCount: number
   readonly timestamps: ReadonlyArray<string | null>
+  readonly runs: readonly PageRun[]
   readonly groups: readonly PageModelGroup[]
 }
 
 export interface PageModel {
   readonly readmeUrl?: string | undefined
+  readonly repoUrl?: string | undefined
   readonly generatedAt: string
   readonly maxEntries: number
   readonly categories: readonly PageModelCategory[]
 }
 
 export function buildPageModel(options: BuildPageModelOptions): Promise<PageModel>
+
+export function escapeHtml(value: unknown): string
+export function formatMs(ms: number): string
+export function describeGroup(group: PageModelGroup, runs: readonly PageRun[]): string
+export function renderChartSvg(
+  group: PageModelGroup,
+  tierOrder: readonly string[],
+  tierColorIndex: Readonly<Record<string, number>>,
+  runs: readonly PageRun[],
+  idPrefix: string,
+): string
+export function renderDataTable(
+  group: PageModelGroup,
+  tierOrder: readonly string[],
+  runs: readonly PageRun[],
+  repoUrl?: string,
+): string
+export function renderHtml(model: PageModel): string
+
+export interface ParsedArgs {
+  histories: string[]
+  maxEntries: number
+  out?: string
+  readme?: string
+  repo?: string
+  help?: boolean
+}
+export function parseArgs(argv: readonly string[]): ParsedArgs
+export function run(
+  argv: readonly string[],
+  io: { log: (text: string) => void; error: (text: string) => void },
+): Promise<number>

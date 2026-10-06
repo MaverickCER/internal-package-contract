@@ -42,7 +42,9 @@ import type {
 import { distNoUrls } from "repo-contract/presets"
 import {
   EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   evaluateFindingVerdict,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
@@ -50,6 +52,7 @@ import {
   validateSecurityExceptionFields,
 } from "./exception-record.js"
 import type {
+  ExceptionV2Fields,
   ExceptionMethod,
   ExceptionRegistrySchema,
   ExceptionType,
@@ -68,9 +71,9 @@ interface ShippedUrl {
 }
 
 /** One `.repo-contract/exceptions/dist-urls.json` record. */
-interface DistUrlRecord {
+interface DistUrlRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly alternatives: string
   readonly remediation: string
@@ -90,7 +93,14 @@ interface ScanReport {
   readonly findings: readonly ScanFinding[]
 }
 
-const REQUIREMENTS = ["justification", "alternatives", "remediation", "method", "exceptionType"]
+const REQUIREMENTS = [
+  "justification",
+  "alternatives",
+  "remediation",
+  "method",
+  "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
+]
 
 /** Every shipped URL needs a complete record; none is forbidden outright. */
 const DIST_URL_POLICY: ExceptionPolicyConfig = {
@@ -108,12 +118,13 @@ export function deriveDistUrlId(url: string): string {
 export function createDistUrlStub(shipped: ShippedUrl, id: string): DistUrlRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     url: shipped.url,
   }
 }

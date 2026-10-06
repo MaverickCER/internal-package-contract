@@ -556,7 +556,7 @@ describe("validateResults()", () => {
     delete broken.analysis.cost
     const text = validateResults(broken).join("\n")
     for (const expected of [
-      "metadata.schemaVersion must be 3",
+      "metadata.schemaVersion must be 4",
       "metadata.package.name must be a string",
       "metadata.tiers must list",
       "metadata.environment must be an object",
@@ -808,7 +808,8 @@ describe("analyze()", () => {
     const row = contribution[0].rows[2]
     expect(row.calls).toBe(1)
     expect(row.estimatedMs).toBeCloseTo(8, 10)
-    expect(row.shareOfOverhead).toBeCloseTo(1, 10)
+    expect(row.exclusiveMs).toBeCloseTo(8, 10)
+    expect(row).not.toHaveProperty("shareOfOverhead")
     expect(row.shareOfTotal).toBeCloseTo(8 / 9, 10)
   })
   it("supports a function-of-n call count, a named variant, and zero overhead", () => {
@@ -846,7 +847,82 @@ describe("analyze()", () => {
       results: { ...variantResults, "end-to-end:with-package": group("end-to-end", () => 1) },
       tiers,
     })
-    expect(flat.contribution[0].rows[0].shareOfOverhead).toBeNull()
+    // Shares are against the whole operation, so a zero-overhead run still attributes sensibly.
+    expect(flat.contribution[0].rows[0].shareOfTotal).toBeCloseTo(
+      flat.contribution[0].rows[0].exclusiveMs / 1,
+      10,
+    )
+  })
+  it("subtracts the time of a function it includes, so nested calls are counted once", () => {
+    const base = validSuite({ tiers, workload: { unit: "item", description: LONG, typicalN: 80 } })
+    const outer = {
+      ...base.functions[0]!,
+      inEndToEnd: {
+        callsPerOperation: 1,
+        description: "Calls inner once.",
+        includes: ["inner"],
+      },
+    }
+    const inner = {
+      ...base.functions[0]!,
+      id: "inner",
+      name: "inner",
+      inEndToEnd: { callsPerOperation: 2, description: "Called by outer, twice." },
+    }
+    const nested = defineSuite({ ...base, functions: [outer, inner] })
+    const nestedResults = {
+      ...results,
+      "fn:sum": group("function", () => 10),
+      "fn:inner": group("function", () => 1),
+    }
+    const { contribution } = analyze({ suite: nested, results: nestedResults, tiers })
+    const [first, second] = contribution
+    expect(first!.rows[0].estimatedMs).toBe(10)
+    expect(first!.rows[0].exclusiveMs).toBe(8)
+    expect(second!.rows[0].exclusiveMs).toBe(2)
+    // never negative, even when the nested time exceeds the outer's own measurement
+    const tiny = analyze({
+      suite: nested,
+      results: { ...nestedResults, "fn:sum": group("function", () => 0.5) },
+      tiers,
+    })
+    expect(tiny.contribution[0]!.rows[0].exclusiveMs).toBe(0)
+  })
+  it("rejects an includes list that names itself, an unknown function, or is not a list", () => {
+    const base = validSuite({ tiers, workload: { unit: "item", description: LONG, typicalN: 80 } })
+    const problems = (includes: unknown) => {
+      try {
+        defineSuite({
+          ...base,
+          functions: [
+            {
+              ...base.functions[0]!,
+              inEndToEnd: {
+                callsPerOperation: 1,
+                description: "A real description.",
+                includes: includes as string[] | undefined,
+              },
+            },
+          ],
+        })
+        return []
+      } catch (error) {
+        return (error as { problems: string[] }).problems
+      }
+    }
+    expect(problems(["sum"])).toContain(
+      "functions[0] (sum).inEndToEnd.includes cannot list itself.",
+    )
+    expect(problems(["ghost"])).toContain(
+      'functions[0] (sum).inEndToEnd.includes names "ghost", which is not a function in this suite.',
+    )
+    expect(problems("sum")).toContain(
+      "functions[0] (sum).inEndToEnd.includes must be a list of function ids.",
+    )
+    expect(problems([3])).toContain(
+      "functions[0] (sum).inEndToEnd.includes must be a list of function ids.",
+    )
+    expect(problems(undefined)).toEqual([])
   })
   it("ignores functions without inEndToEnd and sizes a variant lacks", () => {
     const plain = validSuite({ tiers })
@@ -916,7 +992,7 @@ describe("runSuite() and renderReport()", () => {
     })
     expect(results.results["fn:sum"].tiers.n80.durationMs.iterations).toBe(2)
     expect(results.metadata).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
       package: { name: "demo" },
       tiers: [20, 40, 80, 160],
       timing: {
@@ -1038,7 +1114,7 @@ describe("runSuite() and renderReport()", () => {
       "## 1. End-to-end: the package's total impact",
       "## 2. Function by function",
       "### `sum`",
-      "## 3. What makes up the end-to-end overhead",
+      "## 3. What makes up one end-to-end operation",
       "## Cost model",
       "## Environment and method",
     ]) {

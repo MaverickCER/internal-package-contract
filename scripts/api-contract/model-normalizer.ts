@@ -5,7 +5,6 @@ import {
   ApiExportedMixin,
   ApiInitializerMixin,
   ApiInterface,
-  ApiItemContainerMixin,
   ApiItemKind,
   ApiNameMixin,
   ApiOptionalMixin,
@@ -132,12 +131,10 @@ function excerptText(excerpt: Excerpt | undefined): string | undefined {
  * @returns The nearest defined `fileUrlPath` found by walking `item` and its ancestors, or `undefined` if none of them carry one.
  */
 function resolveFileUrlPath(item: ApiItem): string | undefined {
-  let current: ApiItem | undefined = item
-  while (current !== undefined) {
-    if (current instanceof ApiDeclaredItem && current.fileUrlPath !== undefined) {
-      return current.fileUrlPath
+  for (const entry of [...item.getHierarchy()].reverse()) {
+    if (entry instanceof ApiDeclaredItem && entry.fileUrlPath !== undefined) {
+      return entry.fileUrlPath
     }
-    current = current.parent
   }
   return undefined
 }
@@ -151,24 +148,27 @@ function isDeprecated(item: ApiItem): boolean {
 }
 
 /**
- * @param item - The API item to normalize.
- * @param threshold - The minimum release tag level to admit; items below it are dropped.
- * @returns The flattened `NormalizedMember` for `item`, or `undefined` if its release tag is below `threshold`.
+ * @param item - The API item to read a release tag from.
+ * @returns The item's release tag level; an item that carries no release tag at all (a package, an entry point) is `"public"`, so no threshold ever drops it.
  */
-function buildMember(item: ApiItem, threshold: ReleaseTagLevel): NormalizedMember | undefined {
-  const releaseTag = ApiReleaseTagMixin.isBaseClassOf(item)
-    ? releaseTagLevel(item.releaseTag)
-    : "public"
-  if (!meetsThreshold(releaseTag, threshold)) return undefined
+function releaseTagOf(item: ApiItem): ReleaseTagLevel {
+  return ApiReleaseTagMixin.isBaseClassOf(item) ? releaseTagLevel(item.releaseTag) : "public"
+}
 
-  const parent = item.parent
+/**
+ * @param item - The API item to normalize.
+ * @param parent - The item `item` is a member of.
+ * @returns The flattened `NormalizedMember` for `item`.
+ */
+function buildMember(item: ApiItem, parent: ApiItem): NormalizedMember {
+  const releaseTag = releaseTagOf(item)
   const member: NormalizedMember = {
     canonicalReference: item.canonicalReference.toString(),
     name: ApiNameMixin.isBaseClassOf(item) ? item.name : undefined,
     scopedName: item.getScopedNameWithinPackage(),
     kind: item.kind,
-    parentCanonicalReference: parent?.canonicalReference.toString(),
-    isTopLevelExport: parent?.kind === ApiItemKind.EntryPoint,
+    parentCanonicalReference: parent.canonicalReference.toString(),
+    isTopLevelExport: parent.kind === ApiItemKind.EntryPoint,
     fileUrlPath: item instanceof ApiDeclaredItem ? resolveFileUrlPath(item) : undefined,
     releaseTag,
     isDeprecated: isDeprecated(item),
@@ -238,29 +238,21 @@ export function normalizeApiPackage(
 
   /**
    * @param item - The API item (and, recursively, its container children) to visit.
+   * @param parent - The item `item` is a member of.
    */
-  function visit(item: ApiItem): void {
-    if (
-      ApiReleaseTagMixin.isBaseClassOf(item) &&
-      !meetsThreshold(releaseTagLevel(item.releaseTag), threshold)
-    ) {
-      return
-    }
-    if (ApiExportedMixin.isBaseClassOf(item) && !item.isExported) {
-      return
-    }
+  function visit(item: ApiItem, parent: ApiItem): void {
+    if (!meetsThreshold(releaseTagOf(item), threshold)) return
+    if (ApiExportedMixin.isBaseClassOf(item) && !item.isExported) return
 
     if (!CONTAINER_ONLY_KINDS.has(item.kind)) {
-      const member = buildMember(item, threshold)
-      if (member) result.set(member.canonicalReference, member)
+      const member = buildMember(item, parent)
+      result.set(member.canonicalReference, member)
     }
 
-    if (ApiItemContainerMixin.isBaseClassOf(item)) {
-      for (const child of item.members) visit(child)
-    }
+    for (const child of item.members) visit(child, item)
   }
 
-  for (const entryPoint of pkg.entryPoints) visit(entryPoint)
+  for (const entryPoint of pkg.entryPoints) visit(entryPoint, pkg)
 
   return result
 }

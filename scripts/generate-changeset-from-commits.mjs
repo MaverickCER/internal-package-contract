@@ -1,7 +1,12 @@
 #!/usr/bin/env node
-// Guarantees every commit on `main` since the last release gets a changeset --
+// Guarantees every RELEASABLE commit on `main` since the last release gets a changeset --
 // either the hand-written one its own PR already added, or one generated here --
-// so `changeset version` never runs with a silent "no changeset needed" gap. Run
+// so `changeset version` never runs with a silent "no changeset needed" gap. A commit is
+// releasable when its Conventional Commit type changes what a user gets (`feat`, `fix`, `perf`,
+// `revert`), when it is marked breaking, or when it carries an explicit `Changeset: <bump>`
+// trailer; `chore`, `ci`, `docs`, `test`, `build`, `refactor`, `style` -- and anything a bot
+// authored, such as a benchmark-results refresh or a dependency re-pin -- never becomes a
+// release, so a changelog lists what changed for users and npm gets no empty releases. Run
 // from a CONSUMER's own repo root (this package is a devDependency; every
 // consumer's release-npm-changesets.yml invokes this exact file from
 // node_modules), never from internal-package-contract's own repo, so nothing
@@ -20,6 +25,7 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 const RECORD_SEP = "\x1e"
 const FIELD_SEP = "\x1f"
@@ -29,14 +35,17 @@ const FIELD_SEP = "\x1f"
 // loophole" instruction) so it can never quietly swallow a real behavior change.
 const EXEMPT_PATH_PREFIXES = [".github/", ".vscode/"]
 
-const SEVERITY = { patch: 0, minor: 1, major: 2 }
+const SEVERITIES_HIGHEST_FIRST = ["major", "minor", "patch"]
+
+/** The repository being processed; set by {@link generateChangesets} so the script is testable in-process. */
+let root = process.cwd()
 
 function git(args) {
-  return execFileSync("git", args, { encoding: "utf8" })
+  return execFileSync("git", args, { encoding: "utf8", cwd: root })
 }
 
-function readPackageName() {
-  return JSON.parse(readFileSync("package.json", "utf8")).name
+function readPackage() {
+  return JSON.parse(readFileSync(path.join(root, "package.json")).toString())
 }
 
 // A squash merge (this workflow's own auto-merge step uses `gh pr merge --squash`)
@@ -61,7 +70,6 @@ function findRange() {
   }
 
   const history = git(["log", "--format=%H" + FIELD_SEP + "%s", "HEAD"])
-    .trim()
     .split("\n")
     .filter(Boolean)
     .map((line) => line.split(FIELD_SEP))
@@ -77,18 +85,14 @@ function findRange() {
   // so history predating this mechanism (already versioned some other way,
   // e.g. release-please) is never retroactively re-bumped.
   const adoptionLog = git(["log", "--diff-filter=A", "--format=%H", "--", ".changeset/config.json"])
-    .trim()
     .split("\n")
     .filter(Boolean)
-  const anchor = adoptionLog.length > 0 ? adoptionLog[adoptionLog.length - 1] : null
-  return { anchor }
+  // The first commit to have added it is the last one listed; none at all leaves no anchor.
+  return { anchor: adoptionLog.at(-1) }
 }
 
 function changedFiles(sha) {
-  return git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha])
-    .trim()
-    .split("\n")
-    .filter(Boolean)
+  return git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha]).split("\n").filter(Boolean)
 }
 
 function isExempt(files) {
@@ -99,12 +103,47 @@ function alreadyCovered(files) {
   return files.some((file) => /^\.changeset\/.*\.md$/.test(file) && !file.endsWith("README.md"))
 }
 
-function bumpFor(subject, body) {
+/** Conventional Commit types that change what a user gets. Everything else is housekeeping. */
+const RELEASABLE_TYPES = new Set(["feat", "fix", "perf", "revert"])
+
+/** An author that is automation: its commits are bookkeeping unless they opt in explicitly. */
+const BOT_AUTHOR = /\[bot\]|^github-actions|^dependabot|^renovate/i
+
+/** `Changeset: patch|minor|major` in a commit body: an explicit, human opt-in to a release. */
+const OPT_IN = /^Changeset:\s*(patch|minor|major)\s*$/im
+
+function parseSubject(subject) {
   const match = subject.match(/^(\w+)(\([^)]*\))?(!)?:/)
-  if (match?.[3] === "!") return "major"
-  if (/BREAKING CHANGE:/.test(body)) return "major"
-  if (match?.[1] === "feat") return "minor"
-  return "patch"
+  return { type: match?.[1], breaking: match?.[3] === "!" }
+}
+
+/**
+ * The bump a commit asks for, or `null` when it is not releasable.
+ *
+ * While the package is below 1.0.0 the bump is DEFLATED one level -- a breaking change is `minor`,
+ * a `feat` is `patch` -- the usual 0.x convention, and the reason a stray `feat!:` can never
+ * publish 1.0.0 by itself. Crossing to 1.0.0 is a decision: it takes a human-authored `major`
+ * changeset (or a `Changeset: major` trailer), and the release workflow then refuses to auto-merge
+ * the version PR.
+ * @param {string} subject
+ * @param {string} body
+ * @param {{ author?: string, preOne?: boolean }} [context]
+ * @returns {"patch" | "minor" | "major" | null}
+ */
+export function bumpFor(
+  subject,
+  body,
+  // Stryker disable next-line StringLiteral: any author that is not a bot's behaves the same as none
+  { author = "", preOne = false } = {},
+) {
+  const optIn = OPT_IN.exec(body)?.[1]
+  if (optIn) return optIn
+  if (BOT_AUTHOR.test(author)) return null
+  const { type, breaking } = parseSubject(subject)
+  if (breaking || /BREAKING CHANGE:/.test(body)) return preOne ? "minor" : "major"
+  if (type === "feat") return preOne ? "patch" : "minor"
+  if (RELEASABLE_TYPES.has(type)) return "patch"
+  return null
 }
 
 function listCommits(range) {
@@ -113,7 +152,7 @@ function listCommits(range) {
     "log",
     "--no-merges",
     "--reverse",
-    `--format=%H${FIELD_SEP}%s${FIELD_SEP}%b${RECORD_SEP}`,
+    `--format=%H${FIELD_SEP}%an${FIELD_SEP}%s${FIELD_SEP}%b${RECORD_SEP}`,
     revRange,
   ])
   return raw
@@ -121,69 +160,102 @@ function listCommits(range) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [sha, subject, body = ""] = entry.split(FIELD_SEP)
-      return { sha, subject, body }
+      const [sha, author, subject, body] = entry.split(FIELD_SEP)
+      return { sha, author, subject, body }
     })
 }
 
 function writeChangeset(pkgName, sha, bump, subject) {
-  const dir = ".changeset"
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const file = path.join(dir, `auto-${sha.slice(0, 12)}.md`)
+  const dir = path.join(root, ".changeset")
+  mkdirSync(dir, { recursive: true })
+  const name = `auto-${sha.slice(0, 12)}.md`
   const content = `---\n"${pkgName}": ${bump}\n---\n\n${subject}\n`
-  writeFileSync(file, content)
-  return file
+  writeFileSync(path.join(dir, name), content)
+  // Always forward slashes: this is a repository-relative path that is logged and returned.
+  return path.posix.join(".changeset", name)
 }
 
 function highestSeverityAcrossChangesets() {
-  const dir = ".changeset"
+  const dir = path.join(root, ".changeset")
   if (!existsSync(dir)) return null
   const files = readdirSync(dir).filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
-  let max = null
+  const bumps = new Set()
   for (const file of files) {
-    const content = readFileSync(path.join(dir, file), "utf8")
+    const content = readFileSync(path.join(dir, file)).toString()
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
     if (!frontmatterMatch) continue
     for (const line of frontmatterMatch[1].split("\n")) {
       const bumpMatch = line.match(/:\s*(major|minor|patch)\s*$/)
-      if (bumpMatch && (max === null || SEVERITY[bumpMatch[1]] > SEVERITY[max])) {
-        max = bumpMatch[1]
-      }
+      if (bumpMatch) bumps.add(bumpMatch[1])
     }
   }
-  return max
+  return SEVERITIES_HIGHEST_FIRST.find((level) => bumps.has(level)) ?? null
 }
 
-function main() {
+/** Whether the package is still below 1.0.0, where bumps are deflated. */
+export function isPreOne(version) {
+  return Number.parseInt(String(version).split(".")[0], 10) < 1
+}
+
+/**
+ * Generates a changeset for each releasable commit that lacks one.
+ * @param {string} [cwd] - the repository root.
+ * @param {(line: string) => void} [log]
+ * @returns {{ generated: number, files: string[] }}
+ */
+export function generateChangesets(cwd = process.cwd(), log = console.log) {
+  root = cwd
+  return main(log)
+}
+
+function main(log) {
   const range = findRange()
   if (range.skip) {
-    console.log("HEAD is the release commit itself -- nothing to generate.")
-    return
+    log("HEAD is the release commit itself -- nothing to generate.")
+    return { generated: 0, files: [] }
   }
 
-  const pkgName = readPackageName()
+  const pkg = readPackage()
+  const pkgName = pkg.name
+  const preOne = isPreOne(pkg.version)
   const commits = listCommits(range)
-  let generated = 0
+  const files = []
 
-  for (const { sha, subject, body } of commits) {
-    const files = changedFiles(sha)
-    if (files.length === 0) continue
-    if (isExempt(files)) continue
-    if (alreadyCovered(files)) continue
+  for (const { sha, author, subject, body } of commits) {
+    // A commit with no changed files is exempt too: `every` over nothing is true.
+    const changed = changedFiles(sha)
+    if (isExempt(changed)) continue
+    if (alreadyCovered(changed)) continue
 
-    const bump = bumpFor(subject, body)
+    const bump = bumpFor(subject, body, { author, preOne })
+    if (bump === null) {
+      log(`Skipped ${sha.slice(0, 12)} (not a release): ${subject}`)
+      continue
+    }
     const file = writeChangeset(pkgName, sha, bump, subject)
-    generated++
-    console.log(`Generated ${file} (${bump}) for ${sha.slice(0, 12)}: ${subject}`)
+    files.push(file)
+    log(`Generated ${file} (${bump}) for ${sha.slice(0, 12)}: ${subject}`)
   }
 
-  console.log(`Generated ${generated} changeset(s) from ${commits.length} commit(s) since anchor.`)
+  log(
+    `Generated ${String(files.length)} changeset(s) from ${String(commits.length)} commit(s) since anchor.`,
+  )
+  if (preOne) log("Below 1.0.0: breaking changes bump minor, features bump patch.")
 
   const overallBump = highestSeverityAcrossChangesets()
   if (overallBump) {
-    writeFileSync(".changeset/.release-bump.json", `{ "bump": "${overallBump}" }\n`)
-    console.log(`Recorded overall bump severity: ${overallBump}`)
+    writeFileSync(
+      path.join(root, ".changeset", ".release-bump.json"),
+      `{ "bump": "${overallBump}" }\n`,
+    )
+    log(`Recorded overall bump severity: ${overallBump}`)
   }
+  return { generated: files.length, files }
 }
 
-main()
+// Run only as a script, so the bump rules above can be imported and tested.
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression: process entry point, exercised only by spawning the script
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  generateChangesets()
+}
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, LogicalOperator, MethodExpression

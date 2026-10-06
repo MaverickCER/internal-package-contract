@@ -1,9 +1,4 @@
-import {
-  ApiItemContainerMixin,
-  ApiNameMixin,
-  ApiTypeParameterListMixin,
-  ExcerptTokenKind,
-} from "@microsoft/api-extractor-model"
+import { ApiTypeParameterListMixin, ExcerptTokenKind } from "@microsoft/api-extractor-model"
 import type { ApiItem, ApiPackage, Excerpt } from "@microsoft/api-extractor-model"
 import * as ts from "typescript"
 import path from "node:path"
@@ -62,21 +57,15 @@ export function buildReferenceIndex(pkg: ApiPackage): Map<string, string> {
 
   /**
    * @param item - The API item (and, recursively, its container children) to visit.
-   * @param topLevelName - The top-level export name inherited from an ancestor, or `undefined` if `item` is itself a top-level export.
+   * @param topLevelName - The name of the top-level export `item` is, or sits inside.
    */
-  function visit(item: ApiItem, topLevelName: string | undefined): void {
-    const nextTopLevelName =
-      topLevelName ?? (ApiNameMixin.isBaseClassOf(item) ? item.name : undefined)
-    if (nextTopLevelName !== undefined) {
-      index.set(item.canonicalReference.toString(), nextTopLevelName)
-    }
-    if (ApiItemContainerMixin.isBaseClassOf(item)) {
-      for (const child of item.members) visit(child, nextTopLevelName)
-    }
+  function visit(item: ApiItem, topLevelName: string): void {
+    index.set(item.canonicalReference.toString(), topLevelName)
+    for (const child of item.members) visit(child, topLevelName)
   }
 
   for (const entryPoint of pkg.entryPoints) {
-    for (const member of entryPoint.members) visit(member, undefined)
+    for (const member of entryPoint.members) visit(member, member.displayName)
   }
 
   return index
@@ -97,9 +86,7 @@ export function buildItemIndex(pkg: ApiPackage): Map<string, ApiItem> {
    */
   function visit(item: ApiItem): void {
     index.set(item.canonicalReference.toString(), item)
-    if (ApiItemContainerMixin.isBaseClassOf(item)) {
-      for (const child of item.members) visit(child)
-    }
+    for (const child of item.members) visit(child)
   }
 
   for (const entryPoint of pkg.entryPoints) visit(entryPoint)
@@ -113,12 +100,10 @@ export function buildItemIndex(pkg: ApiPackage): Map<string, ApiItem> {
  */
 export function freeTypeParameterNamesFor(item: ApiItem): ReadonlySet<string> {
   const names = new Set<string>()
-  let current: ApiItem | undefined = item
-  while (current) {
-    if (ApiTypeParameterListMixin.isBaseClassOf(current)) {
-      for (const tp of current.typeParameters) names.add(tp.name)
+  for (const entry of item.getHierarchy()) {
+    if (ApiTypeParameterListMixin.isBaseClassOf(entry)) {
+      for (const tp of entry.typeParameters) names.add(tp.name)
     }
-    current = current.parent
   }
   return names
 }
@@ -137,17 +122,12 @@ interface Reconstruction {
 }
 
 /**
- * @param char - One character (or `undefined`, past either end of the string) to classify.
+ * @param char - One character (or `""`, past either end of a string) to classify.
  * @returns Whether `char` is a "word" character (`[A-Za-z0-9_]`) -- the same class regex `\b` boundaries are defined against.
  */
-function isWordChar(char: string | undefined): boolean {
-  if (char === undefined) return false
-  return (
-    (char >= "a" && char <= "z") ||
-    (char >= "A" && char <= "Z") ||
-    (char >= "0" && char <= "9") ||
-    char === "_"
-  )
+/** @internal Exported for direct unit coverage. */
+export function isWordChar(char: string): boolean {
+  return /^\w$/.test(char)
 }
 
 /**
@@ -158,19 +138,16 @@ function isWordChar(char: string | undefined): boolean {
  * @param word - The exact word to search for, matched only where it isn't adjacent to another word character.
  * @returns Whether `word` occurs in `haystack` as a whole word.
  */
-function containsWholeWord(haystack: string, word: string): boolean {
+/** @internal Exported for direct unit coverage. */
+export function containsWholeWord(haystack: string, word: string): boolean {
   if (word.length === 0) return false
 
-  let index = haystack.indexOf(word)
-  while (index !== -1) {
-    const before = index > 0 ? haystack[index - 1] : undefined
-    const after = index + word.length < haystack.length ? haystack[index + word.length] : undefined
-    if (!isWordChar(before) && !isWordChar(after)) return true
-
-    index = haystack.indexOf(word, index + 1)
-  }
-
-  return false
+  return Array.from({ length: haystack.length }, (_, start) => start).some(
+    (start) =>
+      haystack.startsWith(word, start) &&
+      !isWordChar(haystack.charAt(start - 1)) &&
+      !isWordChar(haystack.charAt(start + word.length)),
+  )
 }
 
 /**
@@ -194,7 +171,6 @@ function reconstructTypeExpression(
   freeTypeParameterNames: ReadonlySet<string>,
 ): Reconstruction | undefined {
   const imports: ImportSpec[] = []
-  const localNameByRef = new Map<string, string>()
   let text = ""
 
   for (const token of excerpt.spannedTokens) {
@@ -206,17 +182,13 @@ function reconstructTypeExpression(
       continue
     }
 
-    const canonicalReference = token.canonicalReference?.toString()
-    if (canonicalReference === undefined) return undefined
-    const importedName = refIndex.get(canonicalReference)
+    // A token with no canonical reference stringifies to "undefined", which no index holds.
+    const importedName = refIndex.get(String(token.canonicalReference))
+    // Stryker disable next-line ConditionalExpression: an unresolved reference also makes the probe fail to compile, which is "unknown" too -- this return only skips running the compiler
     if (importedName === undefined) return undefined
 
-    let localName = localNameByRef.get(canonicalReference)
-    if (localName === undefined) {
-      localName = `${aliasPrefix}_${String(imports.length)}`
-      localNameByRef.set(canonicalReference, localName)
-      imports.push({ localName, importedName, snapshot })
-    }
+    const localName = `${aliasPrefix}_${String(imports.length)}`
+    imports.push({ localName, importedName, snapshot })
     text += localName
   }
 
@@ -295,6 +267,8 @@ interface ProbeHostCache {
 // purely internal perf optimization with no behavioral difference to any caller.
 const probeHostCacheRef: { current: ProbeHostCache | undefined } = { current: undefined }
 
+const PROBE_PATH = "/__probe__.ts"
+
 const PROBE_COMPILER_OPTIONS: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2022,
   module: ts.ModuleKind.ESNext,
@@ -355,19 +329,16 @@ function probeAssignability(input: {
   const probeSource = [...preambleLines, assignmentLine].join("\n")
 
   const probeCache = getProbeHost(input.baselineDts, input.currentDts)
-  probeCache.files.set("/__probe__.ts", probeSource)
+  probeCache.files.set(PROBE_PATH, probeSource)
 
   const program = ts.createProgram(
-    ["/__probe__.ts"],
+    [PROBE_PATH],
     PROBE_COMPILER_OPTIONS,
     probeCache.host,
     probeCache.program,
   )
   probeCache.program = program
-  const probeFile = program.getSourceFile("/__probe__.ts")
-  if (!probeFile) return "unknown"
-
-  if (program.getSyntacticDiagnostics(probeFile).length > 0) return "unknown"
+  if (program.getSyntacticDiagnostics().length > 0) return "unknown"
 
   // TypeScript reports an assignability failure under several different codes depending on the
   // exact shape of the mismatch (2322 "not assignable", 2741/2739 "missing propert(y/ies)", etc.)
@@ -386,13 +357,14 @@ function probeAssignability(input: {
   // "unknown". `assignmentLine` has no newline of its own, so it is always
   // the last physical line.
   const assignmentLineIndex = probeSource.split("\n").length - 1
-  const semanticDiagnostics = program.getSemanticDiagnostics(probeFile)
+  const semanticDiagnostics = program.getSemanticDiagnostics()
 
-  const diagnosticsElsewhere = semanticDiagnostics.filter((d) => {
-    if (d.start === undefined) return true
-    return ts.getLineAndCharacterOfPosition(probeFile, d.start).line !== assignmentLineIndex
-  })
-  if (diagnosticsElsewhere.length > 0) return "unknown"
+  const onAssignmentLine = (d: ts.Diagnostic): boolean =>
+    // Stryker disable next-line ConditionalExpression, LogicalOperator, EqualityOperator: TypeScript attaches a start to every diagnostic that has a file, so the `start` check only narrows the type
+    d.file?.fileName === PROBE_PATH &&
+    d.start !== undefined &&
+    d.file.getLineAndCharacterOfPosition(d.start).line === assignmentLineIndex
+  if (!semanticDiagnostics.every(onAssignmentLine)) return "unknown"
 
   return semanticDiagnostics.length > 0 ? "breaking" : "compatible"
 }

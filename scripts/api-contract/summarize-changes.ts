@@ -1,5 +1,13 @@
 import type { ApiContractChange, ContractImpact } from "./evidence-types.js"
 
+/** @returns The fixed summary sentence for a target with no committed baseline yet. */
+export function summarizeInitialBaseline(): string {
+  return (
+    "No historical public API contract exists for this target. This run establishes the " +
+    "initial contract baseline; v0.1.0 is recommended as the initial package version."
+  )
+}
+
 /**
  * Ported from repo-contract's own `scripts/api-contract/summarize-changes.ts` -- this engine now
  * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
@@ -18,12 +26,7 @@ export function summarizeChanges(
   impact: ContractImpact,
   initialBaseline: boolean,
 ): string {
-  if (initialBaseline) {
-    return (
-      "No historical public API contract exists for this target. This run establishes the " +
-      "initial contract baseline; v0.1.0 is recommended as the initial package version."
-    )
-  }
+  if (initialBaseline) return summarizeInitialBaseline()
 
   if (diff.length === 0) {
     return "No public API changes detected."

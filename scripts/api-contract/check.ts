@@ -32,7 +32,7 @@ import {
 import type { AssignabilityQuery, ResolveAssignability } from "./compatibility-classifier.js"
 import { classifyContractChanges } from "./compatibility-classifier.js"
 import { declaredLevelFromChangesets } from "./changesets.js"
-import { maxLevel, rankAtLeast } from "./levels.js"
+import { maxLevel, rankAtLeast, requiredLevelFor } from "./levels.js"
 import type {
   ApiContractEvidence,
   ApiContractSnapshot,
@@ -49,7 +49,7 @@ import type { ReleaseTagLevel } from "./model-normalizer.js"
 import { normalizeApiPackage } from "./model-normalizer.js"
 import { detectSchemaVersionDrift } from "./schema-version-consistency.js"
 import { computeMinimumRequiredVersion, parseVersion } from "./semver.js"
-import { summarizeChanges } from "./summarize-changes.js"
+import { summarizeChanges, summarizeInitialBaseline } from "./summarize-changes.js"
 import type { ApiContractTarget } from "./targets.js"
 import { readTargets } from "./targets.js"
 import {
@@ -59,12 +59,14 @@ import {
   freeTypeParameterNamesFor,
 } from "./type-assignability.js"
 
+const RELEASE_TAG_FLAG = "--release-tag="
+
 /**
- * @returns The `--release-tag` CLI argument's value if it's "beta" or "alpha", otherwise "public".
+ * @param argv - The command-line arguments to scan.
+ * @returns The `--release-tag` argument's value if it's "beta" or "alpha", otherwise "public".
  */
-function parseReleaseTagArg(): ReleaseTagLevel {
-  const arg = process.argv.find((a) => a.startsWith("--release-tag="))
-  const value = arg?.slice("--release-tag=".length)
+export function parseReleaseTagArg(argv: readonly string[]): ReleaseTagLevel {
+  const value = argv.find((arg) => arg.startsWith(RELEASE_TAG_FLAG))?.slice(RELEASE_TAG_FLAG.length)
   return value === "beta" || value === "alpha" ? value : "public"
 }
 
@@ -90,10 +92,8 @@ function getExcerptForPosition(
       return item instanceof ApiPropertyItem ? item.propertyTypeExcerpt : undefined
     case "variable":
       return item instanceof ApiVariable ? item.variableTypeExcerpt : undefined
-    case "type-alias":
-      return item instanceof ApiTypeAlias ? item.typeExcerpt : undefined
     default:
-      return undefined
+      return item instanceof ApiTypeAlias ? item.typeExcerpt : undefined
   }
 }
 
@@ -109,12 +109,56 @@ async function loadPackageFromText(text: string) {
     os.tmpdir(),
     `ipc-api-contract-baseline-${String(process.pid)}-${String(Date.now())}.api.json`,
   )
-  await writeFile(tmpPath, text, "utf8")
+  await writeFile(tmpPath, text)
   try {
     return loadApiModel(tmpPath).pkg
   } finally {
-    await rm(tmpPath, { force: true })
+    await rm(tmpPath)
   }
+}
+
+/** Everything an assignability query is answered from: both sides' declarations and indexes. */
+export interface AssignabilityResolverContext {
+  readonly baselineDts: string
+  readonly currentDts: string
+  readonly baselineRefIndex: ReadonlyMap<string, string>
+  readonly currentRefIndex: ReadonlyMap<string, string>
+  readonly baselineItemIndex: ReadonlyMap<string, ApiItem>
+  readonly currentItemIndex: ReadonlyMap<string, ApiItem>
+}
+
+/**
+ * Answers one classifier question -- is the old type assignable to the new one, or the reverse --
+ * by locating both sides' type excerpts and handing them to the TypeChecker probe.
+ * @param context - Both sides' declaration text and reference/item indexes.
+ * @param query - The classifier's question: which two items, which type position, which direction.
+ * @returns The probe's verdict, or `"unknown"` when either side's item or type excerpt cannot be found.
+ */
+export function resolveAssignabilityQuery(
+  context: AssignabilityResolverContext,
+  query: AssignabilityQuery,
+): ReturnType<ResolveAssignability> {
+  const oldItem = context.baselineItemIndex.get(query.oldCanonicalReference)
+  const newItem = context.currentItemIndex.get(query.newCanonicalReference)
+  const oldExcerpt = oldItem && getExcerptForPosition(oldItem, query.position, query.parameterIndex)
+  const newExcerpt = newItem && getExcerptForPosition(newItem, query.position, query.parameterIndex)
+  if (!oldItem || !newItem || !oldExcerpt || !newExcerpt) return "unknown"
+
+  return checkAssignability(
+    {
+      baselineDts: context.baselineDts,
+      currentDts: context.currentDts,
+      baselineRefIndex: context.baselineRefIndex,
+      currentRefIndex: context.currentRefIndex,
+      oldExcerpt,
+      newExcerpt,
+      freeTypeParameterNames: new Set([
+        ...freeTypeParameterNamesFor(oldItem),
+        ...freeTypeParameterNamesFor(newItem),
+      ]),
+    },
+    query.direction,
+  )
 }
 
 /**
@@ -176,7 +220,7 @@ async function runSingleTargetCheck(
       impact: "unchanged",
       requiredLevel: "none",
       minimumRequiredVersion: "0.1.0",
-      summary: summarizeChanges([], "unchanged", true),
+      summary: summarizeInitialBaseline(),
     }
   }
 
@@ -190,33 +234,18 @@ async function runSingleTargetCheck(
   const currentItemIndex = buildItemIndex(currentPkg)
   const baselineItemIndex = buildItemIndex(baselinePkg)
 
-  const resolveAssignability: ResolveAssignability = (query) => {
-    const oldItem = baselineItemIndex.get(query.oldCanonicalReference)
-    const newItem = currentItemIndex.get(query.newCanonicalReference)
-    if (!oldItem || !newItem) return "unknown"
-
-    const oldExcerpt = getExcerptForPosition(oldItem, query.position, query.parameterIndex)
-    const newExcerpt = getExcerptForPosition(newItem, query.position, query.parameterIndex)
-    if (!oldExcerpt || !newExcerpt) return "unknown"
-
-    const freeTypeParameterNames = new Set([
-      ...freeTypeParameterNamesFor(oldItem),
-      ...freeTypeParameterNamesFor(newItem),
-    ])
-
-    return checkAssignability(
+  const resolveAssignability: ResolveAssignability = (query) =>
+    resolveAssignabilityQuery(
       {
         baselineDts: baseline.dtsText,
         currentDts: currentDtsText,
         baselineRefIndex,
         currentRefIndex,
-        oldExcerpt,
-        newExcerpt,
-        freeTypeParameterNames,
+        baselineItemIndex,
+        currentItemIndex,
       },
-      query.direction,
+      query,
     )
-  }
 
   const { changes: classifierChanges, impact: classifierImpact } = classifyContractChanges(
     baselineNormalized,
@@ -237,30 +266,21 @@ async function runSingleTargetCheck(
     { resolveAssignability },
   )
   const publicIds = new Set(diff.map((change) => change.id))
-  const lowerTierDiff = allTierChanges
-    .filter((change) => !publicIds.has(change.id))
-    .sort((a, b) => a.id.localeCompare(b.id))
+  const lowerTierDiff = allTierChanges.filter((change) => !publicIds.has(change.id))
 
   const impact: ContractImpact = schemaVersionChanges.length > 0 ? "breaking" : classifierImpact
   const baselineVersion = parseVersion(baseline.meta.packageVersion)
 
-  let requiredLevel: RequiredReleaseLevel | undefined
-  if (impact === "unknown") {
-    requiredLevel = undefined
-  } else if (impact === "breaking") {
-    requiredLevel = "major"
-  } else if (impact === "compatible") {
-    // A compatible change needs a minor bump when it *widens* the public surface: a new
-    // export/member/overload/enum-member (`*-added`), and also a `release-tag-changed` -- which,
-    // being compatible rather than breaking, can only mean a tag was widened (e.g. `@beta` ->
-    // `@public`), newly exposing API. Everything else compatible (a doc-only edit, an optionality
-    // relaxation) is a patch.
-    const widensSurface = (kind: (typeof diff)[number]["kind"]): boolean =>
-      kind.endsWith("-added") || kind === "release-tag-changed"
-    requiredLevel = diff.some((change) => widensSurface(change.kind)) ? "minor" : "patch"
-  } else {
-    requiredLevel = "none"
-  }
+  // Below 1.0.0 the required level is deflated -- see `requiredLevelFor`.
+  const preOne = parseVersion(packageJson.version)?.major === 0
+
+  // A compatible change widens the public surface when it adds an export/member/overload/enum-member
+  // (`*-added`), and also on a `release-tag-changed` -- which, being compatible rather than breaking,
+  // can only mean a tag was widened (e.g. `@beta` -> `@public`), newly exposing API.
+  const widensSurface = diff.some(
+    (change) => change.kind.endsWith("-added") || change.kind === "release-tag-changed",
+  )
+  const requiredLevel = requiredLevelFor(impact, widensSurface, preOne)
 
   const minimumRequiredVersion =
     requiredLevel === undefined
@@ -303,6 +323,7 @@ export async function runApiContractCheck(
 ): Promise<ApiContractEvidence> {
   const [packageJson, targets] = await Promise.all([readPackageJson(root), readTargets(root)])
 
+  const preOneRoot = parseVersion(packageJson.version)?.major === 0
   const targetResults: ApiContractTargetResult[] = []
   // Sequential, not `Promise.all`: each target invokes API Extractor's own programmatic API, which
   // is not safe to run concurrently against the same process (it mutates shared compiler-host
@@ -315,16 +336,16 @@ export async function runApiContractCheck(
   // The aggregate required level across every target, folding in "unknown" targets via the same
   // worst-case reasoning a single target's own impact ranking already uses -- see
   // evidence-types.ts's own doc comment on `ApiContractEvidence.requiredLevel`.
-  let requiredLevel: RequiredReleaseLevel | undefined = "none"
-  let hasUnknownTarget = false
-  for (const result of targetResults) {
-    if (result.impact === "unknown") {
-      hasUnknownTarget = true
-      continue
-    }
-    requiredLevel = maxLevel(requiredLevel, result.requiredLevel ?? "none")
+  const knownTargets = targetResults.filter((result) => result.impact !== "unknown")
+  let requiredLevel = knownTargets
+    .map((result) => result.requiredLevel)
+    .reduce<RequiredReleaseLevel | undefined>((worst, level) => maxLevel(worst, level), undefined)
+  if (
+    knownTargets.length < targetResults.length &&
+    requiredLevel !== (preOneRoot ? "minor" : "major")
+  ) {
+    requiredLevel = undefined
   }
-  if (hasUnknownTarget && requiredLevel !== "major") requiredLevel = undefined
 
   // All targets share one package.json version; pick baselineVersion from any target that has a
   // historical baseline (they should all agree) to compute the one minimumRequiredVersion.
@@ -360,7 +381,22 @@ export async function runApiContractCheck(
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const evidence = await runApiContractCheck(process.cwd(), parseReleaseTagArg())
-  process.stdout.write(JSON.stringify(evidence))
+/**
+ * The script body: runs the check against `cwd` and writes its JSON evidence -- and nothing else.
+ * @param argv - The command-line arguments (`--release-tag=` is the only one read).
+ * @param cwd - The consumer's project root.
+ * @param write - Where the JSON evidence goes (stdout, when run as a script).
+ */
+export async function main(
+  argv: readonly string[],
+  cwd: string,
+  write: (text: string) => void,
+): Promise<void> {
+  write(JSON.stringify(await runApiContractCheck(cwd, parseReleaseTagArg(argv))))
 }
+
+// Stryker disable BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression: process entry point, exercised only by spawning the script
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main(process.argv, process.cwd(), (text) => process.stdout.write(text))
+}
+// Stryker restore BlockStatement, ConditionalExpression, CallExpression, StringLiteral, ArrowFunction, MethodExpression

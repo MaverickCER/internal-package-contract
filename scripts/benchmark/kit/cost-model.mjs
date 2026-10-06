@@ -29,7 +29,8 @@ export function estimateCost(operation, rates = {}) {
   return {
     lowUsdPerMillion: (cpuSeconds / 3600) * vCpuHourUsd * 1_000_000,
     highUsdPerMillion: wallSeconds * reservedGb * gbSecondUsd * 1_000_000,
-    opsPerSecondPerCore: operation.wallMs > 0 ? 1000 / operation.wallMs : Number.POSITIVE_INFINITY,
+    // A zero (or nonsensical negative) time is unbounded throughput, not a negative one.
+    opsPerSecondPerCore: 1000 / Math.max(operation.wallMs, 0),
   }
 }
 
@@ -39,7 +40,6 @@ export function estimateCost(operation, rates = {}) {
  */
 export function formatUsd(usd) {
   if (!Number.isFinite(usd)) return "n/a"
-  if (usd === 0) return "$0"
   if (usd >= 1) return `$${usd.toFixed(2)}`
   if (usd >= 0.01) return `$${usd.toFixed(3)}`
   return `$${usd.toLocaleString("en-US", { maximumSignificantDigits: 2, maximumFractionDigits: 12 })}`

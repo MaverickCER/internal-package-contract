@@ -94,6 +94,7 @@ export function runApiExtractor(options: RunExtractorOptions): RunExtractorResul
   })
 
   const result = Extractor.invoke(extractorConfig, {
+    // Stryker disable next-line BooleanLiteral: the report folder and its temp folder are the same here, so the production-build comparison of the two reports always passes
     localBuild: true,
     messageCallback: (message: ExtractorMessage) => {
       process.stderr.write(`[api-extractor] ${message.text}\n`)

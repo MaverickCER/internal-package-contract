@@ -1,0 +1,32 @@
+{
+  "exceptions": [
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/internal-package-contract/blob/main/TOOLKIT.md",
+      "version": 2,
+      "justification": "TOOLKIT.md is added by this very pull request, so it does not exist on the default branch the link points at until the pull request merges.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/internal-package-contract/blob/main/TOOLKIT.md",
+      "ruleBroken": "Docs (links): every external link must be reachable.",
+      "attempted": "Linking the file by relative path instead; the link is deliberately absolute because the text is copied into other repositories' READMEs.",
+      "constraint": "An absolute GitHub link to a new file cannot resolve before the file is on the default branch.",
+      "whyPreferable": "A one-off record that expires beats a relative link that would be wrong everywhere the paragraph is reused.",
+      "residualRisk": "None: if the link is still dead after the merge, the record has expired and the check fails again.",
+      "revisitWhen": "The pull request is merged.",
+      "expires": "2026-11-05"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md",
+      "version": 2,
+      "justification": "repo-contract's ADR 0018 is added by this very pull request, so it does not exist on the default branch the link points at until the pull request merges.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md",
+      "ruleBroken": "Docs (links): every external link must be reachable.",
+      "attempted": "Linking the file by relative path instead; the link is deliberately absolute because the text is copied into other repositories' READMEs.",
+      "constraint": "An absolute GitHub link to a new file cannot resolve before the file is on the default branch.",
+      "whyPreferable": "A one-off record that expires beats a relative link that would be wrong everywhere the paragraph is reused.",
+      "residualRisk": "None: if the link is still dead after the merge, the record has expired and the check fails again.",
+      "revisitWhen": "The pull request is merged.",
+      "expires": "2026-11-05"
+    }
+  ]
+}
