@@ -8,7 +8,9 @@
 #
 # PULL, not push: each caller runs this on its own daily schedule (and on demand) with its OWN
 # `GITHUB_TOKEN`, so no cross-repository token exists to expire. It opens nothing when the pin is
-# already current, and does not open a second PR for a bump that already has one.
+# already current, and does not open a second PR for a bump that already has one. A git dependency
+# is moved to the newest release tag, and every workflow in the calling repository that pins one of
+# its reusable workflows by commit SHA is re-pinned in the same pull request.
 #
 # `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
 name: Dependency pin sync (reusable)
@@ -23,7 +25,7 @@ on:
       new-version:
         description: >-
           The version to bump an npm dependency to. Optional: left empty, the latest published
-          version is used. Ignored for a git dependency, which is re-resolved to its branch head.
+          version is used. Ignored for a git dependency, which moves to its newest release tag.
         required: false
         type: string
         default: ""
@@ -65,23 +67,49 @@ jobs:
           DEP: ${{ inputs.dependency-name }}
           NEW_VERSION: ${{ inputs.new-version }}
         run: |
-          CURRENT=$(node -p "(require('./package.json').dependencies||{})['$DEP'] || (require('./package.json').devDependencies||{})['$DEP'] || ''")
-          OLD=$(node -p "((require('./package-lock.json').packages||{})['node_modules/$DEP']||{}).version||''")
+          CURRENT=$(node -p "(require('./package.json').dependencies||{})[process.env.DEP] || (require('./package.json').devDependencies||{})[process.env.DEP] || ''")
+          export CURRENT
+          OLD=$(node -p "((require('./package-lock.json').packages||{})['node_modules/' + process.env.DEP]||{}).version||''")
           case "$CURRENT" in
-            # A git dependency (internal-package-contract is consumed as `github:owner/repo#main`
-            # and is not on npm, so `name@version` cannot resolve): re-resolve the branch head.
-            github:*|git+*|git@*|https://*|ssh://*)
-              npm update "${DEP}"
-              TARGET=$(node -p "(((require('./package-lock.json').packages||{})['node_modules/$DEP']||{}).resolved||'').split('#')[1]||''" | cut -c1-7)
+            # A git dependency (internal-package-contract is consumed as `github:owner/repo#<tag>` and
+            # is not on npm, so `name@version` cannot resolve): move it to the newest release TAG
+            # (`vX.Y.Z`), never to a branch head -- an unreleased commit is not a version.
+            github:*)
+              REPO_SLUG="${CURRENT#github:}"
+              REPO_SLUG="${REPO_SLUG%%#*}"
+              LATEST_TAG=$(git ls-remote --tags --refs --sort=-v:refname "https://github.com/${REPO_SLUG}.git" 'v[0-9]*' | head -n 1 | sed 's#.*refs/tags/##')
+              if [ -z "$LATEST_TAG" ]; then
+                echo "::error::${REPO_SLUG} has no vX.Y.Z release tag to pin ${DEP} to."
+                exit 1
+              fi
+              npm install --save-dev --ignore-scripts "${DEP}@github:${REPO_SLUG}#${LATEST_TAG}"
+              TARGET="${LATEST_TAG}"
+              ;;
+            git+*|git@*|https://*|ssh://*)
+              npm update --ignore-scripts "${DEP}"
+              TARGET=$(node -p "(((require('./package-lock.json').packages||{})['node_modules/' + process.env.DEP]||{}).resolved||'').split('#')[1]||''" | cut -c1-7)
               ;;
             *)
               LATEST="${NEW_VERSION:-$(npm view "$DEP" version)}"
-              PREFIX=$(node -p "('$CURRENT'.match(/^[\^~]/) || [''])[0]")
-              npm install "${DEP}@${PREFIX}${LATEST}"
+              PREFIX=$(node -p "(process.env.CURRENT.match(/^[\^~]/) || [''])[0]" )
+              # `npm install dep@x.y.z` saves `^x.y.z` by default, which would silently turn an exact
+              # pin into a range: keep exactly the operator the pin already had.
+              if [ -z "$PREFIX" ]; then
+                npm install --ignore-scripts --save-exact "${DEP}@${LATEST}"
+              else
+                npm install --ignore-scripts --save-prefix="${PREFIX}" "${DEP}@${LATEST}"
+              fi
               TARGET="$LATEST"
               ;;
           esac
-          if git diff --quiet -- package.json package-lock.json; then
+          # A workflow that calls one of the dependency's reusable workflows pins it by commit SHA,
+          # with the release tag in a trailing comment. Move those pins together with the dependency,
+          # so the workflow code never drifts from the installed version.
+          NEW_SHA=$(node -p "(((require('./package-lock.json').packages||{})['node_modules/' + process.env.DEP]||{}).resolved||'').split('#')[1]||''")
+          if [ -n "$NEW_SHA" ] && [ -d .github/workflows ]; then
+            node node_modules/internal-package-contract/scripts/repin-workflows.mjs "$DEP" "$NEW_SHA" "$TARGET"
+          fi
+          if git diff --quiet -- package.json package-lock.json .github/workflows; then
             echo "${DEP} is already current (${TARGET}); nothing to do."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -124,16 +152,21 @@ jobs:
           TARGET: ${{ steps.bump.outputs.target }}
         run: |
           BRANCH="chore/bump-${DEP}-${TARGET}"
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+          # "Already open" means an OPEN pull request, not merely that the branch still exists: a pull
+          # request closed without merging leaves its branch behind.
+          OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
+          if [ "$OPEN" != "0" ]; then
             echo "A bump to ${TARGET} is already open on ${BRANCH}; nothing to do."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- package.json package-lock.json .changeset
+          git add -A -- package.json package-lock.json .changeset .github/workflows
           git checkout -b "$BRANCH"
           git commit -m "chore(deps): bump ${DEP} to ${TARGET}"
-          git push origin "$BRANCH"
+          # --force: the branch is this bot's own, and a stale one left behind by a pull request that
+          # was closed without merging must not block every later bump to the same target.
+          git push --force origin "$BRANCH"
           gh pr create --base main --head "$BRANCH" \
             --title "chore(deps): bump ${DEP} to ${TARGET}" \
             --body "Automated dependency-pin sync: ${DEP} is now ${TARGET}."
@@ -150,8 +183,8 @@ jobs:
         if: steps.pr.outputs.branch
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
         run: |
-          BRANCH="${{ steps.pr.outputs.branch }}"
           SHA=$(git rev-parse HEAD)
           gh workflow run ci.yml --ref "$BRANCH"
           RUN_ID=""

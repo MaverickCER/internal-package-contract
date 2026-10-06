@@ -1,3 +1,4 @@
+import { EXCEPTION_V2_FIELD_KEYS } from "../../checks/exception-record.js"
 import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpers"
 
 /**
@@ -16,7 +17,13 @@ import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpe
  * "what else could we have used instead" is a supply-chain question about a dependency choice, and
  * has no meaning for a review comment about this repository's own source line.
  */
-const ALL_REQUIREMENTS = ["justification", "remediation", "method", "exceptionType"] as const
+const ALL_REQUIREMENTS = [
+  "justification",
+  "remediation",
+  "method",
+  "exceptionType",
+  ...EXCEPTION_V2_FIELD_KEYS,
+] as const
 
 export const CODERABBIT_POLICY: ExceptionPolicyConfig = {
   coderabbit: {

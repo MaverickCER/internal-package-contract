@@ -10,6 +10,68 @@ import path from "node:path"
  * `.repo-contract/api-contract/<target>/`.
  */
 
+/**
+ * Every public subpath of the package -- the keys of `package.json` `exports` that expose a type
+ * declaration (`types` under any condition). A key whose value is a plain path (`./schema` pointing at
+ * a JSON file, `./package.json`) exposes no TypeScript API and is not a subpath here.
+ * @param exportsField - The parsed `package.json` `exports`.
+ * @returns The subpath keys (`"."`, `"./build"`, ...), in declaration order.
+ */
+export function exportedApiSubpaths(exportsField: unknown): readonly string[] {
+  if (typeof exportsField !== "object" || exportsField === null) return []
+  // Only objects are searched, and only objects are recursed into, so a string value can never loop.
+  const isObject = (value: unknown): value is object => typeof value === "object" && value !== null
+  const hasTypes = (value: object): boolean =>
+    Object.entries(value).some(
+      ([key, inner]) =>
+        (key === "types" && typeof inner === "string") || (isObject(inner) && hasTypes(inner)),
+    )
+  return Object.entries(exportsField)
+    .filter(
+      ([key, value]) =>
+        key.startsWith(".") && !key.includes("*") && isObject(value) && hasTypes(value),
+    )
+    .map(([key]) => key)
+}
+
+/**
+ * The public subpath a TypeDoc entry point documents: `src/index.ts` is `"."`, `src/build/index.ts`
+ * and `src/build.ts` are `"./build"`.
+ * @param entryPoint - One `typedoc.json` `entryPoints` entry.
+ * @returns The subpath key it is exported as, by the default naming rule.
+ */
+export function subpathForEntryPoint(entryPoint: string): string {
+  const name = targetNameFromEntryPoint(entryPoint)
+  return name === "index" ? "." : `./${name}`
+}
+
+/**
+ * Compares what the package EXPORTS with what the API contract GUARDS. A public subpath no target
+ * covers could break in a patch release without the gate noticing; a documented entry point that is
+ * not exported guards something users cannot import.
+ * @param entryPoints - The `typedoc.json` `entryPoints`.
+ * @param subpaths - The package's public subpaths ({@link exportedApiSubpaths}).
+ * @param aliases - `package.json` `internal-package-contract.apiTargets`: a subpath whose entry point is not named after it, e.g. `{ ".": "src/runtime/index.ts" }`.
+ * @returns The subpaths with no guarding entry point, and the entry points with no subpath.
+ */
+export function compareExportsToEntryPoints(
+  entryPoints: readonly string[],
+  subpaths: readonly string[],
+  aliases: Readonly<Record<string, string>> = {},
+): { readonly unguarded: readonly string[]; readonly unexported: readonly string[] } {
+  const aliased = new Map(Object.entries(aliases).map(([subpath, entry]) => [entry, subpath]))
+  const guarded = new Set(
+    entryPoints.map((entry) => aliased.get(entry) ?? subpathForEntryPoint(entry)),
+  )
+  const exported = new Set(subpaths)
+  return {
+    unguarded: subpaths.filter((subpath) => !guarded.has(subpath)),
+    unexported: entryPoints.filter(
+      (entry) => !exported.has(aliased.get(entry) ?? subpathForEntryPoint(entry)),
+    ),
+  }
+}
+
 export interface ApiContractTarget {
   /** Derived from the entry point's path, used to namespace this target's baseline directory and label its evidence. */
   readonly name: string
@@ -21,7 +83,7 @@ export interface ApiContractTarget {
  * @param entryPoint - One `typedoc.json` `entryPoints` entry, e.g. "src/runtime/index.ts" or "src/index.ts".
  * @returns A short, filesystem-safe target name: "index" for the package root, or the entry point's containing directory name otherwise.
  */
-function targetNameFromEntryPoint(entryPoint: string): string {
+export function targetNameFromEntryPoint(entryPoint: string): string {
   const withoutSrcPrefix = entryPoint.replace(/^\.?\/?src\//, "")
   const withoutIndexSuffix = withoutSrcPrefix.replace(/\/index\.tsx?$/, "").replace(/\.tsx?$/, "")
   return withoutIndexSuffix.length > 0 ? withoutIndexSuffix : "index"
@@ -48,7 +110,7 @@ export async function readTargets(root: string): Promise<readonly ApiContractTar
 
   let raw: string
   try {
-    raw = await readFile(typedocConfigPath, "utf8")
+    raw = (await readFile(typedocConfigPath)).toString()
   } catch (error) {
     throw new Error(
       `Could not read ${typedocConfigPath} -- the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
@@ -72,8 +134,54 @@ export async function readTargets(root: string): Promise<readonly ApiContractTar
     throw new Error(`${typedocConfigPath} must declare a non-empty "entryPoints" array of strings.`)
   }
 
+  await assertEveryExportIsGuarded(root, entryPoints, typedocConfigPath)
+
   return entryPoints.map((entryPoint) => ({
     name: targetNameFromEntryPoint(entryPoint),
     mainEntryPointFilePath: mainEntryPointFilePathFor(entryPoint),
   }))
+}
+
+/**
+ * Fails when `package.json` `exports` and `typedoc.json` `entryPoints` disagree: the semver promise
+ * covers every public subpath, so a subpath with no target is a hole in it.
+ * @param root - The project root.
+ * @param entryPoints - The validated `typedoc.json` entry points.
+ * @param typedocConfigPath - For the message only.
+ */
+async function assertEveryExportIsGuarded(
+  root: string,
+  entryPoints: readonly string[],
+  typedocConfigPath: string,
+): Promise<void> {
+  let pkg: {
+    exports?: unknown
+    "internal-package-contract"?: { apiTargets?: Record<string, string> }
+  }
+  try {
+    pkg = JSON.parse((await readFile(path.join(root, "package.json"))).toString()) as typeof pkg
+  } catch {
+    return
+  }
+  const subpaths = exportedApiSubpaths(pkg.exports)
+  if (subpaths.length === 0) return
+  const { unguarded, unexported } = compareExportsToEntryPoints(
+    entryPoints,
+    subpaths,
+    pkg["internal-package-contract"]?.apiTargets,
+  )
+  if (unguarded.length === 0 && unexported.length === 0) return
+  const problems = [
+    ...unguarded.map(
+      (subpath) =>
+        `- package.json exports ${JSON.stringify(subpath)}, but no ${path.basename(typedocConfigPath)} entry point documents it (add one, e.g. "src/${subpath === "." ? "index" : `${subpath.slice(2)}/index`}.ts"), so its API is not guarded by the api-contract check.`,
+    ),
+    ...unexported.map(
+      (entry) =>
+        `- ${path.basename(typedocConfigPath)} documents ${JSON.stringify(entry)}, which no package.json export serves (export it, or map it with package.json "internal-package-contract": { "apiTargets": { "<subpath>": "${entry}" } }).`,
+    ),
+  ]
+  throw new Error(
+    `The package's public exports and the API contract's targets disagree:\n${problems.join("\n")}`,
+  )
 }

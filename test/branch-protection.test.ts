@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { branchProtection } from "../checks/branch-protection.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { branchProtection, createBranchProtection } from "../checks/branch-protection.js"
+import { makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 describe("branch-protection", () => {
   it("fails when gh terminated abnormally, naming gh (not a blank tool name) in the rationale", async () => {
@@ -37,8 +37,10 @@ describe("branch-protection", () => {
     )
     expect(result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:BranchProtection:gh-unavailable",
         "Branch protection: gh CLI not found -- install it to check GitHub branch protection.",
+      ),
     })
   })
 
@@ -78,13 +80,16 @@ describe("branch-protection", () => {
           hasDeletion: false,
           hasNonFastForward: false,
           hasPullRequest: false,
+          hasRequiredStatusChecks: false,
+          requiredChecks: [],
+          requiresThreadResolution: false,
         }),
       ),
     )
     expect(result).toEqual({
       outcome: "fail",
       rationale:
-        "Branch protection: MaverickCER/data-cap's default branch (main) is missing deletion protection and a pull-request-required rule and force-push protection. Run `internal-package-contract init` to configure it.",
+        "Branch protection: MaverickCER/data-cap's default branch (main) is missing deletion protection and a pull-request-required rule and force-push protection and a required-status-checks rule and required review-thread resolution. Run `internal-package-contract init` to configure it.",
     })
   })
 
@@ -99,6 +104,9 @@ describe("branch-protection", () => {
           hasDeletion: true,
           hasNonFastForward: true,
           hasPullRequest: false,
+          hasRequiredStatusChecks: true,
+          requiredChecks: ["contract"],
+          requiresThreadResolution: true,
         }),
       ),
     )
@@ -120,13 +128,65 @@ describe("branch-protection", () => {
           hasDeletion: true,
           hasNonFastForward: true,
           hasPullRequest: true,
+          hasRequiredStatusChecks: true,
+          requiredChecks: ["contract"],
+          requiresThreadResolution: true,
         }),
       ),
     )
     expect(result).toEqual({
       outcome: "pass",
       rationale:
-        "Branch protection: MaverickCER/internal-package-contract's default branch (main) blocks deletion, force-pushes, and merging without a PR.",
+        'Branch protection: MaverickCER/internal-package-contract\'s default branch (main) blocks deletion, force-pushes, and merging without a PR, and requires the "contract" check and resolved review threads.',
     })
+  })
+
+  const protectedStatus = {
+    ok: true,
+    owner: "MaverickCER",
+    repo: "data-cap",
+    defaultBranch: "main",
+    hasDeletion: true,
+    hasNonFastForward: true,
+    hasPullRequest: true,
+    hasRequiredStatusChecks: true,
+    requiredChecks: ["contract"],
+    requiresThreadResolution: true,
+  }
+
+  it("fails when the ruleset has no required-status-checks rule (a red CI run could be merged)", async () => {
+    const result = await branchProtection.policy(
+      makeContext(
+        makeJsonResult({ ...protectedStatus, hasRequiredStatusChecks: false, requiredChecks: [] }),
+      ),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("a required-status-checks rule")
+  })
+
+  it("fails when required status checks exist but do not include the contract job", async () => {
+    const result = await branchProtection.policy(
+      makeContext(makeJsonResult({ ...protectedStatus, requiredChecks: ["lint"] })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain('the "contract" check among its required status checks')
+  })
+
+  it("fails when review threads need not be resolved", async () => {
+    const result = await branchProtection.policy(
+      makeContext(makeJsonResult({ ...protectedStatus, requiresThreadResolution: false })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("required review-thread resolution")
+  })
+
+  it("accepts a repository's own differently-named CI job when configured", async () => {
+    const custom = createBranchProtection("self-check")
+    const ok = await custom.policy(
+      makeContext(makeJsonResult({ ...protectedStatus, requiredChecks: ["self-check"] })),
+    )
+    expect(ok.outcome).toBe("pass")
+    const bad = await custom.policy(makeContext(makeJsonResult(protectedStatus)))
+    expect(bad.outcome).toBe("fail")
   })
 })

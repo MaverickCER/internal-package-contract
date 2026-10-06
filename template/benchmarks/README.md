@@ -3,7 +3,7 @@
 This folder is the performance and cost record of the package: what adopting it costs in time and
 money, how each function scales, and where the cost comes from. It is built entirely by
 [`internal-package-contract`](https://github.com/MaverickCER/internal-package-contract): the package
-supplies **what to run** (an input), the contract **stresses it through ten sizes, measures it, checks
+supplies **what to run** (an input), the contract **stresses it through a ladder of doubling sizes (ten by default), measures it, checks
 the big-O and prices it**, and writes a **report** and a machine-readable **result** (the output).
 Nothing in this folder implements timing, statistics or reporting.
 
@@ -86,7 +86,7 @@ export default defineSuite({
 | `inEndToEnd`                                                            | no       | How often one end-to-end operation calls the function, for the attribution section.           |
 
 `expectedComplexity` is one of `constant`, `logarithmic`, `linear`, `linearithmic`, `quadratic`,
-`exponential-or-worse`. Return a value that depends on the work (the contract keeps it alive so
+`cubic-or-worse`. Return a value that depends on the work (the contract keeps it alive so
 nothing is optimized away); return `timed(ms)` only when an operation is timed elsewhere, such as a
 child process.
 
@@ -107,7 +107,7 @@ analysis   complexity      measured class, exponent and notation per group, with
                            class and an agreement of matches / close / differs
            endToEnd        per size: baseline, with package, added time, added CPU, added memory,
                            estimated cost per million operations
-           contribution    per function: calls per operation, estimated time, share of the overhead
+           contribution    per function: calls per operation, estimated and exclusive time, share of the whole operation
            cost            the typical and largest sizes used for the headline numbers
 ```
 

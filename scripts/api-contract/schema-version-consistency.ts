@@ -28,8 +28,7 @@ const LITERAL_TYPE_PATTERN = /^(-?\d+|"[^"]*"|'[^']*')$/
 function isVersionLiteralMember(member: NormalizedMember): boolean {
   return (
     member.name === "version" &&
-    member.propertyTypeExcerptText !== undefined &&
-    LITERAL_TYPE_PATTERN.test(member.propertyTypeExcerptText)
+    Boolean(member.propertyTypeExcerptText?.match(LITERAL_TYPE_PATTERN))
   )
 }
 

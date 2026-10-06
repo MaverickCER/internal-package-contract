@@ -21,18 +21,22 @@ describe("securitySecrets", () => {
   it("wires run exactly: preset head, bundled ignore, bundled rc, trailing positional, when the consumer has no config", () => {
     const check = securitySecrets()
     const run = check.run as string[]
-    expect(run[6]).toContain("secretlintignore")
-    expect(run[8]).toContain("secretlint.config.json")
+    expect(run[0]).toBe("node")
+    expect(run[1]).toContain("run-secretlint.mjs")
+    expect(run[8]).toContain("secretlintignore")
+    expect(run[10]).toContain("secretlint.config.json")
     expect(run).toEqual([
+      "node",
+      run[1],
       "secretlint",
       "--format",
       "json",
       "--output",
       "reports/secretlint.json",
       "--secretlintignore",
-      run[6],
-      "--secretlintrc",
       run[8],
+      "--secretlintrc",
+      run[10],
       "**/*",
     ])
   })
@@ -41,15 +45,17 @@ describe("securitySecrets", () => {
     writeFileSync(path.join(cwd, ".secretlintrc.json"), "{}")
     const check = securitySecrets()
     const run = check.run as string[]
-    expect(run[6]).toContain("secretlintignore")
+    expect(run[8]).toContain("secretlintignore")
     expect(run).toEqual([
+      "node",
+      run[1],
       "secretlint",
       "--format",
       "json",
       "--output",
       "reports/secretlint.json",
       "--secretlintignore",
-      run[6],
+      run[8],
       "**/*",
     ])
   })
@@ -60,7 +66,7 @@ describe("securitySecrets", () => {
     try {
       const check = securitySecrets()
       const run = check.run as string[]
-      expect(run).toEqual(["--secretlintignore", run[1], "--secretlintrc", run[3]])
+      expect(run).toEqual(["node", run[1], "--secretlintignore", run[3], "--secretlintrc", run[5]])
     } finally {
       ;(securitySecretsPreset as { run: string | readonly string[] }).run = original
     }
@@ -69,7 +75,7 @@ describe("securitySecrets", () => {
   it("preserves the underlying secretlint preset's base command and policy", () => {
     const check = securitySecrets()
     const run = check.run as string[]
-    expect(run[0]).toBe("secretlint")
+    expect(run[2]).toBe("secretlint")
     expect(typeof check.policy).toBe("function")
   })
 })

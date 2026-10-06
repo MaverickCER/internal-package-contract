@@ -5,9 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { ExceptionRecordCore } from "repo-contract/helpers"
 import {
   EXCEPTION_TYPES,
+  LEGACY_FIELD_VALUE,
+  emptyV2Fields,
   evaluateFindingVerdict,
+  isExpired,
+  isLegacyRecord,
   isValidNonEmptyStringField,
   reconcileAndPersistExceptionRegistry,
+  recordFieldValue,
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "../checks/exception-record.js"
@@ -15,7 +20,7 @@ import type { ExceptionRegistrySchema } from "../checks/exception-record.js"
 
 interface TestRecord {
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   readonly justification: string
   readonly name: string
 }
@@ -134,14 +139,14 @@ describe("validateExceptionRegistry", () => {
     expect(result.ok).toBe(false)
   })
 
-  it("rejects a version other than the number 1", () => {
+  it("rejects a version other than 1 or 2", () => {
     const result = validateExceptionRegistry(
-      [{ id: "test:a", version: 2, justification: "x", name: "a" }],
+      [{ id: "test:a", version: 3, justification: "x", name: "a" }],
       SCHEMA,
     )
     expect(result).toEqual({
       ok: false,
-      errors: ["exceptions[0].version must be the number 1 (got 2)."],
+      errors: ["exceptions[0].version must be the number 2 (or the legacy 1) (got 3)."],
     })
   })
 
@@ -196,7 +201,7 @@ describe("validateExceptionRegistry", () => {
     const result = validateExceptionRegistry(
       [
         { id: "wrong:a", version: 1, justification: "x", name: "a" },
-        { id: "test:b", version: 2, justification: "x", name: "b" },
+        { id: "test:b", version: 3, justification: "x", name: "b" },
       ],
       SCHEMA,
     )
@@ -215,7 +220,7 @@ describe("validateExceptionRegistry", () => {
     expect(result).toEqual({
       ok: false,
       errors: [
-        'exceptions[0].version must be the number 1 (got "not-a-number").',
+        'exceptions[0].version must be the number 2 (or the legacy 1) (got "not-a-number").',
         "exceptions[1].name must be a non-empty string.",
       ],
     })
@@ -236,12 +241,12 @@ describe("validateExceptionRegistry", () => {
 
   it("a bad version alone reports exactly one error -- schema.validateRecord is never reached, so a simultaneously-invalid name is never itself reported", () => {
     const result = validateExceptionRegistry(
-      [{ id: "test:a", version: 2, justification: "x", name: "" }],
+      [{ id: "test:a", version: 3, justification: "x", name: "" }],
       SCHEMA,
     )
     expect(result).toEqual({
       ok: false,
-      errors: ["exceptions[0].version must be the number 1 (got 2)."],
+      errors: ["exceptions[0].version must be the number 2 (or the legacy 1) (got 3)."],
     })
   })
 
@@ -338,7 +343,7 @@ describe("validateSecurityExceptionFields", () => {
     )
     expect(result).toBeUndefined()
     expect(errors).toEqual([
-      'exceptions[0].method must be "" or one of "mechanical-reverification", "independent-human-review" (got "guessing").',
+      'exceptions[0].method must be "" or one of "mechanical-reverification", "independent-human-review", "policy-rule" (got "guessing").',
     ])
   })
 
@@ -611,5 +616,88 @@ describe("reconcileAndPersistExceptionRegistry", () => {
     if (!result.ok) {
       expect(result.rationale).toContain("Could not write exceptions/test.json")
     }
+  })
+})
+
+describe("version 2 exception records", () => {
+  const V2 = {
+    ruleBroken: "r",
+    attempted: "a",
+    constraint: "c",
+    whyPreferable: "w",
+    residualRisk: "k",
+    revisitWhen: "v",
+    expires: "",
+  }
+
+  it("accepts a version 2 record, keeping its version and structured fields", () => {
+    const result = validateExceptionRegistry(
+      [{ id: "test:a", version: 2, justification: "x", name: "a", ...V2 }],
+      SCHEMA,
+    )
+    expect(result).toEqual({
+      ok: true,
+      records: [{ id: "test:a", version: 2, justification: "x", name: "a", ...V2 }],
+    })
+  })
+
+  it("rejects a version 2 record that omits a structured field or carries a malformed expires", () => {
+    const { constraint: _omitted, ...rest } = V2
+    void _omitted
+    const missing = validateExceptionRegistry(
+      [{ id: "test:a", version: 2, justification: "x", name: "a", ...rest }],
+      SCHEMA,
+    )
+    expect(missing).toEqual({
+      ok: false,
+      errors: ["exceptions[0].constraint must be a string (a version 2 record carries it)."],
+    })
+    const badDate = validateExceptionRegistry(
+      [{ id: "test:a", version: 2, justification: "x", name: "a", ...V2, expires: "soon" }],
+      SCHEMA,
+    )
+    expect(badDate).toEqual({
+      ok: false,
+      errors: ['exceptions[0].expires must be "" or a YYYY-MM-DD date (got "soon").'],
+    })
+  })
+
+  it("does not let a version 1 record carry the structured fields (they are unrecognized there)", () => {
+    const result = validateExceptionRegistry(
+      [{ id: "test:a", version: 1, justification: "x", name: "a", ...V2 }],
+      SCHEMA,
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  it("answers a legacy sentinel for a structured field a version 1 record never had, and the real value otherwise", () => {
+    expect(recordFieldValue({ version: 1 }, "ruleBroken")).toBe(LEGACY_FIELD_VALUE)
+    expect(recordFieldValue({ version: 1 }, "somethingElse")).toBe("")
+    expect(recordFieldValue({ version: 2, ruleBroken: "" }, "ruleBroken")).toBe("")
+    expect(recordFieldValue({ version: 2, ruleBroken: "r" }, "ruleBroken")).toBe("r")
+    expect(recordFieldValue({ version: 2 }, "ruleBroken")).toBe("")
+  })
+
+  it("scaffolds blank v2 fields and flags legacy records", () => {
+    expect(emptyV2Fields()).toEqual({
+      ruleBroken: "",
+      attempted: "",
+      constraint: "",
+      whyPreferable: "",
+      residualRisk: "",
+      revisitWhen: "",
+      expires: "",
+    })
+    expect(isLegacyRecord({ version: 1 })).toBe(true)
+    expect(isLegacyRecord({ version: 2 })).toBe(false)
+  })
+
+  it("expires only on a valid date strictly before today", () => {
+    const now = new Date("2026-10-02T12:00:00Z")
+    expect(isExpired("", now)).toBe(false)
+    expect(isExpired("not-a-date", now)).toBe(false)
+    expect(isExpired("2026-10-02", now)).toBe(false)
+    expect(isExpired("2026-10-01", now)).toBe(true)
+    expect(isExpired("2027-01-01", now)).toBe(false)
   })
 })

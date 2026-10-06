@@ -1,8 +1,17 @@
-# Reusable "measure benchmarks -> post/update a PR comment -> conditionally commit refreshed
-# results+history" workflow for every package that benchmarks itself with the shared kit
-# (`internal-package-contract/benchmark`, run through `run-suite.mjs`). It makes no assumption about
-# how many suites a package has or what they are called: the caller lists them in `suites`, one
-# `label|directory|history-file` per line, and the workflow measures, summarizes and records each.
+# Reusable "measure benchmarks -> gate on same-run properties -> post/update a PR comment" workflow for
+# every package that benchmarks itself with the shared kit (`internal-package-contract/benchmark`, run
+# through `run-suite.mjs`). It makes no assumption about how many suites a package has or what they are
+# called: the caller lists them in `suites`, one `label|directory|history-file` per line.
+#
+# It never writes to the pull request: its token can comment and nothing else, so the PR's head is
+# exactly what its author pushed and CI ran on. Refreshing the committed results and history is a
+# separate job that runs AFTER a merge, on the merge commit (benchmark-record.yml).
+#
+# What can fail the run is deliberately narrow (scripts/benchmark/gates.mjs): a function whose measured
+# growth class differs from its documented big-O, and the package's overhead relative to its bare
+# baseline growing past a threshold against the last run on main and the last release. Both are
+# same-run quantities, so they survive the runner being a different machine than the one that produced
+# the reference. Raw millisecond deltas are comments only.
 #
 # `on: workflow_call` only -- a caller's own `ci.yml` job decides *when* this runs; this file only
 # defines *what* runs (see release-npm-changesets.yml's identical note).
@@ -10,7 +19,7 @@
 # Example caller (data-cap):
 #
 #   benchmark-pr:
-#     permissions: { contents: write, pull-requests: write, statuses: write }
+#     permissions: { contents: read, pull-requests: write }
 #     uses: MaverickCER/internal-package-contract/.github/workflows/benchmark-pr.yml@<sha>
 #     with:
 #       suites: |
@@ -30,7 +39,7 @@ on:
         description: >-
           One suite per line, `label|directory|history-file`: the label shown in the PR comment, the
           directory holding the suite's results.json and BENCHMARKS.md, and the committed history
-          file results are appended to.
+          file results are appended to after a merge.
         required: true
         type: string
       install-dirs:
@@ -51,7 +60,7 @@ on:
         type: string
         default: npm run build
       budgets-path:
-        description: Path to the package's benchmarks/budgets.mjs (BUDGETS export; a "*" entry is the default threshold).
+        description: Path to the package's benchmarks/budgets.mjs (BUDGETS export; a "*" entry is the default highlight threshold; an optional GATES export tunes the gates).
         required: true
         type: string
       comment-marker:
@@ -59,19 +68,17 @@ on:
         required: true
         type: string
       node-version:
-        description: Node version for actions/setup-node.
+        description: >-
+          Node version for actions/setup-node. Benchmarks should run on ONE Node version, the one the
+          package's CI and results.json were produced on: a different engine changes every number.
         required: false
         type: string
-        default: 22.x
+        default: 24.x
 
 jobs:
-  # Same anti-recursion-loop shape as today's per-repo job -- see either
-  # env-cap's or data-cap's own ci.yml for the incident this design avoids
-  # (a GITHUB_TOKEN-authored push firing its own `pull_request: synchronize`
-  # and re-triggering an unbounded remeasure loop). Preserved verbatim here:
-  # same-repo PRs only, and `github.actor != 'github-actions[bot]'` breaks
-  # the loop once this job's own commit becomes the new HEAD.
   benchmark-pr:
+    # Same-repo pull requests only (a fork's code must not run with this job's token), and never a
+    # bot's own pull request -- the benchmark-record job's results PR needs no benchmark comment.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -81,20 +88,19 @@ jobs:
       group: benchmarks-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      statuses: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
+          fetch-depth: 0 # the last release tag, and main's committed results
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ inputs.node-version }}
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       - name: Build the package
         env:
@@ -110,21 +116,30 @@ jobs:
         run: |
           printf '%s\n' "$INSTALL_DIRS" | while IFS= read -r dir; do
             [ -z "$dir" ] && continue
-            (cd "$dir" && npm install)
+            (cd "$dir" && npm install --ignore-scripts)
           done
 
       - name: Validate every suite's documentation
         run: npm run benchmark:check --if-present
 
-      - name: Snapshot main's committed results as "previous"
+      # Two references for the same-run ratios: main's committed results (the previous run), and the
+      # results committed at the last release (a fixed point, so a series of small regressions cannot
+      # ratchet "previous" upward unnoticed).
+      - name: Snapshot main's and the last release's committed results
         env:
           SUITES: ${{ inputs.suites }}
         run: |
-          mkdir -p /tmp/benchmark-previous
+          mkdir -p /tmp/benchmark-previous /tmp/benchmark-release
+          TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' origin/main 2>/dev/null || true)
           printf '%s\n' "$SUITES" | while IFS='|' read -r label dir _history; do
             [ -z "$label" ] && continue
             safe=$(printf '%s' "$dir" | tr '/' '_')
             git show "origin/main:${dir}/results.json" > "/tmp/benchmark-previous/${safe}.json" 2>/dev/null || echo '{}' > "/tmp/benchmark-previous/${safe}.json"
+            if [ -n "$TAG" ]; then
+              git show "${TAG}:${dir}/results.json" > "/tmp/benchmark-release/${safe}.json" 2>/dev/null || echo '{}' > "/tmp/benchmark-release/${safe}.json"
+            else
+              echo '{}' > "/tmp/benchmark-release/${safe}.json"
+            fi
           done
 
       - name: Run the benchmarks
@@ -150,85 +165,45 @@ jobs:
           path: /tmp/benchmark-artifacts
           retention-days: 14
 
-      - name: Post or update the marker-tagged summary comment
+      # Renders the summary and evaluates the gates. The comment is posted whatever the gates say; the
+      # job is failed afterwards, so a red gate is a red check AND an explained one.
+      - name: Render the summary
+        id: summary
         env:
-          GH_TOKEN: ${{ github.token }}
           SUITES: ${{ inputs.suites }}
           BUDGETS_PATH: ${{ inputs.budgets-path }}
           COMMENT_MARKER: ${{ inputs.comment-marker }}
         run: |
           args=()
-          while IFS='|' read -r label dir _history; do
+          while IFS='|' read -r label dir history; do
             [ -z "$label" ] && continue
             safe=$(printf '%s' "$dir" | tr '/' '_')
-            args+=(--example "${label} (\`${dir}\`)|/tmp/benchmark-previous/${safe}.json|${dir}/results.json|${history}")
+            args+=(--example "${label} (\`${dir}\`)|/tmp/benchmark-previous/${safe}.json|${dir}/results.json|${history}|/tmp/benchmark-release/${safe}.json")
           done <<< "$SUITES"
+          status=0
           node node_modules/internal-package-contract/scripts/benchmark/render-summary.mjs \
             --budgets "$BUDGETS_PATH" \
             --marker "$COMMENT_MARKER" \
-            "${args[@]}" > /tmp/summary.md
-          PR="${{ github.event.pull_request.number }}"
-          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR}/comments" --jq ".[] | select(.body | startswith(\"$COMMENT_MARKER\")) | .id" | head -n1)
-          if [ -n "$EXISTING" ]; then
-            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING}" -X PATCH -F body=@/tmp/summary.md
-          else
-            gh api "repos/${{ github.repository }}/issues/${PR}/comments" -X POST -F body=@/tmp/summary.md
-          fi
+            --gate \
+            "${args[@]}" > /tmp/summary.md || status=$?
+          echo "gate-status=$status" >> "$GITHUB_OUTPUT"
 
-      - name: Commit refreshed results + history into this PR, only when it touches benchmarked code
+      - name: Post or update the marker-tagged summary comment
         env:
           GH_TOKEN: ${{ github.token }}
-          # Passed through the environment rather than interpolated straight into `run` -- a branch
-          # ref is attacker-influenced input and must never be spliced into the shell command text.
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          SUITES: ${{ inputs.suites }}
+          COMMENT_MARKER: ${{ inputs.comment-marker }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          CHANGED=$(git diff --name-only origin/main...HEAD)
-          dirs=()
-          histories=()
-          while IFS='|' read -r label dir history; do
-            [ -z "$label" ] && continue
-            dirs+=("$dir")
-            histories+=("$history")
-          done <<< "$SUITES"
-
-          # Benchmarked code = src/ or anything under a suite directory, except the generated outputs.
-          pattern="^src/"
-          for dir in "${dirs[@]}"; do pattern="${pattern}|^${dir}/"; done
-          RELEVANT=$(echo "$CHANGED" | grep -E "$pattern" | grep -vE "/(results\.json|BENCHMARKS\.md)$" | grep -vE "history/" || true)
-          if [ -z "$RELEVANT" ]; then
-            echo "This PR doesn't touch benchmarked code paths -- comment posted above, nothing to commit."
-            exit 0
+          EXISTING=$(gh api "repos/${REPO}/issues/${PR}/comments" --jq ".[] | select(.body | startswith(\"$COMMENT_MARKER\")) | .id" | head -n1)
+          if [ -n "$EXISTING" ]; then
+            gh api "repos/${REPO}/issues/comments/${EXISTING}" -X PATCH -F body=@/tmp/summary.md
+          else
+            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -F body=@/tmp/summary.md
           fi
 
-          for index in "${!dirs[@]}"; do
-            node node_modules/internal-package-contract/scripts/benchmark/append-history.mjs \
-              "${dirs[$index]}/results.json" "${histories[$index]}"
-          done
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for index in "${!dirs[@]}"; do
-            git add "${dirs[$index]}/results.json" "${dirs[$index]}/BENCHMARKS.md" "${histories[$index]}"
-          done
-          if git diff --cached --quiet; then
-            echo "Freshly measured results match what's already committed -- nothing to push."
-            exit 0
-          fi
-          git commit -m "chore(benchmarks): refresh results.json"
-          git push origin HEAD:"$HEAD_REF"
-
-# Pages deploy step (documented here, not wired up yet -- B2/B5's job):
-#
-# Each consumer's own `deploy` job in its ci.yml needs one step added before
-# the Pages artifact upload:
-#
-#   - run: >-
-#       node node_modules/internal-package-contract/scripts/benchmark/render-page.mjs
-#       --out docs/benchmarks/index.html
-#       --readme https://github.com/<owner>/<repo>/blob/main/benchmarks/README.md
-#       --history 'Runtime|<history-file>'
-#
-# `docs/benchmarks/index.html` is generated fresh on every deploy and never
-# committed -- the same treatment `docs/api/` (typedoc output) already gets
-# in this fleet (see deploy-pages-typedoc.yml).
+      - name: Fail the run if a gate failed
+        if: steps.summary.outputs.gate-status != '0'
+        run: |
+          echo "::error::A benchmark gate failed -- see the pull request comment for which, and why."
+          exit 1

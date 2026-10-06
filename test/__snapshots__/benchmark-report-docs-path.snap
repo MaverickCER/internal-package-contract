@@ -1,0 +1,141 @@
+# demo: performance and cost report
+
+What does adopting this package add to latency, CPU, memory and compute spend -- and how does that grow with workload? Three views, from the whole to the part: **(1)** the end-to-end total, **(2)** every function on its own, **(3)** which functions make up the total. New to benchmarks? Read [READING-BENCHMARKS.md](benchmarks/READING-BENCHMARKS.md) first.
+
+## What adopting this package costs
+
+For a typical workload of **80 items** per operation, routing the work through `demo` adds **500 µs** per operation compared with a bare-minimum baseline (**50%** of the baseline). Overall, it grows O(1) with workload size (measured exponent 0.00). At list prices that is on the order of **~$0.001 per million operations** of compute.
+
+> The relative figure and the growth class are the dependable ones: both come from the same run, so they survive a change of machine. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
+
+| Cost | Typical (80 items) | Largest (160 items) |
+| --- | --- | --- |
+| Added latency per operation | 500 µs | 500 µs |
+| Added latency, relative to baseline | 50% | 50% |
+| Added CPU time per operation | 250 µs | 250 µs |
+| Added memory per operation (heap delta) | 0 B | 0 B |
+| Compute cost per 1M operations (order of magnitude) | ~$0.001 | ~$0.001 |
+| Single-core throughput ceiling of the overhead alone | 2,000 ops/s | 2,000 ops/s |
+
+## 1. End-to-end: the package's total impact
+
+Measures what routing the workload through the package adds.
+
+- **Baseline (no package):** Process items directly.
+- **With the package:** Process items via the package.
+
+Both sides use empty or minimal functions on purpose, so the difference is the package's own cost -- not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.
+
+**Variables that could change this result**
+
+| Variable | How it is handled | What it is |
+| --- | --- | --- |
+| items | swept | The tier axis. |
+| mode | fixed at "strict" | Validation mode. |
+
+The baseline is an empty or minimal function, so it costs almost nothing and the _relative_ overhead can look enormous (shown as a multiple of the baseline). Read the absolute columns -- time, CPU and dollars added -- they are what a bill and a latency budget are made of.
+
+| items | Baseline | With package | Added | Added vs baseline | Added CPU | Est. $ / 1M ops |
+| --- | --- | --- | --- | --- | --- | --- |
+| 20 | 1.00 ms | 1.50 ms | 500 µs | 50% | 250 µs | $0.001 – $0.0028 |
+| 40 | 1.00 ms | 1.50 ms | 500 µs | 50% | 250 µs | $0.001 – $0.0028 |
+| 80 | 1.00 ms | 1.50 ms | 500 µs | 50% | 250 µs | $0.001 – $0.0028 |
+| 160 | 1.00 ms | 1.50 ms | 500 µs | 50% | 250 µs | $0.001 – $0.0028 |
+
+**How the total grows:** O(1) (constant), exponent 0.00 over 4 sizes.
+
+## 2. Function by function
+
+Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.
+
+| Function | Documented | Measured | Agreement | At 80 | At 160 |
+| --- | --- | --- | --- | --- | --- |
+| `sum` | O(n) | O(1) | ⚠️ differs | 1.00 ms | 1.00 ms |
+| `lookup` | O(1) | O(1) | ✅ matches | 1.00 ms | 1.00 ms |
+
+> **Needs attention.** These functions grow at a different rate than documented. Either the code regressed or the documentation is wrong -- decide which, then fix it:
+>
+> - `sum`: documented O(n), measured O(1) (exponent 0.00)
+
+### `sum`
+
+**Why we benchmark it.** Adds the items up, once per operation.
+
+**What poor performance would mean.** Every operation pays for the slow sum.
+
+**Expected growth: O(n).** A sufficiently long and honest explanation.
+
+**Variables that could change its cost**
+
+| Variable | How it is handled | What it is |
+| --- | --- | --- |
+| items | swept | The tier axis. |
+
+**In the end-to-end run:** Called twice per operation.
+
+**Measured: O(1)** (exponent 0.00, 4 sizes) -- ⚠️ differs.
+
+| items | Median | p95 | CPU (median) | Heap Δ | Ops/s |
+| --- | --- | --- | --- | --- | --- |
+| 20 | 1.00 ms | 1.20 ms | 500 µs | 200 B | 1,000 |
+| 40 | 1.00 ms | 1.20 ms | 500 µs | 400 B | 1,000 |
+| 80 | 1.00 ms | 1.20 ms | 500 µs | 800 B | 1,000 |
+| 160 | 1.00 ms | 1.20 ms | 500 µs | 1.6 KiB | 1,000 |
+
+### `lookup`
+
+**Why we benchmark it.** Finds one item by key.
+
+**What poor performance would mean.** Lookups slow down as the set grows.
+
+**Expected growth: O(1).** A hash lookup does not depend on the number of items.
+
+**Variables that could change its cost**
+
+| Variable | How it is handled | What it is |
+| --- | --- | --- |
+| keys | fixed at 1 | A single key per lookup. |
+
+**In the end-to-end run:** Called once per operation.
+
+**Measured: O(1)** (exponent 0.00, 4 sizes) -- ✅ matches.
+
+| items | Median | p95 | CPU (median) | Heap Δ | Ops/s |
+| --- | --- | --- | --- | --- | --- |
+| 20 | 1.00 ms | 1.20 ms | 500 µs | 200 B | 1,000 |
+| 40 | 1.00 ms | 1.20 ms | 500 µs | 400 B | 1,000 |
+| 80 | 1.00 ms | 1.20 ms | 500 µs | 800 B | 1,000 |
+| 160 | 1.00 ms | 1.20 ms | 500 µs | 1.6 KiB | 1,000 |
+
+## 3. What makes up one end-to-end operation
+
+Each function's measured cost is multiplied by how many times one end-to-end operation calls it. A function measured on its own includes everything it calls, so where one attributed function calls another, the nested time is subtracted from the caller (its _exclusive_ time): every moment of the operation belongs to at most one row. Shares are measured against the whole operation with the package, a figure measured directly -- not against the _added_ time, which is the small difference of two noisy medians. They are estimates (each function was measured separately); the remainder is shown as _unattributed_.
+
+**At 80 items** (whole operation: 1.50 ms)
+
+| Function | Calls / operation | Time if called that often | Exclusive time | Share of operation |
+| --- | --- | --- | --- | --- |
+| `sum` | 2 | 2.00 ms | 2.00 ms | 133% |
+| `lookup` | 1 | 1.00 ms | 1.00 ms | 67% |
+| _unattributed_ |  |  | 0 | 0.0% |
+
+**At 160 items** (whole operation: 1.50 ms)
+
+| Function | Calls / operation | Time if called that often | Exclusive time | Share of operation |
+| --- | --- | --- | --- | --- |
+| `sum` | 2 | 2.00 ms | 2.00 ms | 133% |
+| `lookup` | 1 | 1.00 ms | 1.00 ms | 67% |
+| _unattributed_ |  |  | 0 | 0.0% |
+
+## Cost model
+
+Estimates use two bracketing price shapes: **low** = CPU-priced compute ($0.040 per vCPU-hour, billed on CPU time) and **high** = duration-and-memory-priced functions ($0.000017 per GB-second, billed on wall time, at least 128 MB reserved). Both are rounded list prices and change over time; override them in `benchmark.config.json` → `costRates` to match your platform and negotiated pricing.
+
+## Environment and method
+
+- Run: `2026-01-01T00:00:00.000Z` → `2026-01-01T00:00:05.000Z` (5 s), test
+- Machine: Test CPU, 8 logical core(s) (4 physical), 16384 MB RAM, linux/x64, Node v24.0.0, ci
+- Git: `abc1234` on `main`
+- Sizes: 20, 40, 80, 160 items -- One item processed per unit of n.
+
+**Do not compare these numbers with another machine's, another day's, or another package's.** They exist to show how _this_ package's cost changes between runs on comparable hardware and how it scales with size. See [READING-BENCHMARKS.md](benchmarks/READING-BENCHMARKS.md).

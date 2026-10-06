@@ -74,12 +74,12 @@ describe("runCoderabbitReview -- real short-circuit path", () => {
 
   it("reports a malformed registry as registryError, leaving the file untouched", async () => {
     const registryPath = path.join(root, ".repo-contract/exceptions/coderabbit.json")
-    writeRegistry([{ id: "coderabbit:src/a.ts:minor:deadbeefcafe", version: 2 }])
+    writeRegistry([{ id: "coderabbit:src/a.ts:minor:deadbeefcafe", version: 3 }])
     const before = readFileSync(registryPath, "utf8")
 
     const evidence = await runCoderabbitReview(root)
     expect(evidence.status).toBe("not-applicable")
-    expect(evidence.registryError?.join("\n")).toContain("version must be the number 1")
+    expect(evidence.registryError?.join("\n")).toContain("version must be the number 2")
     expect(evidence).toMatchObject({ existingRecordCount: 0 })
     expect(readFileSync(registryPath, "utf8")).toBe(before)
   })

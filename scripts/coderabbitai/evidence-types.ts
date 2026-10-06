@@ -21,7 +21,7 @@
  * deliberate "not published" boundary), so there is nothing importable to reuse.
  */
 
-import type { SecurityExceptionFields } from "../../checks/exception-record.js"
+import type { ExceptionV2Fields, SecurityExceptionFields } from "../../checks/exception-record.js"
 
 export interface NormalizedFinding {
   /** `coderabbit:<file>:<severity>:<hash>` -- see `deriveCoderabbitExceptionId`. */
@@ -34,10 +34,11 @@ export interface NormalizedFinding {
 }
 
 /** One `.repo-contract/exceptions/coderabbit.json` record -- the on-disk exception record shape. */
-export interface CoderabbitExceptionRecord extends SecurityExceptionFields {
+export interface CoderabbitExceptionRecord
+  extends SecurityExceptionFields, Partial<ExceptionV2Fields> {
   /** `coderabbit:<file>:<severity>:<hash of summary>` -- must equal `deriveCoderabbitExceptionId(record)`. */
   readonly id: string
-  readonly version: 1
+  readonly version: 1 | 2
   /** Why this CodeRabbit finding is deliberately not acted on, and confirmation it was actually examined (not dismissed unread). */
   readonly justification: string
   readonly file: string

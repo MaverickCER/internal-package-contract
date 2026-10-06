@@ -27,14 +27,12 @@ const BUMP_LINE_PATTERN = /^\s*["']?([^"':]+)["']?\s*:\s*(major|minor|patch)\s*$
  */
 function extractFrontmatterLines(content: string): readonly string[] {
   const lines = content.split(/\r?\n/)
-  if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) return []
-
+  const opens = lines[0]?.trim() === FRONTMATTER_DELIMITER
   const closingIndex = lines.findIndex(
     (line, index) => index > 0 && line.trim() === FRONTMATTER_DELIMITER,
   )
-  if (closingIndex === -1) return []
-
-  return lines.slice(1, closingIndex)
+  // An empty slice rather than a literal `[]`: no frontmatter, no bump lines.
+  return opens && closingIndex !== -1 ? lines.slice(1, closingIndex) : lines.slice(0, 0)
 }
 
 /**

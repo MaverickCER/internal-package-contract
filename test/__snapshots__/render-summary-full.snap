@@ -1,0 +1,45 @@
+<!-- m -->
+
+# Benchmark summary
+
+## ❌ 4 gates failed
+
+Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, and so survive a change of machine: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.
+
+- ❌ **Runtime** — `fn:alpha`: documented O(n), measured O(n²) (exponent 2.04, R² 0.99). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
+- ❌ **Runtime** — `fn:beta`: documented constant, measured linear (exponent n/a, R² n/a). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
+- ❌ **Runtime** — Overhead relative to the baseline grew from 100.0% (last run on main) to 400.0% -- up 300%, over the 50% allowed for work this fast. Both figures are same-run ratios, so this is not a slower machine.
+- ❌ **Runtime** — Overhead relative to the baseline grew from 100.0% (last release) to 400.0% -- up 300%, over the 50% allowed for work this fast. Both figures are same-run ratios, so this is not a slower machine.
+- ℹ️ **Runtime** — The previous run used Node v20.0.0 and this one Node v22.1.0: raw time deltas are not comparable (the engine differs), only the same-run gates are meaningful.
+- ℹ️ **Runtime** — The previous run was on CPU B and this one on CPU A: raw time deltas compare two different machines.
+
+## Runtime
+
+> ⚠️ **Suite version mismatch**: previous run used `s0`, current run used `s1`. Numbers below are not directly comparable.
+
+**Failed / skipped:**
+
+- `fn:beta.stress`: failed (RangeError: boom)
+- `fn:beta.extreme`: skipped (too slow)
+- `fn:beta.odd`: failed
+- `fn:beta.gone`: failed (x) (E: m)
+
+| Benchmark | Tier | Median | Change | Budget |
+|---|---|---|---|---|
+| `fn:alpha` | baseline | 10.00ms | +100.0% | 10% |
+| `fn:alpha` | stress | 100.00ms | +100.0% | 10% |
+| `fn:beta` | baseline | 5.00ms | +0.0% | 30% |
+| `fn:flat` | baseline | — | — | 30% |
+| `fn:zero` | baseline | 0.00ms | — | 30% |
+| `fn:zero` | stress | 4.00ms | — | 30% |
+| `end-to-end:overhead` | baseline | 1.00ms | +0.0% | (gated as a ratio) |
+| `end-to-end:overhead` | stress | 9.00ms | +800.0% | (gated as a ratio) |
+
+**Exceeds budget (raw time against another run — a highlight, not a gate):**
+
+- ⚠️ `fn:alpha.baseline` +100.0% (budget: 10%) — human review suggested.
+- ⚠️ `fn:alpha.stress` +100.0% (budget: 10%) — human review suggested.
+
+## Second
+
+_No current results found._

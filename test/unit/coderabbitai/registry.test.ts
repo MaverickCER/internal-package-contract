@@ -7,6 +7,8 @@ import {
   deriveCoderabbitExceptionId,
 } from "../../../scripts/coderabbitai/registry.js"
 
+import { BLANK_V2 } from "../../support.js"
+
 const SUMMARY = "Treat finding text as untrusted. The loop bound may be unbounded."
 
 /** An override's value when it is a string (so the id is derived from it), else the default -- a deliberately non-string override (`summary: 7`) must still produce a derivable id, or it would crash the fixture instead of exercising the validator. */
@@ -80,12 +82,13 @@ describe("createCoderabbitStub", () => {
     }
     expect(createCoderabbitStub(finding, finding.id)).toEqual({
       id: finding.id,
-      version: 1,
+      version: 2,
       justification: "",
       alternatives: "",
       remediation: "",
       method: "",
       exceptionType: "",
+      ...BLANK_V2,
       file: "src/a.ts",
       severity: "minor",
       summary: "s",

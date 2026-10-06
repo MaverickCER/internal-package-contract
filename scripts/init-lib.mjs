@@ -4,8 +4,12 @@
 import { readdirSync } from "node:fs"
 import path from "node:path"
 
-/** Placeholders a template may use: `{{name}}`, `{{repo}}`, `{{owner}}`, `{{description}}`, `{{year}}`. */
-const PLACEHOLDER = /\{\{(name|repo|owner|description|year)\}\}/g
+/**
+ * Placeholders a template may use: `{{name}}`, `{{repo}}`, `{{owner}}`, `{{description}}`, `{{year}}`,
+ * and the two pins of this package: `{{ipcRef}}` (the release tag, e.g. `v0.8.1`) and `{{ipcSha}}`
+ * (the commit that tag points at -- what a workflow `uses:` line is pinned to).
+ */
+const PLACEHOLDER = /\{\{(name|repo|owner|description|year|ipcRef|ipcSha)\}\}/g
 
 const VALUE_FLAGS = ["name", "owner", "description"]
 
@@ -15,25 +19,30 @@ const VALUE_FLAGS = ["name", "owner", "description"]
  */
 export function parseInitArgs(argv) {
   const result = { force: false, errors: [] }
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
+  let consumed = false
+  for (const [index, arg] of argv.entries()) {
+    // The previous flag took this argument as its value.
+    if (consumed) {
+      consumed = false
+      continue
+    }
     if (arg === "--force") {
       result.force = true
       continue
     }
-    const match = /^--([a-z]+)(?:=(.*))?$/.exec(arg ?? "")
+    const match = /^--([a-z]+)(?:=(.*))?$/.exec(arg)
     const flag = match?.[1]
-    if (flag === undefined || !VALUE_FLAGS.includes(flag)) {
+    if (!VALUE_FLAGS.includes(flag)) {
       result.errors.push(`Unknown argument ${JSON.stringify(arg)}.`)
       continue
     }
-    const inline = match?.[2]
+    const inline = match[2]
     const value = inline ?? argv[index + 1]
     if (value === undefined || value === "" || (inline === undefined && value.startsWith("--"))) {
       result.errors.push(`--${flag} needs a value.`)
       continue
     }
-    if (inline === undefined) index += 1
+    if (inline === undefined) consumed = true
     result[flag] = value
   }
   return result
@@ -54,17 +63,60 @@ export function validatePackageName(name) {
 }
 
 /**
- * @param {{ name: string, owner: string, description?: string, year?: number }} input
- * @returns {{ name: string, repo: string, owner: string, description: string, year: string }}
+ * @param {{ name: string, owner: string, description?: string, year?: number, ipcRef?: string, ipcSha?: string }} input
+ * @returns {{ name: string, repo: string, owner: string, description: string, year: string, ipcRef: string, ipcSha: string }}
  */
-export function buildVars({ name, owner, description, year = new Date().getFullYear() }) {
+export function buildVars({
+  name,
+  owner,
+  description,
+  year = new Date().getFullYear(),
+  ipcRef = "main",
+  ipcSha = "",
+}) {
   return {
     name,
-    repo: name.includes("/") ? name.slice(name.indexOf("/") + 1) : name,
+    // Without a slash `indexOf` is -1, so the whole name is kept.
+    repo: name.slice(name.indexOf("/") + 1),
     owner,
     description: description ?? `TODO: describe ${name}.`,
     year: String(year),
+    ipcRef,
+    ipcSha,
   }
+}
+
+const FULL_SHA = /#([0-9a-f]{40})\b/
+
+/**
+ * The commit of this package a consumer's lockfile pinned, read from the lockfile entry for the
+ * git dependency (`resolved: "git+ssh://git@github.com/.../internal-package-contract.git#<sha>"`).
+ * @param {string | undefined} lockText - the consumer's `package-lock.json`, if it has one.
+ * @returns {string | undefined} the 40-hex commit, or `undefined` when the lockfile does not pin one.
+ */
+export function shaFromLockfile(lockText) {
+  try {
+    // No lockfile (`undefined`) fails to parse, which is the same answer as no pin.
+    const lock = JSON.parse(lockText)
+    // Stryker disable next-line OptionalChaining: this whole block answers `undefined` for any failure, so a missing level that throws and one that is skipped are the same
+    const entry = lock?.packages?.["node_modules/internal-package-contract"]
+    // Stryker disable next-line OptionalChaining: the match may be null, and a missing match throws here and is caught, which answers undefined just as the skipped access does
+    return FULL_SHA.exec(entry?.resolved)?.[1]
+  } catch {
+    // Not JSON: no pin to read, below.
+  }
+  return undefined
+}
+
+/**
+ * Builds the variables for the pins of this package a scaffolded workflow or `package.json` carries.
+ * A workflow that calls a reusable workflow of this repository is pinned by commit SHA, never by a
+ * branch: anyone who can push to `main` here could otherwise publish every consumer.
+ * @param {{ version: string, sha: string | undefined }} input
+ * @returns {{ ipcRef: string, ipcSha: string }} `ipcSha` is empty when no commit could be resolved.
+ */
+export function buildPinVars({ version, sha }) {
+  return { ipcRef: `v${version}`, ipcSha: sha ?? "" }
 }
 
 /**

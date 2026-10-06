@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { buildPageModel } from "../scripts/benchmark/render-page.mjs"
+import {
+  buildPageModel,
+  escapeHtml,
+  formatMs,
+  renderHtml,
+} from "../scripts/benchmark/render-page.mjs"
 
 let dir: string
 const scriptPath = path.resolve(import.meta.dirname, "../scripts/benchmark/render-page.mjs")
@@ -185,5 +190,156 @@ describe("render-page.mjs CLI", () => {
 
   it("prints usage and exits non-zero when called without required arguments", () => {
     expect(() => execFileSync("node", [scriptPath], { encoding: "utf8" })).toThrow()
+  })
+})
+
+describe("the rendered page is accessible without a script", () => {
+  const history = [
+    {
+      timestamp: "2026-01-01T00:00:00.000Z",
+      gitCommit: "abcdef1234567890",
+      pullRequest: 12,
+      versions: { benchmarkSuiteVersion: 1, "env-cap": "0.5.3" },
+      measurements: {
+        "fn:parse": {
+          baseline: { medianMs: 1, inputs: { n: 10 } },
+          stress: { medianMs: 10, inputs: { n: 100 } },
+        },
+      },
+    },
+    {
+      timestamp: "2026-02-01T00:00:00.000Z",
+      measurements: {
+        "fn:parse": {
+          baseline: { medianMs: 1.2, inputs: { n: 10 } },
+          stress: { medianMs: 12, inputs: { n: 100 } },
+        },
+      },
+    },
+  ]
+  const build = async (repo?: string) => {
+    const file = writeHistory("h.json", history)
+    const model = await buildPageModel({ histories: [`Runtime|${file}`], maxEntries: 200, repo })
+    return { model, html: renderHtml(model) }
+  }
+
+  it("records, per run, when, which commit, which pull request and which version", async () => {
+    const { model } = await build()
+    expect(model.categories[0]?.runs).toEqual([
+      {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        commit: "abcdef1234567890",
+        pullRequest: 12,
+        version: "0.5.3",
+      },
+      { timestamp: "2026-02-01T00:00:00.000Z", commit: null, pullRequest: null, version: null },
+    ])
+  })
+
+  it("names each chart for assistive technology and describes what it shows", async () => {
+    const { html } = await build()
+    expect(html).toContain('role="img" aria-labelledby="c0g0-t c0g0-d"')
+    expect(html).toContain('<title id="c0g0-t">fn:parse: median time per run</title>')
+    expect(html).toContain(
+      "baseline: 1.00 ms → 1.20 ms over 2 runs; stress: 10.00 ms → 12.00 ms over 2 runs.",
+    )
+    expect(html).toContain("From v0.5.3, 2026-01-01 to run 2, 2026-02-01.")
+  })
+
+  it("tells series apart by more than colour: a dash pattern and a direct label", async () => {
+    const { html } = await build()
+    expect(html).toMatch(/class="series-line s1" d="[^"]+" stroke-dasharray="none"/)
+    expect(html).toMatch(/class="series-line s2" d="[^"]+" stroke-dasharray="6 3"/)
+    expect(html).toContain('<text class="series-label"')
+    expect(html).toContain(">stress</text>")
+  })
+
+  it("offers every figure as a table with a caption, scoped headers, and linked commit and pull request", async () => {
+    const { html } = await build("https://github.com/o/r")
+    expect(html).toContain("<caption>fn:parse: median time per recorded run</caption>")
+    expect(html).toContain('<th scope="col">baseline (median)</th>')
+    expect(html).toContain('<a href="https://github.com/o/r/commit/abcdef1234567890">abcdef1</a>')
+    expect(html).toContain('<a href="https://github.com/o/r/pull/12">#12</a>')
+    expect(html).toContain("<td>1.20 ms</td>")
+  })
+
+  it("shows commit and pull request as plain text when no repository is given", async () => {
+    const { html } = await build()
+    expect(html).toContain("<td>abcdef1</td>")
+    expect(html).toContain("<td>#12</td>")
+  })
+
+  it("ships no script, and handles forced colors", async () => {
+    const { html } = await build()
+    expect(html).not.toContain("<script")
+    expect(html).not.toContain("mousemove")
+    expect(html).toContain("@media (forced-colors: active)")
+    expect(html).toContain("--text-secondary: #52514e;")
+  })
+
+  it("states a failed fit honestly instead of a class", () => {
+    const html = renderHtml({
+      generatedAt: "x",
+      maxEntries: 5,
+      categories: [
+        {
+          label: "R",
+          tierOrder: [],
+          entryCount: 0,
+          totalEntryCount: 0,
+          timestamps: [],
+          runs: [],
+          groups: [
+            { group: "g", series: [], complexityClass: null, reason: "poor-fit" },
+            { group: "h", series: [], complexityClass: null, reason: "no-size-variation" },
+            { group: "i", series: [], complexityClass: "linear", rSquared: 0.98 },
+          ],
+        },
+      ],
+    })
+    expect(html).toContain("does not follow a power law")
+    expect(html).toContain("no size variation across tiers")
+    expect(html).toContain("Inferred complexity: linear (R² 0.98)")
+    expect(html).toContain('<p class="empty">No data</p>')
+  })
+
+  it("escapes anything that came from a history file", () => {
+    expect(escapeHtml('<a href="x">&')).toBe("&lt;a href=&quot;x&quot;&gt;&amp;")
+    expect(formatMs(0.0004)).toBe("0.40 µs")
+    expect(formatMs(0.5)).toBe("0.500 ms")
+    expect(formatMs(250)).toBe("250.0 ms")
+  })
+})
+
+describe("chart text contrast (axe cannot verify text inside an svg, so the pairs are checked here)", () => {
+  const luminance = (hex: string): number => {
+    const channels = [1, 3, 5].map((index) => {
+      const value = Number.parseInt(hex.slice(index, index + 2), 16) / 255
+      return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * (channels[0] ?? 0) + 0.7152 * (channels[1] ?? 0) + 0.0722 * (channels[2] ?? 0)
+  }
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05)
+  }
+  const html = renderHtml({ categories: [], generatedAt: "2030-01-01T00:00:00.000Z" } as never)
+
+  /** The token declarations in the first block that follows `marker`. */
+  function tokens(marker: string): Record<string, string> {
+    const block = html.slice(html.indexOf(marker)).split("}")[0] ?? ""
+    return Object.fromEntries(
+      [...block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]),
+    ) as Record<string, string>
+  }
+
+  it.each([
+    ["light", ":root {"],
+    ["dark (prefers-color-scheme)", ':root:not([data-theme="light"]) {'],
+    ["dark (data-theme)", ':root[data-theme="dark"] {'],
+  ])("axis and series labels meet 4.5:1 on the chart surface in the %s theme", (_name, marker) => {
+    const t = tokens(marker)
+    expect(contrast(t["text-secondary"] ?? "", t["surface-1"] ?? "")).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(t["text-primary"] ?? "", t["surface-1"] ?? "")).toBeGreaterThanOrEqual(4.5)
   })
 })

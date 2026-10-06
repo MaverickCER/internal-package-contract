@@ -64,6 +64,25 @@ function flatten(data) {
   return [...scoped("self", data.self), ...scoped("transitive", data.transitively)]
 }
 
+/** Whether an `npm view --json` result is npm's definite "no such package/version" (E404), as opposed to a failed lookup. */
+function isNpmNotFound(result) {
+  return result.parsed?.error?.code === "E404"
+}
+
+function emitLookupFailure(result) {
+  const detail =
+    result.spawnError !== undefined
+      ? result.message
+      : (result.parsed?.error?.summary ?? result.stderr ?? result.raw ?? "")
+  emit({
+    ok: false,
+    message: "npm Lookup Failed",
+    cause: String(detail).slice(0, 500),
+    data: { code: result.parsed?.error?.code ?? result.spawnError },
+  })
+  process.exit(0)
+}
+
 const CACHE_DIR = cacheDir(process.env)
 const CACHE_TTL_MS = cacheTtlMs(process.env)
 
@@ -87,6 +106,10 @@ if (!existsSync(pkgFile)) {
     if (emitCached(pkg.name, pkg.version, pkg.version)) process.exit(0)
     const exact = runJson("npm", ["view", `${pkg.name}@${pkg.version}`, "version", "--json"])
     if (typeof exact.parsed !== "string") {
+      // Only a definite "that version is not published" may fall back to the latest published one. A
+      // transient registry or network failure is not that: treating it as "unpublished" would score
+      // (or replay a cached score for) a different version than the one being released.
+      if (!isNpmNotFound(exact)) emitLookupFailure(exact)
       const latest = runJson("npm", ["view", pkg.name, "version", "--json"])
       if (typeof latest.parsed === "string" && emitCached(pkg.name, latest.parsed, pkg.version)) {
         process.exit(0)
@@ -99,6 +122,9 @@ if (!existsSync(pkgFile)) {
       const latest = runJson("npm", ["view", pkg.name, "version", "--json"])
       const published = typeof latest.parsed === "string" ? latest.parsed : undefined
       if (published === undefined) {
+        // Never published at all (npm says E404) is the only "nothing to score"; anything else is a
+        // lookup that did not work.
+        if (!isNpmNotFound(latest)) emitLookupFailure(latest)
         emit({ ok: true, data: { unpublished: true, requestedVersion: pkg.version } })
         process.exit(0)
       }

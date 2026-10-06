@@ -7,8 +7,9 @@
  *   export default [...baseline, { rules: { ... } }]
  *
  * Kept deliberately small: the two well-known recommended sets as a flat-config
- * array a package can append its own blocks to, plus the Node globals so plain
- * `.js`/`.mjs` config and script files do not trip `no-undef`.
+ * array a package can append its own blocks to, the Node globals so plain
+ * `.js`/`.mjs` config and script files do not trip `no-undef`, and suppression hygiene
+ * (every `eslint-disable` must be described, specific, paired and still needed).
  *
  * Non-type-checked on purpose. `recommendedTypeChecked` would require every
  * consumer to wire `parserOptions.projectService` and a tsconfig, which defeats
@@ -31,6 +32,7 @@
  * ordinary import that always works. See `./prettier.config.mjs` for the
  * same reasoning.
  */
+import eslintComments from "@eslint-community/eslint-plugin-eslint-comments"
 import js from "@eslint/js"
 import eslintConfigPrettier from "eslint-config-prettier/flat"
 import globals from "globals"
@@ -43,6 +45,21 @@ export default tseslint.config(
   {
     languageOptions: {
       globals: { ...globals.node },
+    },
+  },
+  // Suppression hygiene. An `eslint-disable` is an exception to a rule, so it has to say why, name
+  // exactly what it disables, close itself, and still be needed: a blanket or undocumented one, or one
+  // left behind after the code it excused changed, is how a standard erodes without a record. (The
+  // contract's `Suppressions` check then makes every surviving suppression visible evidence.)
+  {
+    plugins: { "eslint-comments": eslintComments },
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+    rules: {
+      "eslint-comments/require-description": "error",
+      "eslint-comments/no-unlimited-disable": "error",
+      "eslint-comments/disable-enable-pair": ["error", { allowWholeFile: true }],
+      "eslint-comments/no-aggregating-enable": "error",
+      "eslint-comments/no-duplicate-disable": "error",
     },
   },
   // Last: turn off every rule Prettier already owns, so `Lint` and `Format`

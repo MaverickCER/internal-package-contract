@@ -1,0 +1,173 @@
+# Reusable "after a merge: measure the merge commit and record it" workflow, the counterpart of
+# benchmark-pr.yml (which only measures and comments on a pull request).
+#
+# Committed results and history used to be written INTO each pull request by a bot. That left the PR's
+# head without a CI run (a GITHUB_TOKEN push starts none), made "previous" whatever the last PR measured,
+# and recorded a pull-request-branch commit that a squash merge deletes. Recording after the merge fixes
+# all three: the entry carries the MERGE commit and its pull request number, and the bot's own change
+# arrives as a normal pull request that CI is dispatched on and that merges only when green.
+#
+# `on: workflow_call` only. Call it from the push-to-main trigger of the package's CI; it does nothing
+# for a bot's own commit, which is what ends the loop.
+#
+#   benchmark-record:
+#     if: github.event_name == 'push'
+#     permissions: { contents: write, pull-requests: write, actions: write }
+#     uses: MaverickCER/internal-package-contract/.github/workflows/benchmark-record.yml@<sha>
+#     with:
+#       suites: |
+#         Runtime|benchmarks/performance-runtime|benchmarks/history/runtime.json
+#       budgets-path: benchmarks/budgets.mjs
+name: Benchmark record (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      suites:
+        description: One suite per line, `label|directory|history-file`, as for benchmark-pr.yml.
+        required: true
+        type: string
+      install-dirs:
+        description: Directories (one per line) that need their own `npm install` first.
+        required: false
+        type: string
+        default: ""
+      benchmark-command:
+        required: false
+        type: string
+        default: npm run benchmark
+      build-command:
+        required: false
+        type: string
+        default: npm run build
+      node-version:
+        description: Node version; keep it equal to benchmark-pr.yml's so the numbers are comparable.
+        required: false
+        type: string
+        default: 24.x
+
+jobs:
+  record:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: benchmark-record
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - run: npm ci --ignore-scripts
+
+      - name: Build the package
+        env:
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          if [ -n "$BUILD_COMMAND" ]; then
+            bash -c "$BUILD_COMMAND"
+          fi
+
+      - name: Install self-contained suite projects
+        env:
+          INSTALL_DIRS: ${{ inputs.install-dirs }}
+        run: |
+          printf '%s\n' "$INSTALL_DIRS" | while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+            (cd "$dir" && npm install --ignore-scripts)
+          done
+
+      - name: Run the benchmarks
+        env:
+          BENCHMARK_COMMAND: ${{ inputs.benchmark-command }}
+        run: bash -c "$BENCHMARK_COMMAND"
+
+      # Only a change that touches benchmarked code is recorded (a docs-only merge would add a history
+      # entry saying nothing changed).
+      - name: Append history entries, naming the merge commit and its pull request
+        id: record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUITES: ${{ inputs.suites }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          CHANGED=$(git diff --name-only "${SHA}^1" "${SHA}" 2>/dev/null || true)
+          dirs=()
+          histories=()
+          while IFS='|' read -r label dir history; do
+            [ -z "$label" ] && continue
+            dirs+=("$dir")
+            histories+=("$history")
+          done <<< "$SUITES"
+          pattern="^src/"
+          for dir in "${dirs[@]}"; do pattern="${pattern}|^${dir}/"; done
+          RELEVANT=$(echo "$CHANGED" | grep -E "$pattern" | grep -vE "/(results\.json|BENCHMARKS\.md)$" | grep -vE "history/" || true)
+          if [ -z "$RELEVANT" ]; then
+            echo "This merge does not touch benchmarked code -- nothing to record."
+            echo "record=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PR=$(gh api "repos/${REPO}/commits/${SHA}/pulls" --jq '.[0].number // empty' 2>/dev/null || true)
+          for index in "${!dirs[@]}"; do
+            args=("${dirs[$index]}/results.json" "${histories[$index]}" --commit "$SHA")
+            [ -n "$PR" ] && args+=(--pr "$PR")
+            node node_modules/internal-package-contract/scripts/benchmark/append-history.mjs "${args[@]}"
+          done
+          echo "record=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open a pull request with the refreshed results and merge it when CI is green
+        if: steps.record.outputs.record == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUITES: ${{ inputs.suites }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          BRANCH="chore/benchmarks-${SHA:0:7}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git checkout -b "$BRANCH"
+          while IFS='|' read -r label dir history; do
+            [ -z "$label" ] && continue
+            git add "${dir}/results.json" "${dir}/BENCHMARKS.md" "${history}"
+          done <<< "$SUITES"
+          if git diff --cached --quiet; then
+            echo "Nothing changed -- nothing to record."
+            exit 0
+          fi
+          git commit -m "chore(benchmarks): record results for ${SHA:0:7}"
+          git push --force origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(benchmarks): record results for ${SHA:0:7}" \
+            --body "Measured on merge commit ${SHA}. Recorded after the merge so the history names a commit that exists on main."
+          HEAD_SHA=$(git rev-parse HEAD)
+          # A pull request opened with the workflow token starts no CI of its own; dispatch it.
+          gh workflow run ci.yml --ref "$BRANCH"
+          RUN_ID=""
+          for _ in $(seq 1 30); do
+            RUN_ID=$(gh run list --workflow=ci.yml --branch "$BRANCH" --json databaseId,headSha \
+              --jq "[.[] | select(.headSha == \"$HEAD_SHA\")][0].databaseId")
+            [ -n "$RUN_ID" ] && break
+            sleep 10
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::Never saw CI start for ${HEAD_SHA}; leaving the pull request open."
+            exit 0
+          fi
+          if gh run watch "$RUN_ID" --exit-status; then
+            PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
+            gh pr merge "$PR_NUMBER" --squash --delete-branch
+          else
+            echo "::warning::CI failed on the results pull request; leaving it open for a person."
+          fi

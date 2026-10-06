@@ -1,0 +1,32 @@
+<!-- m -->
+
+# Benchmark summary
+
+## ⚠️ Complexity shifts
+
+The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary budget breach below -- it means the shape of the cost curve changed, not just its slope.
+
+- 🔺 **R / `fn:alpha`**: `quadratic` → `linear`
+
+## ❌ 1 gate failed
+
+Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, and so survive a change of machine: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.
+
+- ❌ **R** — `fn:alpha`: documented undefined, measured undefined (exponent 1.00, R² n/a). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
+- ℹ️ **R** — The previous run used Node v20.0.0 and this one Node v22.0.0: raw time deltas are not comparable (the engine differs), only the same-run gates are meaningful.
+
+## R
+
+**Failed / skipped:**
+
+- `fn:alpha.bogus`: failed
+
+| Benchmark | Tier | Median | Change | Budget |
+|---|---|---|---|---|
+| `fn:alpha` | a | 10.00ms | — | (unbudgeted) |
+| `fn:alpha` | b | 100.00ms | — | (unbudgeted) |
+| `fn:alpha` | noMedian | — | — | (unbudgeted) |
+| `noHistory` | a | 1.00ms | — | (unbudgeted) |
+| `noHistory` | b | 2.00ms | — | (unbudgeted) |
+| `flat` | a | 1.00ms | — | (unbudgeted) |
+| `flat` | b | 1.00ms | — | (unbudgeted) |

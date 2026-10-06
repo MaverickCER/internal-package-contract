@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { accessibility } from "../checks/accessibility.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 function makeFindingsResult(findings: readonly Record<string, unknown>[], pagesScanned = 1) {
   return makeJsonResult({ ok: true, value: findings, pagesScanned })
@@ -55,8 +55,10 @@ describe("accessibility", () => {
     )
     expect(await result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:Accessibility:no-chrome",
         "Accessibility: no system Chrome/Chromium executable found. Install one, or set PUPPETEER_EXECUTABLE_PATH.",
+      ),
     })
   })
 
@@ -69,12 +71,51 @@ describe("accessibility", () => {
     })
   })
 
+  it("says how many results axe itself marked as needing manual review were set aside when it passes", async () => {
+    const result = await accessibility.policy(
+      makeContext(makeJsonResult({ ok: true, value: [], pagesScanned: 2, needsReview: 3 })),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "3 axe result(s) that axe itself marks as needing manual review",
+    )
+  })
+
+  it("says how many TypeDoc navigation nested-interactive results were set aside", async () => {
+    const result = await accessibility.policy(
+      makeContext(
+        makeJsonResult({ ok: true, value: [], pagesScanned: 1, typedocNavNestedInteractive: 6 }),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "6 nested-interactive result(s) in TypeDoc's generated navigation tree",
+    )
+  })
+
+  it("says how many HTML_CodeSniffer prototype-named duplicate-id false positives were set aside", async () => {
+    const result = await accessibility.policy(
+      makeContext(
+        makeJsonResult({
+          ok: true,
+          value: [],
+          pagesScanned: 1,
+          htmlcsPrototypeIdFalsePositives: 2,
+        }),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain("2 HTML_CodeSniffer duplicate-id result(s)")
+  })
+
   it("warns (not vacuously passes) when no built docs site existed to scan", async () => {
     const result = accessibility.policy(makeContext(makeFindingsResult([], 0)))
     expect(await result).toEqual({
       outcome: "warn",
-      rationale:
+      rationale: unexcepted(
+        "environment:Accessibility:no-site",
         "Accessibility: no built docs site found to scan (looked for docs/index.html, docs/api/index.html).",
+      ),
     })
   })
 

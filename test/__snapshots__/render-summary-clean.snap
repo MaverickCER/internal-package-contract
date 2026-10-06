@@ -1,0 +1,18 @@
+<!-- m -->
+
+# Benchmark summary
+
+## ✅ Gates passed
+
+Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, and so survive a change of machine: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.
+
+## Runtime
+
+| Benchmark | Tier | Median | Change | Budget |
+|---|---|---|---|---|
+| `fn:alpha` | baseline | 10.00ms | — | (unbudgeted) |
+| `fn:alpha` | stress | 100.00ms | — | (unbudgeted) |
+| `fn:beta` | baseline | 5.00ms | — | (unbudgeted) |
+| `fn:beta` | stress | 6.00ms | — | (unbudgeted) |
+| `end-to-end:overhead` | baseline | 1.00ms | — | (gated as a ratio) |
+| `end-to-end:overhead` | stress | 2.00ms | — | (gated as a ratio) |

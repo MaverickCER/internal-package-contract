@@ -20,6 +20,7 @@
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { commitlint as commitlintPreset } from "repo-contract/presets"
+import { degraded } from "./environment-exceptions.js"
 import { combinedOutput, resolveConfig } from "./shared.js"
 
 /** At or above this many consecutive non-conforming commits, treat the range as pre-adoption history (`warn`) rather than a regression (`fail`). */
@@ -62,10 +63,11 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
         ctx.result.exitCode !== 0 &&
         /unknown revision|ambiguous argument|bad revision|not a git repository/i.test(printed)
       ) {
-        return {
-          outcome: "warn",
+        return degraded({
+          check: "Commits",
+          code: "no-base",
           rationale: `Commits: could not resolve \`${from}..HEAD\` -- nothing to lint (fresh repo or missing base branch). Fetch \`${from}\` in CI to enable this check.`,
-        }
+        })
       }
 
       // commitlint prints one `⧗   --- input ---` block per FAILING commit
@@ -81,8 +83,9 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
       // test in commits.test.ts passing unchanged.
       const failingCommits = (printed.match(/⧗\s+--- input ---/g) ?? []).length
       if (ctx.result.exitCode !== 0 && failingCommits >= PRE_ADOPTION_THRESHOLD) {
-        return {
-          outcome: "warn",
+        return degraded({
+          check: "Commits",
+          code: "pre-adoption",
           rationale: [
             `Commits: ${String(failingCommits)} commits in \`${from}..HEAD\` are not Conventional Commits -- this looks like history that predates the standard, not a regression.`,
             "Resolve it as a git-history operation before merge:",
@@ -90,7 +93,7 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
             `  - \`git rebase -i ${from}\` and \`reword\` each with a \`type: subject\` header.`,
             "New commits on top of a conforming base will fail here as usual.",
           ].join("\n"),
-        }
+        })
       }
 
       return presetPolicy(ctx)

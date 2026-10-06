@@ -1,7 +1,8 @@
 #!/bin/sh
 # internal-package-contract managed hook. Medium gate before publishing history --
-# everything except the slow analyses (Coverage, Crap, Mutation), which CI runs.
-# Skip once with `git push --no-verify`.
+# every check except the slow analyses (Coverage, Crap, Mutation), which CI runs. The skip list is
+# the only thing named here: a check added to the contract later is in the pre-push set by default.
+# This hook is a convenience; CI runs the same contract and is the gate.
 #
 # This same hooks/ directory does double duty: `internal-package-contract init`
 # installs it verbatim into a CONSUMER's repo (env-cap, data-cap, ...) via
@@ -53,7 +54,7 @@ if [ "$inside_toplevel" = "1" ] && [ -f "$DIR/../repo-contract.config.ts" ]; the
   # inherited shell PATH -- prepends node_modules/.bin to PATH. Confirmed: a bare
   # `node scripts/run-contract.mjs` fails every spawned check with ENOENT even
   # though `npm run contract` (this same command) passes clean.
-  exec npm --prefix "$DIR/.." run contract -- --checks Lint,Format,Typecheck,Tests,Architecture,GithubActions,GitHygiene,BranchProtection,Duplication,Licenses,DocsMarkdown,DocsLinks,DocsFragments,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
+  exec npm --prefix "$DIR/.." run contract -- --skip Coverage,Crap,Mutation
 else
-  exec node "$DIR/../bin/contract.mjs" --checks ApiDocs,Lint,Format,Schema,Build,Typecheck,Tests,Architecture,GithubActions,GitHygiene,BranchProtection,Size,Duplication,Packaging,TypeResolution,Licenses,DocsMarkdown,DocsLinks,DocsFragments,Accessibility,SecurityDeps,SecuritySecrets,SecuritySocket,DeadCode,Commits
+  exec node "$DIR/../bin/contract.mjs" --skip Coverage,Crap,Mutation
 fi

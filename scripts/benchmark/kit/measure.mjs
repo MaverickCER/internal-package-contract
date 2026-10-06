@@ -29,9 +29,10 @@ export function percentile(sorted, p) {
 export function computeDurationStats(values, warmupIterations) {
   const sorted = [...values].sort((a, b) => a - b)
   const count = sorted.length
-  const mean = count > 0 ? sorted.reduce((sum, value) => sum + value, 0) / count : 0
-  const variance =
-    count > 0 ? sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / count : 0
+  // An empty list divides by 1, not 0: its sums are 0, so its mean and variance are 0, not NaN.
+  const divisor = count || 1
+  const mean = sorted.reduce((sum, value) => sum + value, 0) / divisor
+  const variance = sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / divisor
   return {
     minMs: sorted[0] ?? 0,
     medianMs: percentile(sorted, 0.5),
@@ -60,6 +61,24 @@ export function timed(ms) {
 const MAX_BATCH = 100_000
 
 /**
+ * @typedef {object} Instruments
+ * @property {() => number} now - a high-resolution clock in milliseconds.
+ * @property {(previous?: { user: number, system: number }) => { user: number, system: number }} cpuUsage - CPU time in microseconds, since `previous` when given.
+ * @property {() => number} heapUsed - bytes of heap in use.
+ * @property {(() => void) | undefined} gc - forces a collection, when node was started with `--expose-gc`.
+ */
+
+/** @returns {Instruments} the real clock, CPU counter, heap gauge and collector of this process. */
+function realInstruments() {
+  return {
+    now: () => performance.now(),
+    cpuUsage: (previous) => process.cpuUsage(previous),
+    heapUsed: () => process.memoryUsage().heapUsed,
+    gc: typeof global.gc === "function" ? global.gc : undefined,
+  }
+}
+
+/**
  * Samples `iteration` repeatedly: `warmupIterations` discarded runs, then counted samples until
  * `targetDurationMs` of wall time has elapsed or `maxIterations` is reached, never fewer than
  * `minIterations`. Calls `global.gc()` before each counted sample when node was started with
@@ -71,7 +90,7 @@ const MAX_BATCH = 100_000
  * off when `prepare` is given (fresh state per sample cannot be repeated) or when the operation
  * reports its own time with {@link timed}.
  * @param {() => unknown} iteration - one operation; may be async. Return `timed(ms)` to record a duration measured elsewhere; any other returned value (numbers included) is kept alive so the engine cannot optimize the work away.
- * @param {{ warmupIterations?: number, targetDurationMs?: number, minIterations?: number, maxIterations?: number, minSampleMs?: number, prepare?: () => unknown, release?: () => unknown }} [options] - `prepare`/`release` run untimed around every sample (fresh state per sample).
+ * @param {{ warmupIterations?: number, targetDurationMs?: number, minIterations?: number, maxIterations?: number, minSampleMs?: number, prepare?: () => unknown, release?: () => unknown, instruments?: Instruments }} [options] - `prepare`/`release` run untimed around every sample (fresh state per sample); `instruments` replaces the real clock and gauges (for tests).
  * @returns {Promise<{ wallMs: number[], cpuMs: number[], heapDeltaBytes: number[], configuration: object }>} per-operation values, one per sample.
  */
 export async function sample(iteration, options = {}) {
@@ -80,20 +99,25 @@ export async function sample(iteration, options = {}) {
   const minIterations = options.minIterations ?? 5
   const maxIterations = options.maxIterations ?? 60
   const minSampleMs = options.minSampleMs ?? 1
-  const gc = typeof global.gc === "function" ? global.gc : undefined
+  const { now, cpuUsage, heapUsed, gc } = options.instruments ?? realInstruments()
   let batch = 1
   const batchable = options.prepare === undefined
 
   const once = async () => {
     await options.prepare?.()
     gc?.()
-    const heapBefore = process.memoryUsage().heapUsed
-    const cpuBefore = process.cpuUsage()
-    const start = performance.now()
+    const heapBefore = heapUsed()
+    const cpuBefore = cpuUsage()
+    const start = now()
     let returned
-    for (let repetition = 0; repetition < batch; repetition += 1) returned = await iteration()
-    const wall = performance.now() - start
-    const cpu = process.cpuUsage(cpuBefore)
+    // Counted by `Array(batch)`'s own length rather than a counter variable: there is no
+    // increment to get wrong, so a loop that never ends is not something this code can do.
+    for (const repetition of Array(batch).keys()) {
+      void repetition
+      returned = await iteration()
+    }
+    const wall = now() - start
+    const cpu = cpuUsage(cpuBefore)
     const reportedMs =
       batch === 1 &&
       typeof returned === "object" &&
@@ -102,7 +126,7 @@ export async function sample(iteration, options = {}) {
       Number.isFinite(returned[TIMED])
         ? returned[TIMED]
         : undefined
-    const heapAfter = process.memoryUsage().heapUsed
+    const heapAfter = heapUsed()
     // Keep the last result reachable so the work cannot be dead-code-eliminated.
     globalThis["__benchmarkSink"] = returned
     await options.release?.()
@@ -114,21 +138,23 @@ export async function sample(iteration, options = {}) {
     }
   }
 
-  let calibration = { raw: 0 }
-  for (let index = 0; index < warmupIterations; index += 1) calibration = await once()
-  if (batchable && calibration.raw > 0 && calibration.raw < minSampleMs) {
-    batch = Math.min(MAX_BATCH, Math.ceil(minSampleMs / calibration.raw))
+  let calibrationMs = 0
+  for (const warmup of Array(warmupIterations).keys()) {
+    void warmup
+    calibrationMs = (await once()).raw
+  }
+  if (batchable && calibrationMs > 0 && calibrationMs < minSampleMs) {
+    batch = Math.min(MAX_BATCH, Math.ceil(minSampleMs / calibrationMs))
     await once()
   }
 
   const wallMs = []
   const cpuMs = []
   const heapDeltaBytes = []
-  const startedAt = performance.now()
-  while (
-    wallMs.length < maxIterations &&
-    (wallMs.length < minIterations || performance.now() - startedAt < targetDurationMs)
-  ) {
+  const startedAt = now()
+  for (const taken of Array(maxIterations).keys()) {
+    // Past `minIterations` samples, stop once the time budget is spent.
+    if (taken >= minIterations && now() - startedAt >= targetDurationMs) break
     const result = await once()
     wallMs.push(result.wallMs)
     cpuMs.push(result.cpuMs)

@@ -52,7 +52,9 @@ function baselineDir(target: string): string {
  * @returns The hex-encoded sha256 digest of `content`.
  */
 export function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex")
+  // Line endings are not content: a Windows checkout with `core.autocrlf` rewrites a committed LF
+  // baseline to CRLF, which must not read as "manually edited".
+  return createHash("sha256").update(content.replace(/\r\n/g, "\n")).digest("hex")
 }
 
 /**
@@ -114,7 +116,7 @@ export function readSchemaVersion(apiJsonText: string): number {
  * @returns The package's `name` and `version`.
  */
 export async function readPackageJson(root: string): Promise<{ name: string; version: string }> {
-  const raw = await readFile(path.join(root, "package.json"), "utf8")
+  const raw = (await readFile(path.join(root, "package.json"))).toString()
   try {
     return JSON.parse(raw) as { name: string; version: string }
   } catch {
@@ -150,15 +152,11 @@ async function assertInsideGitWorkTree(root: string): Promise<void> {
  * @returns The file's content at `HEAD`, or `undefined` if it couldn't be read.
  */
 async function readFileAtHead(root: string, relativePath: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync("git", ["show", `HEAD:${relativePath}`], {
-      cwd: root,
-      maxBuffer: 1024 * 1024 * 64,
-    })
-    return stdout
-  } catch {
-    return undefined
-  }
+  const shown = await execFileAsync("git", ["show", `HEAD:${relativePath}`], {
+    cwd: root,
+    maxBuffer: 1024 * 1024 * 64,
+  }).catch(() => undefined)
+  return shown?.stdout
 }
 
 /**
@@ -226,7 +224,7 @@ interface WriteBaselineInput {
  */
 async function writeFileAtomic(filePath: string, content: string): Promise<void> {
   const tempPath = `${filePath}.tmp-${randomUUID()}`
-  await writeFile(tempPath, content, "utf8")
+  await writeFile(tempPath, content)
   await rename(tempPath, filePath)
 }
 

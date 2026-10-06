@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { docsLinks } from "../checks/docs-links.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 let cwd: string
 
@@ -216,8 +216,10 @@ describe("docsLinks", () => {
     )
     expect(result).toEqual({
       outcome: "warn",
-      rationale:
-        "Docs (links): 0 broken local link(s) across 1 checked (1 external link(s) also unreachable -- not blocking).",
+      rationale: unexcepted(
+        "environment:DocsLinks:https://example.com/gone",
+        "Docs (links): 0 broken local link(s) across 1 checked (1 external link(s) unreachable: https://example.com/gone).",
+      ),
     })
   })
 

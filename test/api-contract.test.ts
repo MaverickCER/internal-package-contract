@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { evaluateApiContractPolicy } from "../checks/api-contract.js"
+import { requiredLevelFor } from "../scripts/api-contract/levels.js"
 import type {
   ApiContractEvidence,
   ApiContractTargetResult,
@@ -681,5 +682,23 @@ describe("apiContract (module export -- checks/api-contract.ts's `hasTypedocConf
       rationale:
         "ApiContract: no typedoc.json -- this package documents no public entry points to compare.",
     })
+  })
+})
+
+describe("requiredLevelFor()", () => {
+  it("requires major for a breaking change, minor for a widening, patch for the rest, at 1.0.0 and above", () => {
+    expect(requiredLevelFor("breaking", false, false)).toBe("major")
+    expect(requiredLevelFor("compatible", true, false)).toBe("minor")
+    expect(requiredLevelFor("compatible", false, false)).toBe("patch")
+    expect(requiredLevelFor("unchanged", false, false)).toBe("none")
+    expect(requiredLevelFor("unknown", false, false)).toBeUndefined()
+  })
+
+  it("deflates one level below 1.0.0, so no API diff can require a major (and publish 1.0.0) by itself", () => {
+    expect(requiredLevelFor("breaking", false, true)).toBe("minor")
+    expect(requiredLevelFor("compatible", true, true)).toBe("patch")
+    expect(requiredLevelFor("compatible", false, true)).toBe("patch")
+    expect(requiredLevelFor("unchanged", false, true)).toBe("none")
+    expect(requiredLevelFor("unknown", true, true)).toBeUndefined()
   })
 })

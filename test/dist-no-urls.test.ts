@@ -10,7 +10,7 @@ import {
   distNoUrlsCheck,
   evaluateDistUrls,
 } from "../checks/dist-no-urls.js"
-import { makeContext, makeJsonResult, makeResult } from "./support.js"
+import { makeContext, makeJsonResult, makeResult, BLANK_V2 } from "./support.js"
 
 let cwd: string
 beforeEach(() => {
@@ -62,12 +62,13 @@ describe("deriveDistUrlId() / createDistUrlStub() / distinctUrls()", () => {
   it("scaffolds a fully blank stub carrying only the url", () => {
     expect(createDistUrlStub({ id: "dist-url:u", url: "u", where: "f:1" }, "dist-url:u")).toEqual({
       id: "dist-url:u",
-      version: 1,
+      version: 2,
       justification: "",
       alternatives: "",
       remediation: "",
       method: "",
       exceptionType: "",
+      ...BLANK_V2,
       url: "u",
     })
   })
@@ -266,7 +267,7 @@ describe("distNoUrlsCheck() -- policy", () => {
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain(
-      "- https://a.test/x (first at index.js:4): exception incomplete (missing: justification, alternatives, remediation, method, exceptionType)",
+      "- https://a.test/x (first at index.js:4): exception incomplete (missing: justification, alternatives, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen)",
     )
     expect(readRegistry().exceptions).toEqual([
       expect.objectContaining({ id: "dist-url:https://a.test/x", justification: "", url: URL_A }),

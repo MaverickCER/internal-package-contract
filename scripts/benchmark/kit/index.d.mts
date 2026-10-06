@@ -4,7 +4,7 @@
 // permissive; `defineSuite` is the real validator.
 
 export type ComplexityClass =
-  "constant" | "logarithmic" | "linear" | "linearithmic" | "quadratic" | "exponential-or-worse"
+  "constant" | "logarithmic" | "linear" | "linearithmic" | "quadratic" | "cubic-or-worse"
 
 export const COMPLEXITY_NOTATION: Readonly<Record<ComplexityClass, string>>
 export function expectationOf(
@@ -12,6 +12,7 @@ export function expectationOf(
   variant?: any,
 ): { expectedComplexity: ComplexityClass; complexityReason: string }
 export class SuiteDefinitionError extends Error {
+  constructor(problems: readonly string[])
   readonly problems: readonly string[]
 }
 
@@ -40,6 +41,7 @@ export interface SuiteBenchmark {
   inEndToEnd?:
     | {
         callsPerOperation: number | ((n: number) => number)
+        includes?: string[] | undefined
         description: string
         variant?: string
       }
@@ -115,6 +117,12 @@ export function sample(
     minSampleMs?: number
     prepare?: () => unknown
     release?: () => unknown
+    instruments?: {
+      now: () => number
+      cpuUsage: (previous?: { user: number; system: number }) => { user: number; system: number }
+      heapUsed: () => number
+      gc: (() => void) | undefined
+    }
   },
 ): Promise<{
   wallMs: number[]

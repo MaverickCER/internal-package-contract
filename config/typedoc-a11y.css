@@ -1,0 +1,25 @@
+/* Shared TypeDoc accessibility fixes (internal-package-contract). Loaded through config/typedoc.json. */
+
+/* WCAG 1.4.1: a link inside running text must not be told apart by colour alone. */
+.tsd-generator a,
+.tsd-page-footer a,
+footer a,
+.tsd-comment a,
+.tsd-panel a,
+.tsd-index-panel a,
+.tsd-index-content a,
+.tsd-member-summary a,
+.tsd-signature a {
+  text-decoration: underline;
+}
+
+/* Windows high-contrast / forced-colors: keep focus and links visible in the system palette. */
+@media (forced-colors: active) {
+  a {
+    color: LinkText;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

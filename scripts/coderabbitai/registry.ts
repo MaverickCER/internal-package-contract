@@ -9,6 +9,7 @@ import { createHash } from "node:crypto"
 import {
   EXCEPTION_TYPES,
   SECURITY_EXCEPTION_FIELD_KEYS,
+  emptyV2Fields,
   isValidNonEmptyStringField,
   validateSecurityExceptionFields,
 } from "../../checks/exception-record.js"
@@ -16,7 +17,7 @@ import type { ExceptionRegistrySchema, ExceptionType } from "../../checks/except
 import type { CoderabbitExceptionRecord, NormalizedFinding } from "./evidence-types.js"
 
 /** Every value a stored record's `severity` may hold -- `"unknown"` included, since a record mirrors whatever `normalizeFinding` assigned. */
-const SEVERITY_VALUES = new Set(["critical", "major", "minor", "unknown"])
+const SEVERITY_VALUES = new Set<unknown>(["critical", "major", "minor", "unknown"])
 
 /**
  * `"validated-false-positive"` is excluded from a CodeRabbit exception's allowed set -- unlike a
@@ -62,12 +63,13 @@ export function createCoderabbitStub(
 ): CoderabbitExceptionRecord {
   return {
     id,
-    version: 1,
+    version: 2,
     justification: "",
     alternatives: "",
     remediation: "",
     method: "",
     exceptionType: "",
+    ...emptyV2Fields(),
     file: finding.file,
     severity: finding.severity,
     summary: finding.summary,
@@ -83,7 +85,7 @@ export const CODERABBIT_EXCEPTION_SCHEMA: ExceptionRegistrySchema<CoderabbitExce
     const { file, severity, summary } = raw
 
     const fileValid = isValidNonEmptyStringField(file, `${at}.file`, errors)
-    const severityValid = typeof severity === "string" && SEVERITY_VALUES.has(severity)
+    const severityValid = SEVERITY_VALUES.has(severity)
     if (!severityValid) {
       errors.push(
         `${at}.severity must be one of ${[...SEVERITY_VALUES].map((s) => JSON.stringify(s)).join(", ")} (got ${JSON.stringify(severity)}).`,
@@ -99,9 +101,10 @@ export const CODERABBIT_EXCEPTION_SCHEMA: ExceptionRegistrySchema<CoderabbitExce
       return undefined
     }
 
+    // Stryker disable next-line ConditionalExpression: when `security` is undefined its validator has already pushed an error, so the registry is invalid either way -- the check only narrows the type
     if (!fileValid || !severityValid || !summaryValid || security === undefined) return undefined
 
-    const identity = { file, severity, summary }
+    const identity = { file, severity: severity as string, summary }
     const derived = deriveCoderabbitExceptionId(identity)
     if (derived !== core.id) {
       errors.push(

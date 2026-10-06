@@ -1,0 +1,44 @@
+# Automated dependency and workflow-action update PRs.
+#
+# Every runtime-dependency vulnerability already surfaces through the contract's own
+# `SecurityDeps` check, and the SHA-pinned actions across the workflows drift silently without
+# something rewriting them. Dependabot rewrites a pinned action SHA *and* refreshes the `# vX.Y.Z`
+# tag comment next to it, which is exactly the form `.github/workflows/*` already use.
+#
+# Dev-dependency PRs are grouped into one weekly PR to keep the noise down -- none of them reach
+# consumers. The `internal-package-contract` pin is deliberately left to its own
+# `dependency-pin-sync` workflow (it re-pins the reusable workflows in the same pull request).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    labels:
+      - dependencies
+    ignore:
+      - dependency-name: "internal-package-contract"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+          - major
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      github-actions:
+        patterns:
+          - "*"

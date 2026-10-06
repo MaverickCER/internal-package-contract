@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { commits } from "../checks/commits.js"
-import { makeContext, makeResult } from "./support.js"
+import { makeContext, makeResult, unexcepted } from "./support.js"
 
 describe("commits", () => {
   it("warns when origin/main cannot be resolved -- nothing to lint", async () => {
@@ -46,13 +46,16 @@ describe("commits", () => {
     )
     expect(result).toEqual({
       outcome: "warn",
-      rationale: [
-        "Commits: 8 commits in `origin/main..HEAD` are not Conventional Commits -- this looks like history that predates the standard, not a regression.",
-        "Resolve it as a git-history operation before merge:",
-        "  - squash-merge the branch (one conforming message), or",
-        "  - `git rebase -i origin/main` and `reword` each with a `type: subject` header.",
-        "New commits on top of a conforming base will fail here as usual.",
-      ].join("\n"),
+      rationale: unexcepted(
+        "environment:Commits:pre-adoption",
+        [
+          "Commits: 8 commits in `origin/main..HEAD` are not Conventional Commits -- this looks like history that predates the standard, not a regression.",
+          "Resolve it as a git-history operation before merge:",
+          "  - squash-merge the branch (one conforming message), or",
+          "  - `git rebase -i origin/main` and `reword` each with a `type: subject` header.",
+          "New commits on top of a conforming base will fail here as usual.",
+        ].join("\n"),
+      ),
     })
   })
 

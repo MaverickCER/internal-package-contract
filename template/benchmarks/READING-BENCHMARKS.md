@@ -27,13 +27,15 @@ you what you are paying for them, in time and in money, and how the bill grows w
    a typical workload and at the largest tested size, an estimated compute cost per million
    operations, and the code size every process must load. If you read nothing else, read this.
 2. **End-to-end.** The same operation done with no package and through the package, using empty or
-   minimal functions on both sides, at ten sizes. The difference is the package's total impact, with
+   minimal functions on both sides, at every size of the ladder (ten doubling sizes by default; the
+   report's environment section lists the sizes actually used). The difference is the package's total impact, with
    nothing of your own application mixed in.
-3. **Function by function.** Every function measured alone across the same ten sizes, with: why it is
+3. **Function by function.** Every function measured alone across the same sizes, with: why it is
    benchmarked, what poor performance would mean, its documented big-O and the reason for it, every
    variable that could change its cost, and what was deliberately not covered.
-4. **What makes up the overhead.** Each function's cost, multiplied by how often one operation calls
-   it, as a share of the end-to-end overhead -- where the cost actually lives.
+4. **What makes up one operation.** Each function's cost, multiplied by how often one operation calls
+   it, with nested calls counted once, as a share of the whole operation -- where the cost actually
+   lives.
 
 ## How to read a table
 
@@ -51,8 +53,10 @@ you what you are paying for them, in time and in money, and how the bill grows w
 
 Big-O describes how cost grows as size grows -- more useful than any single timing, because it tells
 you what happens at a size you did not test. The report fits a line through the log of time against
-the log of size across all ten sizes; the slope is the **growth exponent**, snapped to the nearest
-class:
+the log of size across the **largest** sizes (the top five of a long ladder: a real cost is a fixed
+per-call overhead plus work that grows, and the overhead hides the growth at small sizes); the slope
+is the **growth exponent**, snapped to the nearest class. The fit's R² is reported next to it, and when
+the cost moves but does not follow a power law (a step, a cache cliff) no class is claimed at all:
 
 | Exponent (about) | Class          | What doubling the size does to the time |
 | ---------------- | -------------- | --------------------------------------- |
@@ -119,7 +123,9 @@ Even on a quiet machine, repeated runs differ. Very fast operations (microsecond
 noisiest in relative terms; the engine batches them and reports the per-operation value, but a 30-40%
 swing between runs on those is ordinary. Slow operations are steadier. Read the median and p95
 together, and trust a trend over a single run. The pull-request summary highlights movements beyond a
-per-benchmark threshold; highlights are prompts to look, never automatic failures.
+per-benchmark threshold; those raw comparisons are prompts to look, never automatic failures (they
+compare two runs on different machines). What can fail a pull request is limited to things measured
+within one run: see "History, pull requests and the history page".
 
 ## How the documentation is done
 
@@ -132,7 +138,7 @@ without it. For every function the report prints, in this order:
 4. **Variables that could change its cost** -- each one swept, measured as a variant, or fixed at a
    stated value.
 5. **Deliberately not covered** -- the honest gaps, with reasons.
-6. **The measurements** -- ten sizes, median, p95, CPU, memory, throughput, and the measured class next
+6. **The measurements** -- every size, median, p95, CPU, memory, throughput, and the measured class next
    to the documented one.
 
 If a section reads as vague, that is a documentation bug: open an issue or fix it.
@@ -141,9 +147,15 @@ If a section reads as vague, that is a documentation bug: open an issue or fix i
 
 When a pull request touches benchmarked code, CI re-runs the suite and posts a summary: the end-to-end
 change first, then any function whose growth class shifted, then ordinary timing movements beyond
-their thresholds. Merged results are appended to a committed history file, and a generated history
-page charts every function across runs. These exist to catch regressions early; none of them blocks a
-merge on its own.
+their thresholds. Two gates can fail the run, because only they are properties of a single run and
+so survive a change of machine: a function whose measured growth class **differs** from its
+documented big-O, and the package's overhead _relative to its own baseline_ growing past an allowance
+(50% for millisecond-scale work, 70% for microsecond-scale work, which is noisier) against both the
+last run on main and the last release. Raw time against another run is a highlight only.
+
+After a merge, a job measures the merge commit and records it -- the results file and a history entry
+naming the commit, pull request and version -- through its own small pull request. A generated history
+page charts every function across runs, with every figure also available as a table.
 
 ## Glossary
 

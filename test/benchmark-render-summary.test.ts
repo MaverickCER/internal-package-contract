@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { renderSummary } from "../scripts/benchmark/render-summary.mjs"
+import { renderSummary, summarize } from "../scripts/benchmark/render-summary.mjs"
 
 let dir: string
 
@@ -204,5 +204,124 @@ describe("renderSummary", () => {
     await expect(renderSummary({ examples: ["not-enough-fields"] })).rejects.toThrow(
       /label\|prevResultsPath/,
     )
+  })
+})
+
+describe("summarize() -- gates", () => {
+  const withAnalysis = (overheadPercent: number, complexity: object = {}) =>
+    makeResults({
+      metadata: {
+        versions: { benchmarkSuiteVersion: 1 },
+        environment: { nodeVersion: "v24.0.0", cpuModel: "EPYC 7763" },
+      },
+      analysis: {
+        complexity,
+        cost: { typical: { n: 640, baselineMs: 2, overheadPercent } },
+      },
+    })
+
+  it("passes, and says so, when nothing differs and the overhead ratio holds", async () => {
+    const prev = write("prev.json", withAnalysis(100))
+    const cur = write("cur.json", withAnalysis(110))
+    const { markdown, failures } = await summarize({
+      marker: "<!-- m -->",
+      examples: [`Runtime|${prev}|${cur}||`],
+    })
+    expect(failures).toEqual([])
+    expect(markdown).toContain("## ✅ Gates passed")
+    expect(markdown).not.toContain("Highlight-only")
+  })
+
+  it("fails a function whose measured class differs from the documented one", async () => {
+    const cur = write(
+      "cur.json",
+      withAnalysis(100, {
+        "fn:validator-includes": {
+          agreement: "differs",
+          expected: "linear",
+          class: "constant",
+          notation: "O(1)",
+          expectedNotation: "O(n)",
+          exponent: 0.07,
+          rSquared: 0.9,
+        },
+      }),
+    )
+    const { markdown, failures } = await summarize({
+      marker: "<!-- m -->",
+      examples: [`Runtime||${cur}||`],
+    })
+    expect(failures).toHaveLength(1)
+    expect(markdown).toContain("## ❌ 1 gate failed")
+    expect(markdown).toContain(
+      "❌ **Runtime** — `fn:validator-includes`: documented O(n), measured O(1)",
+    )
+  })
+
+  it("fails normalized overhead growing past the allowance against the last release, even if the previous run is close", async () => {
+    const prev = write("prev.json", withAnalysis(150))
+    const release = write("release.json", withAnalysis(100))
+    const cur = write("cur.json", withAnalysis(170))
+    const { failures } = await summarize({
+      marker: "<!-- m -->",
+      examples: [`Runtime|${prev}|${cur}||${release}`],
+    })
+    expect(failures).toHaveLength(1)
+    expect(failures[0]?.message).toContain("(last release)")
+  })
+
+  it("lets a package turn a gate off or relax it through a GATES export", async () => {
+    const prev = write("prev.json", withAnalysis(100))
+    const cur = write("cur.json", withAnalysis(300))
+    const budgetsPath = writeRaw(
+      "budgets.mjs",
+      "export const BUDGETS = {}\nexport const GATES = { normalizedOverheadMaxIncreasePercent: { millisecondScale: 500 } }",
+    )
+    const { failures } = await summarize({
+      marker: "<!-- m -->",
+      budgetsPath,
+      examples: [`Runtime|${prev}|${cur}||`],
+    })
+    expect(failures).toEqual([])
+  })
+
+  it("notes a different Node major between the runs", async () => {
+    const prev = write("prev.json", {
+      ...withAnalysis(100),
+      metadata: { versions: { benchmarkSuiteVersion: 1 }, environment: { nodeVersion: "v22.0.0" } },
+    })
+    const cur = write("cur.json", withAnalysis(100))
+    const { markdown } = await summarize({
+      marker: "<!-- m -->",
+      examples: [`Runtime|${prev}|${cur}||`],
+    })
+    expect(markdown).toContain("ℹ️ **Runtime** — The previous run used Node v22.0.0")
+  })
+
+  it("does not highlight the derived overhead group's raw delta, and says it is gated as a ratio", async () => {
+    const derived = (ms: number) => ({
+      ...makeResults(),
+      results: {
+        "end-to-end:overhead": {
+          derived: true,
+          tiers: {
+            n640: { status: "completed", inputs: { n: 640 }, durationMs: { medianMs: ms } },
+          },
+        },
+      },
+    })
+    const prev = write("prev.json", derived(1))
+    const cur = write("cur.json", derived(10))
+    const budgetsPath = writeRaw(
+      "budgets.mjs",
+      'export const BUDGETS = { "*": { maxRegressionPercent: 10 } }',
+    )
+    const { markdown } = await summarize({
+      marker: "<!-- m -->",
+      budgetsPath,
+      examples: [`Runtime|${prev}|${cur}||`],
+    })
+    expect(markdown).toContain("(gated as a ratio)")
+    expect(markdown).not.toContain("**Exceeds budget")
   })
 })

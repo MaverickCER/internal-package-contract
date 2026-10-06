@@ -72,3 +72,30 @@ export function makeContext(
     ...overrides,
   }
 }
+
+/** Every `version: 2` exception-record field blank -- what a freshly scaffolded stub carries. */
+export const BLANK_V2 = {
+  ruleBroken: "",
+  attempted: "",
+  constraint: "",
+  whyPreferable: "",
+  residualRisk: "",
+  revisitWhen: "",
+  expires: "",
+} as const
+
+/** Every `version: 2` exception-record field written -- what a complete, reviewed record carries. */
+export const COMPLETE_V2 = {
+  ruleBroken: "The rule this exception breaks.",
+  attempted: "What was tried first and why it did not work.",
+  constraint: "The technical constraint that forced the exception.",
+  whyPreferable: "Why the chosen outcome beats the alternatives.",
+  residualRisk: "The risk that remains.",
+  revisitWhen: "The condition under which this record is reopened.",
+  expires: "",
+} as const
+
+/** The rationale a check gives for a degradation no exception record covers (see `checks/environment-exceptions.ts`). */
+export function unexcepted(id: string, rationale: string): string {
+  return `Not evaluated (no exception recorded; add or complete in .repo-contract/exceptions/environment.json: ${id} (no record)): ${rationale}`
+}

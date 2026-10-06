@@ -10,6 +10,14 @@
 import type { CheckDefinitionConfig } from "repo-contract"
 import { securitySecrets as securitySecretsPreset } from "repo-contract/presets"
 import { bundledConfig, resolveConfig } from "./shared.js"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
+// Lists the repository's own files for secretlint instead of letting it expand the recursive glob over every generated directory.
+const runSecretlint = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../scripts/run-secretlint.mjs",
+)
 
 const CONFIG_CANDIDATES = [
   ".secretlintrc.json",
@@ -39,5 +47,5 @@ export function securitySecrets(): CheckDefinitionConfig {
     ...(positional ? [positional] : []),
   ]
 
-  return { ...securitySecretsPreset, run }
+  return { ...securitySecretsPreset, run: ["node", runSecretlint, ...run] }
 }

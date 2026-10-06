@@ -1,5 +1,5 @@
 // Pure algorithm: infers an algorithmic-complexity CLASS ("constant" through
-// "exponential-or-worse") from a named benchmark's per-tier {medianMs, inputs}
+// "cubic-or-worse") from a named benchmark's per-tier {medianMs, inputs}
 // measurements, and diffs two such classifications to flag a "complexity
 // shift" -- the headline signal this whole feature exists for (see
 // render-summary.mjs / render-page.mjs, which are the only consumers of this
@@ -63,14 +63,14 @@
 //   `detectComplexityShift` reports `shifted: false` -- there is nothing to
 //   diff against, not a claim that nothing changed.
 
-/** In size order, cheapest ("constant") to worst ("exponential-or-worse"). */
+/** In size order, cheapest ("constant") to worst ("cubic-or-worse"). */
 export const COMPLEXITY_CLASSES = Object.freeze([
   "constant",
   "logarithmic",
   "linear",
   "linearithmic",
   "quadratic",
-  "exponential-or-worse",
+  "cubic-or-worse",
 ])
 
 /**
@@ -78,9 +78,9 @@ export const COMPLEXITY_CLASSES = Object.freeze([
  * class would produce. `linearithmic`'s 1.2 (rather than n*log(n)'s
  * theoretical non-power-law shape) is a deliberately chosen representative
  * value for typical benchmark tier ratios (5x-20x) -- see the module
- * comment's "linear vs linearithmic" limitation. `exponential-or-worse`'s 3
+ * comment's "linear vs linearithmic" limitation. `cubic-or-worse`'s 3
  * is an anchor, not a ceiling: nearest-anchor classification means anything
- * with `p` past the quadratic/exponential midpoint (2.5) snaps here
+ * with `p` past the quadratic/cubic midpoint (2.5) snaps here
  * regardless of how much higher it actually is.
  */
 const CLASS_ANCHORS = Object.freeze([
@@ -89,7 +89,7 @@ const CLASS_ANCHORS = Object.freeze([
   { complexityClass: "linear", exponent: 1 },
   { complexityClass: "linearithmic", exponent: 1.2 },
   { complexityClass: "quadratic", exponent: 2 },
-  { complexityClass: "exponential-or-worse", exponent: 3 },
+  { complexityClass: "cubic-or-worse", exponent: 3 },
 ])
 
 /**
@@ -101,10 +101,9 @@ const CLASS_ANCHORS = Object.freeze([
  * `inputs`, or one with no finite-numeric values at all.
  */
 export function inputTotal(inputs) {
-  if (!inputs || typeof inputs !== "object") return undefined
-  const values = Object.values(inputs).filter(
-    (value) => typeof value === "number" && Number.isFinite(value),
-  )
+  if (!inputs) return undefined
+  // `Number.isFinite` is false for anything that is not a finite number, strings included.
+  const values = Object.values(inputs).filter((value) => Number.isFinite(value))
   if (values.length === 0) return undefined
   return values.reduce((sum, value) => sum + value, 0)
 }
@@ -123,8 +122,8 @@ export function buildSizeSeries(tiers) {
   for (const [tier, measurement] of Object.entries(tiers ?? {})) {
     const size = inputTotal(measurement?.inputs)
     const medianMs = measurement?.medianMs
-    if (size === undefined || !(size > 0)) continue
-    if (typeof medianMs !== "number" || !Number.isFinite(medianMs) || !(medianMs > 0)) continue
+    if (!(size > 0)) continue
+    if (!Number.isFinite(medianMs) || !(medianMs > 0)) continue
     points.push({ tier, size, medianMs })
   }
   points.sort((a, b) => a.size - b.size)
@@ -140,7 +139,7 @@ export function buildSizeSeries(tiers) {
  * the single pairwise ratio `ln(T2/T1) / ln(N2/N1)`.
  */
 export function estimateGrowthExponent(series) {
-  if (!Array.isArray(series) || series.length < 2) return null
+  if (!Array.isArray(series)) return null
 
   const xs = series.map((point) => Math.log(point.size))
   const ys = series.map((point) => Math.log(point.medianMs))
@@ -148,16 +147,53 @@ export function estimateGrowthExponent(series) {
   const xMean = xs.reduce((a, b) => a + b, 0) / n
   const yMean = ys.reduce((a, b) => a + b, 0) / n
 
-  let numerator = 0
-  let denominator = 0
-  for (let i = 0; i < n; i++) {
-    const dx = xs[i] - xMean
-    numerator += dx * (ys[i] - yMean)
-    denominator += dx * dx
-  }
+  // Fewer than two points, or every point at one size, leaves no x-axis variance to fit a slope to.
+  // The y deviations sum to zero, so weighting them by x gives the same covariance as by x - xMean.
+  const numerator = xs.reduce((sum, x, i) => sum + x * (ys[i] - yMean), 0)
+  const denominator = xs.reduce((sum, x) => sum + (x - xMean) ** 2, 0)
 
   if (denominator === 0) return null
   return numerator / denominator
+}
+
+/**
+ * How many of the LARGEST sizes the exponent is fitted on once a ladder is longer than this. A real
+ * cost is `fixed overhead + work(n)`; a single power law fitted across every size is dominated by the
+ * fixed per-call overhead at the small end and reports a function that is linear for large inputs as
+ * "logarithmic". The large end is where the algorithm shows, so that is what is fitted.
+ */
+export const FIT_WINDOW = 5
+
+/** The lowest R-squared of the log-log fit that still counts as a measurement of a growth rate. */
+export const MIN_R_SQUARED = 0.8
+
+/**
+ * A ratio between the slowest and fastest tier below which the group is simply flat: with that little
+ * movement, noise rather than growth dominates the fit and R-squared is meaningless.
+ */
+const FLAT_RATIO = 1.5
+
+/**
+ * Fits the growth exponent on the largest {@link FIT_WINDOW} sizes of `series` (all of them when the
+ * ladder is not longer), and says how well a power law describes them.
+ * @param {readonly { size: number, medianMs: number }[]} series - ascending by size, positive values.
+ * @returns {{ exponent: number, rSquared: number, flat: boolean, points: number } | null} `null` when no slope exists.
+ */
+export function fitGrowth(series) {
+  const window = series.slice(-FIT_WINDOW)
+  const exponent = estimateGrowthExponent(window)
+  if (exponent === null) return null
+  const xs = window.map((point) => Math.log(point.size))
+  const ys = window.map((point) => Math.log(point.medianMs))
+  const xMean = xs.reduce((a, b) => a + b, 0) / xs.length
+  const yMean = ys.reduce((a, b) => a + b, 0) / ys.length
+  const intercept = yMean - exponent * xMean
+  const residual = xs.reduce((sum, x, i) => sum + (ys[i] - (intercept + exponent * x)) ** 2, 0)
+  const total = ys.reduce((sum, y) => sum + (y - yMean) ** 2, 0)
+  const rSquared = total === 0 ? 1 : 1 - residual / total
+  const times = window.map((point) => point.medianMs)
+  const flat = Math.max(...times) / Math.min(...times) < FLAT_RATIO
+  return { exponent, rSquared, flat, points: window.length }
 }
 
 /**
@@ -170,16 +206,9 @@ export function estimateGrowthExponent(series) {
  * earlier/lower anchor as the incumbent on a tie).
  */
 export function snapExponentToClass(exponent) {
-  let best = CLASS_ANCHORS[0]
-  let bestDistance = Math.abs(exponent - best.exponent)
-  for (const anchor of CLASS_ANCHORS.slice(1)) {
-    const distance = Math.abs(exponent - anchor.exponent)
-    if (distance < bestDistance) {
-      best = anchor
-      bestDistance = distance
-    }
-  }
-  return best.complexityClass
+  const distance = (anchor) => Math.abs(exponent - anchor.exponent)
+  return CLASS_ANCHORS.reduce((best, anchor) => (distance(anchor) < distance(best) ? anchor : best))
+    .complexityClass
 }
 
 /**
@@ -200,8 +229,8 @@ export function classifyGroup(tiers) {
     }
   }
 
-  const exponent = estimateGrowthExponent(series)
-  if (exponent === null) {
+  const fit = fitGrowth(series)
+  if (fit === null) {
     return {
       complexityClass: null,
       exponent: null,
@@ -210,7 +239,25 @@ export function classifyGroup(tiers) {
     }
   }
 
-  return { complexityClass: snapExponentToClass(exponent), exponent, points: series.length }
+  // A group that barely moves is flat, whatever its R-squared; one that moves but not along a power
+  // law (a step, a cache cliff) is not given a class the data does not support.
+  // Stryker disable next-line EqualityOperator: an R-squared computed from logarithms of real timings is never exactly MIN_R_SQUARED, so `<` and `<=` cannot disagree
+  if (!fit.flat && fit.rSquared < MIN_R_SQUARED) {
+    return {
+      complexityClass: null,
+      exponent: fit.exponent,
+      points: series.length,
+      rSquared: fit.rSquared,
+      reason: "poor-fit",
+    }
+  }
+
+  return {
+    complexityClass: snapExponentToClass(fit.exponent),
+    exponent: fit.exponent,
+    points: series.length,
+    rSquared: fit.rSquared,
+  }
 }
 
 /**

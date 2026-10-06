@@ -1,6 +1,6 @@
 /**
  * AI code review via the real, installed CodeRabbit CLI (`coderabbit review --agent
- * --uncommitted`), with every finding gated on a complete, finding-specific waiver in the
+ * --uncommitted`, or the committed branch diff against the base branch when the tree is clean), with every finding gated on a complete, finding-specific waiver in the
  * consumer's own `.repo-contract/exceptions/coderabbit.json` -- a generic recreation of
  * repo-contract's own `coderabbitai` check (`checks/coderabbitai.ts` +
  * `scripts/coderabbitai/{review,evidence-types,policy-config,registry}.ts` in that repo, designed
@@ -79,6 +79,7 @@ import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type { ExceptionClassification } from "repo-contract/helpers"
 import { validateExceptionPolicyConfig } from "repo-contract/helpers"
+import { degraded } from "./environment-exceptions.js"
 import { evaluateFindingVerdict, validateExceptionRegistry } from "./exception-record.js"
 import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
 import type {
@@ -323,7 +324,7 @@ export function coderabbitai(): CheckDefinitionConfig {
   return {
     run: ["tsx", reviewScript],
     output: { format: "json" },
-    policy: ({ result }): PolicyResult => {
+    policy: async ({ result }): Promise<PolicyResult> => {
       // The wrapper script always exits 0 having printed *some* well-formed evidence, so a
       // non-`completed` status or unparseable stdout means the script itself never ran (no `tsx` on
       // PATH) or crashed -- a real breakage of this package's own tooling, not a CodeRabbit state.
@@ -339,7 +340,18 @@ export function coderabbitai(): CheckDefinitionConfig {
         }
       }
 
-      return evaluateCoderabbitPolicy({ evidence: result.output.value as CoderabbitEvidence })
+      const evidence = result.output.value as CoderabbitEvidence
+      const verdict = evaluateCoderabbitPolicy({ evidence })
+      // "Did not run" is a degradation, not a verdict: it is recorded, and accepted only by a record
+      // in `.repo-contract/exceptions/environment.json` (`environment:CodeRabbit:<status>`).
+      if (evidence.status === "not-applicable" || evidence.status === "unavailable") {
+        return degraded({
+          check: "CodeRabbit",
+          code: evidence.status,
+          rationale: verdict.rationale,
+        })
+      }
+      return verdict
     },
   }
 }

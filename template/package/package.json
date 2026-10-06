@@ -63,7 +63,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "10.1.8",
-    "internal-package-contract": "github:MaverickCER/internal-package-contract#main",
+    "internal-package-contract": "github:MaverickCER/internal-package-contract#{{ipcRef}}",
     "prettier": "3.9.6",
     "tsup": "^8.0.0",
     "typedoc": "^0.28.20",
@@ -73,7 +73,7 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "overrides": {
     "adm-zip": "0.6.1"

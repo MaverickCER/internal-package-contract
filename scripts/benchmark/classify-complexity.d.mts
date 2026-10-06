@@ -17,7 +17,15 @@ export interface ClassificationResult {
   readonly complexityClass: string | null
   readonly exponent: number | null
   readonly points: number
-  readonly reason?: "insufficient-data" | "no-size-variation"
+  readonly rSquared?: number
+  readonly reason?: "insufficient-data" | "no-size-variation" | "poor-fit"
+}
+
+export interface GrowthFit {
+  readonly exponent: number
+  readonly rSquared: number
+  readonly flat: boolean
+  readonly points: number
 }
 
 export interface ComplexityShiftResult {
@@ -36,6 +44,8 @@ export interface TierMeasurement {
 export type TierMeasurements = Readonly<Record<string, TierMeasurement | undefined>>
 
 export const COMPLEXITY_CLASSES: readonly string[]
+export const FIT_WINDOW: number
+export const MIN_R_SQUARED: number
 
 export function inputTotal(
   inputs: Readonly<Record<string, unknown>> | undefined | null,
@@ -46,6 +56,10 @@ export function buildSizeSeries(tiers: TierMeasurements | undefined): SizeSeries
 export function estimateGrowthExponent(
   series: readonly Pick<SizeSeriesPoint, "size" | "medianMs">[] | undefined,
 ): number | null
+
+export function fitGrowth(
+  series: readonly Pick<SizeSeriesPoint, "size" | "medianMs">[],
+): GrowthFit | null
 
 export function snapExponentToClass(exponent: number): string
 
