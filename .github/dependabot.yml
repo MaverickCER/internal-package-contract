@@ -22,8 +22,12 @@ updates:
     ignore:
       - dependency-name: "internal-package-contract"
       # TypeScript 7 removes the compiler API (createSourceFile, createProgram, the checker) that this
-      # package is built on; stay on 5.x/6.x until an adapter exists. Minor and patch updates continue.
+      # package is built on; stay on 5.x/6.x until an adapter exists. Everything below 7 still updates.
       - dependency-name: "typescript"
+        versions: [">= 7.0.0"]
+      # changesets/action v1 (used by the release workflows) targets Changesets CLI v2; CLI v3 needs
+      # the action's v2. Move both together, then remove this rule.
+      - dependency-name: "@changesets/cli"
         update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
