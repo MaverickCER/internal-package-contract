@@ -15,7 +15,7 @@
 // the old expression, and never twice. Once a runner release ships the upstream fix (it injects
 // `testNameSeparator` instead), the step recognises that and does nothing.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 /** The expression the runner ships with. */
@@ -29,6 +29,36 @@ export const UPSTREAM_FIX_MARKER = "testNameSeparator"
 
 /** The runner files, relative to the directory of its entry point, that build or record test names. */
 export const RUNNER_FILES = ["test-helpers.js", "stryker-setup.js"]
+
+/**
+ * A temporary path beside `file`, on the same filesystem so renaming it into place is atomic.
+ * @param {string} file - the file about to be rewritten.
+ * @param {number} pid - the current process id, so concurrent runs do not share a temporary file.
+ * @returns {string} the temporary path.
+ */
+export function tempPathFor(file, pid) {
+  return `${file}.${String(pid)}.tmp`
+}
+
+/**
+ * Rewrites a file without ever leaving it half-written: the new text goes to a temporary file first and is
+ * renamed over the target, so a crash mid-write cannot leave a truncated runner file that would no longer be
+ * recognised (and so never fixed again) until someone reinstalled it.
+ * @param {string} file - the file to rewrite.
+ * @param {string} text - its new contents.
+ * @param {{ write: (file: string, text: string) => void, rename: (from: string, to: string) => void }} ops - file
+ *   operations; defaults to the real ones.
+ * @returns {void}
+ */
+export function writeFileAtomically(
+  file,
+  text,
+  ops = { write: (target, contents) => writeFileSync(target, contents), rename: renameSync },
+) {
+  const temp = tempPathFor(file, process.pid)
+  ops.write(temp, text)
+  ops.rename(temp, file)
+}
 
 /**
  * @param {string} version - a semver string such as `5.0.3`.
@@ -105,7 +135,7 @@ export function ensureStrykerVitest5Compat(
   io = {
     exists: existsSync,
     readFile: (file) => readFileSync(file, "utf8"),
-    writeFile: (file, text) => writeFileSync(file, text),
+    writeFile: writeFileAtomically,
   },
 ) {
   const vitestDir = findPackageDir(cwd, "vitest", io.exists)

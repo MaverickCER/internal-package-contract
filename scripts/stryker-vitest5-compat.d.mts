@@ -3,6 +3,14 @@ export const VITEST_5_JOIN: string
 export const UPSTREAM_FIX_MARKER: string
 export const RUNNER_FILES: readonly string[]
 
+export function tempPathFor(file: string, pid: number): string
+
+export function writeFileAtomically(
+  file: string,
+  text: string,
+  ops?: { write(file: string, text: string): void; rename(from: string, to: string): void },
+): void
+
 export function majorOf(version: string): number | undefined
 
 export function classify(

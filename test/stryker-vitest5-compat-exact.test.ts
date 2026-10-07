@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
@@ -12,6 +12,8 @@ import {
   ensureStrykerVitest5Compat,
   findPackageDir,
   majorOf,
+  tempPathFor,
+  writeFileAtomically,
 } from "../scripts/stryker-vitest5-compat.mjs"
 
 // The filesystem root as `path.resolve` sees it: `/` on POSIX, the current drive's root (`C:\\`) on Windows.
@@ -62,6 +64,42 @@ describe("the constants", () => {
     expect(VITEST_5_JOIN).toBe("nameParts.join(' > ').trim()")
     expect(UPSTREAM_FIX_MARKER).toBe("testNameSeparator")
     expect(RUNNER_FILES).toEqual(["test-helpers.js", "stryker-setup.js"])
+  })
+})
+
+describe("tempPathFor()", () => {
+  it("puts the process id and a .tmp suffix beside the file", () => {
+    expect(tempPathFor(path.join(ROOT, "a.js"), 4242)).toBe(`${path.join(ROOT, "a.js")}.4242.tmp`)
+    expect(path.dirname(tempPathFor(path.join(ROOT, "x", "a.js"), 1))).toBe(path.join(ROOT, "x"))
+  })
+})
+
+describe("writeFileAtomically()", () => {
+  it("writes the new text to the temporary file first, then renames it over the target", () => {
+    const calls: string[][] = []
+    const file = path.join(ROOT, "runner.js")
+    writeFileAtomically(file, "new text", {
+      write: (target, text) => calls.push(["write", target, text]),
+      rename: (from, to) => calls.push(["rename", from, to]),
+    })
+    const temp = tempPathFor(file, process.pid)
+    expect(calls).toEqual([
+      ["write", temp, "new text"],
+      ["rename", temp, file],
+    ])
+  })
+
+  it("replaces a real file's contents and leaves no temporary file behind", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "stryker-v5-atomic-"))
+    try {
+      const file = path.join(dir, "runner.js")
+      writeFileSync(file, "old text")
+      writeFileAtomically(file, "new text")
+      expect(readFileSync(file, "utf8")).toBe("new text")
+      expect(readdirSync(dir)).toEqual(["runner.js"])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
