@@ -14,7 +14,9 @@ import {
   majorOf,
 } from "../scripts/stryker-vitest5-compat.mjs"
 
-const ROOT = path.join(path.sep, "work", "app")
+// The filesystem root as `path.resolve` sees it: `/` on POSIX, the current drive's root (`C:\\`) on Windows.
+const FS_ROOT = path.parse(path.resolve(path.sep)).root
+const ROOT = path.join(FS_ROOT, "work", "app")
 const RUNNER = path.join(ROOT, "node_modules", "@stryker-mutator", "vitest-runner")
 const RUNNER_DIST = path.join(RUNNER, "dist", "src")
 const HELPERS = path.join(RUNNER_DIST, "test-helpers.js")
@@ -102,13 +104,13 @@ describe("ancestorsOf()", () => {
       path.join(ROOT, "packages", "a"),
       path.join(ROOT, "packages"),
       ROOT,
-      path.join(path.sep, "work"),
-      path.sep,
+      path.join(FS_ROOT, "work"),
+      FS_ROOT,
     ])
   })
 
   it("lists only the root when started at the root", () => {
-    expect(ancestorsOf(path.sep)).toEqual([path.sep])
+    expect(ancestorsOf(FS_ROOT)).toEqual([FS_ROOT])
   })
 
   it("resolves a relative start against the current directory", () => {
@@ -128,10 +130,10 @@ describe("findPackageDir()", () => {
 
   it("walks up to an ancestor's node_modules", () => {
     const { io } = memoryIo({
-      [path.join(path.sep, "work", "node_modules", "vitest", "package.json")]: "{}",
+      [path.join(FS_ROOT, "work", "node_modules", "vitest", "package.json")]: "{}",
     })
     expect(findPackageDir(path.join(ROOT, "packages", "a"), "vitest", io.exists)).toBe(
-      path.join(path.sep, "work", "node_modules", "vitest"),
+      path.join(FS_ROOT, "work", "node_modules", "vitest"),
     )
   })
 
@@ -149,8 +151,8 @@ describe("findPackageDir()", () => {
     expect(found).toBeUndefined()
     expect(asked).toEqual([
       path.join(ROOT, "node_modules", "vitest", "package.json"),
-      path.join(path.sep, "work", "node_modules", "vitest", "package.json"),
-      path.join(path.sep, "node_modules", "vitest", "package.json"),
+      path.join(FS_ROOT, "work", "node_modules", "vitest", "package.json"),
+      path.join(FS_ROOT, "node_modules", "vitest", "package.json"),
     ])
   })
 })
@@ -276,7 +278,7 @@ describe("ensureStrykerVitest5Compat()", () => {
 
   it("finds Vitest and the runner hoisted in an ancestor directory", () => {
     const hoisted = (file: string) =>
-      file.replace(path.join(ROOT, "node_modules"), path.join(path.sep, "work", "node_modules"))
+      file.replace(path.join(ROOT, "node_modules"), path.join(FS_ROOT, "work", "node_modules"))
     const files = Object.fromEntries(
       Object.entries(install("5.0.3", legacy("h"), legacy("s"))).map(([file, text]) => [
         hoisted(file),
