@@ -88,7 +88,7 @@
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^24.19.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.3",
     "cross-spawn": "^7.0.6",
     "dependency-cruiser": "^18.2.0",
     "eslint": "^10.9.0",
