@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  self-check:
+  contract:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,6 +43,16 @@ jobs:
           path: reports/contract
           if-no-files-found: ignore
           retention-days: 30
+
+  # Transitional: the default branch's ruleset still lists `self-check` as a required status check, the
+  # name this job had before it became the standard `contract`. This job passes exactly when `contract`
+  # does, so nothing is weakened; delete it together with the ruleset's `self-check` entry.
+  self-check:
+    needs: contract
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.contract.result }}" = "success"
 
   # bin/init.mjs does path/file-I/O and git-hook wiring -- verify it (and the
   # unit suite) actually work on Windows, not just macOS/Linux. Not the full

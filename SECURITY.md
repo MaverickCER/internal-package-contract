@@ -25,7 +25,7 @@ commit a consumer pins can publish that consumer. So:
   to the repository, holds no npm identity), `build` (read-only; installs with `--ignore-scripts`
   and runs the package's own `verify` gate), and `publish` (holds the npm identity but checks out and
   installs nothing: it publishes the exact tarball `build` produced, with a version-pinned npm).
-- **Branch protection is part of the model.** `main` requires pull requests, the `self-check`
+- **Branch protection is part of the model.** `main` requires pull requests, the `contract`
   status check (strict) and resolved review threads; the `BranchProtection` check verifies the same for
   every consumer.
 - **Tags move only within a major.** The floating `v<major>` tag (`v0` while 0.x) is derived from the
