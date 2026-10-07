@@ -112,9 +112,7 @@ export default defineRepoContract({
     Architecture: architectureOverScope(architecture()),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
-    // This repository's own CI job is `self-check` (see .github/workflows/ci.yml), not the
-    // scaffolded consumer job id `contract`.
-    BranchProtection: createBranchProtection("self-check"),
+    BranchProtection: createBranchProtection(),
     Coverage: { ...coverage, dependsOn: ["Tests"] },
     Crap: { ...crapOverScope(crap), dependsOn: ["Coverage"] },
     Duplication: duplicationOverScope(duplication),
