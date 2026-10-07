@@ -46,6 +46,11 @@ updates:
     labels:
       - dependencies
       - github-actions
+    ignore:
+      # changesets/action v1 pairs with Changesets CLI v2; the commits Dependabot offers next belong to
+      # the action's v2, which refuses CLI v2 ("designed to work with Changesets CLI v3") and breaks the
+      # release workflows. Move the action and the CLI together, then remove this rule.
+      - dependency-name: "changesets/action"
     groups:
       github-actions:
         patterns:
