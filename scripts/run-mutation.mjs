@@ -21,6 +21,8 @@ import { sync as spawnSync } from "cross-spawn"
 import { existsSync, rmSync } from "node:fs"
 import path from "node:path"
 
+import { ensureStrykerVitest5Compat } from "./stryker-vitest5-compat.mjs"
+
 for (let dir = import.meta.dirname; ;) {
   const bin = path.join(dir, "node_modules", ".bin")
   if (existsSync(bin)) process.env.PATH = `${bin}${path.delimiter}${process.env.PATH ?? ""}`
@@ -47,6 +49,19 @@ const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd
 
 const args = ["run", "--reporters", "json,clear-text"]
 if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
+
+// Vitest 5 changed how test names are matched; until the Stryker runner ships its own fix every mutant
+// would run zero tests and survive (stryker-js#6210). See scripts/stryker-vitest5-compat.mjs.
+const compat = ensureStrykerVitest5Compat(process.cwd())
+if (compat.status === "patched") {
+  process.stderr.write(
+    `[mutation] Vitest ${compat.vitestVersion}: aligned @stryker-mutator/vitest-runner's test-name separator with Vitest 5 (stryker-js#6210).\n`,
+  )
+} else if (compat.status === "unrecognised") {
+  process.stderr.write(
+    `[mutation] Vitest ${compat.vitestVersion} with an @stryker-mutator/vitest-runner this package does not recognise: if every mutant survives having run 0 tests, see stryker-js#6210.\n`,
+  )
+}
 
 const result = spawnSync("stryker", args, { stdio: "inherit" })
 
