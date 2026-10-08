@@ -88,7 +88,6 @@
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^24.19.1",
-    "@vitest/coverage-v8": "^4.1.11",
     "cross-spawn": "^7.0.6",
     "dependency-cruiser": "^18.2.0",
     "eslint": "^10.9.0",
@@ -110,11 +109,12 @@
     "secretlint": "^13.0.7",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.68.0",
-    "vitest": "^4.1.11"
+    "typescript-eslint": "^8.68.0"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1"
+    "@changesets/cli": "^2.31.1",
+    "@vitest/coverage-v8": "^5.0.3",
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "tar": "^7.5.22",
