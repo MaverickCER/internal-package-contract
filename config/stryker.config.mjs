@@ -28,6 +28,12 @@ export default {
     "!src/**/__mocks__/**",
   ],
   ignoreStatic: true,
+  // One worker. With several, tests that spawn processes or hold timers contend for CPU: they then
+  // time out and are counted as kills, while other mutants lose their attributed runs and survive,
+  // so the set of survivors differs from run to run (measured on a 6k-mutant package: 143 non-killed
+  // at four workers, 209 at one, only 93 in common) and a full run was slower at four workers than at
+  // one. A consumer whose suite is purely synchronous can raise it.
+  concurrency: 1,
   disableTypeChecks: "{src,test}/**/*.{ts,tsx}",
   tempDirName: ".stryker-tmp",
   cleanTempDir: true,
