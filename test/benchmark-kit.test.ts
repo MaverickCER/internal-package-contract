@@ -228,7 +228,10 @@ describe("measure", () => {
       targetDurationMs: 30,
       minSampleMs: 0,
     })
-    expect(result.wallMs.length).toBeGreaterThan(2)
+    // More than `minIterations` (1) proves sampling continued towards the target; the exact count
+    // depends on the platform's timer granularity (about 15 ms on Windows, so as few as two samples
+    // reach a 30 ms target), so it is not pinned any tighter.
+    expect(result.wallMs.length).toBeGreaterThan(1)
     expect(result.wallMs.length).toBeLessThan(1000)
   })
 })
