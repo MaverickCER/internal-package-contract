@@ -54,6 +54,22 @@ jobs:
     steps:
       - run: test "${{ needs.contract.result }}" = "success"
 
+  # The development toolchain stays on TypeScript 5 (typescript-eslint, typedoc and API Extractor load
+  # the TypeScript compiler API, which the native TypeScript 7 compiler does not ship), so TypeScript 7
+  # gets its own job: this repository's source must still type-check under it. `npx -p` supplies the 7
+  # binary; the repository's own `typescript` stays what the code's type imports resolve against.
+  typescript-7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npx --yes -p typescript@7 tsc --noEmit -p tsconfig.self.json
+
   # bin/init.mjs does path/file-I/O and git-hook wiring -- verify it (and the
   # unit suite) actually work on Windows, not just macOS/Linux. Not the full
   # `npm run contract` here: Mutation/Accessibility need Stryker/a system
