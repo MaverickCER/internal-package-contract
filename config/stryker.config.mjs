@@ -29,10 +29,12 @@ export default {
   ],
   ignoreStatic: true,
   // One worker. With several, tests that spawn processes or hold timers contend for CPU: they then
-  // time out and are counted as kills, while other mutants lose their attributed runs and survive,
-  // so the set of survivors differs from run to run (measured on a 6k-mutant package: 143 non-killed
-  // at four workers, 209 at one, only 93 in common) and a full run was slower at four workers than at
-  // one. A consumer whose suite is purely synchronous can raise it.
+  // exceed the test runner's own per-test timeout and fail, which reads as a killed mutant even when
+  // the mutation changed nothing, while other mutants lose their attributed runs and survive. (This is
+  // the test failing on its own timeout, not Stryker's `Timeout` status, which the Mutation check
+  // rejects.) The set of survivors then differs from run to run -- measured on a 6k-mutant package:
+  // 143 non-killed at four workers, 209 at one, only 93 in common -- and a full run was slower at four
+  // workers than at one. A consumer whose suite is purely synchronous can raise it.
   concurrency: 1,
   disableTypeChecks: "{src,test}/**/*.{ts,tsx}",
   tempDirName: ".stryker-tmp",
