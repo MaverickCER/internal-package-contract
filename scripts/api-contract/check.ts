@@ -48,7 +48,7 @@ import {
 import type { ReleaseTagLevel } from "./model-normalizer.js"
 import { normalizeApiPackage } from "./model-normalizer.js"
 import { detectSchemaVersionDrift } from "./schema-version-consistency.js"
-import { computeMinimumRequiredVersion, parseVersion } from "./semver.js"
+import { compareVersions, computeMinimumRequiredVersion, parseVersion } from "./semver.js"
 import { summarizeChanges, summarizeInitialBaseline } from "./summarize-changes.js"
 import type { ApiContractTarget } from "./targets.js"
 import { readTargets } from "./targets.js"
@@ -367,6 +367,17 @@ export async function runApiContractCheck(
 
   const summary = targetResults.map((result) => `[${result.target}] ${result.summary}`).join("\n\n")
 
+  // A release pull request has already consumed its changesets and bumped `package.json`, so no
+  // changeset is left to declare the level; the bump itself is the declaration. It counts once the
+  // version has reached the minimum the API diff requires over the released baseline.
+  const currentVersion = parseVersion(packageJson.version)
+  const minimumVersion =
+    minimumRequiredVersion === undefined ? undefined : parseVersion(minimumRequiredVersion)
+  const versionAlreadyBumped =
+    currentVersion !== undefined &&
+    minimumVersion !== undefined &&
+    compareVersions(currentVersion, minimumVersion) >= 0
+
   return {
     currentVersion: packageJson.version,
     targets: targetResults,
@@ -376,7 +387,10 @@ export async function runApiContractCheck(
     changesets: {
       changesetCount,
       declaredLevel,
-      satisfied: requiredLevel === undefined ? null : rankAtLeast(declaredLevel, requiredLevel),
+      satisfied:
+        requiredLevel === undefined
+          ? null
+          : rankAtLeast(declaredLevel, requiredLevel) || versionAlreadyBumped,
     },
   }
 }
