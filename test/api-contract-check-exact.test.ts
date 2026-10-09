@@ -277,6 +277,32 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
     rmSync(path.join(fx.root, ".changeset"), { recursive: true, force: true })
   })
 
+  it("counts a package version that has already reached the required minimum, with no changeset left", async () => {
+    fx.setSources(replace(INDEX, "/** @public */\nexport function gone(): void {}\n", ""))
+    const packageJsonPath = path.join(fx.root, "package.json")
+    const original = readFileSync(packageJsonPath, "utf8")
+    const withVersion = (version: string) =>
+      writeFileSync(
+        packageJsonPath,
+        original.replace('"version":"1.2.0"', `"version":"${version}"`),
+      )
+    try {
+      expect((await fx.run()).minimumRequiredVersion).toBe("2.0.0")
+      expect((await fx.run()).changesets.satisfied).toBe(false)
+
+      withVersion("1.9.9")
+      expect((await fx.run()).changesets.satisfied).toBe(false)
+
+      withVersion("2.0.0")
+      expect((await fx.run()).changesets.satisfied).toBe(true)
+
+      withVersion("2.4.1")
+      expect((await fx.run()).changesets.satisfied).toBe(true)
+    } finally {
+      writeFileSync(packageJsonPath, original)
+    }
+  })
+
   it("calls drift under an unchanged version literal breaking even when the shape change alone is compatible", async () => {
     fx.setSources(
       replace(
