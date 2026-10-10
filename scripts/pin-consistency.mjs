@@ -21,11 +21,14 @@ const PIN =
  */
 export function devDependencyRef(packageJson) {
   try {
-    const spec = JSON.parse(packageJson).devDependencies?.["internal-package-contract"]
-    return /^github:[^#]+#(.+)$/.exec(spec)?.[1]
+    // A missing `devDependencies`, a missing entry and a spec that is not `github:...#ref` all throw
+    // here, and a throw is the same answer as no ref, below.
+    const spec = JSON.parse(packageJson).devDependencies["internal-package-contract"]
+    return /^github:[^#]+#(.+)/.exec(spec)[1]
   } catch {
-    return undefined
+    // Not JSON, or not a git dependency on this package: no ref to read.
   }
+  return undefined
 }
 
 /**
