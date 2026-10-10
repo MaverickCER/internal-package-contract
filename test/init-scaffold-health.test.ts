@@ -76,11 +76,11 @@ describe("a freshly scaffolded package", () => {
       scripts: Record<string, string>
     }
     // Without a `verify` script the release workflow falls back to a bare build and publishes anyway.
-    expect(pkg.scripts.verify).toBeDefined()
+    expect(pkg.scripts["verify"]).toBeDefined()
     for (const step of ["typecheck", "lint", "format:check", "build", "test:coverage"]) {
-      expect(pkg.scripts.verify, `verify should run ${step}`).toContain(`npm run ${step}`)
+      expect(pkg.scripts["verify"], `verify should run ${step}`).toContain(`npm run ${step}`)
     }
-    expect(pkg.scripts.prepublishOnly).toBe("npm run verify")
+    expect(pkg.scripts["prepublishOnly"]).toBe("npm run verify")
   })
 
   it("links from its documents to nothing outside the package by a relative path", () => {
