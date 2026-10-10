@@ -16,6 +16,7 @@ import {
   buildPinVars,
   buildVars,
   listTemplateFiles,
+  initFlags,
   parseInitArgs,
   render,
   renderJson,
@@ -25,9 +26,7 @@ import {
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const cwd = process.cwd()
-// Reached two ways: `bin/contract.mjs init ...` (the documented command, so argv[2] is the
-// subcommand name itself) and `bin/init.mjs ...` directly. Only the flags go to the parser.
-const args = parseInitArgs(process.argv.slice(process.argv[2] === "init" ? 3 : 2))
+const args = parseInitArgs(initFlags(process.argv))
 const force = args.force
 const done = []
 const skipped = []

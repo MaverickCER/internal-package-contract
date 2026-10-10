@@ -15,6 +15,7 @@ export interface InitVars {
   ipcRef: string
   ipcSha: string
 }
+export function initFlags(argv: readonly string[]): string[]
 export function parseInitArgs(argv: readonly string[]): InitArgs
 export function validatePackageName(name: string): string | undefined
 export function buildVars(input: {

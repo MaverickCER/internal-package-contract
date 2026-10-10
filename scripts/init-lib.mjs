@@ -14,6 +14,16 @@ const PLACEHOLDER = /\{\{(name|repo|owner|description|year|ipcRef|ipcSha)\}\}/g
 const VALUE_FLAGS = ["name", "owner", "description"]
 
 /**
+ * The flags `init` was given. It is reached two ways: `bin/contract.mjs init ...`, the documented
+ * command, where the subcommand name itself is the first argument, and `bin/init.mjs ...` directly.
+ * @param {readonly string[]} argv - the full `process.argv`.
+ * @returns {string[]} everything after the script, without the subcommand name.
+ */
+export function initFlags(argv) {
+  return argv.slice(argv[2] === "init" ? 3 : 2)
+}
+
+/**
  * @param {readonly string[]} argv - the arguments after the script name.
  * @returns {{ force: boolean, name?: string, owner?: string, description?: string, errors: string[] }}
  */
