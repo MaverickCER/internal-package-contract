@@ -54,8 +54,8 @@ jobs:
     steps:
       - run: test "${{ needs.contract.result }}" = "success"
 
-  # The development toolchain stays on TypeScript 5 (typescript-eslint, typedoc and API Extractor load
-  # the TypeScript compiler API, which the native TypeScript 7 compiler does not ship), so TypeScript 7
+  # The development toolchain stays on TypeScript 6, the last line that ships the classic compiler API
+  # (typescript-eslint and API Extractor load it; the native TypeScript 7 compiler does not), so TypeScript 7
   # gets its own job: this repository's source must still type-check under it. `npx -p` supplies the 7
   # binary; the repository's own `typescript` stays what the code's type imports resolve against.
   typescript-7:
