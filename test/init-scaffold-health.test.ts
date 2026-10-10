@@ -39,6 +39,39 @@ afterAll(() => {
 })
 
 describe("a freshly scaffolded package", () => {
+  it("is left byte-for-byte unchanged by running init again", () => {
+    const snapshot = (): Record<string, string> => {
+      const files: Record<string, string> = {}
+      const walk = (current: string): void => {
+        for (const entry of readdirSync(current, { withFileTypes: true })) {
+          if (entry.name === ".git") continue
+          const full = path.join(current, entry.name)
+          if (entry.isDirectory()) walk(full)
+          else files[path.relative(dir, full)] = readFileSync(full, "utf8")
+        }
+      }
+      walk(dir)
+      return files
+    }
+    const before = snapshot()
+    const again = spawnSync(
+      process.execPath,
+      [
+        bin,
+        "init",
+        "--name",
+        "health-demo",
+        "--owner",
+        "ExampleOwner",
+        "--description",
+        "A health demo",
+      ],
+      { cwd: dir, encoding: "utf8" },
+    )
+    expect(again.status, `${again.stdout}${again.stderr}`).toBe(0)
+    expect(snapshot()).toEqual(before)
+  })
+
   it("carries the repository rules for an agent, and points Claude Code at them", () => {
     const agents = readFileSync(path.join(dir, "AGENTS.md"), "utf8")
     expect(agents).toContain("`health-demo`")
