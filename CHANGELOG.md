@@ -1,5 +1,17 @@
 # internal-package-contract
 
+## 0.10.0
+
+### Minor Changes
+
+- 23125f7: TypeScript 7 (the native compiler) is now part of the standard. The scaffolded `contract.yml` gains a `typescript-7` job that type-checks the package with the TypeScript 7 compiler while the development toolchain stays on TypeScript 5 or 6 (typescript-eslint, typedoc and API Extractor need the compiler API TypeScript 7 does not ship), and this repository's own CI runs the same check. Delete the job from a package that cannot type-check under TypeScript 7 yet.
+
+### Patch Changes
+
+- 30965ef: The ApiContract check now accepts a package version that has already reached the minimum the API diff requires. A release pull request has consumed its changesets and bumped `package.json`, so it has no changeset left to declare the level; the check used to fail it for exactly that, even though the bump was already applied.
+- 5049e93: The benchmark kit's sampling test no longer assumes a timer finer than the platform's, so it stops failing intermittently on Windows, where a 2 ms timer fires about every 15 ms.
+- 0de6552: The shared Stryker baseline now runs one worker. With several, tests that spawn processes contend for CPU: they time out and count as kills while other mutants lose their attributed runs, so the survivors differ from run to run and a full run is slower, not faster. A consumer with a purely synchronous suite can raise `concurrency`.
+
 ## 0.9.0
 
 ### Minor Changes
