@@ -14,6 +14,7 @@ export const SCOPE_DIRS = ["checks", "scripts", "bin"]
 export const ENTRY_SHELLS = [
   "scripts/check-*.mjs",
   "scripts/audit-dev-deps.mjs",
+  "scripts/audit-pins.mjs",
   "scripts/code-scanning-alerts.mjs",
   "scripts/git-hygiene.mjs",
   "scripts/run-*.mjs",
