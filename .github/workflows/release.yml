@@ -41,6 +41,7 @@ jobs:
       - run: npm ci
 
       - name: Version Packages PR
+        id: changesets
         uses: changesets/action@ce079ea084e08a340947ed4d6ecedb2433c8f293 # v1
         with:
           version: npm run version
@@ -54,8 +55,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only when there is nothing left to version. While changesets are pending the step above has
+      # just bumped package.json in this working tree and committed that bump to the release
+      # branch, so tagging here would tag a commit that is not on main and roll the floating major
+      # tag onto it (v0.9.1 and v0 did exactly that, before the release was merged).
       - name: Tag the released version (no npm publish -- private package)
         id: tag
+        if: steps.changesets.outputs.hasChangesets != 'true'
         run: |
           VERSION="v$(node -p "require('./package.json').version")"
           if git rev-parse "$VERSION" >/dev/null 2>&1; then
@@ -64,11 +70,11 @@ jobs:
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag "$VERSION"
+            git tag "$VERSION" "$GITHUB_SHA"
             git push origin "$VERSION"
             MAJOR_TAG="v${VERSION#v}"
             MAJOR_TAG="${MAJOR_TAG%%.*}"
-            git tag -f "$MAJOR_TAG"
+            git tag -f "$MAJOR_TAG" "$GITHUB_SHA"
             git push origin "$MAJOR_TAG" --force
             echo "new-tag=$VERSION" >> "$GITHUB_OUTPUT"
           fi
