@@ -30,6 +30,7 @@ import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
 import { mutation } from "./mutation.js"
 import { noMinify } from "./no-minify.js"
+import { pinConsistency } from "./pin-consistency.js"
 import { npmScriptCheck } from "./npm-script.js"
 import { securityDeps } from "./security-deps.js"
 import { securityDevDeps } from "./security-dev-deps.js"
@@ -91,6 +92,7 @@ export function standardChecks() {
     Architecture: architecture(),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
+    PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
     Crap: { ...crap, dependsOn: ["Coverage"] as const },
