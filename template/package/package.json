@@ -55,7 +55,9 @@
     "version": "changeset version && npm run build",
     "release": "changeset publish",
     "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
-    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check"
+    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run build && npm run test:coverage",
+    "prepublishOnly": "npm run verify"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
