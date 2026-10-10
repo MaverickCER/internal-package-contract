@@ -71,6 +71,18 @@ describe("a freshly scaffolded package", () => {
     expect(output, "files Prettier would rewrite").toBe("")
   })
 
+  it("defines the verify gate the shared release workflow runs before it publishes", () => {
+    const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
+      scripts: Record<string, string>
+    }
+    // Without a `verify` script the release workflow falls back to a bare build and publishes anyway.
+    expect(pkg.scripts.verify).toBeDefined()
+    for (const step of ["typecheck", "lint", "format:check", "build", "test:coverage"]) {
+      expect(pkg.scripts.verify, `verify should run ${step}`).toContain(`npm run ${step}`)
+    }
+    expect(pkg.scripts.prepublishOnly).toBe("npm run verify")
+  })
+
   it("ships the committed API report that the ApiDocsReport check compares against", () => {
     const report = path.join(dir, "docs", "api-report", "README.md")
     expect(existsSync(report)).toBe(true)
