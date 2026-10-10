@@ -69,3 +69,22 @@ jobs:
       - run: npm ci
       - run: npm run build --if-present
       - run: npm test
+
+  # The development toolchain targets TypeScript 5 or 6 (typescript-eslint, typedoc and API Extractor
+  # load the TypeScript compiler API, which the native TypeScript 7 compiler does not ship), so
+  # TypeScript 7 gets its own job: the package's source must still type-check under it. `npx -p`
+  # supplies the 7 binary; the package's own `typescript` stays what the code's type imports resolve
+  # against. Delete this job if the package cannot yet.
+  typescript-7:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npx --yes -p typescript@7 tsc --noEmit -p tsconfig.json
