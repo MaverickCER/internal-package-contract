@@ -12,6 +12,7 @@
 // Every path here is resolved relative to process.cwd() -- the consumer's
 // own repo root, same as every other check in this package.
 
+import { linkinatorArgs } from "./docs-links-args.mjs"
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync } from "node:fs"
 import path from "node:path"
@@ -32,7 +33,7 @@ for (let dir = import.meta.dirname; ;) {
 }
 
 function runLinkinator(args) {
-  const result = spawnSync("linkinator", [...args, "--retry", "--format", "json"], {
+  const result = spawnSync("linkinator", linkinatorArgs(args), {
     encoding: "utf8",
   })
   if (result.error) {
