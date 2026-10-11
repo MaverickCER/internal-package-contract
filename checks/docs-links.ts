@@ -110,14 +110,24 @@ export const docsLinks: CheckDefinitionConfig = {
 
     if (brokenLocal.length === 0) {
       const base = `Docs (links): 0 broken local link(s) across ${String(links.length)} checked`
-      if (brokenExternal.length === 0) return { outcome: "pass", rationale: `${base}.` }
-      // An external link linkinator could not reach is not proof the link is dead (rate limiting,
-      // a bot wall): it is a degradation, accepted per URL by `environment:DocsLinks:<url>`.
-      const urls = [...new Set(brokenExternal.map((l) => l.url))]
+      // HTTP 429 is the host saying "slow down", not "this page is gone", so it is accepted outright:
+      // a rate limit is the one degradation that needs no record per URL. Anything else linkinator could
+      // not reach (a bot wall, a timeout) is still a degradation, accepted per URL by
+      // `environment:DocsLinks:<url>`.
+      const rateLimited = new Set(brokenExternal.filter((l) => l.status === 429).map((l) => l.url))
+      const urls = [...new Set(brokenExternal.map((l) => l.url))].filter((u) => !rateLimited.has(u))
+      const limitedNote = `${String(rateLimited.size)} rate limited, HTTP 429`
+      if (urls.length === 0) {
+        if (rateLimited.size === 0) return { outcome: "pass", rationale: `${base}.` }
+        return {
+          outcome: "pass",
+          rationale: `${base} (${String(rateLimited.size)} external link(s) were rate limited, HTTP 429, which says nothing about whether they exist).`,
+        }
+      }
       return degraded({
         check: "DocsLinks",
         codes: urls,
-        rationale: `${base} (${String(urls.length)} external link(s) unreachable: ${urls.join(", ")}).`,
+        rationale: `${base} (${String(urls.length)} external link(s) unreachable: ${urls.join(", ")}${rateLimited.size > 0 ? `; ${limitedNote}` : ""}).`,
       })
     }
 
