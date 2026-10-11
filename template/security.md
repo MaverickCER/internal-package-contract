@@ -2,8 +2,9 @@
 
 ## Reporting a vulnerability
 
-Report privately via a [GitHub security advisory](../../security/advisories/new). If that form is
-unavailable, open a public issue that says only "requesting a private security contact" with no
+Report privately through this repository's **Security** tab with **Report a vulnerability**
+([how private reporting works](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)).
+If that form is unavailable, open a public issue that says only "requesting a private security contact" with no
 details, and a maintainer will follow up. Please do not disclose the substance of a suspected
 vulnerability in a public issue before it has been triaged.
 
