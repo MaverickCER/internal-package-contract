@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { shaFromLockfile } from "../init-lib.mjs"
-import { COPIES, enrolledCopies, inspectManaged } from "./inspect.mjs"
+import { COPIES, enrolledCopies, inspectManaged, withRequired } from "./inspect.mjs"
 
 const USAGE = "Usage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n"
 
@@ -47,7 +47,7 @@ export function unifiedDiff(wanted, have) {
  * @param {string} cwd - the consumer's root.
  * @param {string} packageRoot - this package's root.
  * @param {{ out: (text: string) => void, err: (text: string) => void }} io
- * @param {readonly { name: string }[]} [copies] - the managed copies on offer; a test seam, defaulting to the real ones.
+ * @param {readonly { name: string, requires?: readonly string[] }[]} [copies] - the managed copies on offer; a test seam, defaulting to the real ones.
  * @returns {number} the exit code.
  */
 export function run(argv, cwd, packageRoot, io, copies = COPIES) {
@@ -80,10 +80,13 @@ export function run(argv, cwd, packageRoot, io, copies = COPIES) {
     // Starting to carry a copy is an explicit act: it is recorded, then the file is written.
     const file = path.join(cwd, "package.json")
     const manifest = JSON.parse(readFileSync(file).toString())
-    const copies = [...new Set([...enrolledCopies(cwd), add])].sort()
-    manifest["internal-package-contract"] = { ...manifest["internal-package-contract"], copies }
+    const enrolled = [...new Set([...enrolledCopies(cwd), ...withRequired(add, copies)])].sort()
+    manifest["internal-package-contract"] = {
+      ...manifest["internal-package-contract"],
+      copies: enrolled,
+    }
     writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`)
-    io.out(`enrolled ${add} in package.json\n`)
+    io.out(`enrolled ${withRequired(add, copies).join(", ")} in package.json\n`)
     apply = true
   }
   const version = JSON.parse(

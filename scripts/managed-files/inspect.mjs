@@ -65,7 +65,39 @@ export const COPIES = Object.freeze([
     from: "runtime/compiler-api.ts",
     to: "src/_ipc/compiler-api.ts",
   },
+  {
+    name: "build-fs",
+    from: "runtime/build-fs.ts",
+    to: "src/_ipc/build-fs.ts",
+  },
+  {
+    name: "resolve-tsconfig-paths",
+    from: "runtime/resolve-tsconfig-paths.ts",
+    to: "src/_ipc/resolve-tsconfig-paths.ts",
+    requires: ["build-fs", "compiler-api", "typescript"],
+  },
+  {
+    name: "no-node-fs",
+    from: "runtime/no-node-fs.ts",
+    to: "src/_ipc/no-node-fs.ts",
+    requires: ["glob"],
+  },
 ])
+
+/**
+ * @param {string} name - a managed copy.
+ * @param {readonly { name: string, requires?: readonly string[] }[]} [copies] - the copies on offer.
+ * @returns {string[]} the copy and, one level of imports at a time, every copy it imports.
+ */
+export function withRequired(name, copies = COPIES) {
+  const wanted = new Set([name])
+  for (const item of wanted) {
+    for (const needed of copies.find((copy) => copy.name === item)?.requires ?? []) {
+      wanted.add(needed)
+    }
+  }
+  return [...wanted]
+}
 
 /**
  * @param {string} from - the canonical file's path in this package.

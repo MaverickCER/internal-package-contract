@@ -1,4 +1,13 @@
-export const COPIES: readonly { name: string; from: string; to: string }[]
+export const COPIES: readonly {
+  name: string
+  from: string
+  to: string
+  requires?: readonly string[]
+}[]
+export function withRequired(
+  name: string,
+  copies?: readonly { name: string; requires?: readonly string[] }[],
+): string[]
 export function copyHeader(from: string): string
 export function enrolledCopies(cwd: string): string[]
 export const MANAGED: readonly { from: string; to: string; kind: "workflow" | "json" }[]
