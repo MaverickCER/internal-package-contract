@@ -76,7 +76,7 @@ export function flattenSchema(schema: unknown): {
     } else if (Array.isArray(node)) {
       if (node.length === 0) structure[pointer] = "[]"
       else if (node.every(isScalar)) {
-        for (const member of node) structure[`${pointer}#${String(member)}`] = ""
+        for (const member of node) structure[`${pointer}#${JSON.stringify(member)}`] = ""
       } else node.forEach((item, index) => walk(item, `${pointer}/${String(index)}`, parentKey))
     } else {
       for (const [key, child] of Object.entries(node as object).sort(([x], [y]) =>

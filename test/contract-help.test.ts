@@ -12,6 +12,15 @@ describe("wantsHelp", () => {
     expect(wantsHelp(["--checks", "a"])).toBe(false)
     expect(wantsHelp([])).toBe(false)
   })
+  it("does not take the value of an init option for a request for help", () => {
+    expect(wantsHelp(["init", "--name", "demo", "--description", "-h"])).toBe(false)
+    expect(wantsHelp(["init", "--owner", "--help"])).toBe(false)
+    expect(wantsHelp(["init", "--name", "-h"])).toBe(false)
+    expect(wantsHelp(["init", "--force", "-h"])).toBe(true)
+    expect(wantsHelp(["init", "--name=demo", "--help"])).toBe(true)
+    expect(wantsHelp(["--checks", "-h"])).toBe(true)
+    expect(wantsHelp(["sync", "--name", "-h"])).toBe(true)
+  })
 })
 
 describe("helpText", () => {

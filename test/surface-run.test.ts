@@ -88,6 +88,16 @@ describe("runSurfaceCheck: no baseline", () => {
   })
 })
 
+describe("runSurfaceCheck: a baseline whose version cannot be read", () => {
+  it("refuses, rather than treating every version as a sufficient bump", async () => {
+    project("0.3.0", "Usage")
+    baseline("not-a-version", surfaceWith("Usage --a"))
+    await expect(runSurfaceCheck(root, { runBin: runBin("Usage") })).rejects.toThrow(
+      `${BASELINE_PATH} records an unparseable version "not-a-version"; restore it from git or regenerate it with \`internal-package-contract update-baseline\`.`,
+    )
+  })
+})
+
 describe("runSurfaceCheck: against a baseline", () => {
   it("is satisfied with no changeset when nothing changed", async () => {
     project("0.3.0", "Usage --a")

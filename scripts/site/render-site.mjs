@@ -75,7 +75,13 @@ export async function run(argv, cwd, io) {
     io.err(`[site] ${args.content} is not valid JSON.\n`)
     return 1
   }
-  const pkg = JSON.parse(readFileSync(path.join(cwd, "package.json")).toString())
+  let pkg
+  try {
+    pkg = JSON.parse(readFileSync(path.join(cwd, "package.json")).toString())
+  } catch {
+    io.err("[site] package.json is missing or is not valid JSON.\n")
+    return 1
+  }
   const problems = validateSite(site, pkg)
   if (problems.length > 0) {
     io.err(

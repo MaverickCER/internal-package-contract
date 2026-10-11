@@ -436,6 +436,17 @@ describe("isAuthError()", () => {
   })
 })
 
+describe("classifyProblem(): a rejected token wins over a generic authentication message", () => {
+  it("reports token-rejected when both are present", () => {
+    expect(classifyProblem("", { ok: false, message: "Auth Error", data: { code: 401 } })).toBe(
+      "token-rejected",
+    )
+    expect(classifyProblem("", { ok: false, message: "Auth Error", data: { code: 403 } })).toBe(
+      "token-rejected",
+    )
+  })
+})
+
 describe("classifyProblem()", () => {
   it("maps Socket's auth envelope to not-authenticated", () => {
     expect(classifyProblem("", { ok: false, message: "Auth Error" })).toBe("not-authenticated")

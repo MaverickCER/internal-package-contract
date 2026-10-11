@@ -19,8 +19,8 @@ describe("flattenSchema", () => {
     })
     expect(structure).toEqual({
       "/type": '"object"',
-      "/required#a": "",
-      "/required#b": "",
+      '/required#"a"': "",
+      '/required#"b"': "",
       "/properties/a/type": '"string"',
       "/properties/title/type": '"number"',
     })

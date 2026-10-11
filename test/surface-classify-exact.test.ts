@@ -20,6 +20,7 @@ describe("flattenSchema (exact)", () => {
   it("keeps scalar members of any type as set members and addresses objects in arrays by index", () => {
     expect(flattenSchema({ enum: [1, "1", true, null] }).structure).toEqual({
       "/enum#1": "",
+      '/enum#"1"': "",
       "/enum#true": "",
       "/enum#null": "",
     })
@@ -171,40 +172,40 @@ describe("classifySurface (every message, flag and impact)", () => {
       classifySurface(withSchema(base), withSchema({ ...base, required: ["a", "z"] })),
     ).toEqual([
       {
-        id: "schema:./s:/required#z",
+        id: 'schema:./s:/required#"z"',
         kind: "schema-required-added",
         impact: "breaking",
         widens: false,
-        explanation: "/required#z now lists z in ./s.",
+        explanation: '/required#"z" now lists "z" in ./s.',
       },
     ])
     expect(
       classifySurface(withSchema({ ...base, required: ["a", "z"] }), withSchema(base)),
     ).toEqual([
       {
-        id: "schema:./s:/required#z",
+        id: 'schema:./s:/required#"z"',
         kind: "schema-required-removed",
         impact: "compatible",
         widens: false,
-        explanation: "/required#z no longer lists z in ./s.",
+        explanation: '/required#"z" no longer lists "z" in ./s.',
       },
     ])
     expect(classifySurface(withSchema({ enum: ["x"] }), withSchema({ enum: ["x", "y"] }))).toEqual([
       {
-        id: "schema:./s:/enum#y",
+        id: 'schema:./s:/enum#"y"',
         kind: "schema-set-member-added",
         impact: "breaking",
         widens: false,
-        explanation: "/enum#y now lists y in ./s.",
+        explanation: '/enum#"y" now lists "y" in ./s.',
       },
     ])
     expect(classifySurface(withSchema({ enum: ["x", "y"] }), withSchema({ enum: ["x"] }))).toEqual([
       {
-        id: "schema:./s:/enum#y",
+        id: 'schema:./s:/enum#"y"',
         kind: "schema-set-member-removed",
         impact: "breaking",
         widens: false,
-        explanation: "/enum#y no longer lists y in ./s.",
+        explanation: '/enum#"y" no longer lists "y" in ./s.',
       },
     ])
     expect(classifySurface(withSchema({ type: "a" }), withSchema({ type: "b" }))).toEqual([
@@ -251,7 +252,7 @@ describe("classifySurface (every message, flag and impact)", () => {
     const deep = (required: string[]) => withSchema({ properties: { o: { required } } })
     expect(classifySurface(deep(["a"]), deep(["a", "b"]))).toEqual([
       expect.objectContaining({
-        id: "schema:./s:/properties/o/required#b",
+        id: 'schema:./s:/properties/o/required#"b"',
         kind: "schema-required-added",
       }),
     ])

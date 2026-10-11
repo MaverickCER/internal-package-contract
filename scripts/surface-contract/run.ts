@@ -156,6 +156,12 @@ export async function runSurfaceCheck(
           preOne,
         ) as RequiredReleaseLevel)
   const baselineVersion = parseVersion(baseline.packageVersion)
+  // An unreadable baseline version would make every current version look like a sufficient bump.
+  if (baselineVersion === undefined) {
+    throw new Error(
+      `${BASELINE_PATH} records an unparseable version ${JSON.stringify(baseline.packageVersion)}; restore it from git or regenerate it with \`internal-package-contract update-baseline\`.`,
+    )
+  }
   const minimumRequiredVersion = computeMinimumRequiredVersion(baselineVersion, requiredLevel)
   const minimum = parseVersion(minimumRequiredVersion) as NonNullable<
     ReturnType<typeof parseVersion>

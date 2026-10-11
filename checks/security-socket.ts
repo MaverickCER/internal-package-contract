@@ -289,9 +289,9 @@ function failureCode(parsed: unknown): unknown {
  * @internal Exported for direct unit coverage -- see this module's own doc comment.
  */
 export function classifyProblem(stderr: string, parsed: unknown): SocketProblem | undefined {
-  if (isAuthError(parsed)) return "not-authenticated"
   const code = failureCode(parsed)
   if (code === 401 || code === 403) return "token-rejected"
+  if (isAuthError(parsed)) return "not-authenticated"
   if (code === 429) return "rate-limited"
   if (code === "ENOENT") return "cli-not-installed"
   const NETWORK_ERROR_CODES = /\b(ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN)\b/

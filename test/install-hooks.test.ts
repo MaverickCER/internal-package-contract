@@ -7,6 +7,14 @@ describe("hooksPathFor", () => {
       "node_modules/internal-package-contract/hooks",
     )
   })
+  it("keeps the path relative to the repository root when the package sits below it", () => {
+    expect(
+      hooksPathFor({ installed: true, packageHooks: "/abs/hooks", prefix: "packages/app/" }),
+    ).toBe("packages/app/node_modules/internal-package-contract/hooks")
+    expect(
+      hooksPathFor({ installed: false, packageHooks: "/abs/hooks", prefix: "packages/app/" }),
+    ).toBe("/abs/hooks")
+  })
   it("falls back to this package's own hooks directory when it is not installed under the repository", () => {
     expect(hooksPathFor({ installed: false, packageHooks: "/abs/hooks" })).toBe("/abs/hooks")
   })

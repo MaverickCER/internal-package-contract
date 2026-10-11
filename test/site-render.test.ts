@@ -16,6 +16,9 @@ describe("inline", () => {
     expect(inline("a <b> & c")).toBe("a &lt;b&gt; &amp; c")
     expect(inline("run `npm i <x>` now")).toBe("run <code>npm i &lt;x&gt;</code> now")
     expect(inline("a **strong** word")).toBe("a <strong>strong</strong> word")
+    // Formatting marks never reach inside an address: such a link is left as the text it was written as.
+    expect(inline("[x](https://e.com/`a`)")).toBe("[x](https://e.com/<code>a</code>)")
+    expect(inline("[x](https://e.com/**b**)")).toBe("[x](https://e.com/<strong>b</strong>)")
     expect(inline("see [the docs](https://example.com/a?b=1&c=2)")).toBe(
       'see <a href="https://example.com/a?b=1&amp;c=2">the docs</a>',
     )

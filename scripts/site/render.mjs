@@ -22,7 +22,7 @@ const SAFE_URL = /^(?:https:\/\/[^\s"'<>)]+|(?!\/\/)[^:\s"'<>)]+)$/
  */
 export function inline(text) {
   return esc(text)
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (whole, label, url) => {
+    .replace(/\[([^\]]+)\]\(([^)\s`*]+)\)/g, (whole, label, url) => {
       return SAFE_URL.test(url) ? `<a href="${url}">${label}</a>` : whole
     })
     .replace(/`([^`]+)`/g, "<code>$1</code>")

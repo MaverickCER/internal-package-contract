@@ -815,17 +815,6 @@ section[id] {
   .hero-actions,
   .copy-button,
   .skip-link,
-  .search-overlay,
-  .diagram-branches,
-  .diagram-tree {
-    /* connector chrome hidden below via specific rule, structure kept for content */
-  }
-
-  .site-header,
-  .nav-toggle,
-  .hero-actions,
-  .copy-button,
-  .skip-link,
   .search-overlay {
     display: none !important;
   }

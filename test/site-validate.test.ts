@@ -22,6 +22,12 @@ describe("validateSite", () => {
     expect(validateSite(validSite(), pkg)).toEqual([])
   })
 
+  it("says so, rather than crashing, when the content is not a JSON object", () => {
+    for (const value of [null, [], "text", 7, true]) {
+      expect(validateSite(value as never, pkg)).toEqual(["The site content must be a JSON object."])
+    }
+  })
+
   it("reports every missing required section by name", () => {
     for (const key of [
       "hero",

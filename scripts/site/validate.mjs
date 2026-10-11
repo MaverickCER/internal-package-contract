@@ -102,6 +102,9 @@ function longSentence(text) {
  * @returns {string[]} every problem found, empty when the content meets the bar.
  */
 export function validateSite(site, pkg) {
+  if (site === null || typeof site !== "object" || Array.isArray(site)) {
+    return ["The site content must be a JSON object."]
+  }
   const errors = []
   for (const key of ["siteUrl", "repoUrl", "title", "description"]) {
     if (!isText(site[key])) errors.push(`${key} is required.`)

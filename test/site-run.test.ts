@@ -97,6 +97,16 @@ describe("run", () => {
     expect(await run([], dir, r2.io)).toBe(1)
     expect(r2.err.join("")).toContain("docs/site.json is not valid JSON")
   })
+  it("says clearly when package.json is missing or is not JSON, instead of crashing", async () => {
+    const r = io()
+    rmSync(path.join(dir, "package.json"))
+    expect(await run([], dir, r.io)).toBe(1)
+    expect(r.err.join("")).toBe("[site] package.json is missing or is not valid JSON.\n")
+    writeFileSync(path.join(dir, "package.json"), "{ nope")
+    const r2 = io()
+    expect(await run([], dir, r2.io)).toBe(1)
+    expect(r2.err.join("")).toBe("[site] package.json is missing or is not valid JSON.\n")
+  })
   it("takes the content file and the output directory from flags", async () => {
     mkdirSync(path.join(dir, "site-src"))
     writeFileSync(path.join(dir, "site-src", "content.json"), JSON.stringify(validSite()))

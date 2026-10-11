@@ -2,9 +2,20 @@
 // SurfaceContract check snapshots (this text) is tested, and so `--help` never reaches code that would
 // run the contract.
 
-/** @param {readonly string[]} argv - the arguments after the script name. */
+/** The `init` options whose next argument is their value, so a `-h` there is a value and not a request for help. */
+const INIT_VALUE_OPTIONS = ["--name", "--owner", "--description"]
+
+/**
+ * @param {readonly string[]} argv - the arguments after the script name.
+ * @returns {boolean} whether help was asked for; the value of an `init` option never counts.
+ */
 export function wantsHelp(argv) {
-  return argv.includes("--help") || argv.includes("-h")
+  const isInit = argv[0] === "init"
+  return argv.some(
+    (arg, index) =>
+      (arg === "--help" || arg === "-h") &&
+      !(isInit && INIT_VALUE_OPTIONS.includes(argv[index - 1])),
+  )
 }
 
 /** @returns {string} the usage text, ending in a newline. */
