@@ -14,7 +14,9 @@ describe("the baseline commitlint config", () => {
   it.each([
     ["Co-Authored-By: A Person <a@example.com>"],
     ["co-authored-by: A Person <a@example.com>"],
-    ["Co-authored-by: Claude <noreply@anthropic.com>"],
+    ["Co-Authored-By : A Person <a@example.com>"],
+    ["Co-Authored-By\t: A Person <a@example.com>"],
+    ["Co-authored-by: Some Bot <bot@example.com>"],
   ])("rejects a commit carrying the trailer %s", (trailer) => {
     const result = lint(`fix: handle empty input\n\nThe parser threw.\n\n${trailer}\n`)
     expect(result.status).not.toBe(0)

@@ -18,7 +18,7 @@ export default {
         // A `Co-Authored-By:` line makes GitHub list that identity as a contributor of the
         // repository. Credit is the maintainer's to give, so no commit here carries one.
         "no-co-author-trailer": ({ raw }) => [
-          !/^co-authored-by:/im.test(raw ?? ""),
+          !/^co-authored-by[ \t]*:/im.test(raw ?? ""),
           "commits must not carry a Co-Authored-By trailer; remove the line from the message",
         ],
       },
