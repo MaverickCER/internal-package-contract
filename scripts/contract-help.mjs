@@ -17,6 +17,7 @@ Commands:
   exceptions                 list every exception registry: counts by type, legacy, expired
   sync-benchmark-guides      copy the canonical benchmark guides into benchmarks/
   update-baseline            regenerate the API and surface baselines after a release
+  site                       generate the landing page and one-page brief from docs/site.json (--check to verify)
   install-hooks              point git at the bundled hooks (run it once per clone)
 
 Options (when running the contract):

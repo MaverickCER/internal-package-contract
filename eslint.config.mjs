@@ -47,6 +47,13 @@ export default tseslint.config(
       globals: { ...globals.node },
     },
   },
+  // The generated landing page's script runs in a browser, in the same plain-JavaScript style as the
+  // published sites it replaces, so it gets browser globals and may ignore a caught error it cannot act on.
+  {
+    files: ["scripts/site/assets/script.js"],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: { "@typescript-eslint/no-unused-vars": ["error", { caughtErrors: "none" }] },
+  },
   // Suppression hygiene. An `eslint-disable` is an exception to a rule, so it has to say why, name
   // exactly what it disables, close itself, and still be needed: a blanket or undocumented one, or one
   // left behind after the code it excused changed, is how a standard erodes without a record. (The
