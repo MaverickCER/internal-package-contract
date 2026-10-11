@@ -4,6 +4,7 @@ import {
   classifyGroup,
   detectComplexityShift,
   SHIFT_MARGIN,
+  movedByMargin,
   estimateGrowthExponent,
   FIT_WINDOW,
   fitGrowth,
@@ -238,6 +239,24 @@ describe("detectComplexityShift", () => {
     expect(Math.abs((shift.previousExponent ?? 0) - (shift.currentExponent ?? 0))).toBeLessThan(
       SHIFT_MARGIN,
     )
+  })
+
+  it("counts a move of exactly the margin, in either direction, and nothing smaller", () => {
+    expect(movedByMargin(1, 1 + SHIFT_MARGIN)).toBe(true)
+    expect(movedByMargin(1 + SHIFT_MARGIN, 1)).toBe(true)
+    expect(movedByMargin(1, 1 + SHIFT_MARGIN - 0.01)).toBe(false)
+  })
+
+  it("does not flag a large exponent move that stays inside one class", () => {
+    const sizes = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240]
+    const tiers = (exponent: number) =>
+      Object.fromEntries(
+        sizes.map((n) => [`n${String(n)}`, { medianMs: n ** exponent / 1e4, inputs: { n } }]),
+      )
+    const shift = detectComplexityShift(tiers(1.7), tiers(2.4))
+    expect(shift.previousClass).toBe("quadratic")
+    expect(shift.currentClass).toBe("quadratic")
+    expect(shift.shifted).toBe(false)
   })
 
   it("flags a shift once the exponent has moved by the margin and the class changed", () => {

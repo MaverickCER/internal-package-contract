@@ -41,7 +41,10 @@ const normalizeHelp = (text: string): string =>
 
 /** Reads a JSON file, tolerating the comments and trailing commas a shared tsconfig or tool config carries. */
 async function readJson(file: string): Promise<unknown> {
-  const { config, error } = ts.parseConfigFileTextToJson(file, await readFile(file, "utf8"))
+  const { config, error } = ts.parseConfigFileTextToJson(
+    file.replaceAll("\\", "/"),
+    await readFile(file, "utf8"),
+  )
   if (error !== undefined) throw new Error(`${file} is not readable JSON.`)
   return config as unknown
 }

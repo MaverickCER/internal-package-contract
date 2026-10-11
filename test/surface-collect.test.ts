@@ -17,7 +17,7 @@ const pkg = (extra: object): void =>
   write("package.json", JSON.stringify({ name: "@o/demo", version: "0.1.0", ...extra }))
 const fake =
   (files: Record<string, { exitCode: number | null; stdout: string }>) => (file: string) =>
-    files[path.relative(root, file)] ?? { exitCode: null, stdout: "" }
+    files[path.relative(root, file).split(path.sep).join("/")] ?? { exitCode: null, stdout: "" }
 
 describe("collectSurface: nothing exposed", () => {
   it("returns an empty surface for a library with no bin, schema or action", async () => {
@@ -119,7 +119,7 @@ describe("collectSurface: schemas", () => {
   it("fails clearly when an exported schema file is missing", async () => {
     pkg({ exports: { "./schema": "./schemas/missing.json" } })
     await expect(collectSurface(root, { runBin: fake({}) })).rejects.toThrow(
-      /schemas\/missing\.json/,
+      /schemas[\\/]missing\.json/,
     )
   })
   it("skips a wildcard whose directory does not exist", async () => {

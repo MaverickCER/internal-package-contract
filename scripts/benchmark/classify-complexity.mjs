@@ -270,6 +270,11 @@ export function classifyGroup(tiers) {
  */
 export const SHIFT_MARGIN = 0.25
 
+/** Whether two fitted exponents are at least {@link SHIFT_MARGIN} apart (the boundary itself counts). */
+export function movedByMargin(previousExponent, currentExponent) {
+  return Math.abs(previousExponent - currentExponent) >= SHIFT_MARGIN
+}
+
 /**
  * Diffs a group's previous (history) vs current (fresh run) tier
  * measurements. `shifted` is true only when BOTH classifications succeeded
@@ -284,7 +289,7 @@ export function detectComplexityShift(previousTiers, currentTiers) {
       previous.complexityClass !== null &&
       current.complexityClass !== null &&
       previous.complexityClass !== current.complexityClass &&
-      Math.abs(previous.exponent - current.exponent) >= SHIFT_MARGIN,
+      movedByMargin(previous.exponent, current.exponent),
     previousClass: previous.complexityClass,
     currentClass: current.complexityClass,
     previousExponent: previous.exponent,

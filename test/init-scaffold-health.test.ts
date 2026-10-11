@@ -11,7 +11,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
  */
 const root = path.resolve(import.meta.dirname, "..")
 const bin = path.join(root, "bin", "contract.mjs")
-const prettier = path.join(root, "node_modules", ".bin", "prettier")
+// Node runs Prettier's own entry file: `.bin/prettier` is a `.cmd` shim on Windows, which execFileSync cannot start.
+const prettier = path.join(root, "node_modules", "prettier", "bin", "prettier.cjs")
 let dir: string
 
 /** What a failed Prettier run printed; anything that is not a nonzero exit (a spawn failure) is rethrown. */
@@ -103,8 +104,9 @@ describe("a freshly scaffolded package", () => {
     let output = ""
     try {
       execFileSync(
-        prettier,
+        process.execPath,
         [
+          prettier,
           "--check",
           "--config",
           path.join(root, "prettier.config.mjs"),

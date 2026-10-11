@@ -440,4 +440,14 @@ describe("classifySurface (every message, flag and impact)", () => {
     const changes = classifySurface(act({}, ["keep", "gone"]), act({}, ["keep", "new"]))
     expect(changes.map((c) => c.id)).toEqual(["action:output:gone", "action:output:new"])
   })
+
+  it("treats a boolean property schema that became an object as breaking, never as a new property", () => {
+    const before = withSchema({ properties: { a: true } })
+    const after = withSchema({ properties: { a: { type: "string" } } })
+    expect(classifySurface(before, after).map((c) => [c.id, c.kind])).toEqual([
+      ["schema:./s:/properties/a", "schema-constraint-removed"],
+      ["schema:./s:/properties/a/type", "schema-constraint-added"],
+    ])
+    expect(classifySurface(before, after).every((c) => c.impact === "breaking")).toBe(true)
+  })
 })

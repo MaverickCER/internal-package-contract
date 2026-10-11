@@ -25,7 +25,8 @@ import { classifySurface } from "./classify.js"
 import type { RunBin } from "./collect.js"
 import { collectSurface } from "./collect.js"
 
-export const BASELINE_PATH = path.join(".repo-contract", "surface-contract", "baseline.json")
+/** Forward slashes on every OS: it appears in messages and in the committed docs. */
+export const BASELINE_PATH = ".repo-contract/surface-contract/baseline.json"
 
 export interface SurfaceBaseline {
   readonly packageName: string

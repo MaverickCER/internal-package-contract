@@ -21,7 +21,7 @@ describe("bundled git hooks", () => {
     expect(read("pre-push")).toContain('SKIP="--skip Coverage,Crap,Mutation"')
     expect(read("pre-push")).not.toMatch(/SKIP="[^"\n]*(Lint|Format|Tests|SecuritySocket)/)
   })
-  it("are executable", () => {
+  it.skipIf(process.platform === "win32")("are executable", () => {
     for (const name of ["pre-commit", "pre-push", "commit-msg"]) {
       expect(statSync(path.join(hooks, name)).mode & 0o111, name).not.toBe(0)
     }

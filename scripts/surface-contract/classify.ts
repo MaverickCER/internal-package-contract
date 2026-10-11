@@ -70,7 +70,7 @@ export function flattenSchema(schema: unknown): {
 } {
   const structure: Record<string, string> = {}
   const docs: Record<string, string> = {}
-  const walk = (node: unknown, pointer = "", parentKey = ""): void => {
+  const walk = (node: unknown, pointer = "", parentKey?: string): void => {
     if (isScalar(node)) {
       structure[pointer] = JSON.stringify(node)
     } else if (Array.isArray(node)) {
@@ -82,7 +82,7 @@ export function flattenSchema(schema: unknown): {
       for (const [key, child] of Object.entries(node as object).sort(([x], [y]) =>
         x.localeCompare(y),
       )) {
-        if (DOC_KEYS.has(key) && !NAME_MAP_KEYS.has(parentKey))
+        if (DOC_KEYS.has(key) && !NAME_MAP_KEYS.has(parentKey as string))
           docs[`${pointer}/${key}`] = JSON.stringify(child)
         else walk(child, `${pointer}/${key}`, key)
       }
