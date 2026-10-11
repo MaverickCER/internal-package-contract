@@ -76,4 +76,30 @@ describe("run (exact output)", () => {
       "Pin audit blocked, not passed:\n- package-lock.json: could not ask GitHub whether aaaaaaa is reachable (HTTP 500).\n",
     )
   })
+  it("separates several items with newlines", async () => {
+    const wfText = (sha: string) =>
+      `    uses: MaverickCER/internal-package-contract/.github/workflows/r.yml@${sha} # v1\n`
+    const two = {
+      lockfile: files.lockfile,
+      workflows: [{ file: "w.yml", text: wfText(A) + wfText(B) }],
+    }
+    const bad = collect()
+    await run({
+      ...two,
+      io: bad.io,
+      gh: gh({
+        [`${R}/compare/main...${A}`]: { ok: false, status: 404 },
+        [`${R}/compare/main...${B}`]: { ok: false, status: 404 },
+      }),
+    })
+    const lines = bad.err.join("").split("\n")
+    expect(lines).toHaveLength(4)
+    expect(lines.every((l) => l === "" || l.startsWith("- "))).toBe(true)
+    const blocked = collect()
+    await run({ ...two, io: blocked.io, gh: gh({}) })
+    const blockedLines = blocked.err.join("").split("\n")
+    expect(blockedLines[0]).toBe("Pin audit blocked, not passed:")
+    expect(blockedLines.slice(1).every((l) => l === "" || l.startsWith("- "))).toBe(true)
+    expect(blockedLines).toHaveLength(5)
+  })
 })
