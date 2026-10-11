@@ -177,9 +177,11 @@ jobs:
           # step during the VERSION run that produced this exact version bump -- not by diffing
           # version strings, which is ambiguous pre-1.0. It rides along in the release commit.
           BUMP=$(node -p "require('./.changeset/.release-bump.json').bump" 2>/dev/null || echo "")
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "bump-type=$BUMP" >> "$GITHUB_OUTPUT"
+          {
+            echo "name=$NAME"
+            echo "version=$VERSION"
+            echo "bump-type=$BUMP"
+          } >> "$GITHUB_OUTPUT"
           if [ "$PRIVATE" = "true" ]; then
             echo "should-publish=false" >> "$GITHUB_OUTPUT"
             echo "$NAME is private; nothing to publish."
@@ -301,7 +303,7 @@ jobs:
         run: |
           set -eu
           served=""
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
             served=$(npm view "$NAME@$VERSION" version 2>/dev/null || true)
             [ "$served" = "$VERSION" ] && break
             sleep 10

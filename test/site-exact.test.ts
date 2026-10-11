@@ -4,7 +4,7 @@ import { validateSite, wordCount } from "../scripts/site/validate.mjs"
 import { validSite } from "./support-site.js"
 
 // Fixtures are deliberately loose: each test reaches into the content and breaks one field.
-type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any -- see above
+type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any -- each test breaks one field of a valid site, so the fixture type must be loose
 
 const pkg = { name: "demo-pkg", version: "0.4.2", license: "MIT" }
 const site = (mutate: (value: Loose) => void = () => {}) => {

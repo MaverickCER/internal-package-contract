@@ -73,7 +73,7 @@ describe("release workflows", () => {
   it("ask the registry afterwards for the published version and its provenance", () => {
     const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
     expect(text).toContain("name: ${{ steps.info.outputs.name }}")
-    expect(text).toContain('echo "name=$NAME" >> "$GITHUB_OUTPUT"')
+    expect(text).toContain('echo "name=$NAME"\n            echo "version=$VERSION"')
     expect(text).toContain("- name: Verify what npm now serves")
     expect(text).toContain('npm view "$NAME@$VERSION" version')
     expect(text).toContain('npm view "$NAME@$VERSION" dist.attestations --json')

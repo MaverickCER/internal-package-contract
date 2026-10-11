@@ -154,6 +154,12 @@ describe("what the package adds", () => {
       "<td>40</td><td>1.00 ms</td><td>1.50 ms</td><td>+0.500 ms</td><td>+50.0%</td>",
     )
   })
+  it("writes the header cells and the rows with nothing between them", async () => {
+    const { html } = await page([entry(0)])
+    expect(html).toContain('</th><th scope="col">')
+    expect(html).not.toMatch(/<\/th>[^<]+<th/)
+    expect(html).toContain("</td></tr><tr><td>40</td>")
+  })
   it("says 'within timer noise' instead of a percentage for a baseline below the floor", async () => {
     const { html } = await page([entry(0)])
     expect(html).toContain(
@@ -185,7 +191,97 @@ describe("what the package adds", () => {
   })
 })
 
+describe("what the package adds: edge cases", () => {
+  const both = (baseline: unknown, withPackage: unknown, over: Record<string, unknown> = {}) =>
+    entry(0, {
+      measurements: { "end-to-end:baseline": baseline, "end-to-end:with-package": withPackage },
+      ...over,
+    })
+  it("takes the latest run that has both groups, not one that has only one of them", async () => {
+    const both0 = entry(0)
+    const onlyBaseline = entry(1, {
+      measurements: { "end-to-end:baseline": { n20: m(9, 20) } },
+    })
+    const onlyPackage = entry(2, {
+      measurements: { "end-to-end:with-package": { n20: m(9, 20) } },
+    })
+    const { html } = await page([both0, onlyBaseline, onlyPackage], "partial.json")
+    expect(html).toContain("<td>20</td><td>0.500 ms</td><td>0.750 ms</td>")
+    expect(html).toContain("2026-01-01")
+  })
+  it("gives a difference of nothing a plus sign, not a minus", async () => {
+    const { html } = await page([both({ n20: m(1, 20) }, { n20: m(1, 20) })], "zero.json")
+    expect(html).toContain("<td>+0.00 µs</td><td>+0.0%</td>")
+  })
+  it("shows a dash where a row has no input size, and keeps the tiers in the order given", async () => {
+    const { html } = await page(
+      [both({ n80: { medianMs: 1 }, n20: m(1, 20) }, { n80: { medianMs: 2 }, n20: m(2, 20) })],
+      "nosize.json",
+    )
+    expect(html).toContain("<td>–</td><td>1.00 ms</td><td>2.00 ms</td>")
+    expect(html.indexOf("<td>20</td><td>1.00 ms</td>")).toBeLessThan(
+      html.indexOf("<td>–</td><td>1.00 ms</td>"),
+    )
+  })
+  it("takes the size from the baseline when the with-package measurement did not record one", async () => {
+    const { html } = await page(
+      [both({ n20: m(1, 20) }, { n20: { medianMs: 2 } })],
+      "base-size.json",
+    )
+    expect(html).toContain("<td>20</td><td>1.00 ms</td><td>2.00 ms</td>")
+  })
+  it("names the commit of the run it shows, and says nothing of a commit when there is none", async () => {
+    const withCommit = await page([entry(0)], "commit.json")
+    expect(withCommit.html).toContain("2026-01-01, commit c0ffee0</caption>")
+    const noCommit = await page([entry(0, { gitCommit: undefined })], "nocommit.json")
+    expect(noCommit.html).toContain("Latest run measuring both: 2026-01-01</caption>")
+  })
+  it("leaves no trace of the table, not even whitespace or text, when it is absent", async () => {
+    const { html } = await page(
+      [entry(0, { measurements: { "fn:parse": { n20: m(1, 20), n40: m(2, 40) } } })],
+      "absent.json",
+    )
+    expect(html).toContain("Each chart's data is available as a table beneath it.</p><ul")
+  })
+})
+
+describe("the group definition", () => {
+  it("is given for a group the suite kit makes and left out for any other", async () => {
+    const e = entry(0, {
+      measurements: {
+        "fn:parse": { n20: m(1, 20), n40: m(2, 40) },
+        "custom-group": { n20: m(1, 20), n40: m(2, 40) },
+      },
+    })
+    const { html } = await page([e], "kinds.json")
+    expect(html).toContain(
+      `<h3>fn:parse</h3><p class="kind">${escapeHtml(copy.groups["function"]!)}</p>`,
+    )
+    expect(html).toContain('<h3>custom-group</h3><p class="class-badge')
+  })
+})
+
+describe("the median's noise", () => {
+  it("is left out when the median is zero, rather than dividing by it", async () => {
+    const e = entry(0, {
+      measurements: { "fn:parse": { n20: m(0, 20, { stdDevMs: 1 }), n40: m(2, 40) } },
+    })
+    const { html } = await page([e], "zero-median.json")
+    expect(html).toContain("<td>0.00 µs</td>")
+    expect(html).not.toMatch(/Infinity|NaN/)
+  })
+})
+
 describe("provenance", () => {
+  it("mentions the processor not being recorded only when no run recorded one", async () => {
+    const some = await page([entry(0, { cpuModel: undefined }), entry(1)], "some-cpu.json")
+    expect(some.html).not.toContain("the processor was not recorded")
+    const none = await page(
+      [entry(0, { cpuModel: undefined }), entry(1, { cpuModel: undefined })],
+      "no-cpu.json",
+    )
+    expect(none.html).toContain("the processor was not recorded")
+  })
   it("says how many runs came from how many commits, and where they were measured", async () => {
     const { html } = await page([entry(0), entry(1), entry(2)])
     expect(html).toContain(

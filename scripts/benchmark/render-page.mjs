@@ -188,7 +188,7 @@ export async function buildPageModel({ histories, maxEntries, readme, repo }) {
     category.provenance = describeProvenance(category.runs)
     // The latest run that measured both the baseline and the package, so the cost is shown at one moment.
     const costIndex = entries.findLastIndex(
-      (e) => e.measurements?.["end-to-end:baseline"] && e.measurements?.["end-to-end:with-package"],
+      (e) => e.measurements?.["end-to-end:baseline"] && e.measurements["end-to-end:with-package"],
     )
     const costRows =
       costIndex === -1

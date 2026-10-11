@@ -38,6 +38,16 @@ describe("hooksStatus", () => {
     expect(hooksStatus({ ...base, configured: "" })).toBe("missing")
     expect(hooksStatus({ ...base, configured: "/home/me/.git-global-hooks" })).toBe("missing")
   })
+  it("does not resolve a path that was never configured, so an unset or empty setting is never taken for the bundled hooks", () => {
+    const everythingIsBundled = () => "/real/hooks"
+    expect(hooksStatus({ ...base, configured: undefined, realpath: everythingIsBundled })).toBe(
+      "missing",
+    )
+    expect(hooksStatus({ ...base, configured: "", realpath: everythingIsBundled })).toBe("missing")
+    expect(hooksStatus({ ...base, configured: "/anything", realpath: everythingIsBundled })).toBe(
+      "installed",
+    )
+  })
   it("is missing when the configured path cannot be resolved", () => {
     const failing = () => {
       throw new Error("ENOENT")
@@ -63,6 +73,8 @@ describe("gitHooksCheck (policy)", () => {
     })
   })
   it("passes, saying why, where hooks do not apply", async () => {
+    expect((await judge("ci")).outcome).toBe("pass")
+    expect((await judge("not-a-repo")).outcome).toBe("pass")
     expect((await judge("ci")).rationale).toBe(
       "GitHooks: not checked in CI, where this contract is the gate.",
     )
@@ -74,6 +86,13 @@ describe("gitHooksCheck (policy)", () => {
     expect(result.rationale).toBe(
       "GitHooks: the bundled hooks are not installed, so commits and pushes are not checked locally and CI will be the first to find a failure. Run `npx internal-package-contract install-hooks` once in this clone.",
     )
+  })
+  it("names check-git-hooks when the script did not run to completion", async () => {
+    const result = await gitHooksCheck().policy(makeContext(makeResult({ status: "timed_out" })))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: "check-git-hooks did not run to completion (status: timed_out).",
+    })
   })
   it("fails closed on output that is not the envelope", async () => {
     const result = await gitHooksCheck().policy(makeContext(makeResult({ stdout: "oops" })))
