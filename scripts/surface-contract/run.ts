@@ -142,21 +142,20 @@ export async function runSurfaceCheck(
   }
 
   const changes = classifySurface(baseline.surface, surface)
-  const impact = changes.some((c) => c.impact === "breaking")
-    ? "breaking"
-    : changes.length > 0
-      ? "compatible"
-      : "unchanged"
-  const preOne = parseVersion(version)?.major === 0
+  const current = parseVersion(version)
+  const preOne = current !== undefined && current.major === 0
+  const breaking = changes.some((c) => c.impact === "breaking")
+  // `requiredLevelFor` only answers `undefined` for an unclassifiable impact, which this never passes.
   const requiredLevel =
-    requiredLevelFor(
-      impact,
-      changes.some((c) => c.widens),
-      preOne,
-    ) ?? "none"
+    changes.length === 0
+      ? "none"
+      : (requiredLevelFor(
+          breaking ? "breaking" : "compatible",
+          changes.some((c) => c.widens),
+          preOne,
+        ) as RequiredReleaseLevel)
   const baselineVersion = parseVersion(baseline.packageVersion)
   const minimumRequiredVersion = computeMinimumRequiredVersion(baselineVersion, requiredLevel)
-  const current = parseVersion(version)
   const minimum = parseVersion(minimumRequiredVersion)
   // A release pull request has consumed its changesets and bumped the version, so the bump itself
   // is the declaration once it reaches the minimum.

@@ -47,12 +47,12 @@ export function evaluateSurfacePolicy(evidence: SurfaceEvidence): PolicyResult {
   if (evidence.changes.length === 0) {
     return {
       outcome: "pass",
-      rationale: `SurfaceContract: the CLI, schema and action surface is unchanged since ${evidence.baselineVersion ?? "the baseline"}.`,
+      rationale: `SurfaceContract: the CLI, schema and action surface is unchanged since ${String(evidence.baselineVersion)}.`,
     }
   }
   const { declaredLevel, changesetCount, satisfied } = evidence.changesets
   const lines = [
-    `SurfaceContract: the CLI, schema or action surface changed since ${evidence.baselineVersion ?? "the baseline"}:`,
+    `SurfaceContract: the CLI, schema or action surface changed since ${String(evidence.baselineVersion)}:`,
     ...evidence.changes.map((c) => `- [${c.impact}] ${c.explanation} (${c.id})`),
     "",
     `Release level: ${String(changesetCount)} changeset(s) declare \`${declaredLevel}\`; the surface change requires \`${evidence.requiredLevel}\`.`,
@@ -70,7 +70,7 @@ export function evaluateSurfacePolicy(evidence: SurfaceEvidence): PolicyResult {
     outcome: "pass",
     rationale: [
       ...lines,
-      `Minimum required version if released now: ${evidence.minimumRequiredVersion ?? "unknown"}.`,
+      `Minimum required version if released now: ${String(evidence.minimumRequiredVersion)}.`,
     ].join("\n"),
   }
 }

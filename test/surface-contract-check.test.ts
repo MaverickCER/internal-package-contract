@@ -92,6 +92,24 @@ describe("evaluateSurfacePolicy", () => {
   })
 })
 
+describe("evaluateSurfacePolicy (version wording)", () => {
+  it("names the baseline version when nothing changed, and the minimum version when it passes", () => {
+    expect(evaluateSurfacePolicy(evidence({ baselineVersion: "1.4.0" })).rationale).toContain(
+      "since 1.4.0.",
+    )
+    const r = evaluateSurfacePolicy(
+      evidence({
+        changes: [breaking],
+        baselineVersion: "1.4.0",
+        minimumRequiredVersion: "1.5.0",
+        requiredLevel: "minor",
+      }),
+    )
+    expect(r.rationale).toContain("changed since 1.4.0:")
+    expect(r.rationale).toContain("Minimum required version if released now: 1.5.0.")
+  })
+})
+
 describe("surfaceContract", () => {
   it("runs the bundled script under tsx and asks for JSON", () => {
     const check = surfaceContract()
@@ -117,6 +135,6 @@ describe("surfaceContract", () => {
   it("fails closed, with its own name, on output that is not JSON", async () => {
     const r = await surfaceContract().policy(makeContext(makeResult({ stdout: "oops" })))
     expect(r.outcome).toBe("fail")
-    expect(r.rationale).toMatch(/^SurfaceContract: check output could not be parsed as JSON\./)
+    expect(r.rationale).toBe("SurfaceContract: check output could not be parsed as JSON.\noops")
   })
 })

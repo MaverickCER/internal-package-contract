@@ -71,20 +71,22 @@ export function flattenSchema(schema: unknown): {
   const structure: Record<string, string> = {}
   const docs: Record<string, string> = {}
   const walk = (node: unknown, pointer: string, parentKey: string): void => {
-    if (Array.isArray(node)) {
+    if (isScalar(node)) {
+      structure[pointer] = JSON.stringify(node)
+    } else if (Array.isArray(node)) {
       if (node.length === 0) structure[pointer] = "[]"
       else if (node.every(isScalar)) {
-        for (const member of node)
-          structure[`${pointer}#${typeof member === "string" ? member : JSON.stringify(member)}`] =
-            ""
+        for (const member of node) structure[`${pointer}#${String(member)}`] = ""
       } else node.forEach((item, index) => walk(item, `${pointer}/${String(index)}`, parentKey))
-    } else if (typeof node === "object" && node !== null) {
-      for (const [key, child] of Object.entries(node).sort(([a], [b]) => a.localeCompare(b))) {
+    } else {
+      for (const [key, child] of Object.entries(node as object).sort(([x], [y]) =>
+        x.localeCompare(y),
+      )) {
         if (DOC_KEYS.has(key) && !NAME_MAP_KEYS.has(parentKey))
           docs[`${pointer}/${key}`] = JSON.stringify(child)
         else walk(child, `${pointer}/${key}`, key)
       }
-    } else structure[pointer] = JSON.stringify(node)
+    }
   }
   walk(schema, "", "")
   return { structure, docs }
@@ -140,9 +142,12 @@ function classifyCli(name: string, before: CliSurface, after: CliSurface): Surfa
 
 /** Pointers that end at a named property, shortest first: `/properties/a`, `/properties/a/properties/b`. */
 function propertyRoots(pointer: string): string[] {
-  return [...pointer.matchAll(/\/properties\/[^/#]+/g)].map((m) =>
-    pointer.slice(0, (m.index ?? 0) + m[0].length),
-  )
+  const roots: string[] = []
+  pointer.replace(/\/properties\/[^/#]+/g, (match, offset: number) => {
+    roots.push(pointer.slice(0, offset + match.length))
+    return match
+  })
+  return roots
 }
 
 function classifySchema(key: string, before: unknown, after: unknown): SurfaceChange[] {
@@ -163,7 +168,7 @@ function classifySchema(key: string, before: unknown, after: unknown): SurfaceCh
     changes.push({ id: id(pointer), kind, impact, widens, explanation })
   }
   const startsWith = (map: Record<string, string>, root: string): boolean =>
-    Object.keys(map).some((p) => p === root || p.startsWith(`${root}/`) || p.startsWith(`${root}#`))
+    Object.keys(map).some((p) => p === root || p.startsWith(`${root}/`))
   for (const pointer of [
     ...new Set([...Object.keys(a.structure), ...Object.keys(b.structure)]),
   ].sort()) {
@@ -171,7 +176,8 @@ function classifySchema(key: string, before: unknown, after: unknown): SurfaceCh
     const now = b.structure[pointer]
     if (was === now) continue
     const hash = pointer.indexOf("#")
-    const setKey = hash === -1 ? "" : pointer.slice(pointer.lastIndexOf("/", hash) + 1, hash)
+    // Only read for a set member, where `hash` is the position of its `#`: the keyword it belongs to.
+    const setKey = pointer.slice(pointer.lastIndexOf("/", hash) + 1, hash)
     if (was !== undefined && now !== undefined) {
       add(
         pointer,

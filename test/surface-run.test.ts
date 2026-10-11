@@ -229,7 +229,99 @@ describe("runSurfaceUpdate", () => {
   })
 })
 
+describe("runSurfaceCheck (exact evidence)", () => {
+  it("reports a surface-free package with its changesets counted and satisfied", async () => {
+    project("0.1.0", null)
+    changeset("minor")
+    expect(await runSurfaceCheck(root)).toEqual({
+      currentVersion: "0.1.0",
+      status: "no-surface",
+      changes: [],
+      requiredLevel: "none",
+      minimumRequiredVersion: undefined,
+      baselineVersion: undefined,
+      changesets: { changesetCount: 1, declaredLevel: "minor", satisfied: true },
+    })
+  })
+  it("asks for a minor, not a patch, when one change widens and another does not, from 1.0.0", async () => {
+    project("1.2.0", "Usage --a --b", { type: "object", description: "new" })
+    baseline("1.2.0", {
+      cli: { demo: { exitCode: 0, help: "Usage --a" } },
+      schemas: { "./schema": { type: "object", description: "old" } },
+      action: null,
+    })
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage --a --b") })
+    expect(e.changes.map((c) => [c.kind, c.widens])).toEqual([
+      ["cli-flag-added", true],
+      ["schema-docs-changed", false],
+    ])
+    expect(e.requiredLevel).toBe("minor")
+  })
+  it("treats an unparseable package version as not pre-1.0 and not bumped", async () => {
+    project("next", "Usage")
+    baseline("0.3.0", surfaceWith("Usage --a"))
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage") })
+    expect(e.requiredLevel).toBe("major")
+    expect(e.changesets.satisfied).toBe(false)
+  })
+})
+
+describe("runSurfaceUpdate (exact outcomes)", () => {
+  it("moves the baseline forward when only the version changed", async () => {
+    project("0.2.0", "h")
+    baseline("0.1.0", surfaceWith("h"))
+    const outcome = await runSurfaceUpdate(root, { runBin: runBin("h") })
+    expect(outcome).toEqual({
+      status: "updated",
+      message: `Surface baseline updated to version 0.2.0. Review ${BASELINE_PATH} and commit.`,
+    })
+    expect((await readSurfaceBaseline(root))?.packageVersion).toBe("0.2.0")
+  })
+  it("words the refusals and the no-op exactly", async () => {
+    project("next", "h")
+    expect(await runSurfaceUpdate(root, { runBin: runBin("h") })).toEqual({
+      status: "refused",
+      message:
+        'Refusing to update: could not parse package.json\'s version "next" as major.minor.patch.',
+    })
+    project("0.1.0", "h")
+    baseline("junk", surfaceWith("h"))
+    expect(await runSurfaceUpdate(root, { runBin: runBin("h") })).toEqual({
+      status: "refused",
+      message:
+        'Refusing to update: the committed surface baseline records an unparseable version "junk".',
+    })
+    project("0.1.0", "h")
+    baseline("0.2.0", surfaceWith("h"))
+    expect(await runSurfaceUpdate(root, { runBin: runBin("h") })).toEqual({
+      status: "refused",
+      message:
+        "Refusing to update: package.json declares 0.1.0, older than the committed surface baseline's 0.2.0.",
+    })
+    project("0.2.0", "h")
+    baseline("0.2.0", surfaceWith("h"))
+    expect(await runSurfaceUpdate(root, { runBin: runBin("h") })).toEqual({
+      status: "current",
+      message:
+        "Surface baseline is already at version 0.2.0 with matching contents; nothing to do.",
+    })
+  })
+})
+
 describe("main", () => {
+  it("creates the first baseline when CI is not set", async () => {
+    project("0.3.0", "Usage --a")
+    let out = ""
+    await main(root, {}, (text) => (out += text))
+    expect(JSON.parse(out).status).toBe("initial-baseline")
+    expect(await readSurfaceBaseline(root)).toBeDefined()
+  })
+  it("treats CI set to anything but true as not CI", async () => {
+    project("0.3.0", "Usage --a")
+    let out = ""
+    await main(root, { CI: "false" }, (text) => (out += text))
+    expect(JSON.parse(out).status).toBe("initial-baseline")
+  })
   it("prints only the evidence as JSON, and passes CI=true through", async () => {
     project("0.3.0", "Usage --a")
     let out = ""

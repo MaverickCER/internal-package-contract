@@ -63,11 +63,11 @@ describe("collectSurface: CLIs", () => {
   it("runs the real file with --help through defaultRunBin", () => {
     write(
       "cli.mjs",
-      'process.stdout.write(process.argv.slice(2).join(" ") + "|" + (process.env.NO_COLOR ?? "")); process.exitCode = 3',
+      'process.stdout.write(process.argv.slice(2).join(" ") + "|" + process.env.NO_COLOR + "|" + process.env.FORCE_COLOR); process.exitCode = 3',
     )
     expect(defaultRunBin(path.join(root, "cli.mjs"), root)).toEqual({
       exitCode: 3,
-      stdout: "--help|1",
+      stdout: "--help|1|0",
     })
   })
   it("falls back to stderr when the CLI prints its help there", () => {
@@ -133,6 +133,56 @@ describe("collectSurface: schemas", () => {
   })
 })
 
+describe("collectSurface: edge cases", () => {
+  it("names a string bin after an unscoped package too, and after the part following a long scope", async () => {
+    write("bin.js", "")
+    write("package.json", JSON.stringify({ name: "plain", version: "1.0.0", bin: "bin.js" }))
+    expect(
+      Object.keys(
+        (await collectSurface(root, { runBin: fake({ "bin.js": { exitCode: 0, stdout: "h" } }) }))
+          .cli,
+      ),
+    ).toEqual(["plain"])
+    write(
+      "package.json",
+      JSON.stringify({ name: "@longscope/tool", version: "1.0.0", bin: "bin.js" }),
+    )
+    expect(
+      Object.keys(
+        (await collectSurface(root, { runBin: fake({ "bin.js": { exitCode: 0, stdout: "h" } }) }))
+          .cli,
+      ),
+    ).toEqual(["tool"])
+  })
+  it("matches a wildcard file name on both its prefix and its suffix", async () => {
+    for (const name of [
+      "m-one.s.json",
+      "one.s.json",
+      "m-two.json",
+      "xm-three.s.json",
+      "m-.s.json",
+    ]) {
+      write(`schemas/${name}`, "{}")
+    }
+    pkg({ exports: { "./s/*": "./schemas/m-*.s.json" } })
+    expect(Object.keys((await collectSurface(root, { runBin: fake({}) })).schemas)).toEqual(
+      ["./s/", "./s/one"].sort(),
+    )
+  })
+  it("ignores a wildcard export whose target has no star in the file name, and a star key with a plain target", async () => {
+    write("a/f.json", "{}")
+    pkg({ exports: { "./s/*": "./a/f.json" } })
+    expect((await collectSurface(root, { runBin: fake({}) })).schemas).toEqual({})
+  })
+  it("reports an unreadable JSON file by its path", async () => {
+    write("bad.json", "{ nope")
+    pkg({ exports: { "./bad": "./bad.json" } })
+    await expect(collectSurface(root, { runBin: fake({}) })).rejects.toThrow(
+      `${path.join(root, "bad.json")} is not readable JSON.`,
+    )
+  })
+})
+
 describe("collectSurface: action", () => {
   it("reads inputs (required, default) and outputs from action.yml", async () => {
     write(
@@ -173,6 +223,14 @@ describe("collectSurface: action", () => {
     expect((await collectSurface(root, { runBin: fake({}) })).action).toEqual({
       inputs: {},
       outputs: [],
+    })
+  })
+  it("reads an input declared with no body as optional with no default, and outputs in sorted order", async () => {
+    write("action.yml", "name: x\ninputs:\n  bare:\noutputs:\n  zeta:\n  alpha:\n")
+    pkg({})
+    expect((await collectSurface(root, { runBin: fake({}) })).action).toEqual({
+      inputs: { bare: { required: false, default: null } },
+      outputs: ["alpha", "zeta"],
     })
   })
   it("stringifies a non-string default", async () => {

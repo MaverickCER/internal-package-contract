@@ -42,22 +42,19 @@ const normalizeHelp = (text: string): string =>
 /** Reads a JSON file, tolerating the comments and trailing commas a shared tsconfig or tool config carries. */
 async function readJson(file: string): Promise<unknown> {
   const { config, error } = ts.parseConfigFileTextToJson(file, await readFile(file, "utf8"))
-  if (error !== undefined) {
-    throw new Error(
-      `${file} is not readable JSON: ${ts.flattenDiagnosticMessageText(error.messageText, "\n")}`,
-    )
-  }
+  if (error !== undefined) throw new Error(`${file} is not readable JSON.`)
   return config as unknown
 }
 
 /** The JSON files an `exports` entry serves: the file itself, or one per match of a `*` pattern. */
 async function schemaFiles(root: string, key: string, target: string): Promise<[string, string][]> {
-  if (!key.includes("*") && !target.includes("*")) return [[key, target]]
-  const star = target.indexOf("*")
+  if (!key.includes("*")) return [[key, target]]
   const slash = target.lastIndexOf("/")
-  if (star < slash) return []
   const dir = target.slice(0, slash + 1)
-  const [prefix, suffix] = [target.slice(slash + 1, star), target.slice(star + 1)]
+  const fileName = target.slice(slash + 1)
+  const star = fileName.indexOf("*")
+  if (star === -1) return []
+  const [prefix, suffix] = [fileName.slice(0, star), fileName.slice(star + 1)]
   const entries = await readdir(path.join(root, dir)).catch(() => [] as string[])
   return entries
     .filter((name) => name.startsWith(prefix) && name.endsWith(suffix))
@@ -77,8 +74,7 @@ async function collectAction(root: string): Promise<ActionSurface | null> {
     outputs?: Record<string, unknown>
   }
   const inputs: Record<string, { required: boolean; default: string | null }> = {}
-  for (const name of Object.keys(doc.inputs ?? {}).sort()) {
-    const input = doc.inputs?.[name]
+  for (const [name, input] of Object.entries(doc.inputs ?? {})) {
     inputs[name] = {
       required: input?.required === true,
       default: input?.default === undefined ? null : String(input.default),
@@ -105,7 +101,9 @@ export async function collectSurface(
   }
 
   const bins =
-    typeof pkg.bin === "string" ? { [pkg.name.replace(/^@[^/]+\//, "")]: pkg.bin } : (pkg.bin ?? {})
+    typeof pkg.bin === "string"
+      ? { [pkg.name.slice(pkg.name.lastIndexOf("/") + 1)]: pkg.bin }
+      : (pkg.bin ?? {})
   const cli: Record<string, { exitCode: number | null; help: string }> = {}
   for (const name of Object.keys(bins).sort()) {
     const file = path.join(root, bins[name]!)
