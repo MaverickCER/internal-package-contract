@@ -39,6 +39,7 @@
 
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { isDerivedGroup } from "./page-sections.mjs"
 import { detectComplexityShift } from "./classify-complexity.mjs"
 import { evaluateGates } from "./gates.mjs"
 import {
@@ -90,6 +91,8 @@ function complexityShifts(label, current, historyPath) {
   if (!previousEntry) return []
 
   return Object.entries(resultsToMeasurements(current)).flatMap(([group, tiers]) => {
+    // The overhead is a difference of two noisy medians, not a measurement: its shape is not a signal.
+    if (isDerivedGroup(group)) return []
     const shift = detectComplexityShift(previousEntry.measurements?.[group], tiers)
     return shift.shifted ? [{ label, group, ...shift }] : []
   })
@@ -250,7 +253,7 @@ export async function summarize({ examples, budgetsPath, marker }) {
       ? `## ❌ ${String(failures.length)} gate${failures.length === 1 ? "" : "s"} failed`
       : "## ✅ Gates passed",
     "",
-    "Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, and so survive a change of machine: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.",
+    "Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.",
     "",
     ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
     ...notes.map((finding) => `- ℹ️ **${finding.label}** — ${finding.message}`),

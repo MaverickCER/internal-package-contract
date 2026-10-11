@@ -5,7 +5,7 @@
 // gate at any threshold: the same code swings 10-40% between runs, more for microsecond-scale work, and
 // the two runs may not even be the same CPU or Node version. Raw cross-run deltas therefore stay
 // highlights in the PR comment. What can gate is a property of ONE run, or a ratio between two quantities
-// measured in the same run -- both survive a change of machine:
+// measured in the same run -- both depend far less on the machine than a raw time does:
 //
 //   1. complexity     a function whose measured growth class is two or more classes away from the one
 //                     documented for it (`agreement: "differs"`). The documented big-O is the
