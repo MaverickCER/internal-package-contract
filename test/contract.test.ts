@@ -54,6 +54,7 @@ describe("the promised surface", () => {
       "Architecture",
       "GithubActions",
       "GitHygiene",
+      "GitHooks",
       "PinConsistency",
       "BranchProtection",
       "Coverage",

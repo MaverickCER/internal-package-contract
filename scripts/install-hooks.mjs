@@ -1,6 +1,6 @@
-// `internal-package-contract install-hooks`: points git at the bundled hooks. `init` does this once; a
-// package's `prepare` script runs this on every `npm install`, so a fresh clone is covered without
-// anyone remembering to run `init`. It never fails: an install must not break because git is missing.
+// `internal-package-contract install-hooks`: points git at the bundled hooks. `init` does this once, and a
+// clone made later runs this command once; the `GitHooks` check warns until it has been. Nothing runs it as
+// an install script. It never fails, so it is safe to put in a setup script.
 
 /**
  * @param {{ installed: boolean, packageHooks: string }} input

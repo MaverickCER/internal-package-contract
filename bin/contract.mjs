@@ -10,7 +10,7 @@
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
-//   internal-package-contract install-hooks   point git at the bundled hooks (run by a package's `prepare`)
+//   internal-package-contract install-hooks   point git at the bundled hooks (once per clone)
 //
 // A consuming package's package.json only needs
 // `{ "scripts": { "contract": "internal-package-contract" } }`.

@@ -26,6 +26,7 @@ import { duplication } from "./duplication.js"
 import { docsFragments } from "./docs-fragments.js"
 import { docsLinks } from "./docs-links.js"
 import { docsMarkdown } from "./docs-markdown.js"
+import { gitHooksCheck } from "./git-hooks.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
 import { mutation } from "./mutation.js"
@@ -95,6 +96,7 @@ export function standardChecks() {
     Architecture: architecture(),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
+    GitHooks: gitHooksCheck(),
     PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },

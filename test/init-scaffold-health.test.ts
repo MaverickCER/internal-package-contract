@@ -122,20 +122,14 @@ describe("a freshly scaffolded package", () => {
     expect(output, "files Prettier would rewrite").toBe("")
   })
 
-  it("installs the git hooks on every npm install, so a fresh clone is covered without running init", () => {
+  it("has no install-time script: the hooks are installed on purpose, not as a side effect of npm install", () => {
     const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
       scripts: Record<string, string>
     }
-    expect(pkg.scripts["prepare"]).toBe("node scripts/install-hooks.mjs")
-  })
-
-  it("has a prepare script that succeeds, and does nothing, where internal-package-contract is not installed", () => {
-    const run = spawnSync(process.execPath, [path.join(dir, "scripts", "install-hooks.mjs")], {
-      cwd: dir,
-      encoding: "utf8",
-    })
-    expect(run.status, `${run.stdout}${run.stderr}`).toBe(0)
-    expect(run.stdout + run.stderr).toBe("")
+    for (const name of ["preinstall", "install", "postinstall", "prepare", "prepublish"]) {
+      expect(pkg.scripts, name).not.toHaveProperty(name)
+    }
+    expect(existsSync(path.join(dir, "scripts", "install-hooks.mjs"))).toBe(false)
   })
 
   it("defines the verify gate the shared release workflow runs before it publishes", () => {
