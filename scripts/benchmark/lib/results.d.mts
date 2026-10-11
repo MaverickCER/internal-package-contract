@@ -67,3 +67,9 @@ export function resultsToMeasurements(
 export function latestHistoryEntry(
   history: HistoryFile | null | undefined,
 ): HistoryEntry | undefined
+
+export function dispersionOf(entry: unknown): {
+  stdDevMs?: number
+  p95Ms?: number
+  iterations?: number
+}

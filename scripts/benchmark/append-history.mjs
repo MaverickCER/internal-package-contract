@@ -67,9 +67,9 @@ export function parseAppendArgs(argv) {
 
 /**
  * Intentionally compact: medianMs + inputs + a generic derived throughput figure per completed
- * (group, tier), not the full per-run detail (min/max/stdDev/memory) already reachable via
- * `gitCommit` in that commit's own results.json. Duplicating all of that here would make this file
- * grow unboundedly for no benefit.
+ * (group, tier), plus the three numbers that say how noisy the run was (stdDevMs, p95Ms, iterations).
+ * The rest of the per-run detail (min/max/memory) stays reachable via `gitCommit` in that commit's own
+ * results.json.
  * @param {{ medianMs: number, inputs?: Record<string, number> }} measurement - one tier's result.
  * @returns {object} the compact tier entry.
  */
@@ -78,6 +78,10 @@ function summarizeTier(measurement) {
   return {
     medianMs: measurement.medianMs,
     ...(measurement.inputs ? { inputs: measurement.inputs } : {}),
+    // How noisy the run was: without these a reader cannot tell a real change from the run's own spread.
+    ...(Number.isFinite(measurement.stdDevMs) ? { stdDevMs: measurement.stdDevMs } : {}),
+    ...(Number.isFinite(measurement.p95Ms) ? { p95Ms: measurement.p95Ms } : {}),
+    ...(Number.isFinite(measurement.iterations) ? { iterations: measurement.iterations } : {}),
     ...(size !== undefined && measurement.medianMs > 0
       ? { unitsPerSecond: Math.round((size / (measurement.medianMs / 1000)) * 100) / 100 }
       : {}),
@@ -111,6 +115,10 @@ export function buildEntry(results, { commit, pullRequest }) {
     ...(pullRequest === undefined ? {} : { pullRequest }),
     nodeVersion: results.metadata?.environment?.nodeVersion,
     runner: results.metadata?.environment?.runner,
+    // The processor, so a reader can tell whether two runs were on comparable hardware.
+    ...(results.metadata?.environment?.cpuModel
+      ? { cpuModel: results.metadata.environment.cpuModel }
+      : {}),
     versions: { ...results.metadata?.versions },
     measurements,
   }
