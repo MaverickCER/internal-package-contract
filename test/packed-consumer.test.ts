@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { gzipSync } from "node:zlib"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -10,6 +11,7 @@ import {
   missingFromTarball,
   missingPackage,
   promisedFiles,
+  tarballFiles,
   targetFiles,
 } from "../scripts/packed-consumer/plan.mjs"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
@@ -474,6 +476,123 @@ describe("packedConsumerCheck (policy) -- exact results", () => {
       expect(accepted.rationale).toContain("environment:PackedConsumer:install")
       expect(accepted.rationale).not.toContain("add or complete")
       expect(unaccepted.rationale).toContain("add or complete")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/** One tar entry: a 512-byte ustar header followed by the data, padded to a whole block. */
+function entry(name: string, body = "", options: { type?: string; prefix?: string } = {}): Buffer {
+  const header = Buffer.alloc(512)
+  header.write(name, 0, "utf8")
+  header.write(`${body.length.toString(8).padStart(11, "0")}\0`, 124, "latin1")
+  header.write(options.type ?? "0", 156, "latin1")
+  if (options.prefix !== undefined) header.write(options.prefix, 345, "utf8")
+  const data = Buffer.from(body, "utf8")
+  return Buffer.concat([header, data, Buffer.alloc((512 - (data.length % 512)) % 512)])
+}
+const tarball = (...entries: Buffer[]) => gzipSync(Buffer.concat([...entries, Buffer.alloc(1024)]))
+
+describe("tarballFiles", () => {
+  it("lists each file without the leading package/ directory", () => {
+    expect(
+      tarballFiles(
+        tarball(
+          entry("package/package.json", "{}"),
+          entry("package/dist/index.js", "x".repeat(600)),
+        ),
+      ),
+    ).toEqual(["package.json", "dist/index.js"])
+  })
+  it("joins a ustar prefix to the name", () => {
+    expect(tarballFiles(tarball(entry("index.js", "", { prefix: "package/dist/deep" })))).toEqual([
+      "dist/deep/index.js",
+    ])
+  })
+  it("uses the path from a pax extended header for the next file only", () => {
+    const record = "path=package/dist/very/long/name.js"
+    const extended = entry("pax", `${String(record.length + 4)} ${record}\n`, { type: "x" })
+    expect(
+      tarballFiles(tarball(extended, entry("short", "data"), entry("package/after.js"))),
+    ).toEqual(["dist/very/long/name.js", "after.js"])
+  })
+  it("skips directories and other entry types", () => {
+    expect(
+      tarballFiles(tarball(entry("package/dist/", "", { type: "5" }), entry("package/a.js"))),
+    ).toEqual(["a.js"])
+  })
+  it("treats a NUL type as a regular file, and an empty archive as no files", () => {
+    expect(tarballFiles(tarball(entry("package/a.js", "", { type: "\0" })))).toEqual(["a.js"])
+    expect(tarballFiles(gzipSync(Buffer.alloc(1024)))).toEqual([])
+    expect(tarballFiles(gzipSync(Buffer.alloc(0)))).toEqual([])
+  })
+  it("reads a final entry that has only its header and no end marker after it", () => {
+    expect(tarballFiles(gzipSync(entry("package/a.js")))).toEqual(["a.js"])
+  })
+  it("ends a name at the first NUL even when text follows it", () => {
+    expect(tarballFiles(tarball(entry("package/a.js\0 junk")))).toEqual(["a.js"])
+  })
+  it("keeps a package/ that is not the leading directory", () => {
+    expect(tarballFiles(tarball(entry("package/dist/package/a.js")))).toEqual(["dist/package/a.js"])
+  })
+  it("reads an extended header that is not the first entry", () => {
+    const record = "path=package/dist/late.js"
+    const extended = entry("pax", `${String(record.length + 4)} ${record}\n`, { type: "x" })
+    expect(
+      tarballFiles(tarball(entry("package/first.js", "abc"), extended, entry("short"))),
+    ).toEqual(["first.js", "dist/late.js"])
+  })
+  it("strips package/ only at the start of a path", () => {
+    expect(tarballFiles(tarball(entry("dist/package/a.js")))).toEqual(["dist/package/a.js"])
+  })
+  it("ignores an extended header that names no path", () => {
+    const extended = entry("pax", "14 comment=none\n", { type: "x" })
+    expect(tarballFiles(tarball(extended, entry("package/a.js")))).toEqual(["a.js"])
+  })
+  it("does not loop on an entry whose size is not a number", () => {
+    const broken = entry("package/a.js")
+    broken.write("zzzzzzzzzzz\0", 124, "latin1")
+    expect(tarballFiles(tarball(broken))).toEqual(["a.js"])
+  })
+  it("ends cleanly on an archive cut off in the middle of a header", () => {
+    const whole = gzipSync(Buffer.concat([entry("package/a.js"), Buffer.alloc(100, 1)]))
+    expect(tarballFiles(whole)).toEqual(["a.js"])
+  })
+  it("stops at the end-of-archive marker", () => {
+    expect(
+      tarballFiles(
+        gzipSync(
+          Buffer.concat([entry("package/a.js"), Buffer.alloc(1024), entry("package/ignored.js")]),
+        ),
+      ),
+    ).toEqual(["a.js"])
+  })
+  it("reads what npm itself packed", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ipc-tarball-"))
+    try {
+      writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ name: "t", version: "1.0.0", files: ["a.js", "lib"] }),
+      )
+      writeFileSync(path.join(dir, "a.js"), "1")
+      mkdirSync(path.join(dir, "lib"))
+      writeFileSync(path.join(dir, "lib", "b.js"), "2")
+      const packed = spawnSync(
+        "npm",
+        ["pack", "--json", "--ignore-scripts", "--pack-destination", dir],
+        {
+          cwd: dir,
+          encoding: "utf8",
+          shell: process.platform === "win32",
+        },
+      )
+      const [report] = JSON.parse(packed.stdout) as {
+        filename: string
+        files: { path: string }[]
+      }[]
+      const listed = tarballFiles(readFileSync(path.join(dir, report?.filename ?? "")))
+      expect(listed.sort()).toEqual((report?.files ?? []).map((file) => file.path).sort())
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

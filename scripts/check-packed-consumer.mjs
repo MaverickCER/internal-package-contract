@@ -17,6 +17,7 @@ import {
   entryPoints,
   missingFromTarball,
   promisedFiles,
+  tarballFiles,
 } from "./packed-consumer/plan.mjs"
 
 const argv = process.argv.slice(2)
@@ -52,11 +53,7 @@ if (manifest.private === true) {
   if (!existsSync(tarball)) {
     finish({ state: "problem", problems: [`no tarball to check at ${tarball}.`], skipped: [] })
   } else {
-    const listing = run("tar", ["-tzf", tarball])
-    const packedFiles = listing.stdout
-      .split("\n")
-      .map((line) => line.replace(/^package\//, ""))
-      .filter((line) => line !== "")
+    const packedFiles = tarballFiles(readFileSync(tarball))
     const problems = missingFromTarball(promisedFiles(manifest), packedFiles).map(
       (file) => `${file} is promised by package.json but is not in the tarball.`,
     )

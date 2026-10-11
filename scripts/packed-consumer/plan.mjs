@@ -3,6 +3,8 @@
 // entry point proves the published package does. This module is the pure half: which entries to try, and
 // whether a failure is the package's fault or only a peer dependency the consumer has not installed.
 
+import { gunzipSync } from "node:zlib"
+
 const SKIPPED_KEYS = new Set(["./package.json"])
 
 /**
@@ -130,4 +132,45 @@ export function classifyFailure(output, manifest) {
   const lines = output.split("\n").filter((line) => line.trim() !== "")
   const named = lines.find((line) => /Error\b.*:/.test(line))
   return { kind: "broken", reason: (named ?? lines[0] ?? "no output").trim() }
+}
+
+const BLOCK = 512
+
+/**
+ * The files in an npm tarball, read in Node so no external `tar` is needed (the one on a Windows runner can
+ * treat `C:\path` as a remote host). Handles the long-name forms npm writes: the ustar `prefix` field and a
+ * pax extended header's `path` record.
+ * @param {Buffer} gzipped - the contents of the `.tgz`.
+ * @returns {string[]} each file's path inside the package, without the leading `package/`.
+ */
+export function tarballFiles(gzipped) {
+  const tar = gunzipSync(gzipped)
+  const files = []
+  let offset = 0
+  let extendedPath
+  // Bounded by the number of blocks: every entry takes at least one, so a well-formed archive never needs
+  // more iterations, and a corrupt one cannot loop forever.
+  // Stryker disable next-line EqualityOperator, ArithmeticOperator, AssignmentOperator: equivalent -- the bound is only a guard; the end-of-archive marker, or running out of data, stops a real archive first.
+  for (let entry = 0; entry < tar.length / BLOCK; entry += 1) {
+    const header = tar.subarray(offset, offset + BLOCK)
+    if (header.length < BLOCK || header.every((byte) => byte === 0)) break
+    const field = (start, length) =>
+      header
+        .subarray(start, start + length)
+        .toString("utf8")
+        .replace(/\0[\s\S]*/, "")
+    const size = Number.parseInt(field(124, 12), 8)
+    const type = String.fromCharCode(header[156])
+    const body = tar.subarray(offset + BLOCK, offset + BLOCK + size)
+    if (type === "x") {
+      extendedPath = /(?:^|\n)\d+ path=([^\n]*)/.exec(body.toString("utf8"))?.[1]
+    } else if (type === "0" || type === "\0") {
+      const prefix = field(345, 155)
+      const name = extendedPath ?? (prefix === "" ? field(0, 100) : `${prefix}/${field(0, 100)}`)
+      files.push(name.replace(/^package\//, ""))
+      extendedPath = undefined
+    }
+    offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK
+  }
+  return files
 }
