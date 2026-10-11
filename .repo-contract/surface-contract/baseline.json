@@ -1,0 +1,98 @@
+{
+  "packageName": "internal-package-contract",
+  "packageVersion": "0.10.0",
+  "surface": {
+    "action": null,
+    "cli": {
+      "internal-package-contract": {
+        "exitCode": 0,
+        "help": "Usage: internal-package-contract [command] [options]\n\nCommands:\n  (none)                     run the whole contract\n  init                       scaffold repo files and git wiring\n  exceptions                 list every exception registry: counts by type, legacy, expired\n  sync-benchmark-guides      copy the canonical benchmark guides into benchmarks/\n  update-baseline            regenerate the API and surface baselines after a release\n\nOptions (when running the contract):\n  --checks a,b               run only checks a and b (and what they depend on)\n  --skip a,b                 run every check except a and b\n  --strict                   also fail on a \"not evaluated\" result no exception covers\n                             (the default under CI)\n  --no-strict                turn --strict off under CI\n  -h, --help                 print this text and exit"
+      }
+    },
+    "schemas": {
+      "./config/knip": {
+        "$schema": "https://unpkg.com/knip@6/schema.json",
+        "entry": [
+          "src/index.ts!",
+          "src/index.tsx!",
+          "src/main.ts!",
+          "src/cli/index.ts!",
+          "src/cli.ts!",
+          "src/bin/**/*.ts!",
+          "bin/**/*.{js,mjs,cjs,ts}!"
+        ],
+        "ignore": [
+          "**/*.d.ts",
+          "dist/**",
+          "coverage/**",
+          "reports/**",
+          "examples/**",
+          "benchmark/**",
+          "benchmarks/**",
+          ".stryker-tmp/**"
+        ],
+        "project": ["src/**/*.{ts,tsx,js,mjs,cjs}!"]
+      },
+      "./config/secretlint": {
+        "//": "Baseline secretlint config -- the default the SecuritySecrets check uses when a consumer has no .secretlintrc.* of its own. @secretlint/secretlint-rule-preset-recommend ships with internal-package-contract.",
+        "rules": [
+          {
+            "id": "@secretlint/secretlint-rule-preset-recommend"
+          }
+        ]
+      },
+      "./config/typedoc": {
+        "$schema": "https://typedoc.org/schema.json",
+        "customCss": "./typedoc-a11y.css",
+        "plugin": ["internal-package-contract/config/typedoc-a11y-search-label"],
+        "validation": {
+          "invalidLink": true,
+          "notDocumented": true,
+          "notExported": true
+        }
+      },
+      "./config/typedoc-markdown": {
+        "$schema": "https://typedoc.org/schema.json",
+        "disableSources": true,
+        "expandObjects": true,
+        "hideBreadcrumbs": true,
+        "hidePageHeader": true,
+        "outputFileStrategy": "modules",
+        "parametersFormat": "table",
+        "plugin": ["typedoc-plugin-markdown"],
+        "useCodeBlocks": true
+      },
+      "./tsconfig": {
+        "compilerOptions": {
+          "allowUnreachableCode": false,
+          "allowUnusedLabels": false,
+          "declaration": true,
+          "declarationMap": true,
+          "esModuleInterop": true,
+          "exactOptionalPropertyTypes": true,
+          "forceConsistentCasingInFileNames": true,
+          "isolatedModules": true,
+          "lib": ["ES2022"],
+          "module": "NodeNext",
+          "moduleResolution": "NodeNext",
+          "noEmit": true,
+          "noFallthroughCasesInSwitch": true,
+          "noImplicitOverride": true,
+          "noImplicitReturns": true,
+          "noPropertyAccessFromIndexSignature": true,
+          "noUncheckedIndexedAccess": true,
+          "noUnusedLocals": true,
+          "noUnusedParameters": true,
+          "resolveJsonModule": true,
+          "skipLibCheck": true,
+          "sourceMap": true,
+          "strict": true,
+          "target": "ES2022",
+          "types": ["node"],
+          "useUnknownInCatchVariables": true,
+          "verbatimModuleSyntax": true
+        }
+      }
+    }
+  }
+}

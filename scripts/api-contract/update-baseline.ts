@@ -39,6 +39,7 @@ import {
 import { getApiExtractorVersion, runApiExtractorForTarget } from "./extractor-adapter.js"
 import { compareVersions, parseVersion } from "./semver.js"
 import { readTargets } from "./targets.js"
+import { runSurfaceUpdate } from "../surface-contract/run.js"
 
 export interface TargetUpdateOutcome {
   readonly target: string
@@ -151,6 +152,9 @@ export async function runUpdateBaseline(root: string): Promise<readonly TargetUp
   for (const target of targets) {
     outcomes.push(await updateOneTarget(root, target, packageJson))
   }
+  // The CLI / schema / action baseline moves with the API baselines, in the same commit.
+  const surface = await runSurfaceUpdate(root)
+  if (surface !== undefined) outcomes.push({ target: "surface", ...surface })
   return outcomes
 }
 

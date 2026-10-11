@@ -23,12 +23,15 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { helpText, wantsHelp } from "../scripts/contract-help.mjs"
 import { runContract } from "../scripts/contract-run.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 // Subcommand dispatch.
-if (process.argv[2] === "init") {
+if (wantsHelp(process.argv.slice(2))) {
+  process.stdout.write(helpText())
+} else if (process.argv[2] === "init") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "init.mjs")).href)
   // init sets its own exit behaviour; nothing else to do here.
 } else if (process.argv[2] === "exceptions") {

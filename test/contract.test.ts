@@ -48,6 +48,7 @@ describe("the promised surface", () => {
       "Schema",
       "Build",
       "ApiContract",
+      "SurfaceContract",
       "Typecheck",
       "Tests",
       "Architecture",

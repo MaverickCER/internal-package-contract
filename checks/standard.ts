@@ -36,6 +36,7 @@ import { securityDeps } from "./security-deps.js"
 import { securityDevDeps } from "./security-dev-deps.js"
 import { securitySecrets } from "./security-secrets.js"
 import { suppressions } from "./suppressions.js"
+import { surfaceContract } from "./surface-contract.js"
 import { codeScanning } from "./code-scanning.js"
 import { securitySocket } from "./security-socket.js"
 import { tests } from "./tests.js"
@@ -81,6 +82,8 @@ export function standardChecks() {
     // and fails when the branch's changesets under-declare the resulting bump -- see
     // checks/api-contract.ts's own module comment.
     ApiContract: apiContract,
+    // The same semver gate for the rest of the public surface: CLI help, exported schemas, the Action.
+    SurfaceContract: surfaceContract(),
     Typecheck: typecheck,
     // `isolated` -- Vitest with V8 coverage instrumentation is the single
     // heaviest check, and a consumer's own subprocess-spawning integration tests
