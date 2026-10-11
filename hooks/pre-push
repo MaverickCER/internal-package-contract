@@ -37,6 +37,11 @@
 # inside `git rev-parse --show-toplevel`'s own physical toplevel rules that
 # out: a symlinked-in copy resolves to wherever the real checkout lives, which
 # is never inside the *pushing* repo's own working tree.
+# A push skips the slow analyses (CI runs them); the pre-commit hook sets IPC_HOOK_FULL=1 and skips nothing.
+SKIP="--skip Coverage,Crap,Mutation"
+if [ "${IPC_HOOK_FULL:-}" = "1" ]; then
+  SKIP=""
+fi
 DIR=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd)
 TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -n "$TOPLEVEL" ]; then
@@ -54,7 +59,9 @@ if [ "$inside_toplevel" = "1" ] && [ -f "$DIR/../repo-contract.config.ts" ]; the
   # inherited shell PATH -- prepends node_modules/.bin to PATH. Confirmed: a bare
   # `node scripts/run-contract.mjs` fails every spawned check with ENOENT even
   # though `npm run contract` (this same command) passes clean.
-  exec npm --prefix "$DIR/.." run contract -- --skip Coverage,Crap,Mutation
+  # shellcheck disable=SC2086 -- $SKIP is deliberately word-split into the flag and its value (or nothing)
+  exec npm --prefix "$DIR/.." run contract -- $SKIP
 else
-  exec node "$DIR/../bin/contract.mjs" --skip Coverage,Crap,Mutation
+  # shellcheck disable=SC2086
+  exec node "$DIR/../bin/contract.mjs" $SKIP
 fi

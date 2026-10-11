@@ -1,5 +1,7 @@
 #!/bin/sh
-# internal-package-contract managed hook. Fast checks only -- Format + Lint.
-# A local convenience: CI runs the full contract and is the gate.
+# internal-package-contract managed hook. A commit runs the ENTIRE contract -- Coverage, Crap and
+# Mutation included -- so what CI will run has already passed before the change reaches history; what
+# CI adds beyond it (CodeRabbit, CodeQL) is left to those services. See pre-push for how the command is
+# resolved. A push runs the same contract minus the slow analyses.
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec node "$DIR/../bin/contract.mjs" --checks Format,Lint
+IPC_HOOK_FULL=1 exec "$DIR/pre-push"
