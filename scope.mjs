@@ -8,7 +8,7 @@
 // Adding a file to this list is a decision that belongs in review.
 
 /** Source trees every gate covers. */
-export const SCOPE_DIRS = ["checks", "scripts", "bin"]
+export const SCOPE_DIRS = ["checks", "scripts", "bin", "runtime"]
 
 /** Process entry points excluded from the gates (see above). */
 export const ENTRY_SHELLS = [

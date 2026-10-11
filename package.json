@@ -51,6 +51,7 @@
     "checks",
     "config",
     "hooks",
+    "runtime",
     "scripts",
     "template",
     "contract.ts",

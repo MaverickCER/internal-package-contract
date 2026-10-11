@@ -4,4 +4,5 @@ export function run(
   cwd: string,
   packageRoot: string,
   io: { out: (text: string) => void; err: (text: string) => void },
+  copies?: readonly { name: string }[],
 ): number

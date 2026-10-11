@@ -21,7 +21,7 @@ export default {
     ...SCOPE_DIRS.map((dir) => `${dir}/**/*.{ts,mjs}`),
     ...[...NON_RUNTIME, ...ENTRY_SHELLS].map((glob) => `!${glob}`),
   ],
-  disableTypeChecks: "{checks,scripts,bin,test}/**/*.{ts,mjs}",
+  disableTypeChecks: "{checks,scripts,bin,runtime,test}/**/*.{ts,mjs}",
   // Several suites run the real TypeScript compiler and API Extractor; a mutant that slows them must
   // not be mistaken for a hang on a runner slower than a developer's machine.
   timeoutMS: 120_000,

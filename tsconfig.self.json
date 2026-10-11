@@ -21,6 +21,7 @@
     "vitest.config.ts",
     "checks/**/*.ts",
     "scripts/**/*.ts",
+    "runtime/**/*.ts",
     "test/**/*.ts"
   ]
 }
