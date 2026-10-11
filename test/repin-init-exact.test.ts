@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import {
   buildVars,
+  initFlags,
   listTemplateFiles,
   parseInitArgs,
   shaFromLockfile,
@@ -144,6 +145,23 @@ describe("repinWorkflows() and run()", () => {
       expect(err).toEqual(["Usage: repin-workflows.mjs <dependency> <commit-sha> <release-tag>\n"])
       expect(out).toEqual([])
     }
+  })
+})
+
+describe("initFlags()", () => {
+  it("drops the subcommand name when init is reached through the dispatcher", () => {
+    expect(initFlags(["node", "contract.mjs", "init", "--name", "demo", "--force"])).toEqual([
+      "--name",
+      "demo",
+      "--force",
+    ])
+    expect(initFlags(["node", "contract.mjs", "init"])).toEqual([])
+  })
+
+  it("keeps every argument when init.mjs is run directly, even one whose value is the word init", () => {
+    expect(initFlags(["node", "init.mjs", "--name", "demo"])).toEqual(["--name", "demo"])
+    expect(initFlags(["node", "init.mjs", "--name", "init"])).toEqual(["--name", "init"])
+    expect(initFlags(["node", "init.mjs"])).toEqual([])
   })
 })
 
