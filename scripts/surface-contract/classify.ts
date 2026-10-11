@@ -70,7 +70,7 @@ export function flattenSchema(schema: unknown): {
 } {
   const structure: Record<string, string> = {}
   const docs: Record<string, string> = {}
-  const walk = (node: unknown, pointer: string, parentKey: string): void => {
+  const walk = (node: unknown, pointer = "", parentKey = ""): void => {
     if (isScalar(node)) {
       structure[pointer] = JSON.stringify(node)
     } else if (Array.isArray(node)) {
@@ -88,12 +88,12 @@ export function flattenSchema(schema: unknown): {
       }
     }
   }
-  walk(schema, "", "")
+  walk(schema)
   return { structure, docs }
 }
 
 const FLAG = /(?<![\w-])--[A-Za-z][A-Za-z0-9-]*/g
-const flagsOf = (help: string): Set<string> => new Set(help.match(FLAG) ?? [])
+const flagsOf = (help: string): Set<string> => new Set([...help.matchAll(FLAG)].map((m) => m[0]))
 
 function classifyCli(name: string, before: CliSurface, after: CliSurface): SurfaceChange[] {
   const changes: SurfaceChange[] = []
@@ -169,9 +169,7 @@ function classifySchema(key: string, before: unknown, after: unknown): SurfaceCh
   }
   const startsWith = (map: Record<string, string>, root: string): boolean =>
     Object.keys(map).some((p) => p === root || p.startsWith(`${root}/`))
-  for (const pointer of [
-    ...new Set([...Object.keys(a.structure), ...Object.keys(b.structure)]),
-  ].sort()) {
+  for (const pointer of new Set([...Object.keys(a.structure), ...Object.keys(b.structure)])) {
     const was = a.structure[pointer]
     const now = b.structure[pointer]
     if (was === now) continue

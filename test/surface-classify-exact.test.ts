@@ -415,4 +415,29 @@ describe("classifySurface (every message, flag and impact)", () => {
       "schema:./z:/a",
     ])
   })
+
+  it("reports a changed exit code and changed help text together when no flag changed", () => {
+    expect(classifySurface(withCli("old", 0), withCli("new", 1)).map((c) => c.kind)).toEqual([
+      "cli-exit-code-changed",
+      "cli-help-changed",
+    ])
+  })
+  it("names a multi-character new property in full, and a nested one under a property with siblings", () => {
+    const a = withSchema({ properties: { o: { type: "object" }, p: { type: "string" } } })
+    const b = withSchema({
+      properties: {
+        o: { type: "object", properties: { n: { type: "string", pattern: "x" } } },
+        p: { type: "string" },
+        bcd: { type: "number" },
+      },
+    })
+    expect(classifySurface(a, b).map((c) => c.id)).toEqual([
+      "schema:./s:/properties/bcd",
+      "schema:./s:/properties/o/properties/n",
+    ])
+  })
+  it("keeps outputs that exist on both sides out of the changes", () => {
+    const changes = classifySurface(act({}, ["keep", "gone"]), act({}, ["keep", "new"]))
+    expect(changes.map((c) => c.id)).toEqual(["action:output:gone", "action:output:new"])
+  })
 })

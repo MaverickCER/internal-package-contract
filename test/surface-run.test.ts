@@ -266,6 +266,20 @@ describe("runSurfaceCheck (exact evidence)", () => {
   })
 })
 
+describe("runSurfaceCheck (mixed impact)", () => {
+  it("needs a major when one change is breaking and another is compatible, from 1.0.0", async () => {
+    project("1.2.0", "Usage --b", { type: "object", description: "new" })
+    baseline("1.2.0", {
+      cli: { demo: { exitCode: 0, help: "Usage --a --b" } },
+      schemas: { "./schema": { type: "object", description: "old" } },
+      action: null,
+    })
+    expect((await runSurfaceCheck(root, { runBin: runBin("Usage --b") })).requiredLevel).toBe(
+      "major",
+    )
+  })
+})
+
 describe("runSurfaceUpdate (exact outcomes)", () => {
   it("moves the baseline forward when only the version changed", async () => {
     project("0.2.0", "h")

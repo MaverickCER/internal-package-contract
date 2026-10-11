@@ -132,6 +132,10 @@ describe("surfaceContract", () => {
     expect(r.outcome).toBe("fail")
     expect(r.rationale).toContain("the surface-contract check could not be spawned")
   })
+  it("fails closed with no output to show when the script printed nothing", async () => {
+    const r = await surfaceContract().policy(makeContext(makeResult({ stdout: "" })))
+    expect(r.rationale).toBe("SurfaceContract: check output could not be parsed as JSON.")
+  })
   it("fails closed, with its own name, on output that is not JSON", async () => {
     const r = await surfaceContract().policy(makeContext(makeResult({ stdout: "oops" })))
     expect(r.outcome).toBe("fail")

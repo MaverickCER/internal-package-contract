@@ -156,11 +156,12 @@ export async function runSurfaceCheck(
         ) as RequiredReleaseLevel)
   const baselineVersion = parseVersion(baseline.packageVersion)
   const minimumRequiredVersion = computeMinimumRequiredVersion(baselineVersion, requiredLevel)
-  const minimum = parseVersion(minimumRequiredVersion)
+  const minimum = parseVersion(minimumRequiredVersion) as NonNullable<
+    ReturnType<typeof parseVersion>
+  >
   // A release pull request has consumed its changesets and bumped the version, so the bump itself
   // is the declaration once it reaches the minimum.
-  const bumped =
-    current !== undefined && minimum !== undefined && compareVersions(current, minimum) >= 0
+  const bumped = current !== undefined && compareVersions(current, minimum) >= 0
   return evidence("compared", {
     changes,
     requiredLevel,
