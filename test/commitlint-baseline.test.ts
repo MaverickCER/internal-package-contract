@@ -1,10 +1,16 @@
 import { spawnSync } from "node:child_process"
+import { createRequire } from "node:module"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 const config = path.resolve(__dirname, "../config/commitlint.config.mjs")
+// Node runs commitlint's own entry file: `npx` is `npx.cmd` on Windows, which spawnSync cannot start without a shell.
+const cli = path.join(
+  path.dirname(createRequire(import.meta.url).resolve("@commitlint/cli/package.json")),
+  "cli.js",
+)
 const lint = (message: string) =>
-  spawnSync("npx", ["commitlint", "--config", config], { input: message, encoding: "utf8" })
+  spawnSync(process.execPath, [cli, "--config", config], { input: message, encoding: "utf8" })
 
 describe("the baseline commitlint config", () => {
   it("accepts a plain conventional commit", () => {
