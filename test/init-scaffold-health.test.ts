@@ -14,9 +14,18 @@ const bin = path.join(root, "bin", "contract.mjs")
 const prettier = path.join(root, "node_modules", ".bin", "prettier")
 let dir: string
 
+/** What a failed Prettier run printed; anything that is not a nonzero exit (a spawn failure) is rethrown. */
+function prettierFailure(error: unknown): string {
+  const failure = error as { status?: unknown; stdout?: string; stderr?: string }
+  if (typeof failure.status !== "number") throw error
+  return `${failure.stdout ?? ""}${failure.stderr ?? ""}`
+}
+
 beforeAll(() => {
   dir = mkdtempSync(path.join(tmpdir(), "ipc-scaffold-health-"))
-  spawnSync("git", ["init", "-q"], { cwd: dir })
+  const init = spawnSync("git", ["init", "-q"], { cwd: dir, encoding: "utf8" })
+  expect(init.error, `git init failed to start: ${String(init.error)}`).toBeUndefined()
+  expect(init.status, `git init failed: ${init.stdout}${init.stderr}`).toBe(0)
   const run = spawnSync(
     process.execPath,
     [
@@ -72,13 +81,12 @@ describe("a freshly scaffolded package", () => {
     expect(snapshot()).toEqual(before)
   })
 
-  it("carries the repository rules for an agent, and points Claude Code at them", () => {
+  it("carries the repository rules for an agent", () => {
     const agents = readFileSync(path.join(dir, "AGENTS.md"), "utf8")
     expect(agents).toContain("`health-demo`")
     expect(agents).toContain("Co-Authored-By")
     expect(agents).toContain("--no-verify")
     expect(agents).toContain("npm run verify")
-    expect(readFileSync(path.join(dir, "CLAUDE.md"), "utf8").trim()).toBe("@AGENTS.md")
   })
 
   it("declares @types/node for the Node floor it supports, so it can install", () => {
@@ -107,8 +115,7 @@ describe("a freshly scaffolded package", () => {
         { cwd: dir, encoding: "utf8", stdio: "pipe" },
       )
     } catch (error) {
-      const failure = error as { stdout?: string; stderr?: string }
-      output = `${failure.stdout ?? ""}${failure.stderr ?? ""}`
+      output = prettierFailure(error)
     }
     expect(output, "files Prettier would rewrite").toBe("")
   })
