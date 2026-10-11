@@ -324,6 +324,8 @@ describe("check-packed-consumer (script, against a real pack and install)", () =
     const packed = spawnSync("npm", ["pack", "--ignore-scripts", "--pack-destination", dir], {
       cwd: dir,
       encoding: "utf8",
+      // Windows cannot start npm.cmd without a shell.
+      shell: process.platform === "win32",
     })
     const tarball = packed.stdout.trim().split("\n").at(-1) ?? ""
     put("index.js", 'throw new Error("changed after packing")\n')
