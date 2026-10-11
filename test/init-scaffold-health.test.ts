@@ -126,7 +126,16 @@ describe("a freshly scaffolded package", () => {
     const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
       scripts: Record<string, string>
     }
-    expect(pkg.scripts["prepare"]).toBe("internal-package-contract install-hooks")
+    expect(pkg.scripts["prepare"]).toBe("node scripts/install-hooks.mjs")
+  })
+
+  it("has a prepare script that succeeds, and does nothing, where internal-package-contract is not installed", () => {
+    const run = spawnSync(process.execPath, [path.join(dir, "scripts", "install-hooks.mjs")], {
+      cwd: dir,
+      encoding: "utf8",
+    })
+    expect(run.status, `${run.stdout}${run.stderr}`).toBe(0)
+    expect(run.stdout + run.stderr).toBe("")
   })
 
   it("defines the verify gate the shared release workflow runs before it publishes", () => {
