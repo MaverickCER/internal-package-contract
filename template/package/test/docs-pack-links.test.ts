@@ -20,24 +20,55 @@ function publishedFiles(): string[] {
     cwd: root,
     encoding: "utf8",
     shell: process.platform === "win32",
-    stdio: ["ignore", "pipe", "ignore"],
+    // stderr stays visible so a failing `npm pack` explains itself.
+    stdio: ["ignore", "pipe", "inherit"],
+    // npm colours its JSON when the runner forces colour on, which is not parseable.
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      FORCE_COLOR: "0",
+      npm_config_color: "false",
+      npm_config_ignore_scripts: "true",
+    },
   })
-  const [result] = JSON.parse(output) as PackResult[]
+  // Whatever else printed first (a lifecycle script, a notice), the report is the last JSON array.
+  const start = output.lastIndexOf("\n[\n")
+  const [result] = JSON.parse(start === -1 ? output : output.slice(start + 1)) as PackResult[]
   return (result?.files ?? []).map((file) => file.path)
 }
 
-const LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)|^\[[^\]]+\]:\s*(\S+)/g
+/** The link target with percent-encoding decoded, or `undefined` when the encoding is malformed. */
+function decodeTarget(target: string): string | undefined {
+  try {
+    return decodeURI(target)
+  } catch {
+    return undefined
+  }
+}
+
+const LINK = /\]\(([^)\s]+)(?:\s+"[^"]*")?\)|^ {0,3}\[[^\]]+\]:\s*(\S+)/g
 
 /** Relative link targets (anchor stripped) with the 1-based line they appear on; code fences are skipped. */
 function relativeLinks(markdown: string): { line: number; target: string }[] {
   const links: { line: number; target: string }[] = []
-  let inFence = false
+  // CommonMark: a fence opens with three or more backticks or tildes and closes only with the same
+  // character, at least as many of them, and nothing else on the line.
+  let fence: { char: string; length: number } | undefined
   markdown.split("\n").forEach((text, index) => {
-    if (/^\s*```/.test(text)) {
-      inFence = !inFence
+    const [, opener = "", info = ""] = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(text) ?? []
+    if (fence !== undefined) {
+      const closes =
+        opener !== "" &&
+        opener.startsWith(fence.char) &&
+        opener.length >= fence.length &&
+        info.trim() === ""
+      if (closes) fence = undefined
       return
     }
-    if (inFence) return
+    if (opener !== "") {
+      fence = { char: opener.slice(0, 1), length: opener.length }
+      return
+    }
     for (const match of text.matchAll(LINK)) {
       const target = (match[1] ?? match[2] ?? "").split("#")[0] ?? ""
       if (target === "" || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) continue
@@ -47,20 +78,61 @@ function relativeLinks(markdown: string): { line: number; target: string }[] {
   return links
 }
 
+describe("decodeTarget", () => {
+  it("decodes valid percent-encoding and refuses a malformed sequence", () => {
+    expect(decodeTarget("./a%20b.md")).toBe("./a b.md")
+    expect(decodeTarget("./%E0%A4%A.md")).toBeUndefined()
+  })
+})
+
+describe("relativeLinks", () => {
+  it("skips links inside backtick and tilde fences, honouring the opening length", () => {
+    const markdown = [
+      "[a](./a.md)",
+      "````md",
+      "```",
+      "[inner](./inner.md)",
+      "```",
+      "[still inside](./inside.md)",
+      "````",
+      "~~~",
+      "[tilde](./tilde.md)",
+      "~~~",
+      "[b](./b.md)",
+    ].join("\n")
+    expect(relativeLinks(markdown)).toEqual([
+      { line: 1, target: "./a.md" },
+      { line: 11, target: "./b.md" },
+    ])
+  })
+  it("does not close a fence on a different character or on a line with text after the marker", () => {
+    const markdown = ["```", "~~~", "``` text", "[x](./x.md)", "```", "[y](./y.md)"].join("\n")
+    expect(relativeLinks(markdown)).toEqual([{ line: 6, target: "./y.md" }])
+  })
+  it("reads reference definitions indented by up to three spaces, but not four", () => {
+    expect(relativeLinks("  [details]: ./missing.md")).toEqual([
+      { line: 1, target: "./missing.md" },
+    ])
+    expect(relativeLinks("    [code]: ./code.md")).toEqual([])
+  })
+})
+
 describe("published documentation links", () => {
   const published = publishedFiles()
   const documents = published.filter((file) => file.endsWith(".md"))
 
   it("publishes a meaningful number of documents", () => {
     expect(documents).toContain("README.md")
-    expect(documents.length).toBeGreaterThan(5)
+    expect(documents.length).toBeGreaterThan(20)
   })
 
   it("publishes Markdown only from the folders meant to ship documentation", () => {
     const unexpected = documents.filter(
       (file) =>
         !file.startsWith("node_modules/") &&
-        !/^(?:[^/]+\.md|(?:specs|skills|benchmarks|examples|docs\/api-report)\/.+\.md)$/.test(file),
+        !/^(?:[^/]+\.md|(?:specs|skills|benchmarks|docs\/api-report)\/.+\.md|examples\/README\.md)$/.test(
+          file,
+        ),
     )
     expect(
       unexpected,
@@ -72,8 +144,13 @@ describe("published documentation links", () => {
     const offenders: string[] = []
     for (const file of documents) {
       for (const { line, target } of relativeLinks(readFileSync(path.join(root, file), "utf8"))) {
+        const decoded = decodeTarget(target)
+        if (decoded === undefined) {
+          offenders.push(`${file}:${String(line)}: ${target} (malformed percent-encoding)`)
+          continue
+        }
         const resolved = path.posix
-          .normalize(path.posix.join(path.posix.dirname(file), decodeURI(target)))
+          .normalize(path.posix.join(path.posix.dirname(file), decoded))
           .replace(/\/$/, "")
         const found =
           published.includes(resolved) ||
