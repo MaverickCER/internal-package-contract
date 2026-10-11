@@ -24,7 +24,9 @@ export const MAX_LINES = 220
 export const REQUIRED_BADGES = [
   { label: "CI status", pattern: /actions\/workflows|workflow\/status/ },
   { label: "npm version", pattern: /\/npm\/v\// },
-  { label: "coverage", pattern: /coverage/i },
+  { label: "coverage", pattern: /coverage-badge/i },
+  { label: "mutation", pattern: /mutation-badge/i },
+  { label: "Scorecard", pattern: /api\.scorecard\.dev|securityscorecards\.dev/ },
   { label: "Socket", pattern: /badge\.socket\.dev/ },
   { label: "license", pattern: /license/i },
 ]

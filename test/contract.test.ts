@@ -57,6 +57,7 @@ describe("the promised surface", () => {
       "GitHooks",
       "LandingPage",
       "ReadmeStructure",
+      "ScorecardWorkflow",
       "PinConsistency",
       "BranchProtection",
       "Coverage",

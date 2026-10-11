@@ -80,6 +80,8 @@ describe("check-readme (script)", () => {
       "![CI](https://github.com/o/p/actions/workflows/ci.yml/badge.svg)",
       "![npm](https://img.shields.io/npm/v/p.svg)",
       "![Coverage](https://x/coverage-badge.json)",
+      "![Mutation](https://x/mutation-badge.json)",
+      "![Scorecard](https://api.scorecard.dev/projects/github.com/o/p/badge)",
       "![Socket](https://badge.socket.dev/npm/package/p/latest)",
       "![License](https://img.shields.io/npm/l/p.svg)",
     ]

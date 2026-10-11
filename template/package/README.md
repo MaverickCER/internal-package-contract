@@ -3,12 +3,14 @@
 [![CI](https://github.com/{{owner}}/{{repo}}/actions/workflows/ci.yml/badge.svg)](https://github.com/{{owner}}/{{repo}}/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/{{name}}.svg)](https://www.npmjs.com/package/{{name}})
 [![Coverage](https://img.shields.io/endpoint?url=https://{{owner}}.github.io/{{repo}}/coverage-badge.json)](https://github.com/{{owner}}/{{repo}})
+[![Mutation](https://img.shields.io/endpoint?url=https://{{owner}}.github.io/{{repo}}/mutation-badge.json)](https://github.com/{{owner}}/{{repo}})
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/{{owner}}/{{repo}}/badge)](https://scorecard.dev/viewer/?uri=github.com/{{owner}}/{{repo}})
 [![Socket Badge](https://badge.socket.dev/npm/package/{{name}}/latest)](https://socket.dev/npm/package/{{name}})
 [![License](https://img.shields.io/npm/l/{{name}}.svg)](LICENSE)
 
 **{{description}}**
 
-<!-- TODO({{name}}): add the badges that apply (mutation score, bundle size) once the package publishes them. The coverage badge reads docs/coverage-badge.json from your Pages site; it stays blank until that is published. -->
+<!-- TODO({{name}}): the coverage and mutation badges read docs/coverage-badge.json and docs/mutation-badge.json from your Pages site (write the mutation one with internal-package-contract's run-mutation-badge.mjs); the Scorecard badge reads the result .github/workflows/scorecard.yml publishes. They stay blank until the first run on main. -->
 
 ## Why it exists
 

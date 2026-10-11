@@ -10,6 +10,8 @@ const BADGES = [
   "[![CI](https://github.com/o/p/actions/workflows/ci.yml/badge.svg)](x)",
   "[![npm](https://img.shields.io/npm/v/p.svg)](x)",
   "[![Coverage](https://img.shields.io/endpoint?url=https://o.github.io/p/coverage-badge.json)](x)",
+  "[![Mutation](https://img.shields.io/endpoint?url=https://o.github.io/p/mutation-badge.json)](x)",
+  "[![Scorecard](https://api.scorecard.dev/projects/github.com/o/p/badge)](x)",
   "[![Socket Badge](https://badge.socket.dev/npm/package/p/latest)](x)",
   "[![License](https://img.shields.io/npm/l/p.svg)](LICENSE)",
 ]
@@ -49,6 +51,8 @@ describe("validateReadme", () => {
       "CI status",
       "npm version",
       "coverage",
+      "mutation",
+      "Scorecard",
       "Socket",
       "license",
     ])
@@ -98,8 +102,17 @@ describe("validateReadme", () => {
     expect(validateReadme(readme({ badges: BADGES.slice(1) }))).toEqual([
       "README.md is missing the CI status badge above its first section.",
     ])
-    expect(validateReadme(readme({ badges: BADGES.slice(0, 4) }))).toEqual([
+    expect(validateReadme(readme({ badges: BADGES.slice(0, 6) }))).toEqual([
       "README.md is missing the license badge above its first section.",
+    ])
+  })
+  it("requires the mutation and Scorecard badges", () => {
+    const without = (needle: string) => BADGES.filter((badge) => !badge.includes(needle))
+    expect(validateReadme(readme({ badges: without("mutation-badge") }))).toEqual([
+      "README.md is missing the mutation badge above its first section.",
+    ])
+    expect(validateReadme(readme({ badges: without("scorecard.dev") }))).toEqual([
+      "README.md is missing the Scorecard badge above its first section.",
     ])
   })
   it("counts only badges above the first section", () => {

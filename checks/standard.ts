@@ -29,6 +29,7 @@ import { docsMarkdown } from "./docs-markdown.js"
 import { gitHooksCheck } from "./git-hooks.js"
 import { landingPageCheck } from "./landing-page.js"
 import { readmeStructureCheck } from "./readme-structure.js"
+import { scorecardWorkflowCheck } from "./scorecard-workflow.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
 import { mutation } from "./mutation.js"
@@ -101,6 +102,7 @@ export function standardChecks() {
     GitHooks: gitHooksCheck(),
     LandingPage: landingPageCheck(),
     ReadmeStructure: readmeStructureCheck(),
+    ScorecardWorkflow: scorecardWorkflowCheck(),
     PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
