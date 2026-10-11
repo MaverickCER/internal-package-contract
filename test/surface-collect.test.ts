@@ -169,6 +169,13 @@ describe("collectSurface: edge cases", () => {
       ["./s/", "./s/one"].sort(),
     )
   })
+  it("replaces every star in a wildcard key, not only the first", async () => {
+    write("schemas/one.json", "{}")
+    pkg({ exports: { "./s/*/v/*": "./schemas/*.json" } })
+    expect(Object.keys((await collectSurface(root, { runBin: fake({}) })).schemas)).toEqual([
+      "./s/one/v/one",
+    ])
+  })
   it("ignores a wildcard export whose target has no star in the file name, and a star key with a plain target", async () => {
     write("a/f.json", "{}")
     pkg({ exports: { "./s/*": "./a/f.json" } })

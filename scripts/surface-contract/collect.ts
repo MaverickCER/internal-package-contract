@@ -59,7 +59,7 @@ async function schemaFiles(root: string, key: string, target: string): Promise<[
   return entries
     .filter((name) => name.startsWith(prefix) && name.endsWith(suffix))
     .map((name) => [
-      key.replace("*", name.slice(prefix.length, name.length - suffix.length)),
+      key.replaceAll("*", name.slice(prefix.length, name.length - suffix.length)),
       `${dir}${name}`,
     ])
 }
