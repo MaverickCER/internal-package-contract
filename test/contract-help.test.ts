@@ -34,6 +34,7 @@ describe("helpText", () => {
       "install-hooks",
       "site",
       "sync",
+      "add export",
       "--checks",
       "--skip",
       "--strict",
