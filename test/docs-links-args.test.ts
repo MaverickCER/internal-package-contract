@@ -19,4 +19,22 @@ describe("linkinatorArgs", () => {
     expect(Number(args[args.indexOf("--retry-errors-jitter") + 1])).toBeGreaterThan(0)
     expect(Number(args[args.indexOf("--timeout") + 1])).toBeGreaterThan(0)
   })
+  it("is exactly the crawl followed by the rate-limit-safe options", () => {
+    expect(linkinatorArgs(["docs", "--recurse"])).toEqual([
+      "docs",
+      "--recurse",
+      "--concurrency",
+      "4",
+      "--retry",
+      "--retry-errors",
+      "--retry-errors-count",
+      "3",
+      "--retry-errors-jitter",
+      "2000",
+      "--timeout",
+      "30000",
+      "--format",
+      "json",
+    ])
+  })
 })
