@@ -136,6 +136,7 @@ the packaging checks see a fresh `dist/`.
 | `GithubActions`    | `github-actionlint` (npm wrapper for actionlint)                                                                                                                                                                                              | any workflow finding (no workflows → pass)                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `GitHygiene`       | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`                                                                                                                                                             | a repo-maintenance defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `GitHooks`         | `core.hooksPath` against the bundled hooks (local only)                                                                                                                                                                                       | never fails: warns when the hooks are not installed, with the one command that installs them; passes in CI                                                                                                                                                                                                                                                                                                                                                                                       |
+| `LandingPage`      | `docs/site.json` against the landing-page quality bar, and the generated `docs/index.html`, `brief.html`, `styles.css`, `script.js` against what it produces                                                                                  | invalid content, or generated files that differ from it; passes when the package has no `docs/site.json`                                                                                                                                                                                                                                                                                                                                                                                         |
 | `PinConsistency`   | the `package.json` ref, the lockfile commit and every workflow's pinned SHA of this package (offline)                                                                                                                                         | any disagreement between them, a workflow not pinned to a full SHA, or a missing or wrong `# vX` comment; passes when the repo does not use this package                                                                                                                                                                                                                                                                                                                                         |
 | `BranchProtection` | `gh api` against the default branch's GitHub ruleset                                                                                                                                                                                          | deletion / force-push / PR-required protection, the `contract` required status check (strict), or required review-thread resolution missing (`gh` unavailable is a recorded degradation)                                                                                                                                                                                                                                                                                                         |
 | `Coverage`         | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS`                                                                                                                                                                                              | any metric below threshold                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -410,6 +411,24 @@ A consumer wires the three scripts as thin npm scripts that forward to this pack
   }
 }
 ```
+
+## Landing page
+
+A package's landing page is written as content and generated, so every MaverickCER package meets one
+bar: it leads with the outcome for an organization, states each guarantee with its scope, shows real
+output, says who should not adopt it, and ships a one-page `brief.html` a developer can hand to a
+manager.
+
+1. Write `docs/site.json` (hero outcome, problem, model, demo, scoped guarantees, comparison, adoption,
+   `notFor`, manager brief, resources). The validator names every missing or weak field.
+2. Run `npx internal-package-contract site` to write `docs/index.html`, `brief.html`, `styles.css` and
+   `script.js`. `--check` reports stale output without writing; `--content` and `--out` override the
+   paths.
+3. The `LandingPage` check fails if the content is invalid or the committed pages differ from what it
+   produces, so the pages cannot drift from the content. `Accessibility` scans the result.
+
+What the validator enforces is mechanical (required sections, a stated scope on each guarantee, a
+`notFor` entry, a brief with its risks). Whether the copy is true and persuasive stays a human review.
 
 ## Evolving the standard
 

@@ -27,6 +27,7 @@ import { docsFragments } from "./docs-fragments.js"
 import { docsLinks } from "./docs-links.js"
 import { docsMarkdown } from "./docs-markdown.js"
 import { gitHooksCheck } from "./git-hooks.js"
+import { landingPageCheck } from "./landing-page.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
 import { mutation } from "./mutation.js"
@@ -97,6 +98,7 @@ export function standardChecks() {
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
     GitHooks: gitHooksCheck(),
+    LandingPage: landingPageCheck(),
     PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
