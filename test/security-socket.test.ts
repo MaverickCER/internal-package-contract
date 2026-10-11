@@ -367,14 +367,14 @@ describe("securitySocket()", () => {
     }
   })
 
-  it("never reconciles the registry when Socket could not run (a failure, not a pass)", async () => {
+  it("never reconciles the registry when Socket could not run (a warning locally, a failure in CI, never a pass)", async () => {
     writeRegistry([completeRecord()])
     vi.stubEnv("CI", "")
     vi.stubEnv("GITHUB_ACTIONS", "")
     const result = await securitySocket().policy(
       makeContext(scriptOutput({ ok: false, message: "Auth Error", cause: "x" })),
     )
-    expect(result.outcome).toBe("fail")
+    expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("socket login")
     expect(readRegistry().exceptions).toHaveLength(1)
     vi.unstubAllEnvs()
@@ -826,6 +826,28 @@ describe("interpretSocketRun()", () => {
     })
   })
 
+  it("warns, naming the steps, when no API key is available on a developer machine", () => {
+    const authFailure = scriptOutput({ ok: false, message: "Auth Error" })
+    const result = interpretSocketRun(authFailure, LOCAL_ENV)
+    expect(result.kind).toBe("warn")
+    expect(result).toEqual({
+      kind: "warn",
+      rationale: expect.stringContaining(
+        "the Socket scan did not run, so its alerts were not checked",
+      ),
+    })
+    expect(result.kind === "warn" && result.rationale).toContain("socket login")
+  })
+
+  it("still fails when no API key is available in CI, where a skipped scan would hide alerts", () => {
+    const authFailure = scriptOutput({ ok: false, message: "Auth Error" })
+    expect(interpretSocketRun(authFailure, CI_ENV).kind).toBe("fail")
+  })
+
+  it("fails, not warns, when a key exists but Socket rejects it", () => {
+    expect(interpretSocketRun(scriptOutput({ ok: false, code: 401 }), LOCAL_ENV).kind).toBe("fail")
+  })
+
   it("tolerates whitespace around the JSON", () => {
     expect(
       interpretSocketRun(
@@ -857,7 +879,7 @@ describe("interpretSocketRun()", () => {
   it("gives local, cause-specific steps for each problem", () => {
     const fail = (body: unknown, env = LOCAL_ENV) => {
       const outcome = interpretSocketRun(scriptOutput(body), env)
-      return outcome.kind === "fail" ? outcome.rationale : ""
+      return outcome.kind === "fail" || outcome.kind === "warn" ? outcome.rationale : ""
     }
     expect(fail({ ok: false, message: "Auth Error" })).toContain("you are not signed in to Socket")
     expect(fail({ ok: false, message: "Auth Error" })).toContain("1. Sign in: `socket login`")
