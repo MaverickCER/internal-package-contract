@@ -94,7 +94,7 @@ function glance(results) {
   lines.push(
     `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds **${formatMs(typical.overheadMs)}** per operation compared with a bare-minimum baseline (**${percent(typical.overheadPercent)}** of the baseline). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
     "",
-    "> The relative figure and the growth class are the dependable ones: both come from the same run, so they survive a change of machine. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
+    "> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
     "",
   )
   const bundle = Object.values(metadata.bundleSizes ?? {}).reduce(
