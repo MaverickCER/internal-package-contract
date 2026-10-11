@@ -100,6 +100,6 @@ describe("run (exact output)", () => {
     const blockedLines = blocked.err.join("").split("\n")
     expect(blockedLines[0]).toBe("Pin audit blocked, not passed:")
     expect(blockedLines.slice(1).every((l) => l === "" || l.startsWith("- "))).toBe(true)
-    expect(blockedLines).toHaveLength(5)
+    expect(blockedLines).toHaveLength(7)
   })
 })
