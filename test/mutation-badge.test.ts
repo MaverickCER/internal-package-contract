@@ -86,6 +86,20 @@ describe("run", () => {
     expect(out[0]).toBe("[mutation-badge] wrote x/b.json (100.0%)\n")
     expect(JSON.parse(readFileSync(path.join(dir, "x/b.json"), "utf8")).message).toBe("100.0%")
   })
+  it("creates a nested output directory", () => {
+    put("reports/mutation/mutation.json", report("Killed"))
+    const { io: sinks } = io()
+    expect(run(["--out", "a/b/c/badge.json"], dir, sinks)).toBe(0)
+    expect(JSON.parse(readFileSync(path.join(dir, "a/b/c/badge.json"), "utf8")).label).toBe(
+      "mutation",
+    )
+  })
+  it("takes each flag's value even when it follows another flag", () => {
+    put("r.json", report("Killed"))
+    const { io: sinks, out } = io()
+    expect(run(["--out", "o.json", "--report", "r.json"], dir, sinks)).toBe(0)
+    expect(out).toEqual(["[mutation-badge] wrote o.json (100.0%)\n"])
+  })
   it("refuses to write from a missing or unparseable report", () => {
     for (const setup of [() => {}, () => put("reports/mutation/mutation.json", "not json")]) {
       setup()

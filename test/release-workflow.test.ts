@@ -53,4 +53,45 @@ describe("release workflows", () => {
       expect(text, `${name} must not merge a release PR; a person does`).not.toMatch(/gh pr merge/)
     }
   })
+
+  it("publish only from the default branch, and only a tarball the build job made", () => {
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    expect(text).toContain(
+      "if: needs.build.outputs.should-publish == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+    )
+    expect(text).toContain('npm publish "$1" --provenance --access public --ignore-scripts')
+  })
+
+  it("keep the publishing identity out of every job but publish", () => {
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
+    const withToken = jobs.filter((job) => /id-token:\s*write/.test(job))
+    expect(withToken).toHaveLength(1)
+    expect(withToken[0]).toMatch(/^publish:/)
+  })
+
+  it("ask the registry afterwards for the published version and its provenance", () => {
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    expect(text).toContain("name: ${{ steps.info.outputs.name }}")
+    expect(text).toContain('echo "name=$NAME" >> "$GITHUB_OUTPUT"')
+    expect(text).toContain("- name: Verify what npm now serves")
+    expect(text).toContain('npm view "$NAME@$VERSION" version')
+    expect(text).toContain('npm view "$NAME@$VERSION" dist.attestations --json')
+    // The verification is the last thing the publish job does.
+    expect(
+      text
+        .trimEnd()
+        .endsWith('echo "$NAME@$VERSION is served by npm with a provenance attestation."'),
+    ).toBe(true)
+  })
+
+  it("imports the exact tarball in a clean project before it is uploaded for publishing", () => {
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    const gate = text.indexOf("- name: Install the tarball into a clean project and import it")
+    expect(gate).toBeGreaterThan(text.indexOf("npm pack --ignore-scripts --pack-destination"))
+    expect(gate).toBeLessThan(text.indexOf("name: release-tarball"))
+    expect(text).toContain(
+      'node node_modules/internal-package-contract/scripts/check-packed-consumer.mjs --strict --tarball "$1"',
+    )
+  })
 })

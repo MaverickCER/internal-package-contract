@@ -153,6 +153,7 @@ jobs:
       contents: read
     outputs:
       should-publish: ${{ steps.info.outputs.should-publish }}
+      name: ${{ steps.info.outputs.name }}
       version: ${{ steps.info.outputs.version }}
       bump-type: ${{ steps.info.outputs.bump-type }}
     steps:
@@ -176,6 +177,7 @@ jobs:
           # step during the VERSION run that produced this exact version bump -- not by diffing
           # version strings, which is ambiguous pre-1.0. It rides along in the release commit.
           BUMP=$(node -p "require('./.changeset/.release-bump.json').bump" 2>/dev/null || echo "")
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "bump-type=$BUMP" >> "$GITHUB_OUTPUT"
           if [ "$PRIVATE" = "true" ]; then
@@ -206,6 +208,17 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/release"
           ls -l "$RUNNER_TEMP/release"
 
+      # Source-level tests run the source; this installs the exact tarball that is about to be published
+      # into an empty project and imports every entry point, the way a consumer would. It runs before the
+      # upload, so nothing that fails here can reach the publish job.
+      - name: Install the tarball into a clean project and import it
+        if: steps.info.outputs.should-publish == 'true'
+        run: |
+          set -eu
+          set -- "$RUNNER_TEMP"/release/*.tgz
+          [ "$#" -eq 1 ] || { echo "::error::Expected exactly one tarball, found $#."; exit 1; }
+          node node_modules/internal-package-contract/scripts/check-packed-consumer.mjs --strict --tarball "$1"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.info.outputs.should-publish == 'true'
         with:
@@ -216,7 +229,9 @@ jobs:
 
   publish:
     needs: build
-    if: needs.build.outputs.should-publish == 'true'
+    # Only the default branch publishes. The caller triggers on pushes to it, so this holds already; it
+    # is stated here so a caller that is edited to run on another branch cannot publish from it.
+    if: needs.build.outputs.should-publish == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
       # Enables npm's OIDC trusted publishing (GA since July 2025) -- no NPM_TOKEN
@@ -275,3 +290,29 @@ jobs:
                 -f ref="refs/tags/$MAJOR_TAG" -f sha="$GITHUB_SHA" > /dev/null
             fi
           fi
+
+      # Publishing succeeded as far as npm's client knows; this asks the registry what it now serves. A
+      # failure cannot unpublish anything, it makes the run red so a person looks at it: the version must
+      # be there, and it must carry the provenance attestation that proves this repository's CI built it.
+      - name: Verify what npm now serves
+        env:
+          NAME: ${{ needs.build.outputs.name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -eu
+          served=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            served=$(npm view "$NAME@$VERSION" version 2>/dev/null || true)
+            [ "$served" = "$VERSION" ] && break
+            sleep 10
+          done
+          if [ "$served" != "$VERSION" ]; then
+            echo "::error::npm does not serve $NAME@$VERSION two minutes after publishing it."
+            exit 1
+          fi
+          attestations=$(npm view "$NAME@$VERSION" dist.attestations --json 2>/dev/null || true)
+          if [ -z "$attestations" ] || [ "$attestations" = "undefined" ] || [ "$attestations" = "null" ]; then
+            echo "::error::$NAME@$VERSION is on npm but carries no provenance attestation."
+            exit 1
+          fi
+          echo "$NAME@$VERSION is served by npm with a provenance attestation."

@@ -80,3 +80,20 @@ describe("check-landing-page (script)", () => {
     expect(envelope()).toEqual({ ok: true, state: "current" })
   })
 })
+
+describe("landingPageCheck (policy) -- edges", () => {
+  it("names the tool when it did not run to completion", async () => {
+    expect(
+      await landingPageCheck().policy(makeContext(makeResult({ status: "timed_out" }))),
+    ).toEqual({
+      outcome: "fail",
+      rationale: "check-landing-page did not run to completion (status: timed_out).",
+    })
+  })
+  it("falls back to a generic message when a problem carries none", async () => {
+    expect(await judge({ ok: true, state: "problem" })).toEqual({
+      outcome: "fail",
+      rationale: "LandingPage: the landing page could not be checked.",
+    })
+  })
+})

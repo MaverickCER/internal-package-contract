@@ -57,7 +57,7 @@ const SECTIONS = [
  * @returns {number} the number of whitespace-separated words.
  */
 export function wordCount(text) {
-  return text.split(/\s+/).filter(Boolean).length
+  return (text.match(/\S+/g) ?? []).length
 }
 
 const isText = (value) => typeof value === "string" && value.trim() !== ""
@@ -82,7 +82,8 @@ function* stringsIn(node, at) {
   if (typeof node === "string") yield [at, node]
   else if (Array.isArray(node)) {
     for (const [i, item] of node.entries()) yield* stringsIn(item, `${at}[${String(i)}]`)
-  } else if (node && typeof node === "object") {
+  } else if (node != null) {
+    // A number or boolean has no entries; only null and undefined need ruling out.
     for (const [key, value] of Object.entries(node))
       yield* stringsIn(value, at === "" ? key : `${at}.${key}`)
   }
@@ -90,7 +91,7 @@ function* stringsIn(node, at) {
 
 function longSentence(text) {
   return text
-    .split(/(?<=[.!?])\s+/)
+    .split(/[.!?]\s/)
     .map(wordCount)
     .find((words) => words > MAX_BRIEF_SENTENCE_WORDS)
 }
@@ -245,7 +246,8 @@ export function validateSite(site, pkg) {
         )
     }
     for (const key of ["whyItMatters", "whatCouldGoWrong"]) {
-      for (const [i, text] of (Array.isArray(site.brief[key]) ? site.brief[key] : []).entries()) {
+      if (!Array.isArray(site.brief[key])) continue
+      for (const [i, text] of site.brief[key].entries()) {
         const words = isText(text) ? longSentence(text) : undefined
         if (words !== undefined)
           errors.push(

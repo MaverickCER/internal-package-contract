@@ -59,7 +59,7 @@ export function validateReadme(markdown) {
   const found = headings(lines)
 
   const titles = found.filter((heading) => heading.level === 1)
-  if (titles.length !== 1 || found[0]?.level !== 1) {
+  if (titles.length !== 1 || found[0].level !== 1) {
     problems.push('README.md must open with a single "# <package name>" title.')
   }
 
@@ -83,17 +83,16 @@ export function validateReadme(markdown) {
     )
   }
 
-  const whatItDoes = sections.find((section) => section.text === "What it does")
-  if (whatItDoes !== undefined) {
-    const next = sections.find((section) => section.line > whatItDoes.line)
-    const end = next?.line ?? Infinity
-    const seeItRun = found.some(
-      (heading) =>
-        heading.level === 3 &&
-        heading.text === "See it run" &&
-        heading.line > whatItDoes.line &&
-        heading.line < end,
-    )
+  // `### See it run` must sit under `## What it does`: the nearest `##` above it names its section.
+  if (names.includes("What it does")) {
+    let current
+    let seeItRun = false
+    for (const heading of found) {
+      if (heading.level === 2) current = heading.text
+      else if (current === "What it does" && heading.level === 3 && heading.text === "See it run") {
+        seeItRun = true
+      }
+    }
     if (!seeItRun) {
       problems.push(
         'README.md must have a "### See it run" under "What it does" that shows real output.',
@@ -101,20 +100,21 @@ export function validateReadme(markdown) {
     }
   }
 
-  const firstSection = sections[0]?.line ?? lines.length + 1
-  const header = lines.slice(0, firstSection - 1).filter((text) => /!\[[^\]]*\]\(/.test(text))
+  const header = lines
+    .slice(0, sections.length === 0 ? lines.length : sections[0].line - 1)
+    .filter((text) => /!\[[^\]]*\]\(/.test(text))
   for (const badge of REQUIRED_BADGES) {
     if (!header.some((text) => badge.pattern.test(text))) {
       problems.push(`README.md is missing the ${badge.label} badge above its first section.`)
     }
   }
 
-  const nextSteps = sections.find((section) => section.text === "Next steps")
-  if (nextSteps !== undefined) {
-    const following = sections.find((section) => section.line > nextSteps.line)
-    const body = lines.slice(nextSteps.line, (following?.line ?? lines.length + 1) - 1).join("\n")
+  if (names.includes("Next steps")) {
+    const start = sections.findIndex((section) => section.text === "Next steps")
+    const end = sections[start + 1]?.line ?? lines.length + 1
+    const body = lines.slice(sections[start].line, end - 1)
     for (const step of NEXT_STEPS) {
-      if (!body.includes(`**${step}:**`)) {
+      if (!body.some((text) => text.includes(`**${step}:**`))) {
         problems.push(`README.md "Next steps" must offer **${step}:** as its own step.`)
       }
     }

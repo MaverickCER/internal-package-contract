@@ -44,3 +44,24 @@ describe("the shared script", () => {
       expect(script).toContain(hook)
   })
 })
+
+describe("inline code on the hero's navy panel", () => {
+  const luminance = (rgb: number[]) => {
+    const [r, g, b] = rgb.map((value) => {
+      const channel = value / 255
+      return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
+  }
+  it("has white text on a translucent white background, readable on the navy", () => {
+    const rule = /\.hero code \{([^}]*)\}/.exec(css)?.[1] ?? ""
+    expect(rule).toContain("color: #fff;")
+    const alpha = Number(/background: rgb\(255 255 255 \/ ([\d.]+)\)/.exec(rule)?.[1])
+    expect(alpha).toBeGreaterThan(0)
+    const navy = /--color-navy:\s*#([0-9a-fA-F]{6})/.exec(css)?.[1] ?? ""
+    const base = [0, 2, 4].map((i) => parseInt(navy.slice(i, i + 2), 16))
+    const blended = base.map((channel) => channel * (1 - alpha) + 255 * alpha)
+    const ratio = (luminance([255, 255, 255]) + 0.05) / (luminance(blended) + 0.05)
+    expect(ratio).toBeGreaterThanOrEqual(4.5)
+  })
+})

@@ -151,3 +151,115 @@ describe("validateReadme", () => {
     expect(validateReadme(readme({ extra: "line\n".repeat(150) }))).toEqual([])
   })
 })
+
+describe("validateReadme -- code fences and heading syntax", () => {
+  const roadmap =
+    'README.md has a section that is not part of the standard layout: "Roadmap". Move its content into the section it belongs to, or into a guide.'
+  const withExtra = (extra: string) => validateReadme(readme({ extra }))
+
+  it("sees a heading after a closed fence", () => {
+    expect(withExtra("```md\n## Hidden\n```\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("~~~\n## Hidden\n~~~\n## Roadmap\n")).toEqual([roadmap])
+  })
+  it("closes a fence only with the same character", () => {
+    expect(withExtra("```\n~~~\n## Hidden\n```\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("~~~\n```\n## Hidden\n~~~\n## Roadmap\n")).toEqual([roadmap])
+  })
+  it("allows up to three spaces before a fence", () => {
+    expect(withExtra("   ```\n## Hidden\n   ```\n## Roadmap\n")).toEqual([roadmap])
+  })
+  it("does not treat text before backticks, one backtick or one tilde as a fence", () => {
+    expect(withExtra("text ``` text\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("ab```\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("`code` and text\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("~not a fence\n## Roadmap\n")).toEqual([roadmap])
+    expect(withExtra("    ```\n## Roadmap\n")).toEqual([roadmap])
+  })
+  it("reads a heading only at the start of a line, with spaces after the hashes", () => {
+    expect(withExtra("see ## Roadmap\n")).toEqual([])
+    expect(withExtra("##Roadmap\n")).toEqual([])
+    expect(withExtra("####### seven\n")).toEqual([])
+  })
+  it("trims extra spaces and closing hashes from a heading's text", () => {
+    const text = readme().replace("## Why it exists", "##   Why it exists   ##  ")
+    expect(validateReadme(text)).toEqual([])
+  })
+  it("still sees a final heading when the file ends with a newline", () => {
+    expect(validateReadme(`${readme()}## Roadmap\n`)).toEqual([roadmap])
+    expect(validateReadme(`${readme()}## Roadmap`)).toEqual([roadmap])
+  })
+})
+
+describe("validateReadme -- structure edge cases", () => {
+  const seeItRun =
+    'README.md must have a "### See it run" under "What it does" that shows real output.'
+  it("requires the title to be the first heading, not merely present", () => {
+    const message = 'README.md must open with a single "# <package name>" title.'
+    expect(validateReadme(readme({ title: "## Early\n\n# p" }))).toContain(message)
+  })
+  it("reports only the missing section when What it does or Next steps is absent", () => {
+    const without = (name: string) => REQUIRED_SECTIONS.filter((section) => section !== name)
+    expect(validateReadme(readme({ sections: without("What it does") }))).toEqual([
+      'README.md is missing the "What it does" section.',
+    ])
+    expect(validateReadme(readme({ sections: without("Next steps") }))).toEqual([
+      'README.md is missing the "Next steps" section.',
+    ])
+  })
+  it("does not fail when What it does or Next steps is the last section", () => {
+    const only = validateReadme(readme({ sections: ["What it does"] }))
+    expect(only).toContain('README.md is missing the "Why it exists" section.')
+    expect(only).not.toContain(seeItRun)
+    const last = validateReadme(readme({ sections: ["Next steps"] }))
+    expect(last).not.toContain('README.md "Next steps" must offer **Verify:** as its own step.')
+  })
+  it("accepts See it run only as a level-3 heading with that text under What it does", () => {
+    const base = (inner: string) => readme().replace("### See it run\n", inner)
+    expect(validateReadme(base("#### See it run\n"))).toEqual([seeItRun])
+    expect(validateReadme(base("### Something else\n"))).toEqual([seeItRun])
+    expect(validateReadme(base("### See it run later\n"))).toEqual([seeItRun])
+    expect(validateReadme(base("## See it run\n"))).toContain(seeItRun)
+  })
+  it("rejects a See it run under a different section", () => {
+    const moved = readme()
+      .replace("### See it run\n", "")
+      .replace("## Install and verify\n", "## Install and verify\n\n### See it run\n")
+    expect(validateReadme(moved)).toEqual([seeItRun])
+  })
+  it("finds the badges when there are no sections, and ignores a badge on the first section's lines", () => {
+    const noSections = ["# p", ...BADGES].join("\n")
+    expect(validateReadme(noSections)).not.toContain(
+      "README.md is missing the license badge above its first section.",
+    )
+    const justAfter = readme({ badges: BADGES.slice(1) }).replace(
+      "## Why it exists\n",
+      `## Why it exists\n${BADGES[0]}\n`,
+    )
+    expect(validateReadme(justAfter)).toEqual([
+      "README.md is missing the CI status badge above its first section.",
+    ])
+  })
+  it("finds the next-step markers in any line of that section only", () => {
+    const text = readme({
+      nextSteps: "- a\n- **Evaluate:** x\n- b\n- **Integrate:** y\n- **Verify:** z",
+    })
+    expect(validateReadme(text)).toEqual([])
+    const inEarlier = readme({ nextSteps: "- nothing" }).replace(
+      "## Maturity, versioning and support\n",
+      "## Maturity, versioning and support\n\n**Evaluate:** **Integrate:** **Verify:**\n",
+    )
+    expect(validateReadme(inEarlier)).toHaveLength(3)
+  })
+})
+
+describe("validateReadme -- only images count as badges", () => {
+  it("does not take a line of text that mentions a badge's subject for the badge", () => {
+    const text = readme({ badges: BADGES.slice(0, 6) }).replace(
+      "Tagline.",
+      "Released under the MIT license.",
+    )
+    expect(validateReadme(text)).toEqual([
+      "README.md is missing the license badge above its first section.",
+    ])
+  })
+})

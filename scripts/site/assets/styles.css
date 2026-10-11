@@ -890,6 +890,13 @@ section[id] {
   margin: 0 0 var(--space-4);
 }
 
+/* Inline code on the hero's fixed navy panel: the page-wide code background is a light grey tuned for
+   the page, which under the hero's white text measured 1.23:1 in light mode. */
+.hero code {
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+}
+
 .hero-note {
   font-size: 0.9rem;
   opacity: 0.9;

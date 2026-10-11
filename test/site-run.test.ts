@@ -126,3 +126,44 @@ describe("internal-package-contract site", () => {
     expect(stale.stderr).toContain("Usage: internal-package-contract site")
   })
 })
+
+describe("renderFiles -- the package's own Prettier settings", () => {
+  it("formats the generated script with the consumer's configuration", async () => {
+    // Prettier caches a directory's configuration, so each setting gets its own directory.
+    const scriptWith = async (semi: boolean) => {
+      const own = mkdtempSync(path.join(tmpdir(), "ipc-site-prettier-"))
+      try {
+        writeFileSync(path.join(own, ".prettierrc.json"), JSON.stringify({ semi }))
+        const files = await renderFiles({
+          site: validSite(),
+          pkg: { name: "demo-pkg", version: "0.4.2" },
+          outDir: own,
+        })
+        return files.find((file) => file.name === "script.js")?.text ?? ""
+      } finally {
+        rmSync(own, { recursive: true, force: true })
+      }
+    }
+    expect(await scriptWith(false)).not.toMatch(/;\n/)
+    expect(await scriptWith(true)).toMatch(/;\n/)
+  })
+})
+
+describe("run -- flags", () => {
+  it("takes the value after --content and --out, in either order", async () => {
+    writeFileSync(path.join(dir, "elsewhere.json"), JSON.stringify(validSite()))
+    const { out, io: sinks } = io()
+    expect(await run(["--out", "site-out", "--content", "elsewhere.json"], dir, sinks)).toBe(0)
+    expect(out.join("")).toBe(
+      "[site] wrote index.html, brief.html, styles.css, script.js to site-out\n",
+    )
+  })
+  it("rejects a flag with no value and an unknown flag with the usage line", async () => {
+    const first = io()
+    expect(await run(["--out"], dir, first.io)).toBe(1)
+    expect(first.err.join("")).toContain("Usage: internal-package-contract site")
+    const second = io()
+    expect(await run(["--nope"], dir, second.io)).toBe(1)
+    expect(second.err.join("")).toContain("Usage: internal-package-contract site")
+  })
+})

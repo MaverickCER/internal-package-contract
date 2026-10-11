@@ -24,6 +24,7 @@ describe("helpText", () => {
       "update-baseline",
       "install-hooks",
       "site",
+      "sync",
       "--checks",
       "--skip",
       "--strict",

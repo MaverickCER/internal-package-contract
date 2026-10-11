@@ -4,7 +4,9 @@
 export interface RenderSummaryOptions {
   readonly examples: readonly string[]
   readonly budgetsPath?: string
+  readonly exceptionsPath?: string
   readonly marker?: string
+  readonly now?: Date
 }
 
 export function renderSummary(options: RenderSummaryOptions): Promise<string>
@@ -24,6 +26,7 @@ export interface ParsedArgs {
   examples: string[]
   marker: string
   budgetsPath?: string
+  exceptionsPath?: string
   gate?: boolean
   help?: boolean
 }

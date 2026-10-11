@@ -23,8 +23,7 @@ const SAFE_URL = /^(?:https:\/\/[^\s"'<>)]+|(?!\/\/)[^:\s"'<>)]+)$/
 export function inline(text) {
   return esc(text)
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (whole, label, url) => {
-      const raw = url.replaceAll("&amp;", "&")
-      return SAFE_URL.test(raw) ? `<a href="${url}">${label}</a>` : whole
+      return SAFE_URL.test(url) ? `<a href="${url}">${label}</a>` : whole
     })
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
@@ -35,7 +34,7 @@ export function slugOf(name) {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/^-|-$/g, "")
 }
 
 const isPreOne = (version) => {

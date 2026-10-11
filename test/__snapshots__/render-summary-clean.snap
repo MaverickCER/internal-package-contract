@@ -4,7 +4,7 @@
 
 ## ✅ Gates passed
 
-Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.
+Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. Raw time deltas against another run (the tables below) are highlights only.
 
 ## Runtime
 

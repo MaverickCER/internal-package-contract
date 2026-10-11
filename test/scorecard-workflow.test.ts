@@ -62,6 +62,14 @@ describe("validateScorecardWorkflow", () => {
   })
 })
 
+describe("validateScorecardWorkflow -- no use of the action", () => {
+  it("reports the pin problem once rather than failing, when no line uses the action", () => {
+    expect(
+      validateScorecardWorkflow(GOOD.replace("- uses: ossf/scorecard-action", "- run: echo")),
+    ).toEqual(["the scorecard action must be pinned to a full commit SHA."])
+  })
+})
+
 describe("validateScorecardWorkflows", () => {
   it("fails when no workflow runs the action", () => {
     expect(validateScorecardWorkflows([{ name: "ci.yml", text: "name: CI" }])).toEqual([
@@ -78,6 +86,50 @@ describe("validateScorecardWorkflows", () => {
       "scorecard.yml: the scorecard action must set `publish_results: true` so the result is public.",
     ])
     expect(validateScorecardWorkflows([{ name: "scorecard.yml", text: GOOD }])).toEqual([])
+  })
+})
+
+describe("validateScorecardWorkflow -- line handling", () => {
+  it("ignores indentation, a list dash and trailing comments", () => {
+    const text = GOOD.replace("      - uses:", "      -   uses:").replace(
+      "publish_results: true",
+      "publish_results: true   # public",
+    )
+    expect(validateScorecardWorkflow(text.replace("-   uses:", "- uses:"))).toEqual([])
+  })
+  it("does not accept a setting that is commented out or only a suffix or prefix of the real one", () => {
+    const publish = "the scorecard action must set `publish_results: true` so the result is public."
+    expect(
+      validateScorecardWorkflow(GOOD.replace("publish_results: true", "# publish_results: true")),
+    ).toEqual([publish])
+    expect(
+      validateScorecardWorkflow(GOOD.replace("publish_results: true", "x_publish_results: true")),
+    ).toEqual([publish])
+    expect(
+      validateScorecardWorkflow(GOOD.replace("publish_results: true", "publish_results: truer")),
+    ).toEqual([publish])
+    expect(validateScorecardWorkflow(GOOD.replace("id-token: write", "# id-token: write"))).toEqual(
+      ["the scorecard job needs the `id-token: write` permission to sign its result."],
+    )
+    expect(
+      validateScorecardWorkflow(GOOD.replace("id-token: write", "my-id-token: write")),
+    ).toHaveLength(1)
+    expect(validateScorecardWorkflow(GOOD.replace("schedule:", "# schedule:"))).toEqual([
+      "the workflow needs a `schedule:` trigger so the score does not go stale.",
+    ])
+    expect(validateScorecardWorkflow(GOOD.replace("schedule:", "unschedule:"))).toHaveLength(1)
+  })
+  it("reads the action reference from the line that uses it", () => {
+    expect(
+      validateScorecardWorkflow(GOOD.replace("      - uses:", "      - name: x\n        uses:")),
+    ).toEqual([])
+  })
+  it("does not count a commented-out use of the action", () => {
+    expect(
+      validateScorecardWorkflows([{ name: "a.yml", text: GOOD.replace("- uses:", "# - uses:") }]),
+    ).toEqual([
+      "no workflow in .github/workflows runs `ossf/scorecard-action`, so the package publishes no Scorecard result.",
+    ])
   })
 })
 
@@ -160,6 +212,27 @@ describe("check-scorecard-workflow (script)", () => {
       state: "problem",
       message:
         "scorecard.yml: the scorecard action must set `publish_results: true` so the result is public.",
+    })
+  })
+})
+
+describe("scorecardWorkflowCheck (policy) -- edges", () => {
+  it("names the tool when it did not run to completion", async () => {
+    expect(
+      await scorecardWorkflowCheck().policy(makeContext(makeResult({ status: "timed_out" }))),
+    ).toEqual({
+      outcome: "fail",
+      rationale: "check-scorecard-workflow did not run to completion (status: timed_out).",
+    })
+  })
+  it("falls back to a generic message when a problem carries none", async () => {
+    expect(
+      await scorecardWorkflowCheck().policy(
+        makeContext(makeJsonResult({ ok: true, state: "problem" })),
+      ),
+    ).toEqual({
+      outcome: "fail",
+      rationale: "ScorecardWorkflow: the Scorecard workflow could not be checked.",
     })
   })
 })

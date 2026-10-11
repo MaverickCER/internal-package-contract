@@ -41,10 +41,11 @@ export async function renderFiles({ site, pkg, outDir }) {
 
 function parseArgs(argv) {
   const args = { content: "docs/site.json", out: "docs", check: false, errors: [] }
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]
+  // An iterator, so a flag takes the next argument as its value without an index to advance.
+  const items = argv[Symbol.iterator]()
+  for (const arg of items) {
     if (arg === "--check") args.check = true
-    else if (arg === "--content" || arg === "--out") args[arg.slice(2)] = argv[(i += 1)]
+    else if (arg === "--content" || arg === "--out") args[arg.slice(2)] = items.next().value
     else args.errors.push(arg)
   }
   return args
@@ -69,12 +70,12 @@ export async function run(argv, cwd, io) {
   }
   let site
   try {
-    site = JSON.parse(readFileSync(contentPath, "utf8"))
+    site = JSON.parse(readFileSync(contentPath).toString())
   } catch {
     io.err(`[site] ${args.content} is not valid JSON.\n`)
     return 1
   }
-  const pkg = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8"))
+  const pkg = JSON.parse(readFileSync(path.join(cwd, "package.json")).toString())
   const problems = validateSite(site, pkg)
   if (problems.length > 0) {
     io.err(

@@ -52,7 +52,7 @@ import {
 
 /**
  * @param {string[]} argv - the command-line arguments after the script name.
- * @returns {{ examples: string[], marker: string, budgetsPath?: string, gate?: boolean, help?: boolean }}
+ * @returns {{ examples: string[], marker: string, budgetsPath?: string, exceptionsPath?: string, gate?: boolean, help?: boolean }}
  */
 export function parseArgs(argv) {
   const args = { examples: [], marker: "<!-- benchmark-summary -->" }
@@ -62,6 +62,7 @@ export function parseArgs(argv) {
   for (const arg of items) {
     if (arg === "--budgets") args.budgetsPath = value()
     else if (arg === "--marker") args.marker = value()
+    else if (arg === "--exceptions") args.exceptionsPath = value()
     else if (arg === "--example") args.examples.push(value())
     else if (arg === "--gate") args.gate = true
     else if (arg === "--help" || arg === "-h") args.help = true
@@ -200,11 +201,19 @@ async function loadBudgetsModule(budgetsPath) {
 
 /**
  * Renders the summary and evaluates the gates.
- * @param {{ examples: string[], budgetsPath?: string, marker: string }} input
+ * @param {{ examples: string[], budgetsPath?: string, exceptionsPath?: string, marker: string, now?: Date }} input
  * @returns {Promise<{ markdown: string, failures: object[] }>} the Markdown, and every gate that failed.
  */
-export async function summarize({ examples, budgetsPath, marker }) {
+export async function summarize({
+  examples,
+  budgetsPath,
+  exceptionsPath,
+  marker,
+  now = new Date(),
+}) {
   const { budgets, gates } = await loadBudgetsModule(budgetsPath)
+  // Stryker disable next-line ArrayDeclaration: equivalent -- a stray element has no suite or group, so it matches no gain.
+  const records = tryReadJson(exceptionsPath)?.exceptions ?? []
 
   const perExample = examples.map((spec) => {
     const { label, prevPath, curPath, historyPath, releasePath } = parseExample(spec)
@@ -215,7 +224,13 @@ export async function summarize({ examples, budgetsPath, marker }) {
       shifts: complexityShifts(label, current ?? {}, historyPath),
       section: renderExample(label, previous, current, budgets),
       // With no current results there is nothing to judge: every gate returns no findings.
-      findings: evaluateGates({ previous, release, current, gates }).map((finding) => ({
+      findings: evaluateGates({
+        previous,
+        release,
+        current,
+        gates,
+        exceptions: { suite: path.basename(path.dirname(curPath)), records, now },
+      }).map((finding) => ({
         ...finding,
         label,
       })),
@@ -253,7 +268,7 @@ export async function summarize({ examples, budgetsPath, marker }) {
       ? `## ❌ ${String(failures.length)} gate${failures.length === 1 ? "" : "s"} failed`
       : "## ✅ Gates passed",
     "",
-    "Two things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, and the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release. Raw time deltas against another run (the tables below) are highlights only.",
+    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. Raw time deltas against another run (the tables below) are highlights only.",
     "",
     ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
     ...notes.map((finding) => `- ℹ️ **${finding.label}** — ${finding.message}`),
@@ -282,7 +297,7 @@ export async function run(argv, io) {
   const args = parseArgs(argv)
   if (args.help || args.examples.length === 0) {
     io.error(
-      "Usage: node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] [--gate] --example 'label|prev|cur|history[|release]' [--example ...]",
+      "Usage: node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] [--exceptions <registry.json>] [--gate] --example 'label|prev|cur|history[|release]' [--example ...]",
     )
     return args.help ? 0 : 1
   }

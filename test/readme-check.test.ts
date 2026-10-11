@@ -96,3 +96,24 @@ describe("check-readme (script)", () => {
     expect(envelope()).toEqual({ ok: true, state: "current" })
   })
 })
+
+describe("readmeStructureCheck (policy) -- edges", () => {
+  it("names the tool when it did not run to completion", async () => {
+    expect(
+      await readmeStructureCheck().policy(makeContext(makeResult({ status: "timed_out" }))),
+    ).toEqual({
+      outcome: "fail",
+      rationale: "check-readme did not run to completion (status: timed_out).",
+    })
+  })
+  it("falls back to a generic message when a problem carries none", async () => {
+    expect(
+      await readmeStructureCheck().policy(
+        makeContext(makeJsonResult({ ok: true, state: "problem" })),
+      ),
+    ).toEqual({
+      outcome: "fail",
+      rationale: "ReadmeStructure: the README could not be checked.",
+    })
+  })
+})

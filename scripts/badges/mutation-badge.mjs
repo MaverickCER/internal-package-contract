@@ -18,6 +18,7 @@ const USAGE =
  * @returns {number | undefined} the score in percent, or undefined when no mutant was applicable.
  */
 export function mutationScore(report) {
+  // Stryker disable next-line ArrayDeclaration: equivalent -- an element without a recognised status is filtered out below.
   const mutants = Object.values(report.files ?? {}).flatMap((file) => file.mutants ?? [])
   const applicable = mutants.filter((mutant) => APPLICABLE.has(mutant.status))
   if (applicable.length === 0) return undefined
@@ -41,9 +42,10 @@ function parseArgs(argv) {
     out: "docs/mutation-badge.json",
     errors: [],
   }
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i]
-    if (arg === "--report" || arg === "--out") args[arg.slice(2)] = argv[(i += 1)]
+  // An iterator, so a flag takes the next argument as its value without an index to advance.
+  const items = argv[Symbol.iterator]()
+  for (const arg of items) {
+    if (arg === "--report" || arg === "--out") args[arg.slice(2)] = items.next().value
     else args.errors.push(arg)
   }
   return args
@@ -64,7 +66,7 @@ export function run(argv, cwd, io) {
   const reportPath = path.resolve(cwd, args.report)
   let report
   try {
-    report = JSON.parse(readFileSync(reportPath, "utf8"))
+    report = JSON.parse(readFileSync(reportPath).toString())
   } catch {
     io.err(
       `[mutation-badge] ${args.report} is missing or not JSON. Run the mutation suite first, so the badge is never written from nothing.\n`,

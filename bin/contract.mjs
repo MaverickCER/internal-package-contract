@@ -10,6 +10,7 @@
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
+//   internal-package-contract sync            report (or with --apply, restore) the files this package owns
 //   internal-package-contract site            generate the landing page and one-page brief from docs/site.json
 //   internal-package-contract install-hooks   point git at the bundled hooks (once per clone)
 //
@@ -51,6 +52,14 @@ if (wantsHelp(process.argv.slice(2))) {
       ? "Benchmark guides are already identical to the canonical ones.\n"
       : `Updated ${written.join(", ")}.\n`,
   )
+} else if (process.argv[2] === "sync") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "managed-files", "sync.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), packageRoot, {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
 } else if (process.argv[2] === "site") {
   const { run } = await import(
     pathToFileURL(path.join(packageRoot, "scripts", "site", "render-site.mjs")).href

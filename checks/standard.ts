@@ -13,6 +13,7 @@ import { format, license, lint, publint, typecheck } from "repo-contract/presets
 import { accessibility } from "./accessibility.js"
 import { apiContract } from "./api-contract.js"
 import { architecture } from "./architecture.js"
+import { benchmarkComplexityCheck } from "./benchmark-complexity.js"
 import { benchmarkGuides } from "./benchmark-guides.js"
 import { arethetypeswrong } from "./arethetypeswrong.js"
 import { branchProtection } from "./branch-protection.js"
@@ -26,12 +27,15 @@ import { duplication } from "./duplication.js"
 import { docsFragments } from "./docs-fragments.js"
 import { docsLinks } from "./docs-links.js"
 import { docsMarkdown } from "./docs-markdown.js"
+import { engineMatrixCheck } from "./engine-matrix.js"
+import { packedConsumerCheck } from "./packed-consumer.js"
 import { gitHooksCheck } from "./git-hooks.js"
 import { landingPageCheck } from "./landing-page.js"
 import { readmeStructureCheck } from "./readme-structure.js"
 import { scorecardWorkflowCheck } from "./scorecard-workflow.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
+import { managedFilesCheck } from "./managed-files.js"
 import { mutation } from "./mutation.js"
 import { noMinify } from "./no-minify.js"
 import { pinConsistency } from "./pin-consistency.js"
@@ -103,6 +107,8 @@ export function standardChecks() {
     LandingPage: landingPageCheck(),
     ReadmeStructure: readmeStructureCheck(),
     ScorecardWorkflow: scorecardWorkflowCheck(),
+    EngineMatrix: engineMatrixCheck(),
+    ManagedFiles: managedFilesCheck(),
     PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
@@ -119,9 +125,11 @@ export function standardChecks() {
     // install-and-run integration tests can pack too; keep the two off each
     // other's back rather than racing under load.
     TypeResolution: { ...arethetypeswrong, dependsOn: ["Tests"] as const },
+    PackedConsumer: { ...packedConsumerCheck(), dependsOn: ["Tests"] as const },
     Licenses: license,
     DocsMarkdown: docsMarkdown(),
     BenchmarkGuides: benchmarkGuides(),
+    BenchmarkComplexity: benchmarkComplexityCheck(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     // No explicit dependsOn needed: declaration-order phasing (writers,

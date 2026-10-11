@@ -17,10 +17,21 @@
 //                     on main and the results at the last release, so a series of small regressions
 //                     cannot ratchet the previous run upward unnoticed.
 //
+//   3. complexity gain   a group whose fitted growth class got worse than at the last release. Getting worse
+//                     at big-O is a decision, so it fails until a human records that they accepted it
+//                     (see complexity-gain.mjs); an improvement never fails.
+//
 // The thresholds are deliberately loose, because they have to clear run-to-run noise with margin:
 // microsecond-scale work (a baseline under 1 ms) swings 30-40% with no change at all, so it is allowed
 // to grow by 70% before a human is stopped; millisecond-scale work, which is steadier, by 50%. Either
 // still catches the 2x-and-worse changes that mean an algorithmic or implementation mistake.
+
+import {
+  complexityGains,
+  describeGain,
+  judgeGains,
+  REGISTRY_RELATIVE_PATH,
+} from "./complexity-gain.mjs"
 
 /** The default gate settings; a package overrides any of them with a `GATES` export in its budgets file. */
 export const DEFAULT_GATES = Object.freeze({
@@ -41,7 +52,7 @@ export const DEFAULT_GATES = Object.freeze({
 /**
  * @typedef {object} Finding
  * @property {"fail" | "note"} level - `fail` fails a gated run; `note` is information.
- * @property {"complexity" | "normalized-overhead" | "environment"} kind
+ * @property {"complexity" | "complexity-gain" | "normalized-overhead" | "environment"} kind
  * @property {string} message
  */
 
@@ -87,6 +98,27 @@ export function complexityFindings(current) {
     })
   }
   return findings
+}
+
+/**
+ * @param {{ suite: string, release: object | null | undefined, current: object | undefined, records: readonly Record<string, unknown>[], now: Date }} input
+ * @returns {Finding[]} a failure for each group that got worse than at the last release with no complete record
+ *   accepting it, and a note for each one a record does accept.
+ */
+export function complexityGainFindings({ suite, release, current, records, now }) {
+  const judged = judgeGains(complexityGains(suite, release, current), records, now)
+  return [
+    ...judged.unaccepted.map(({ gain, id, reason }) => ({
+      level: "fail",
+      kind: "complexity-gain",
+      message: `${describeGain(gain)}. It got worse at big-O than at the last release and no human has accepted it. Fix the regression, or review it and record the decision as ${id} in ${REGISTRY_RELATIVE_PATH} (${reason}).`,
+    })),
+    ...judged.accepted.map(({ gain, id }) => ({
+      level: "note",
+      kind: "complexity-gain",
+      message: `${describeGain(gain)}. Accepted by ${id}.`,
+    })),
+  ]
 }
 
 /**
@@ -151,10 +183,10 @@ export function environmentNotes(previous, current) {
 
 /**
  * Every gate finding for one suite.
- * @param {{ previous?: object | null, release?: object | null, current?: object, gates?: object }} input
+ * @param {{ previous?: object | null, release?: object | null, current?: object, gates?: object, exceptions?: { suite: string, records: readonly Record<string, unknown>[], now: Date } }} input
  * @returns {Finding[]}
  */
-export function evaluateGates({ previous, release, current, gates: overrides }) {
+export function evaluateGates({ previous, release, current, gates: overrides, exceptions }) {
   const gates = resolveGates(overrides)
   return [
     ...(gates.complexity ? complexityFindings(current) : []),
@@ -166,6 +198,9 @@ export function evaluateGates({ previous, release, current, gates: overrides }) 
       ],
       gates,
     ),
+    ...(exceptions === undefined
+      ? []
+      : complexityGainFindings({ ...exceptions, release, current })),
     ...environmentNotes(previous, current),
   ]
 }
