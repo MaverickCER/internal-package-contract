@@ -261,9 +261,19 @@ export function classifyGroup(tiers) {
 }
 
 /**
+ * How far the fitted exponent must move, in addition to the class changing, before a shift is reported.
+ * Classes are anchors on a line (0, 0.3, 1, 1.2, 2, 3), and a group whose exponent sits near the midpoint
+ * of two of them changes label on a shift of a few hundredths: measured on real CI runs, an exponent of
+ * 1.13 became 1.03 (`linearithmic` to `linear`) with nothing but run-to-run noise. A real change of
+ * algorithm moves the exponent by about a whole class gap (linear to quadratic is ~1.0), so requiring 0.25
+ * keeps those and drops the label flips that are only noise at a boundary.
+ */
+export const SHIFT_MARGIN = 0.25
+
+/**
  * Diffs a group's previous (history) vs current (fresh run) tier
  * measurements. `shifted` is true only when BOTH classifications succeeded
- * AND they disagree -- see the module comment's "known limitations" for why
+ * AND they disagree by at least {@link SHIFT_MARGIN} of exponent -- see the module comment's "known limitations" for why
  * a `null` on either side never counts as a shift.
  */
 export function detectComplexityShift(previousTiers, currentTiers) {
@@ -273,7 +283,8 @@ export function detectComplexityShift(previousTiers, currentTiers) {
     shifted:
       previous.complexityClass !== null &&
       current.complexityClass !== null &&
-      previous.complexityClass !== current.complexityClass,
+      previous.complexityClass !== current.complexityClass &&
+      Math.abs(previous.exponent - current.exponent) >= SHIFT_MARGIN,
     previousClass: previous.complexityClass,
     currentClass: current.complexityClass,
     previousExponent: previous.exponent,

@@ -3,6 +3,7 @@ import {
   buildSizeSeries,
   classifyGroup,
   detectComplexityShift,
+  SHIFT_MARGIN,
   estimateGrowthExponent,
   FIT_WINDOW,
   fitGrowth,
@@ -220,6 +221,33 @@ describe("detectComplexityShift", () => {
     expect(shift.shifted).toBe(true)
     expect(shift.previousClass).toBe("linear")
     expect(shift.currentClass).toBe("quadratic")
+  })
+
+  it("does not flag a label change caused by an exponent that barely moved across a class boundary", () => {
+    // 10 sizes; the exponent is 1.13 (linearithmic) before and about 1.03 (linear) after: 0.1 of movement,
+    // which is run-to-run noise, not a change in the algorithm.
+    const sizes = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240]
+    const tiers = (exponent: number) =>
+      Object.fromEntries(
+        sizes.map((n) => [`n${String(n)}`, { medianMs: n ** exponent / 1e4, inputs: { n } }]),
+      )
+    const shift = detectComplexityShift(tiers(1.13), tiers(1.03))
+    expect(shift.previousClass).toBe("linearithmic")
+    expect(shift.currentClass).toBe("linear")
+    expect(shift.shifted).toBe(false)
+    expect(Math.abs((shift.previousExponent ?? 0) - (shift.currentExponent ?? 0))).toBeLessThan(
+      SHIFT_MARGIN,
+    )
+  })
+
+  it("flags a shift once the exponent has moved by the margin and the class changed", () => {
+    const sizes = [20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240]
+    const tiers = (exponent: number) =>
+      Object.fromEntries(
+        sizes.map((n) => [`n${String(n)}`, { medianMs: n ** exponent / 1e4, inputs: { n } }]),
+      )
+    expect(detectComplexityShift(tiers(1.0), tiers(1.0 + SHIFT_MARGIN + 0.1)).shifted).toBe(true)
+    expect(detectComplexityShift(tiers(1.0), tiers(2.0)).shifted).toBe(true)
   })
 
   it("does not flag a shift when both classifications agree", () => {
