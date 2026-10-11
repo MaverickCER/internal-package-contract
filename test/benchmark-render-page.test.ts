@@ -181,8 +181,8 @@ describe("render-page.mjs CLI", () => {
 
     const html = readFileSync(outPath, "utf8")
     expect(html).toContain("<!doctype html>")
-    expect(html).toContain("What's measured")
-    expect(html).toContain("not comparable machine-to-machine")
+    expect(html).toContain("Why these benchmarks exist")
+    expect(html).toContain("Absolute timings vary with runner hardware")
     expect(html).toContain("inferred complexity class")
     expect(html).toContain("cold-start")
     expect(html).toContain("Inferred complexity")
@@ -231,8 +231,17 @@ describe("the rendered page is accessible without a script", () => {
         commit: "abcdef1234567890",
         pullRequest: 12,
         version: "0.5.3",
+        runner: null,
+        cpuModel: null,
       },
-      { timestamp: "2026-02-01T00:00:00.000Z", commit: null, pullRequest: null, version: null },
+      {
+        timestamp: "2026-02-01T00:00:00.000Z",
+        commit: null,
+        pullRequest: null,
+        version: null,
+        runner: null,
+        cpuModel: null,
+      },
     ])
   })
 

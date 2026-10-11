@@ -107,6 +107,11 @@
   .series-dot.s8 { fill: var(--series-8); stroke: var(--surface-1); }
   .empty { color: var(--text-secondary); font-size: 12px; padding: 20px 0; }
   details.data { margin: 6px 0 4px; font-size: 12px; }
+  section.purpose, section.package-cost { margin: 20px 0; }
+  p.kind { color: var(--text-secondary); font-size: 12px; margin: 2px 0 6px; }
+  section.package-cost table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
+  section.package-cost caption { text-align: left; color: var(--text-secondary); padding: 2px 0 6px; }
+  section.package-cost th, section.package-cost td { text-align: left; padding: 2px 12px 2px 0; font-variant-numeric: tabular-nums; white-space: nowrap; border-bottom: 1px solid var(--border); }
   details.data summary { cursor: pointer; color: var(--link); padding: 4px 0; }
   details.data summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
   details.data table { border-collapse: collapse; width: 100%; margin-top: 6px; display: block; overflow-x: auto; }
@@ -129,13 +134,10 @@
   <p class="lede">Committed benchmark history, rendered fresh on every deploy. Each chart names the version and date of its first and last run, and every figure is also available as a table that links the commit and pull request it was measured at.</p>
   
 
-  <section class="methodology" aria-label="How to read these charts">
-    <p><strong>What's measured:</strong> the median wall-clock time of each named benchmark group, at each of its declared input-size tiers, recorded after each merge that touches benchmarked code.</p>
-    <p><strong>Absolute timing is not comparable machine-to-machine:</strong> these numbers come from whatever CI runner measured a given commit, and runner hardware varies. A single point moving a little is expected noise, not necessarily a regression.</p>
-    <p><strong>What IS trustworthy regardless of machine: the inferred complexity class</strong> shown under each chart's title, and the package's overhead relative to its own baseline. They describe the shape of the cost curve, not its level. A class change (for example linear to quadratic) is the signal worth investigating; a wiggling line within the same class usually is not.</p>
-  </section>
+  <section class="purpose" aria-labelledby="purpose-h"><h2 id="purpose-h">Why these benchmarks exist</h2><p>This package makes two promises: adopting it costs little, and that cost grows predictably as the work gets larger. These benchmarks check both on every merge that touches benchmarked code, and keep the results, so a change in cost can be traced to the commit and pull request that caused it.</p><p>They exist to catch what tests cannot: code that becomes slower, and code that begins to scale worse as inputs grow.</p><h3>What they show</h3><ul><li>How long each benchmarked operation took, at several input sizes, at each recorded commit.</li><li>How steeply that cost rises with input size, reported as an inferred complexity class (for example linear or quadratic) fitted to the measured sizes.</li><li>How much time the package adds to the same work done without it, measured in the same run.</li></ul><h3>What they do not show</h3><ul><li>That an algorithm has a particular asymptotic complexity. A class describes the sizes that were tested; it is not a proof. The fit quality (R²) says how closely the data follows the model, not whether the class is right.</li><li>That your application will see the same times. Timings depend on hardware, runtime version and whatever else was running.</li><li>That one changed point is a regression. Each run is one measurement of one commit, so a single move is within normal noise until it repeats or crosses a threshold.</li></ul></section>
+  <section class="methodology" aria-labelledby="interpretation-h"><h2 id="interpretation-h">How to read the results</h2><ul><li>Absolute timings vary with runner hardware and conditions. Compare runs only when their environments are comparable; each run records its runner and, when it reports one, its processor.</li><li>Inferred complexity describes how measured cost scales across the tested input sizes. It is an empirical classification, and fit quality is reported separately. Comparing the class between runs is more portable than comparing times, but it still assumes the same sizes, workload and runtime.</li><li>Package cost compares the package-enabled workload with its baseline in the same run. It is steadier than absolute time, but runtime behaviour such as compilation and garbage collection, and contention on the runner, still affect it.</li><li>Investigate sustained trends, a changed complexity class and a growing package cost. Do not treat one fluctuating point as a regression.</li></ul></section>
 
-<section class="category" aria-labelledby="cat0"><h2 id="cat0">Empty</h2><p class="sub">0 of 0 recorded run(s) shown (most recent 5 max). Each chart's data is available as a table beneath it.</p><ul class="legend" aria-label="Series"></ul><div class="grid"></div></section>
+<section class="category" aria-labelledby="cat0"><h2 id="cat0">Empty</h2><p class="sub">0 of 0 recorded run(s) shown (most recent 5 max). No runs recorded. Each chart's data is available as a table beneath it.</p><ul class="legend" aria-label="Series"></ul><div class="grid"></div></section>
 
   <footer>Generated 2026-03-01T00:00:00.000Z.</footer>
 </main>

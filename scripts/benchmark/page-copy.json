@@ -1,0 +1,62 @@
+{
+  "purpose": {
+    "heading": "Why these benchmarks exist",
+    "why": [
+      "This package makes two promises: adopting it costs little, and that cost grows predictably as the work gets larger. These benchmarks check both on every merge that touches benchmarked code, and keep the results, so a change in cost can be traced to the commit and pull request that caused it.",
+      "They exist to catch what tests cannot: code that becomes slower, and code that begins to scale worse as inputs grow."
+    ],
+    "shows": {
+      "heading": "What they show",
+      "items": [
+        "How long each benchmarked operation took, at several input sizes, at each recorded commit.",
+        "How steeply that cost rises with input size, reported as an inferred complexity class (for example linear or quadratic) fitted to the measured sizes.",
+        "How much time the package adds to the same work done without it, measured in the same run."
+      ]
+    },
+    "doesNotShow": {
+      "heading": "What they do not show",
+      "items": [
+        "That an algorithm has a particular asymptotic complexity. A class describes the sizes that were tested; it is not a proof. The fit quality (R²) says how closely the data follows the model, not whether the class is right.",
+        "That your application will see the same times. Timings depend on hardware, runtime version and whatever else was running.",
+        "That one changed point is a regression. Each run is one measurement of one commit, so a single move is within normal noise until it repeats or crosses a threshold."
+      ]
+    }
+  },
+  "interpretation": {
+    "heading": "How to read the results",
+    "items": [
+      "Absolute timings vary with runner hardware and conditions. Compare runs only when their environments are comparable; each run records its runner and, when it reports one, its processor.",
+      "Inferred complexity describes how measured cost scales across the tested input sizes. It is an empirical classification, and fit quality is reported separately. Comparing the class between runs is more portable than comparing times, but it still assumes the same sizes, workload and runtime.",
+      "Package cost compares the package-enabled workload with its baseline in the same run. It is steadier than absolute time, but runtime behaviour such as compilation and garbage collection, and contention on the runner, still affect it.",
+      "Investigate sustained trends, a changed complexity class and a growing package cost. Do not treat one fluctuating point as a regression."
+    ]
+  },
+  "groups": {
+    "baseline": "The same workload run without the package. It is the floor that the package's cost is measured against.",
+    "with-package": "The same workload run through the package.",
+    "derived-overhead": "Derived, not measured: for each size, the with-package time minus the baseline time (never below zero). A difference of two noisy medians is noisier than either, so it is shown for reading only and is not given a complexity class.",
+    "function": "One function measured on its own, at each input size."
+  },
+  "badges": {
+    "derived": "Derived from with-package minus baseline; not classified",
+    "poorFit": "Inferred complexity: unavailable (the cost does not follow a power law across the largest sizes; a fixed cost, a step change or noise are the usual causes)"
+  },
+  "packageCost": {
+    "heading": "What the package adds",
+    "intro": "For each input size, the time without the package, the time with it, and the difference, all from the latest recorded run.",
+    "formula": "Added time = with package − baseline. Relative cost = added time ÷ baseline × 100%.",
+    "noise": "Where the baseline is below the timer-noise floor the percentage is dominated by noise, so it is not shown.",
+    "withinNoise": "within timer noise",
+    "columns": {
+      "size": "Input size",
+      "baseline": "Without package",
+      "withPackage": "With package",
+      "added": "Added",
+      "relative": "Relative cost"
+    }
+  },
+  "provenance": {
+    "distinct": "Each run is one measurement of one commit, not a repeat.",
+    "repeated": "Some commits were measured more than once."
+  }
+}

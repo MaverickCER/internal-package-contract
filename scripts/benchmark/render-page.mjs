@@ -27,11 +27,18 @@
 //     [--history 'Build-time|docs/benchmark-history/buildtime.json' ...] \
 //     [--max-entries 200]
 
+import { readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { classifyGroup } from "./classify-complexity.mjs"
+import { DEFAULT_GATES } from "./gates.mjs"
 import { readJson } from "./lib/results.mjs"
+import { describeProvenance, groupKind, isDerivedGroup, packageCostRows } from "./page-sections.mjs"
+
+// The page's prose lives in one data file so every package that generates a page says the same thing,
+// and so the wording can be reviewed as text.
+const copy = JSON.parse(readFileSync(new URL("./page-copy.json", import.meta.url), "utf8"))
 
 const DEFAULT_MAX_ENTRIES = 200
 
@@ -123,11 +130,21 @@ function buildGroupData(group, entries, tierOrder) {
     tier,
     points: entries.map((entry, index) => {
       const measurement = entry.measurements?.[group]?.[tier]
-      return measurement ? { index, medianMs: measurement.medianMs } : null
+      return measurement
+        ? {
+            index,
+            medianMs: measurement.medianMs,
+            ...(Number.isFinite(measurement.stdDevMs) ? { stdDevMs: measurement.stdDevMs } : {}),
+          }
+        : null
     }),
   }))
 
   // A group is only discovered from an entry that measured it, so there is always one.
+  // A derived group (the overhead) is a difference of two noisy medians, so it is not given a class.
+  if (isDerivedGroup(group)) {
+    return { group, series, complexityClass: null, exponent: null, points: 0, reason: "derived" }
+  }
   const latest = entries.findLast((entry) => entry.measurements?.[group])
   return { group, series, ...classifyGroup(latest.measurements[group]) }
 }
@@ -162,9 +179,27 @@ export async function buildPageModel({ histories, maxEntries, readme, repo }) {
         commit: typeof e.gitCommit === "string" ? e.gitCommit : null,
         pullRequest: Number.isInteger(e.pullRequest) ? e.pullRequest : null,
         version: entryVersion(e),
+        runner: typeof e.runner === "string" ? e.runner : null,
+        cpuModel: typeof e.cpuModel === "string" ? e.cpuModel : null,
       })),
       groups,
     })
+    const category = categories[categories.length - 1]
+    category.provenance = describeProvenance(category.runs)
+    // The latest run that measured both the baseline and the package, so the cost is shown at one moment.
+    const costIndex = entries.findLastIndex(
+      (e) => e.measurements?.["end-to-end:baseline"] && e.measurements?.["end-to-end:with-package"],
+    )
+    const costRows =
+      costIndex === -1
+        ? []
+        : packageCostRows(
+            entries[costIndex].measurements,
+            tierOrder,
+            DEFAULT_GATES.noiseFloorBaselineMs,
+          )
+    category.packageCost =
+      costRows.length > 0 ? { rows: costRows, run: category.runs[costIndex] } : null
   }
   return {
     generatedAt: new Date().toISOString(),
@@ -320,6 +355,66 @@ export function renderChartSvg(group, tierOrder, tierColorIndex, runs, idPrefix)
 }
 
 /**
+ * A median with how noisy its run was, when the run kept that: `1.00 ms ±10%` is a standard deviation
+ * of a tenth of the median. Without a recorded spread the median stands alone.
+ * @param {{ medianMs: number, stdDevMs?: number }} point
+ * @returns {string}
+ */
+function formatMedian(point) {
+  const text = formatMs(point.medianMs)
+  if (!Number.isFinite(point.stdDevMs) || !(point.medianMs > 0)) return text
+  return `${text} ±${String(Math.round((point.stdDevMs / point.medianMs) * 100))}%`
+}
+
+/** @param {number} ms @returns {string} a difference with an explicit sign, using a true minus. */
+function formatSignedMs(ms) {
+  return `${ms < 0 ? "−" : "+"}${formatMs(Math.abs(ms))}`
+}
+
+/** @param {number} percent @returns {string} */
+function formatSignedPercent(percent) {
+  return `${percent < 0 ? "−" : "+"}${Math.abs(percent).toFixed(1)}%`
+}
+
+/** @param {string[]} items @returns {string} */
+function renderList(items) {
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+}
+
+/** The page's statement of purpose: why the benchmarks exist, what they show and what they do not. */
+function renderPurpose() {
+  const { purpose } = copy
+  return `<section class="purpose" aria-labelledby="purpose-h"><h2 id="purpose-h">${escapeHtml(purpose.heading)}</h2>${purpose.why.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}<h3>${escapeHtml(purpose.shows.heading)}</h3>${renderList(purpose.shows.items)}<h3>${escapeHtml(purpose.doesNotShow.heading)}</h3>${renderList(purpose.doesNotShow.items)}</section>`
+}
+
+/** How to read the results, with the qualifications a careful reader needs. */
+function renderInterpretation() {
+  return `<section class="methodology" aria-labelledby="interpretation-h"><h2 id="interpretation-h">${escapeHtml(copy.interpretation.heading)}</h2>${renderList(copy.interpretation.items)}</section>`
+}
+
+/**
+ * Baseline, with-package and the difference side by side, from one run, with the formula.
+ * @param {{ rows: object[], run: { timestamp: string | null, commit: string | null } } | null} cost
+ * @returns {string} empty when the suite has no baseline and with-package groups.
+ */
+function renderPackageCost(cost) {
+  if (!cost) return ""
+  const { packageCost } = copy
+  const c = packageCost.columns
+  const head = [c.size, c.baseline, c.withPackage, c.added, c.relative]
+    .map((label) => `<th scope="col">${escapeHtml(label)}</th>`)
+    .join("")
+  const rows = cost.rows
+    .map(
+      (row) =>
+        `<tr><td>${row.size === null ? "–" : String(row.size)}</td><td>${escapeHtml(formatMs(row.baselineMs))}</td><td>${escapeHtml(formatMs(row.withPackageMs))}</td><td>${escapeHtml(formatSignedMs(row.addedMs))}</td><td>${row.relativePercent === null ? escapeHtml(packageCost.withinNoise) : escapeHtml(formatSignedPercent(row.relativePercent))}</td></tr>`,
+    )
+    .join("")
+  const commit = cost.run.commit ? `, commit ${cost.run.commit.slice(0, 7)}` : ""
+  return `<section class="package-cost" aria-labelledby="cost-h"><h3 id="cost-h">${escapeHtml(packageCost.heading)}</h3><p>${escapeHtml(packageCost.intro)}</p><p>${escapeHtml(packageCost.formula)}</p><p>${escapeHtml(packageCost.noise)}</p><table><caption>Latest run measuring both: ${escapeHtml(dateOf(cost.run.timestamp))}${escapeHtml(commit)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></section>`
+}
+
+/**
  * The same data as a table: every figure a chart shows, readable by keyboard, screen reader or
  * spreadsheet, with the commit, pull request and version each run belongs to.
  * @param {object} group
@@ -336,11 +431,17 @@ export function renderDataTable(group, tierOrder, runs, repoUrl) {
   const rows = runs.map((run, index) => {
     const cells = tiers.map((tier) => {
       const point = group.series.find((s) => s.tier === tier).points[index]
-      return `<td>${point ? escapeHtml(formatMs(point.medianMs)) : "–"}</td>`
+      return `<td>${point ? escapeHtml(formatMedian(point)) : "–"}</td>`
     })
     return `<tr><th scope="row">${String(index + 1)}</th><td>${escapeHtml(dateOf(run.timestamp))}</td><td>${run.version ? escapeHtml(run.version) : "–"}</td><td>${run.commit ? link(run.commit.slice(0, 7), `/commit/${run.commit}`) : "–"}</td><td>${run.pullRequest ? link(`#${String(run.pullRequest)}`, `/pull/${String(run.pullRequest)}`) : "–"}</td>${cells.join("")}</tr>`
   })
   return `<details class="data"><summary>Data table for ${escapeHtml(group.group)}</summary><table><caption>${escapeHtml(group.group)}: median time per recorded run</caption><thead>${head}</thead><tbody>${rows.join("")}</tbody></table></details>`
+}
+
+/** @param {string} name @returns {string} the group's definition as a paragraph, or nothing for an unknown kind. */
+function groupDefinition(name) {
+  const kind = groupKind(name)
+  return kind ? `<p class="kind">${escapeHtml(copy.groups[kind])}</p>` : ""
 }
 
 function badgeText(g) {
@@ -350,8 +451,8 @@ function badgeText(g) {
   }
   if (g.reason === "no-size-variation")
     return "Inferred complexity: unavailable (no size variation across tiers)"
-  if (g.reason === "poor-fit")
-    return "Inferred complexity: unavailable (the cost does not follow a power law across the largest sizes)"
+  if (g.reason === "derived") return copy.badges.derived
+  if (g.reason === "poor-fit") return copy.badges.poorFit
   return "Inferred complexity: unavailable (fewer than 2 tiers with recorded inputs)"
 }
 
@@ -373,10 +474,10 @@ export function renderHtml(model) {
         .map((group, gi) => {
           const id = `c${String(ci)}g${String(gi)}`
           const chart = renderChartSvg(group, category.tierOrder, tierColorIndex, category.runs, id)
-          return `<article class="chart-card"><h3>${escapeHtml(group.group)}</h3><p class="class-badge${group.complexityClass ? "" : " unknown"}">${escapeHtml(badgeText(group))}</p>${chart || '<p class="empty">No data</p>'}${chart ? renderDataTable(group, category.tierOrder, category.runs, model.repoUrl) : ""}</article>`
+          return `<article class="chart-card"><h3>${escapeHtml(group.group)}</h3>${groupDefinition(group.group)}<p class="class-badge${group.complexityClass ? "" : " unknown"}">${escapeHtml(badgeText(group))}</p>${chart || '<p class="empty">No data</p>'}${chart ? renderDataTable(group, category.tierOrder, category.runs, model.repoUrl) : ""}</article>`
         })
         .join("")
-      return `<section class="category" aria-labelledby="cat${String(ci)}"><h2 id="cat${String(ci)}">${escapeHtml(category.label)}</h2><p class="sub">${String(category.entryCount)} of ${String(category.totalEntryCount)} recorded run(s) shown (most recent ${String(model.maxEntries)} max). Each chart's data is available as a table beneath it.</p><ul class="legend" aria-label="Series">${legend}</ul><div class="grid">${cards}</div></section>`
+      return `<section class="category" aria-labelledby="cat${String(ci)}"><h2 id="cat${String(ci)}">${escapeHtml(category.label)}</h2><p class="sub">${String(category.entryCount)} of ${String(category.totalEntryCount)} recorded run(s) shown (most recent ${String(model.maxEntries)} max). ${escapeHtml(category.provenance)} Each chart's data is available as a table beneath it.</p>${renderPackageCost(category.packageCost)}<ul class="legend" aria-label="Series">${legend}</ul><div class="grid">${cards}</div></section>`
     })
     .join("\n")
 
@@ -467,6 +568,11 @@ ${darkExplicit}
 ${seriesRules}
   .empty { color: var(--text-secondary); font-size: 12px; padding: 20px 0; }
   details.data { margin: 6px 0 4px; font-size: 12px; }
+  section.purpose, section.package-cost { margin: 20px 0; }
+  p.kind { color: var(--text-secondary); font-size: 12px; margin: 2px 0 6px; }
+  section.package-cost table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
+  section.package-cost caption { text-align: left; color: var(--text-secondary); padding: 2px 0 6px; }
+  section.package-cost th, section.package-cost td { text-align: left; padding: 2px 12px 2px 0; font-variant-numeric: tabular-nums; white-space: nowrap; border-bottom: 1px solid var(--border); }
   details.data summary { cursor: pointer; color: var(--link); padding: 4px 0; }
   details.data summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
   details.data table { border-collapse: collapse; width: 100%; margin-top: 6px; display: block; overflow-x: auto; }
@@ -489,11 +595,8 @@ ${seriesRules}
   <p class="lede">Committed benchmark history, rendered fresh on every deploy. Each chart names the version and date of its first and last run, and every figure is also available as a table that links the commit and pull request it was measured at.</p>
   ${model.readmeUrl ? `<p class="lede">New here? <a href="${escapeHtml(model.readmeUrl)}">Read this package's benchmarks guide</a> for what is measured, how to read the results, and how they are documented.</p>` : ""}
 
-  <section class="methodology" aria-label="How to read these charts">
-    <p><strong>What's measured:</strong> the median wall-clock time of each named benchmark group, at each of its declared input-size tiers, recorded after each merge that touches benchmarked code.</p>
-    <p><strong>Absolute timing is not comparable machine-to-machine:</strong> these numbers come from whatever CI runner measured a given commit, and runner hardware varies. A single point moving a little is expected noise, not necessarily a regression.</p>
-    <p><strong>What IS trustworthy regardless of machine: the inferred complexity class</strong> shown under each chart's title, and the package's overhead relative to its own baseline. They describe the shape of the cost curve, not its level. A class change (for example linear to quadratic) is the signal worth investigating; a wiggling line within the same class usually is not.</p>
-  </section>
+  ${renderPurpose()}
+  ${renderInterpretation()}
 
 ${body}
 
