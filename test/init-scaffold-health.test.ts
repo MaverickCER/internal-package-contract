@@ -39,6 +39,15 @@ afterAll(() => {
 })
 
 describe("a freshly scaffolded package", () => {
+  it("carries the repository rules for an agent, and points Claude Code at them", () => {
+    const agents = readFileSync(path.join(dir, "AGENTS.md"), "utf8")
+    expect(agents).toContain("`health-demo`")
+    expect(agents).toContain("Co-Authored-By")
+    expect(agents).toContain("--no-verify")
+    expect(agents).toContain("npm run verify")
+    expect(readFileSync(path.join(dir, "CLAUDE.md"), "utf8").trim()).toBe("@AGENTS.md")
+  })
+
   it("declares @types/node for the Node floor it supports, so it can install", () => {
     const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
       engines: { node: string }
