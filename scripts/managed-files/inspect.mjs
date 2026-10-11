@@ -45,6 +45,26 @@ export const COPIES = Object.freeze([
     from: "runtime/generated-banner.ts",
     to: "src/_ipc/generated-banner.ts",
   },
+  {
+    name: "display-path",
+    from: "runtime/display-path.ts",
+    to: "src/_ipc/display-path.ts",
+  },
+  {
+    name: "glob",
+    from: "runtime/glob.ts",
+    to: "src/_ipc/glob.ts",
+  },
+  {
+    name: "typescript",
+    from: "runtime/typescript.ts",
+    to: "src/_ipc/typescript.ts",
+  },
+  {
+    name: "compiler-api",
+    from: "runtime/compiler-api.ts",
+    to: "src/_ipc/compiler-api.ts",
+  },
 ])
 
 /**
