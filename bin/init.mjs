@@ -25,7 +25,9 @@ import {
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const cwd = process.cwd()
-const args = parseInitArgs(process.argv.slice(2))
+// Reached two ways: `bin/contract.mjs init ...` (the documented command, so argv[2] is the
+// subcommand name itself) and `bin/init.mjs ...` directly. Only the flags go to the parser.
+const args = parseInitArgs(process.argv.slice(process.argv[2] === "init" ? 3 : 2))
 const force = args.force
 const done = []
 const skipped = []
