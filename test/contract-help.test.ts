@@ -22,6 +22,7 @@ describe("helpText", () => {
       "exceptions",
       "sync-benchmark-guides",
       "update-baseline",
+      "install-hooks",
       "--checks",
       "--skip",
       "--strict",

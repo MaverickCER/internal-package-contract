@@ -10,6 +10,7 @@
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
+//   internal-package-contract install-hooks   point git at the bundled hooks (run by a package's `prepare`)
 //
 // A consuming package's package.json only needs
 // `{ "scripts": { "contract": "internal-package-contract" } }`.
@@ -49,6 +50,8 @@ if (wantsHelp(process.argv.slice(2))) {
       ? "Benchmark guides are already identical to the canonical ones.\n"
       : `Updated ${written.join(", ")}.\n`,
   )
+} else if (process.argv[2] === "install-hooks") {
+  await import(pathToFileURL(path.join(packageRoot, "bin", "install-hooks.mjs")).href)
 } else if (process.argv[2] === "update-baseline") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.

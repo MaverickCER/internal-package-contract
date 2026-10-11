@@ -122,6 +122,13 @@ describe("a freshly scaffolded package", () => {
     expect(output, "files Prettier would rewrite").toBe("")
   })
 
+  it("installs the git hooks on every npm install, so a fresh clone is covered without running init", () => {
+    const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
+      scripts: Record<string, string>
+    }
+    expect(pkg.scripts["prepare"]).toBe("internal-package-contract install-hooks")
+  })
+
   it("defines the verify gate the shared release workflow runs before it publishes", () => {
     const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
       scripts: Record<string, string>

@@ -88,7 +88,7 @@ fleet needs one. The `internal-package-contract` CLI (which loads
 `./eslint`, `./prettier`, `./tsconfig`, and `./config/*` for the individual
 tool configs.
 
-**Bundled git hooks** (a local convenience: CI runs the same contract and is the
+**Bundled git hooks** (installed by `init`, and on every `npm install` by the scaffold's `prepare` script, which runs `internal-package-contract install-hooks`; a local convenience: CI runs the same contract and is the
 gate, so a hook that is skipped locally is still caught before merge):
 
 | Hook         | Runs                                                                 |

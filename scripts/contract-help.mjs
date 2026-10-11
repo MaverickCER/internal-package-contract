@@ -17,6 +17,7 @@ Commands:
   exceptions                 list every exception registry: counts by type, legacy, expired
   sync-benchmark-guides      copy the canonical benchmark guides into benchmarks/
   update-baseline            regenerate the API and surface baselines after a release
+  install-hooks              point git at the bundled hooks (a package's prepare script runs this)
 
 Options (when running the contract):
   --checks a,b               run only checks a and b (and what they depend on)

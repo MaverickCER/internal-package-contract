@@ -52,6 +52,7 @@
     "docs:api": "typedoc",
     "docs:api:report": "typedoc --options typedoc.markdown.json",
     "contract": "internal-package-contract",
+    "prepare": "internal-package-contract install-hooks",
     "version": "changeset version && npm run build",
     "release": "changeset publish",
     "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
