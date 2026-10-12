@@ -20,15 +20,15 @@ and goes stale when the covered code changes), a `version`, and a `justification
 record -- every record written from now on -- also carries the elements that make an exception
 auditable instead of merely present:
 
-| Field           | Answers                                                                     |
-| --------------- | --------------------------------------------------------------------------- |
-| `ruleBroken`    | Which rule of the standard is being broken?                                 |
-| `attempted`     | What was tried first, and why did it not work?                              |
-| `constraint`    | What technical constraint forced the exception?                             |
-| `whyPreferable` | Why is the chosen outcome better than the alternatives?                     |
-| `residualRisk`  | What risk remains, and who carries it?                                      |
-| `revisitWhen`   | Under what condition must this record be reopened?                          |
-| `expires`       | Optional `YYYY-MM-DD`. After it the record no longer counts. `""` for none. |
+| Field           | Answers                                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ruleBroken`    | Which rule of the standard is being broken?                                                                                       |
+| `attempted`     | What was tried first, and why did it not work?                                                                                    |
+| `constraint`    | What technical constraint forced the exception?                                                                                   |
+| `whyPreferable` | Why is the chosen outcome better than the alternatives?                                                                           |
+| `residualRisk`  | What risk remains, and who carries it?                                                                                            |
+| `revisitWhen`   | Under what condition must this record be reopened?                                                                                |
+| `expires`       | Required key: a `YYYY-MM-DD` date after which the record no longer counts, or `""` for none. Leaving the key out is a load error. |
 
 A blank field is an incomplete record: the check that owns the registry fails and names what is
 missing. A freshly scaffolded stub is all blanks on purpose -- it exists so the finding is recorded and

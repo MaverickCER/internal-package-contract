@@ -62,7 +62,7 @@ export interface ExceptionRegistrySchema<TRecord extends { readonly id: string }
  * (and any registry-specific ones). Together they are what makes an exception auditable: which
  * rule is being broken, what was tried first, the technical constraint that forced the exception,
  * why the chosen outcome is preferable to the alternatives, what risk remains, and the condition
- * under which the record must be reopened. `expires` is an optional hard date (`YYYY-MM-DD`, or
+ * under which the record must be reopened. `expires` is a required key holding a hard date (`YYYY-MM-DD`, or
  * `""` for none) after which the record no longer counts.
  */
 export const EXCEPTION_V2_FIELD_KEYS = [
@@ -74,7 +74,7 @@ export const EXCEPTION_V2_FIELD_KEYS = [
   "revisitWhen",
 ] as const
 
-/** The {@link EXCEPTION_V2_FIELD_KEYS} plus the optional `expires` date -- every key a v2 record may carry beyond its registry's own. */
+/** The {@link EXCEPTION_V2_FIELD_KEYS} plus the `expires` key (a date, or `""` for none -- the key itself must be present) -- every key a v2 record may carry beyond its registry's own. */
 const EXCEPTION_V2_ALL_KEYS = [...EXCEPTION_V2_FIELD_KEYS, "expires"] as const
 
 /** The version-2 fields of an exception record; every one is an empty string on a freshly scaffolded stub until a human writes it. */

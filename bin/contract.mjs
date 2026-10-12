@@ -10,6 +10,9 @@
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
+//   internal-package-contract sync            report (or with --apply, restore) the files this package owns
+//   internal-package-contract site            generate the landing page and one-page brief from docs/site.json
+//   internal-package-contract install-hooks   point git at the bundled hooks (once per clone)
 //
 // A consuming package's package.json only needs
 // `{ "scripts": { "contract": "internal-package-contract" } }`.
@@ -23,12 +26,15 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { helpText, wantsHelp } from "../scripts/contract-help.mjs"
 import { runContract } from "../scripts/contract-run.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 // Subcommand dispatch.
-if (process.argv[2] === "init") {
+if (wantsHelp(process.argv.slice(2))) {
+  process.stdout.write(helpText())
+} else if (process.argv[2] === "init") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "init.mjs")).href)
   // init sets its own exit behaviour; nothing else to do here.
 } else if (process.argv[2] === "exceptions") {
@@ -46,6 +52,24 @@ if (process.argv[2] === "init") {
       ? "Benchmark guides are already identical to the canonical ones.\n"
       : `Updated ${written.join(", ")}.\n`,
   )
+} else if (process.argv[2] === "sync") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "managed-files", "sync.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), packageRoot, {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "site") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "site", "render-site.mjs")).href
+  )
+  process.exitCode = await run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "install-hooks") {
+  await import(pathToFileURL(path.join(packageRoot, "bin", "install-hooks.mjs")).href)
 } else if (process.argv[2] === "update-baseline") {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.

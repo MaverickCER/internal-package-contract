@@ -14,6 +14,7 @@ export const SCOPE_DIRS = ["checks", "scripts", "bin"]
 export const ENTRY_SHELLS = [
   "scripts/check-*.mjs",
   "scripts/audit-dev-deps.mjs",
+  "scripts/audit-pins.mjs",
   "scripts/code-scanning-alerts.mjs",
   "scripts/git-hygiene.mjs",
   "scripts/run-*.mjs",
@@ -22,5 +23,10 @@ export const ENTRY_SHELLS = [
   "bin/*.mjs",
 ]
 
-/** Declaration files carry no runtime code. */
-export const NON_RUNTIME = ["**/*.d.mts", "**/*.d.ts"]
+/**
+ * Not Node runtime code. Declaration files carry none. The shared site assets are browser files the generated
+ * pages load: Node cannot run them, so coverage and CRAP would score them as untested whatever the tests say.
+ * Their content is pinned by `test/site-assets.test.ts` and the pages they ship in are checked for accessibility
+ * (pa11y, axe) in every package that publishes one.
+ */
+export const NON_RUNTIME = ["**/*.d.mts", "**/*.d.ts", "**/site/assets/**"]

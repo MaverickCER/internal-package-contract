@@ -20,9 +20,10 @@
  *   `alternatives`, `remediation`, `method` and `exceptionType` -- and the only accepted
  *   `exceptionType` is `"required-for-package-to-exist"`: the flagged dependency or behavior must
  *   be the reason the package exists at all, and `justification` must say why.
- * - **The scan can never be skipped silently.** CLI not installed, not signed in, token rejected,
- *   network down and rate limiting all FAIL, with steps that differ between CI and a developer
- *   machine (see `./socket-guidance.ts`).
+ * - **The scan can never be skipped silently.** CLI not installed, token rejected, network down and
+ *   rate limiting all FAIL, as does having no API key in CI. On a developer machine with no API key
+ *   the check WARNS: the scan did not run and its alerts were not checked, with the steps to fix it
+ *   (see `./socket-guidance.ts`). The steps differ between CI and a developer machine.
  *
  * Example record (id is `socket:<package>@<version>:<alert name>`; alerts on the scored package
  * itself use the version `self`, so their records survive releases):
@@ -80,7 +81,7 @@ import type {
   PersistedExceptionRegistry,
 } from "./exception-record.js"
 import { abnormalTermination, packageRoot } from "./shared.js"
-import { socketGuidance } from "./socket-guidance.js"
+import { isCiEnvironment, socketGuidance } from "./socket-guidance.js"
 import type { SocketProblem } from "./socket-guidance.js"
 
 const SCRIPT_PATH = path.join(packageRoot, "scripts", "socket-package-score.mjs")
@@ -288,9 +289,9 @@ function failureCode(parsed: unknown): unknown {
  * @internal Exported for direct unit coverage -- see this module's own doc comment.
  */
 export function classifyProblem(stderr: string, parsed: unknown): SocketProblem | undefined {
-  if (isAuthError(parsed)) return "not-authenticated"
   const code = failureCode(parsed)
   if (code === 401 || code === 403) return "token-rejected"
+  if (isAuthError(parsed)) return "not-authenticated"
   if (code === 429) return "rate-limited"
   if (code === "ENOENT") return "cli-not-installed"
   const NETWORK_ERROR_CODES = /\b(ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN)\b/
@@ -390,7 +391,7 @@ const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]
 
 /** The outcome of running and interpreting the score script itself, before any registry work. */
 type SocketRunOutcome =
-  | { readonly kind: "fail" | "pass"; readonly rationale: string }
+  | { readonly kind: "fail" | "pass" | "warn"; readonly rationale: string }
   | {
       readonly kind: "ok"
       readonly alerts: readonly NormalizedSocketAlert[]
@@ -443,6 +444,14 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
   }
   if (!parsed["ok"]) {
     const problem = classifyProblem(result.stderr, parsed)
+    if (problem === "not-authenticated" && !isCiEnvironment(env)) {
+      // No API key on a developer machine: say so and let the rest of the contract run. In CI this stays a
+      // failure, because a scan that did not run there would let a package with alerts look clean.
+      return {
+        kind: "warn",
+        rationale: `the Socket scan did not run, so its alerts were not checked.\n${socketGuidance(problem, env)}`,
+      }
+    }
     if (problem !== undefined) return { kind: "fail", rationale: socketGuidance(problem, env) }
     const detail = [safeString(parsed["message"]), safeString(parsed["cause"])]
       .filter((part) => part.length > 0)

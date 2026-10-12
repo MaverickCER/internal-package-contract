@@ -6,7 +6,7 @@ What does adopting this package add to latency, CPU, memory and compute spend --
 
 For a typical workload of **80 items** per operation, routing the work through `demo` adds **500 µs** per operation compared with a bare-minimum baseline (**50%** of the baseline). Overall, it grows O(1) with workload size (measured exponent 0.00). At list prices that is on the order of **~$0.001 per million operations** of compute.
 
-> The relative figure and the growth class are the dependable ones: both come from the same run, so they survive a change of machine. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
+> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
 
 | Cost | Typical (80 items) | Largest (160 items) |
 | --- | --- | --- |

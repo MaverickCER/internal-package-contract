@@ -192,6 +192,45 @@ describe("renderSummary", () => {
     expect(output).toContain("`linear` → `quadratic`")
   })
 
+  it("never reports a shift for the derived overhead group, however much its shape moved", async () => {
+    const tiers = (small: number, large: number) => ({
+      baseline: { status: "completed", inputs: { n: 10 }, durationMs: { medianMs: small } },
+      stress: { status: "completed", inputs: { n: 100 }, durationMs: { medianMs: large } },
+    })
+    const curPath = write(
+      "cur.json",
+      makeResults({
+        results: {
+          "end-to-end:overhead": { tiers: tiers(1, 100) },
+          "fn:parse": { tiers: tiers(1, 100) },
+        },
+      }),
+    )
+    const historyPath = write("history.json", {
+      historySchemaVersion: 2,
+      entries: [
+        {
+          measurements: {
+            "end-to-end:overhead": {
+              baseline: { medianMs: 1, inputs: { n: 10 } },
+              stress: { medianMs: 10, inputs: { n: 100 } },
+            },
+            "fn:parse": {
+              baseline: { medianMs: 1, inputs: { n: 10 } },
+              stress: { medianMs: 10, inputs: { n: 100 } },
+            },
+          },
+        },
+      ],
+    })
+    const output = await renderSummary({ examples: [`Runtime||${curPath}|${historyPath}`] })
+    const start = output.indexOf("Complexity shifts")
+    expect(start).toBeGreaterThan(-1)
+    const shifts = output.slice(start, output.indexOf("\n## ", start + 1))
+    expect(shifts).toContain("fn:parse")
+    expect(shifts).not.toContain("end-to-end:overhead")
+  })
+
   it("does not flag a complexity shift when no history path is given for an example", async () => {
     const curPath = write("cur.json", makeResults())
     const output = await renderSummary({

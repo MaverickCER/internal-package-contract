@@ -13,6 +13,7 @@ import { format, license, lint, publint, typecheck } from "repo-contract/presets
 import { accessibility } from "./accessibility.js"
 import { apiContract } from "./api-contract.js"
 import { architecture } from "./architecture.js"
+import { benchmarkComplexityCheck } from "./benchmark-complexity.js"
 import { benchmarkGuides } from "./benchmark-guides.js"
 import { arethetypeswrong } from "./arethetypeswrong.js"
 import { branchProtection } from "./branch-protection.js"
@@ -26,15 +27,24 @@ import { duplication } from "./duplication.js"
 import { docsFragments } from "./docs-fragments.js"
 import { docsLinks } from "./docs-links.js"
 import { docsMarkdown } from "./docs-markdown.js"
+import { engineMatrixCheck } from "./engine-matrix.js"
+import { packedConsumerCheck } from "./packed-consumer.js"
+import { gitHooksCheck } from "./git-hooks.js"
+import { landingPageCheck } from "./landing-page.js"
+import { readmeStructureCheck } from "./readme-structure.js"
+import { scorecardWorkflowCheck } from "./scorecard-workflow.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
+import { managedFilesCheck } from "./managed-files.js"
 import { mutation } from "./mutation.js"
 import { noMinify } from "./no-minify.js"
+import { pinConsistency } from "./pin-consistency.js"
 import { npmScriptCheck } from "./npm-script.js"
 import { securityDeps } from "./security-deps.js"
 import { securityDevDeps } from "./security-dev-deps.js"
 import { securitySecrets } from "./security-secrets.js"
 import { suppressions } from "./suppressions.js"
+import { surfaceContract } from "./surface-contract.js"
 import { codeScanning } from "./code-scanning.js"
 import { securitySocket } from "./security-socket.js"
 import { tests } from "./tests.js"
@@ -80,6 +90,8 @@ export function standardChecks() {
     // and fails when the branch's changesets under-declare the resulting bump -- see
     // checks/api-contract.ts's own module comment.
     ApiContract: apiContract,
+    // The same semver gate for the rest of the public surface: CLI help, exported schemas, the Action.
+    SurfaceContract: surfaceContract(),
     Typecheck: typecheck,
     // `isolated` -- Vitest with V8 coverage instrumentation is the single
     // heaviest check, and a consumer's own subprocess-spawning integration tests
@@ -91,6 +103,13 @@ export function standardChecks() {
     Architecture: architecture(),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
+    GitHooks: gitHooksCheck(),
+    LandingPage: landingPageCheck(),
+    ReadmeStructure: readmeStructureCheck(),
+    ScorecardWorkflow: scorecardWorkflowCheck(),
+    EngineMatrix: engineMatrixCheck(),
+    ManagedFiles: managedFilesCheck(),
+    PinConsistency: pinConsistency(),
     BranchProtection: branchProtection,
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
     Crap: { ...crap, dependsOn: ["Coverage"] as const },
@@ -106,9 +125,11 @@ export function standardChecks() {
     // install-and-run integration tests can pack too; keep the two off each
     // other's back rather than racing under load.
     TypeResolution: { ...arethetypeswrong, dependsOn: ["Tests"] as const },
+    PackedConsumer: { ...packedConsumerCheck(), dependsOn: ["Tests"] as const },
     Licenses: license,
     DocsMarkdown: docsMarkdown(),
     BenchmarkGuides: benchmarkGuides(),
+    BenchmarkComplexity: benchmarkComplexityCheck(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     // No explicit dependsOn needed: declaration-order phasing (writers,

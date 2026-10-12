@@ -333,7 +333,7 @@ describe("render-page -- pieces", () => {
       "unavailable (no size variation across tiers)",
     )
     expect(page({ reason: "poor-fit" })).toContain(
-      "does not follow a power law across the largest sizes)",
+      "does not follow a power law across the largest sizes; a fixed cost, a step change or noise are the usual causes)",
     )
     expect(page({ reason: "insufficient-data" })).toContain(
       "fewer than 2 tiers with recorded inputs)",

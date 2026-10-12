@@ -213,6 +213,8 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     init("--name", "demo")
     const tsup = readFileSync(path.join(cwd, "tsup.config.ts"), "utf8")
     expect(tsup).not.toMatch(/minify\w*\s*[:=]\s*(?!false)\S*true/)
+    // An install-time script is what a supply-chain policy should not have to trust, and `prepare` also
+    // runs when the package is installed from git; the hooks are installed by `install-hooks`, run on purpose.
     expect(
       JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")).scripts,
     ).not.toHaveProperty("prepare")

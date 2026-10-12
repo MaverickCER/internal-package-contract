@@ -184,6 +184,7 @@ jobs:
           node node_modules/internal-package-contract/scripts/benchmark/render-summary.mjs \
             --budgets "$BUDGETS_PATH" \
             --marker "$COMMENT_MARKER" \
+            --exceptions .repo-contract/exceptions/benchmark-complexity.json \
             --gate \
             "${args[@]}" > /tmp/summary.md || status=$?
           echo "gate-status=$status" >> "$GITHUB_OUTPUT"

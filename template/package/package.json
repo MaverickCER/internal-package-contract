@@ -36,7 +36,7 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md",
+    "/*.md",
     "LICENSE"
   ],
   "scripts": {
@@ -55,19 +55,21 @@
     "version": "changeset version && npm run build",
     "release": "changeset publish",
     "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
-    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check"
+    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run build && npm run test:coverage",
+    "prepublishOnly": "npm run verify"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
-    "@types/node": "^20.19.0",
+    "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "10.1.8",
     "internal-package-contract": "github:MaverickCER/internal-package-contract#{{ipcRef}}",
-    "prettier": "3.9.6",
+    "prettier": "3.9.9",
     "tsup": "^8.0.0",
     "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "4.13.0",
+    "typedoc-plugin-markdown": "4.13.1",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.65.0",
     "vitest": "^5.0.3"

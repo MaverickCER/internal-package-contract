@@ -45,8 +45,17 @@ export default defineSuite({
       input: (n) => [n],
     },
     variables: [
-      { name: "calls per operation", how: "swept", description: "The tier axis: how many package calls one operation makes." },
-      { name: "runtime", how: "fixed", value: "node", description: "Measured on Node only; other runtimes are not covered." },
+      {
+        name: "calls per operation",
+        how: "swept",
+        description: "The tier axis: how many package calls one operation makes.",
+      },
+      {
+        name: "runtime",
+        how: "fixed",
+        value: "node",
+        description: "Measured on Node only; other runtimes are not covered.",
+      },
     ],
   },
 
@@ -63,9 +72,20 @@ export default defineSuite({
         "One operation makes n calls and each call does a constant amount of work, so the total grows in direct proportion to n.",
       variables: [
         { name: "calls per operation", how: "swept", description: "The tier axis." },
-        { name: "arguments", how: "fixed", value: "none", description: "The function takes no arguments, so there is no payload-shape variable." },
+        {
+          name: "arguments",
+          how: "fixed",
+          value: "none",
+          description: "The function takes no arguments, so there is no payload-shape variable.",
+        },
       ],
-      notCovered: [{ name: "concurrent callers", reason: "The function is synchronous and keeps no shared state, so concurrency cannot change its cost." }],
+      notCovered: [
+        {
+          name: "concurrent callers",
+          reason:
+            "The function is synchronous and keeps no shared state, so concurrency cannot change its cost.",
+        },
+      ],
       // How the end-to-end run uses this function, so section 3 can attribute the overhead to it.
       inEndToEnd: { callsPerOperation: (n) => n, description: "Called once per unit of n." },
       call: (n) => {

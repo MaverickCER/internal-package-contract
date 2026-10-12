@@ -96,6 +96,31 @@ describe("runUpdateBaseline()", { timeout: 180_000 }, () => {
     expect(meta).toMatchObject({ packageName: "fx", packageVersion: "1.0.0" })
   })
 
+  it("also updates the surface baseline, reported as its own target after the API targets", async () => {
+    const repo = makeRepo("1.0.0")
+    repo.write(
+      "package.json",
+      JSON.stringify({
+        name: "fx",
+        version: "1.0.0",
+        type: "module",
+        exports: { "./schema": "./s.json" },
+      }),
+    )
+    repo.write("s.json", '{"type":"object"}')
+    const outcomes = await runUpdateBaseline(repo.root)
+    expect(outcomes.map((o) => [o.target, o.status])).toEqual([
+      ["index", "updated"],
+      ["surface", "updated"],
+    ])
+    expect(outcomes[1]?.message).toContain(".repo-contract/surface-contract/baseline.json")
+    expect(
+      JSON.parse(
+        readFileSync(path.join(repo.root, ".repo-contract/surface-contract/baseline.json"), "utf8"),
+      ).surface.schemas,
+    ).toEqual({ "./schema": { type: "object" } })
+  })
+
   it("does nothing when the baseline already matches at the same version", async () => {
     const repo = await committed("1.0.0")
     expect(await runUpdateBaseline(repo.root)).toEqual([

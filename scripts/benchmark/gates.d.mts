@@ -1,6 +1,6 @@
 export interface Finding {
   level: "fail" | "note"
-  kind: "complexity" | "normalized-overhead" | "environment"
+  kind: "complexity" | "complexity-gain" | "normalized-overhead" | "environment"
   message: string
 }
 export interface Gates {
@@ -19,6 +19,13 @@ export function resolveGates(
   },
 ): Gates
 export function complexityFindings(current: object | undefined): Finding[]
+export function complexityGainFindings(input: {
+  suite: string
+  release: object | null | undefined
+  current: object | undefined
+  records: readonly Record<string, unknown>[]
+  now: Date
+}): Finding[]
 export function overheadFindings(
   current: object | undefined,
   references: { name: string; results: object | null | undefined }[],
@@ -33,4 +40,5 @@ export function evaluateGates(input: {
   release?: object | null
   current?: object
   gates?: object
+  exceptions?: { suite: string; records: readonly Record<string, unknown>[]; now: Date }
 }): Finding[]

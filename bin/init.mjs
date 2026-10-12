@@ -16,6 +16,7 @@ import {
   buildPinVars,
   buildVars,
   listTemplateFiles,
+  initFlags,
   parseInitArgs,
   render,
   renderJson,
@@ -25,7 +26,7 @@ import {
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const cwd = process.cwd()
-const args = parseInitArgs(process.argv.slice(2))
+const args = parseInitArgs(initFlags(process.argv))
 const force = args.force
 const done = []
 const skipped = []

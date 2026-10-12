@@ -27,6 +27,23 @@ export function primaryMedianMs(entry) {
   return entry?.durationMs?.medianMs
 }
 
+/**
+ * The spread of the same measurement `primaryMedianMs` summarizes: standard deviation, 95th percentile
+ * and iteration count, each only when it is a finite number. A median alone hides how noisy a run was;
+ * keeping these lets a reader judge later whether a change is larger than the run's own noise. A derived
+ * entry (the overhead) has none and yields `{}`.
+ * @param {any} entry - one tier of a raw results.json.
+ * @returns {{ stdDevMs?: number, p95Ms?: number, iterations?: number }}
+ */
+export function dispersionOf(entry) {
+  const source = entry?.totalMs?.medianMs !== undefined ? entry.totalMs : entry?.durationMs
+  const kept = {}
+  for (const key of ["stdDevMs", "p95Ms", "iterations"]) {
+    if (Number.isFinite(source?.[key])) kept[key] = source[key]
+  }
+  return kept
+}
+
 /** Reads and JSON-parses a file, returning `null` on any read/parse failure (a missing "previous" results.json on a first-ever run, say) instead of throwing. */
 export function tryReadJson(filePath) {
   try {
@@ -74,6 +91,7 @@ export function resultsToMeasurements(results) {
     measurements[name][tier] = {
       medianMs,
       ...(entry.inputs && typeof entry.inputs === "object" ? { inputs: entry.inputs } : {}),
+      ...dispersionOf(entry),
     }
   }
   return measurements

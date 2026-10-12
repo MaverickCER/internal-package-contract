@@ -223,6 +223,43 @@ describe("docsLinks", () => {
     })
   })
 
+  it("passes, saying so, when the only unreachable external links were rate limited (HTTP 429)", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    const result = await docsLinks.policy(
+      makeContext(
+        makeLinksResult([
+          { url: "https://github.com/o/r/blob/main/A.md", state: "BROKEN", status: 429 },
+          { url: "https://github.com/o/r/blob/main/B.md", state: "BROKEN", status: 429 },
+          { url: "./ok.md", state: "OK", status: 200 },
+        ]),
+      ),
+    )
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale:
+        "Docs (links): 0 broken local link(s) across 3 checked (2 external link(s) were rate limited, HTTP 429, which says nothing about whether they exist).",
+    })
+  })
+
+  it("still needs a record for an unreachable link that was not rate limited, even beside rate-limited ones", async () => {
+    writeFileSync(path.join(cwd, "README.md"), "# hi")
+    const result = await docsLinks.policy(
+      makeContext(
+        makeLinksResult([
+          { url: "https://github.com/o/r/blob/main/A.md", state: "BROKEN", status: 429 },
+          { url: "https://example.com/gone", state: "BROKEN", status: 404 },
+        ]),
+      ),
+    )
+    expect(result).toEqual({
+      outcome: "warn",
+      rationale: unexcepted(
+        "environment:DocsLinks:https://example.com/gone",
+        "Docs (links): 0 broken local link(s) across 2 checked (1 external link(s) unreachable: https://example.com/gone; 1 rate limited, HTTP 429).",
+      ),
+    })
+  })
+
   it("fails, naming the parent, on a broken LOCAL link", async () => {
     writeFileSync(path.join(cwd, "README.md"), "# hi")
     const result = await docsLinks.policy(

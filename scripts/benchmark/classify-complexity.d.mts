@@ -69,3 +69,5 @@ export function detectComplexityShift(
   previousTiers: TierMeasurements | undefined,
   currentTiers: TierMeasurements | undefined,
 ): ComplexityShiftResult
+export const SHIFT_MARGIN: number
+export function movedByMargin(previousExponent: number, currentExponent: number): boolean
