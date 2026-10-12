@@ -38,6 +38,11 @@
 # out: a symlinked-in copy resolves to wherever the real checkout lives, which
 # is never inside the *pushing* repo's own working tree.
 # A push skips the slow analyses (CI runs them); the pre-commit hook sets IPC_HOOK_FULL=1 and skips nothing.
+#
+# Git exports the repository's own location (GIT_INDEX_FILE, GIT_DIR, ...) to a hook. The contract's tests build
+# throwaway repositories with `git`, and those commands would act on THIS repository's index instead of their own
+# (staging deletions of its files). Nothing the contract does wants them, so they are dropped before it runs.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 SKIP="--skip Coverage,Crap,Mutation"
 if [ "${IPC_HOOK_FULL:-}" = "1" ]; then
   SKIP=""
