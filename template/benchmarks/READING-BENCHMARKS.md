@@ -165,11 +165,13 @@ If a section reads as vague, that is a documentation bug: open an issue or fix i
 
 When a pull request touches benchmarked code, CI re-runs the suite and posts a summary: the end-to-end
 change first, then any function whose growth class shifted, then ordinary timing movements beyond
-their thresholds. Two gates can fail the run, because only they are properties of a single run, so they
-are far less sensitive to the machine than a raw time is: a function whose measured growth class **differs** from its
-documented big-O, and the package's overhead _relative to its own baseline_ growing past an allowance
-(50% for millisecond-scale work, 70% for microsecond-scale work, which is noisier) against both the
-last run on main and the last release. Raw time against another run is a highlight only.
+their thresholds. Three gates can fail the run, because only they are properties of a single run, or of
+its growth class, so they are far less sensitive to the machine than a raw time is: a function whose
+measured growth class **differs** from its documented big-O; a function whose growth class has gotten
+**worse** than at the last release, unless `.repo-contract/exceptions/benchmark-complexity.json` records
+a person's acceptance of it; and the package's overhead _relative to its own baseline_ growing past an
+allowance (50% for millisecond-scale work, 70% for microsecond-scale work, which is noisier) against both
+the last run on main and the last release. Raw time against another run is a highlight only.
 
 After a merge, a job measures the merge commit and records it -- the results file and a history entry
 naming the commit, pull request and version -- through its own small pull request. Each entry also keeps

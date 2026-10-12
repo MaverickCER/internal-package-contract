@@ -395,9 +395,10 @@ function renderInterpretation() {
 /**
  * Baseline, with-package and the difference side by side, from one run, with the formula.
  * @param {{ rows: object[], run: { timestamp: string | null, commit: string | null } } | null} cost
+ * @param {string} id - the heading's id, unique on the page because every category shows its own table.
  * @returns {string} empty when the suite has no baseline and with-package groups.
  */
-function renderPackageCost(cost) {
+function renderPackageCost(cost, id) {
   if (!cost) return ""
   const { packageCost } = copy
   const c = packageCost.columns
@@ -411,7 +412,7 @@ function renderPackageCost(cost) {
     )
     .join("")
   const commit = cost.run.commit ? `, commit ${cost.run.commit.slice(0, 7)}` : ""
-  return `<section class="package-cost" aria-labelledby="cost-h"><h3 id="cost-h">${escapeHtml(packageCost.heading)}</h3><p>${escapeHtml(packageCost.intro)}</p><p>${escapeHtml(packageCost.formula)}</p><p>${escapeHtml(packageCost.noise)}</p><table><caption>Latest run measuring both: ${escapeHtml(dateOf(cost.run.timestamp))}${escapeHtml(commit)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></section>`
+  return `<section class="package-cost" aria-labelledby="${id}"><h3 id="${id}">${escapeHtml(packageCost.heading)}</h3><p>${escapeHtml(packageCost.intro)}</p><p>${escapeHtml(packageCost.formula)}</p><p>${escapeHtml(packageCost.noise)}</p><table><caption>Latest run measuring both: ${escapeHtml(dateOf(cost.run.timestamp))}${escapeHtml(commit)}</caption><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></section>`
 }
 
 /**
@@ -477,7 +478,7 @@ export function renderHtml(model) {
           return `<article class="chart-card"><h3>${escapeHtml(group.group)}</h3>${groupDefinition(group.group)}<p class="class-badge${group.complexityClass ? "" : " unknown"}">${escapeHtml(badgeText(group))}</p>${chart || '<p class="empty">No data</p>'}${chart ? renderDataTable(group, category.tierOrder, category.runs, model.repoUrl) : ""}</article>`
         })
         .join("")
-      return `<section class="category" aria-labelledby="cat${String(ci)}"><h2 id="cat${String(ci)}">${escapeHtml(category.label)}</h2><p class="sub">${String(category.entryCount)} of ${String(category.totalEntryCount)} recorded run(s) shown (most recent ${String(model.maxEntries)} max). ${escapeHtml(category.provenance)} Each chart's data is available as a table beneath it.</p>${renderPackageCost(category.packageCost)}<ul class="legend" aria-label="Series">${legend}</ul><div class="grid">${cards}</div></section>`
+      return `<section class="category" aria-labelledby="cat${String(ci)}"><h2 id="cat${String(ci)}">${escapeHtml(category.label)}</h2><p class="sub">${String(category.entryCount)} of ${String(category.totalEntryCount)} recorded run(s) shown (most recent ${String(model.maxEntries)} max). ${escapeHtml(category.provenance)} Each chart's data is available as a table beneath it.</p>${renderPackageCost(category.packageCost, `cost${String(ci)}`)}<ul class="legend" aria-label="Series">${legend}</ul><div class="grid">${cards}</div></section>`
     })
     .join("\n")
 
