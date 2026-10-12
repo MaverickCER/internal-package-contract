@@ -1,5 +1,16 @@
 # internal-package-contract
 
+## 0.11.0
+
+### Minor Changes
+
+- 2410ab9: Bump `repo-contract` to 0.10.0.
+- 7291bdd: The `typescript` dependency moves from 5.9 to 6.0. It is the compiler API IPC's own checks load, so consumers resolving it through IPC now get TypeScript 6.
+
+### Patch Changes
+
+- b316933: This repository's own release workflow no longer tags a version before it is merged. While changesets were pending it read the version the Version Packages step had just bumped in its working tree, tagged the unmerged release-branch commit with it and moved the floating major tag there (v0.9.1 and v0 pointed at a commit that never reached main). It now tags only when there is nothing left to version, and tags the commit the run is for.
+
 ## 0.10.0
 
 ### Minor Changes
