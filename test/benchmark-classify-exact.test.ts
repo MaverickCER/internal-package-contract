@@ -4,6 +4,7 @@ import {
   buildSizeSeries,
   classifyGroup,
   detectComplexityShift,
+  discardedTiers,
   estimateGrowthExponent,
   fitGrowth,
   inputTotal,
@@ -197,18 +198,51 @@ describe("classifyGroup()", () => {
     })
   })
 
+  it("says why each tier that could not be used was left out", () => {
+    expect(discardedTiers(undefined)).toEqual([])
+    expect(discardedTiers({})).toEqual([])
+    expect(
+      discardedTiers({
+        ok: { medianMs: 1, inputs: { n: 10 } },
+        none: { medianMs: 1 },
+        nothing: undefined,
+        empty: { medianMs: 1, inputs: {} },
+        zeroSize: { medianMs: 1, inputs: { n: 0 } },
+        negative: { medianMs: 1, inputs: { n: -5 } },
+        text: { medianMs: 1, inputs: { n: "10" } },
+        zero: { medianMs: 0, inputs: { n: 10 } },
+        negativeTime: { medianMs: -1, inputs: { n: 10 } },
+        missingTime: { inputs: { n: 10 } },
+        nan: { medianMs: Number.NaN, inputs: { n: 10 } },
+      }),
+    ).toEqual([
+      { tier: "none", why: "it recorded no size" },
+      { tier: "nothing", why: "it recorded no size" },
+      { tier: "empty", why: "it recorded no size" },
+      { tier: "zeroSize", why: "it recorded no size" },
+      { tier: "negative", why: "it recorded no size" },
+      { tier: "text", why: "it recorded no size" },
+      { tier: "zero", why: "its time was zero, below the timer's resolution" },
+      { tier: "negativeTime", why: "its time was zero, below the timer's resolution" },
+      { tier: "missingTime", why: "its time was zero, below the timer's resolution" },
+      { tier: "nan", why: "its time was zero, below the timer's resolution" },
+    ])
+  })
+
   it("explains why it could not classify", () => {
     expect(classifyGroup({})).toEqual({
       complexityClass: null,
       exponent: null,
       points: 0,
       reason: "insufficient-data",
+      discarded: [],
     })
     expect(classifyGroup({ a: tier(10, 1) })).toEqual({
       complexityClass: null,
       exponent: null,
       points: 1,
       reason: "insufficient-data",
+      discarded: [],
     })
     expect(
       classifyGroup({
@@ -220,6 +254,7 @@ describe("classifyGroup()", () => {
       exponent: null,
       points: 2,
       reason: "no-size-variation",
+      size: 10,
     })
   })
 

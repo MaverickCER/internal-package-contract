@@ -21,6 +21,8 @@ import { sync as spawnSync } from "cross-spawn"
 import { existsSync, rmSync } from "node:fs"
 import path from "node:path"
 
+import { confirmEvidence, strykerRerun } from "./mutation/confirm-timeouts.mjs"
+import { MEMO_DIRECTORY, inputsHash, recall, remember } from "./mutation/memo.mjs"
 import { ensureStrykerVitest5Compat } from "./stryker-vitest5-compat.mjs"
 
 for (let dir = import.meta.dirname; ;) {
@@ -47,29 +49,57 @@ const fallbackConfig = fallbackIdx === -1 ? undefined : process.argv[fallbackIdx
 
 const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd(), c)))
 
-const args = ["run", "--reporters", "json,clear-text"]
+// Always every mutant, whatever an incremental file says. A package may keep `incremental` on for a developer
+// iterating by hand, but the check's evidence must be a full analysis: a result carried over from a run made under other
+// conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in for
+// a run that would not have said the same, and CI, starting cold, would then fail what a local gate passed.
+const args = ["run", "--reporters", "json,clear-text", "--force"]
 if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
 
-// Vitest 5 changed how test names are matched; until the Stryker runner ships its own fix every mutant
-// would run zero tests and survive (stryker-js#6210). See scripts/stryker-vitest5-compat.mjs.
-const compat = ensureStrykerVitest5Compat(process.cwd())
-if (compat.status === "patched") {
+const inputs = inputsHash(process.cwd())
+
+if (recall(process.cwd(), inputs, process.env)) {
   process.stderr.write(
-    `[mutation] Vitest ${compat.vitestVersion}: aligned @stryker-mutator/vitest-runner's test-name separator with Vitest 5 (stryker-js#6210).\n`,
+    `[mutation] reused: nothing a mutation run depends on has changed since the last clean run (inputs ${inputs.slice(0, 12)}). Set IPC_MUTATION_MEMO=0 to run it anyway.\n`,
   )
-} else if (compat.status === "unrecognised") {
-  process.stderr.write(
-    `[mutation] Vitest ${compat.vitestVersion} with an @stryker-mutator/vitest-runner this package does not recognise: if every mutant survives having run 0 tests, see stryker-js#6210.\n`,
+} else {
+  // Vitest 5 changed how test names are matched; until the Stryker runner ships its own fix every mutant
+  // would run zero tests and survive (stryker-js#6210). See scripts/stryker-vitest5-compat.mjs.
+  const compat = ensureStrykerVitest5Compat(process.cwd())
+  if (compat.status === "patched") {
+    process.stderr.write(
+      `[mutation] Vitest ${compat.vitestVersion}: aligned @stryker-mutator/vitest-runner's test-name separator with Vitest 5 (stryker-js#6210).\n`,
+    )
+  } else if (compat.status === "unrecognised") {
+    process.stderr.write(
+      `[mutation] Vitest ${compat.vitestVersion} with an @stryker-mutator/vitest-runner this package does not recognise: if every mutant survives having run 0 tests, see stryker-js#6210.\n`,
+    )
+  }
+
+  const result = spawnSync("stryker", args, { stdio: "inherit" })
+
+  try {
+    rmSync(path.join(process.cwd(), ".stryker-tmp"), { recursive: true, force: true })
+  } catch {
+    // best effort -- bin/contract.mjs cleans it too
+  }
+
+  if (result.error) throw result.error
+  // A timeout that is a stalled machine and not a loop is caught when its mutant is run alone; see the module.
+  const evidence = path.join(process.cwd(), MEMO_DIRECTORY, "mutation.json")
+  const confirmed = confirmEvidence(
+    evidence,
+    strykerRerun(
+      process.cwd(),
+      ["run", ...(!ownConfig && fallbackConfig ? [fallbackConfig] : [])],
+      evidence,
+    ),
   )
+  if (confirmed.confirmed > 0) {
+    process.stderr.write(
+      `[mutation] ${String(confirmed.confirmed)} mutant(s) timed out in the full run and were run again alone: ${String(confirmed.caught)} caught, ${String(confirmed.confirmed - confirmed.caught)} still time out.\n`,
+    )
+  }
+  remember(process.cwd(), inputs, result.status)
+  process.exitCode = typeof result.status === "number" ? result.status : 1
 }
-
-const result = spawnSync("stryker", args, { stdio: "inherit" })
-
-try {
-  rmSync(path.join(process.cwd(), ".stryker-tmp"), { recursive: true, force: true })
-} catch {
-  // best effort -- bin/contract.mjs cleans it too
-}
-
-if (result.error) throw result.error
-process.exitCode = typeof result.status === "number" ? result.status : 1

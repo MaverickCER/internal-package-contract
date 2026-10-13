@@ -4,7 +4,7 @@ What does adopting this package add to latency, CPU, memory and compute spend --
 
 ## What adopting this package costs
 
-For a typical workload of **80 items** per operation, routing the work through `demo` adds **1.80 ms** per operation compared with a bare-minimum baseline (**225%** of the baseline). Overall, it grows O(n) with workload size (measured exponent 0.88). At list prices that is on the order of **~$0.01 per million operations** of compute.
+For a typical workload of **80 items** per operation, routing the work through `demo` adds **1.80 ms** per operation compared with a bare-minimum baseline (**225% of the baseline**). Overall, it grows O(n) with workload size (measured exponent 0.88). At list prices that is on the order of **~$0.01 per million operations** of compute.
 
 > The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
 
@@ -49,10 +49,10 @@ The baseline is an empty or minimal function, so it costs almost nothing and the
 
 Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.
 
-| Function | Documented | Measured | Agreement | At 80 | At 160 |
-| --- | --- | --- | --- | --- | --- |
-| `sum` | O(n) | O(n) | ✅ matches | 800 µs | 1.60 ms |
-| `lookup` | O(1) | O(1) | ✅ matches | 50.0 µs | 50.0 µs (at 80) |
+| Function | Varies | Documented | Measured | Agreement | At 80 | At 160 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sum` | item | O(n) | O(n) | ✅ matches | 800 µs | 1.60 ms |
+| `lookup` | item | O(1) | O(1) | ✅ matches | 50.0 µs | 50.0 µs (at 80) |
 
 ### `sum`
 

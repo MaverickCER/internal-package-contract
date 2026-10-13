@@ -1,5 +1,12 @@
 // Public entry of the shared benchmark kit: `import { defineSuite, ... } from "internal-package-contract/benchmark"`.
-export { COMPLEXITY_NOTATION, SuiteDefinitionError, defineSuite, expectationOf } from "./define.mjs"
+export {
+  COMPLEXITY_NOTATION,
+  SuiteDefinitionError,
+  defineSuite,
+  expectationOf,
+  groupName,
+  parseGroup,
+} from "./define.mjs"
 export { QUICK_TIERS, STANDARD_TIERS, tierName, validateTiers } from "./tiers.mjs"
 export { computeDurationStats, percentile, sample, snapshotMemory, timed } from "./measure.mjs"
 export { DEFAULT_RATES, estimateCost, formatUsd } from "./cost-model.mjs"

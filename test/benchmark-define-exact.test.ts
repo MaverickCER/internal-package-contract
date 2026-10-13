@@ -434,3 +434,171 @@ describe("how a function is called in the end-to-end run", () => {
     ])
   })
 })
+
+describe("a function that depends on more than one variable", () => {
+  const at = "functions[0] (sum).sweeps[0]"
+  const vars = [
+    swept,
+    { name: "width", how: "swept", description: "How wide each item is." },
+    { name: "depth", how: "swept", description: "How deep each item nests." },
+  ]
+  const sweep = (extra: Loose = {}): Loose => ({
+    variable: "width",
+    description: "How wide each item is.",
+    baseValue: 4,
+    expectedComplexity: "linear",
+    complexityReason: LONG,
+    ...extra,
+  })
+  const problems = (sweeps: unknown, variables: unknown[] = vars) =>
+    problemsOf(suite({}, { variables, sweeps }))
+
+  it("accepts a documented sweep of another variable, in every field it may carry", () => {
+    expect(
+      problems([sweep(), sweep({ variable: "depth", primaryValue: 10, tiers: [5, 10, 15, 20] })]),
+    ).toEqual([])
+    expect(problems(undefined)).toEqual([])
+  })
+  it("passes the sweeps through to the frozen suite", () => {
+    const defined = defineSuite(
+      suite({}, { variables: vars, sweeps: [sweep()] }) as never,
+    ) as unknown as { functions: { sweeps: unknown[] }[] }
+    expect(defined.functions[0]?.sweeps).toHaveLength(1)
+  })
+  it("needs a list with something in it", () => {
+    for (const sweeps of [[], "width", {}, null]) {
+      expect(problems(sweeps), JSON.stringify(sweeps)).toEqual([
+        "functions[0] (sum).sweeps must list at least one variable, or be left out.",
+      ])
+    }
+  })
+  it("needs a kebab-case name that is neither the suite's unit nor already listed", () => {
+    expect(problems([sweep({ variable: "Width" })])).toContain(`${at}.variable must be kebab-case.`)
+    expect(problems([sweep({ variable: undefined })])).toContain(
+      `${at}.variable must be kebab-case.`,
+    )
+    expect(problems([sweep({ variable: "item" })])).toContain(
+      `${at}.variable "item" is the suite's own unit, which is always swept.`,
+    )
+    expect(problems([sweep(), sweep()])).toContain(
+      'functions[0] (sum).sweeps[1].variable "width" is listed twice.',
+    )
+  })
+  it("needs a description, a base value, a growth class and the reason for it", () => {
+    expect(problems([sweep({ description: "short" })])).toEqual([
+      `${at}.description must be a real explanation (at least 10 characters), not a placeholder.`,
+    ])
+    for (const baseValue of [0, -1, 1.5, "4", undefined]) {
+      expect(problems([sweep({ baseValue })]), String(baseValue)).toEqual([
+        `${at}.baseValue must be a positive integer: the value held while another variable is swept.`,
+      ])
+    }
+    expect(problems([sweep({ primaryValue: 0 })])).toEqual([
+      `${at}.primaryValue must be a positive integer: the value the unit is held at while this one is swept (default: the typical size).`,
+    ])
+    expect(problems([sweep({ expectedComplexity: "fast" })])).toEqual([
+      `${at}.expectedComplexity must be one of: constant, logarithmic, linear, linearithmic, quadratic, cubic-or-worse.`,
+    ])
+    expect(problems([sweep({ complexityReason: "x" })])).toEqual([
+      `${at}.complexityReason (why that big-O) must be a real explanation (at least 20 characters), not a placeholder.`,
+    ])
+  })
+  it("checks a ladder of its own like any other", () => {
+    expect(problems([sweep({ tiers: [1, 2] })])).toEqual([
+      `${at}.tiers: tiers must list at least 4 sizes, or the growth rate (big-O) cannot be estimated.`,
+    ])
+  })
+  it("must also be listed among the function's variables as swept", () => {
+    expect(problems([sweep()], [swept])).toEqual([
+      `${at}.variable "width" must also be listed in functions[0] (sum).variables as "swept".`,
+    ])
+    expect(
+      problems(
+        [sweep()],
+        [swept, { name: "width", how: "fixed", value: 4, description: "How wide it is." }],
+      ),
+    ).toEqual([
+      `${at}.variable "width" must also be listed in functions[0] (sum).variables as "swept".`,
+    ])
+  })
+  it("asks for the variables list when it is missing altogether", () => {
+    expect(problems([sweep()], null as never)).toContain(
+      `${at}.variable "width" must also be listed in functions[0] (sum).variables as "swept".`,
+    )
+  })
+  it("tolerates a null entry, reporting each gap in it", () => {
+    expect(problems([null])).toContain(`${at}.variable must be kebab-case.`)
+  })
+})
+
+describe("covers and notBenchmarked", () => {
+  const at = "functions[0] (sum).covers"
+  const withCovers = (covers: unknown, fnExtra: Loose = {}) =>
+    problemsOf(suite({}, { covers, ...fnExtra }))
+  const sweeps = [
+    {
+      variable: "width",
+      description: "How wide each item is.",
+      baseValue: 4,
+      expectedComplexity: "linear",
+      complexityReason: LONG,
+    },
+  ]
+  const vars = [swept, { name: "width", how: "swept", description: "How wide each item is." }]
+
+  it("accepts every form of accounting, for each parameter or key", () => {
+    expect(
+      withCovers(
+        {
+          load: {
+            schema: "swept",
+            "options.width": "sweep:width",
+            "options.mode": "variant:cold",
+            "options.cache": "fixed: reset before every sample",
+            "options.strict": "not covered: only changes the message",
+          },
+        },
+        { variables: vars, sweeps, variants: [{ name: "cold", description: "A cold start." }] },
+      ),
+    ).toEqual([])
+    expect(withCovers(undefined)).toEqual([])
+  })
+  it("needs a map of functions to parameters", () => {
+    for (const covers of [[], "x", null, 3]) {
+      expect(withCovers(covers), JSON.stringify(covers)).toEqual([
+        "functions[0] (sum).covers must map each public function it exercises to its parameters.",
+      ])
+    }
+    for (const parameters of [[], "x", null]) {
+      expect(withCovers({ load: parameters }), JSON.stringify(parameters)).toEqual([
+        `${at}.load must map each parameter or key to what the benchmark does with it.`,
+      ])
+    }
+  })
+  it("rejects an accounting that is not one of the forms, with the forms", () => {
+    expect(withCovers({ load: { a: "maybe", b: "fixed: short" } })).toEqual([
+      `${at}.load.a must be "swept", "sweep:<variable>", "variant:<name>", "fixed: <why>" or "not covered: <why>" (a reason is at least 10 characters).`,
+      `${at}.load.b must be "swept", "sweep:<variable>", "variant:<name>", "fixed: <why>" or "not covered: <why>" (a reason is at least 10 characters).`,
+    ])
+  })
+  it("only lets a sweep or a variant be named when the function declares it", () => {
+    expect(withCovers({ load: { a: "sweep:width" } })).toEqual([
+      `${at}.load.a names the sweep "width", which functions[0] (sum) does not declare.`,
+    ])
+    expect(withCovers({ load: { a: "variant:cold" } })).toEqual([
+      `${at}.load.a names the variant "cold", which functions[0] (sum) does not declare.`,
+    ])
+    expect(withCovers({ load: { a: "sweep:width" } }, { variables: vars, sweeps })).toEqual([])
+  })
+  it("needs a real reason for each function left out", () => {
+    expect(problemsOf(suite({ notBenchmarked: { load: "because" } }))).toEqual([
+      "notBenchmarked.load (why it has no benchmark) must be a real explanation (at least 20 characters), not a placeholder.",
+    ])
+    expect(problemsOf(suite({ notBenchmarked: { load: LONG } }))).toEqual([])
+    for (const value of [[], "x", null]) {
+      expect(problemsOf(suite({ notBenchmarked: value })), JSON.stringify(value)).toEqual([
+        "notBenchmarked must map each public function it leaves out to the reason.",
+      ])
+    }
+  })
+})

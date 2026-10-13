@@ -8,11 +8,25 @@ import {
   stripJsonComments,
   validateExportName,
 } from "../scripts/recipes/add-export.mjs"
+import { planAddCheck } from "../scripts/recipes/add-check.mjs"
+import { OPTIONAL_SETTINGS } from "../scripts/recipes/optional-settings.mjs"
 import { run } from "../scripts/recipes/apply.mjs"
 
 const template = path.resolve(import.meta.dirname, "../template/package")
+// The scaffold's Markdown report configuration inherits its entry points from typedoc.json, so a recipe has
+// nothing to add to it. A package that lists its own is the case worth exercising, so this stands in for it.
+const OWN_ENTRY_POINTS = `{
+  "$schema": "https://typedoc.org/schema.json",
+  "extends": ["internal-package-contract/config/typedoc-markdown"],
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api-report",
+  "readme": "none"
+}
+`
 const read = (file: string) =>
-  readFileSync(path.join(template, file), "utf8").replaceAll("{{name}}", "demo-pkg")
+  file === "typedoc.markdown.json"
+    ? OWN_ENTRY_POINTS
+    : readFileSync(path.join(template, file), "utf8").replaceAll("{{name}}", "demo-pkg")
 const INPUTS = [
   "package.json",
   "tsup.config.ts",
@@ -164,10 +178,67 @@ export function entryName(): string {
       '"eslint-plugin": "src/eslint-plugin/index.ts"',
     )
   })
+  it("leaves the scaffold's own typedoc.markdown.json alone, since it inherits the entry points", () => {
+    const own = readFileSync(path.join(template, "typedoc.markdown.json"), "utf8")
+    const result = plan("helpers", (files) => (files["typedoc.markdown.json"] = own))
+    expect(result.problems).toEqual([])
+    expect(result.writes.some((write) => write.path === "typedoc.markdown.json")).toBe(false)
+  })
   it("does not need typedoc.markdown.json", () => {
     const without = plan("helpers", (files) => delete files["typedoc.markdown.json"])
     expect(without.problems).toEqual([])
     expect(without.writes.some((write) => write.path === "typedoc.markdown.json")).toBe(false)
+  })
+})
+
+describe("planAddExport -- the surface source", () => {
+  const withSurface = (files: Record<string, string | undefined>) => {
+    files["docs/surface.json"] = read("docs/surface.json")
+  }
+  it("describes the new entry point in docs/surface.json, as one the maintainer still has to answer", () => {
+    const result = plan("helpers", withSurface)
+    expect(result.problems).toEqual([])
+    const surface = JSON.parse(written(result, "docs/surface.json") ?? "{}")
+    expect(Object.keys(surface.entries)).toEqual([".", "./helpers"])
+    expect(surface.entries["./helpers"]).toEqual({
+      source: "src/helpers/",
+      environment: "isomorphic",
+      tier: "Experimental",
+      purpose: "TODO: say what a reader gets from this entry point.",
+    })
+    expect(
+      result.writes.map((write) => write.path).filter((file) => file === "docs/surface.json"),
+    ).toHaveLength(1)
+  })
+  it("leaves a package with no surface source alone", () => {
+    expect(plan("helpers").writes.some((write) => write.path === "docs/surface.json")).toBe(false)
+  })
+  it("refuses an entry point the surface source already describes", () => {
+    const result = plan("helpers", (files) => {
+      files["docs/surface.json"] = JSON.stringify({ entries: { "./helpers": {} } })
+    })
+    expect(result.problems).toEqual(['docs/surface.json already describes "./helpers".'])
+    expect(result.writes).toEqual([])
+  })
+  it("refuses a surface source it cannot add to", () => {
+    for (const [text, message] of [
+      ["{ nope", "docs/surface.json is not valid JSON, so the new entry cannot be added to it."],
+      ["{}", 'docs/surface.json has no "entries" object to add the new entry point to.'],
+      [
+        '{"entries": []}',
+        'docs/surface.json has no "entries" object to add the new entry point to.',
+      ],
+      [
+        '{"entries": null}',
+        'docs/surface.json has no "entries" object to add the new entry point to.',
+      ],
+    ] as const) {
+      expect(
+        plan("helpers", (files) => {
+          files["docs/surface.json"] = text
+        }).problems,
+      ).toEqual([message])
+    }
   })
 })
 
@@ -383,15 +454,18 @@ describe("add (run)", () => {
     const code = run(args, dir, s.io, format === undefined ? { format: () => {} } : { format })
     return { code, out: s.out.join(""), err: s.err.join("") }
   }
-  const USAGE = "Usage: internal-package-contract add export <name> [--dry-run]\n"
+  const USAGE =
+    "Usage: internal-package-contract add export <name> [--dry-run]\n       internal-package-contract add check <Name> [--dry-run]\n"
 
   it("rejects an unknown recipe, a missing name and an unknown flag", () => {
     expect(add(["nope", "x"])).toEqual({
       code: 2,
       out: "",
-      err: `[add] unknown recipe: nope. Available: export.\n${USAGE}`,
+      err: `[add] unknown recipe: nope. Available: export, check.\n${USAGE}`,
     })
-    expect(add([]).err).toBe(`[add] unknown recipe: (none given). Available: export.\n${USAGE}`)
+    expect(add([]).err).toBe(
+      `[add] unknown recipe: (none given). Available: export, check.\n${USAGE}`,
+    )
     expect(add(["export"]).err).toBe(`[add] expected: add export <name> [--dry-run]\n${USAGE}`)
     expect(add(["export", "x", "--nope"]).err).toBe(
       `[add] expected: add export <name> [--dry-run]\n${USAGE}`,
@@ -428,6 +502,23 @@ describe("add (run)", () => {
     )
     expect(existsSync(path.join(dir, "src/helpers/index.ts"))).toBe(false)
     expect(readFileSync(path.join(dir, "tsup.config.ts"), "utf8")).toBe(read("tsup.config.ts"))
+  })
+  it("says nothing about the surface file when the package has none, and sends the author to it when it has one", () => {
+    seed()
+    const plain = add(["export", "helpers"])
+    expect(plain.out.endsWith("and `internal-package-contract update-baseline`.\n")).toBe(true)
+    expect(plain.out).not.toContain("surface.json")
+    rmSync(path.join(dir, "src"), { recursive: true, force: true })
+    rmSync(path.join(dir, "test"), { recursive: true, force: true })
+    rmSync(path.join(dir, ".changeset"), { recursive: true, force: true })
+    seed()
+    put("docs/surface.json", read("docs/surface.json"))
+    const withSurface = add(["export", "helpers"])
+    expect(
+      withSurface.out.endsWith(
+        "update-baseline`.\nThen describe the entry point in docs/surface.json (its tier is yours to set) and run `internal-package-contract generate` to refresh the tables that list the entry points.\n",
+      ),
+    ).toBe(true)
   })
   it("writes the files, then formats exactly what it wrote and says what to do next", () => {
     seed()
@@ -567,5 +658,219 @@ describe("add (run)", () => {
         { cwd: dir, stdio: "ignore" },
       ],
     ])
+  })
+})
+
+describe("planAddCheck", () => {
+  const manifest = (extra: object = {}, indent: string | number = 2, tail = "\n") =>
+    `${JSON.stringify({ name: "p", version: "1.0.0", ...extra }, null, indent)}${tail}`
+  const DEFAULTS = {
+    child_process: [],
+    env: [],
+    fs: ["bin"],
+    forbiddenDependencies: [],
+  }
+  it("names the check and writes its settings out, keeping the file's indentation and ending", () => {
+    for (const [indent, tail] of [
+      [2, "\n"],
+      ["\t", "\n"],
+      [4, ""],
+    ] as const) {
+      const result = planAddCheck({
+        name: "AmbientCapabilities",
+        packageJson: manifest({}, indent, tail),
+      })
+      expect(result.problems).toEqual([])
+      expect(result.text).toBe(
+        manifest(
+          {
+            "internal-package-contract": {
+              checks: ["AmbientCapabilities"],
+              ambientCapabilities: DEFAULTS,
+            },
+          },
+          indent,
+          tail,
+        ),
+      )
+    }
+  })
+  it("lists every check that exists, separated by commas", () => {
+    const table = OPTIONAL_SETTINGS as Record<string, object>
+    table["Other"] = {}
+    try {
+      expect(planAddCheck({ name: "Nope", packageJson: "{}" }).problems).toEqual([
+        "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, Other.",
+      ])
+    } finally {
+      delete table["Other"]
+    }
+  })
+  it("writes two spaces to a file with no indentation to follow", () => {
+    expect(
+      planAddCheck({ name: "AmbientCapabilities", packageJson: '{"name": "p"}' }).text,
+    ).toMatch(/^\{\n {2}"name": "p",\n {2}"internal-package-contract"/)
+  })
+  it("keeps what the package already wrote, and its other settings", () => {
+    const own = {
+      copies: ["glob"],
+      checks: ["Other"],
+      ambientCapabilities: { env: [] },
+    }
+    const result = planAddCheck({
+      name: "AmbientCapabilities",
+      packageJson: manifest({ "internal-package-contract": own }),
+    })
+    expect(JSON.parse(result.text ?? "")["internal-package-contract"]).toEqual({
+      copies: ["glob"],
+      checks: ["AmbientCapabilities", "Other"],
+      ambientCapabilities: { env: [] },
+    })
+  })
+  it("changes nothing when the check is already on", () => {
+    const text = manifest({ "internal-package-contract": { checks: ["AmbientCapabilities"] } })
+    expect(planAddCheck({ name: "AmbientCapabilities", packageJson: text })).toEqual({
+      problems: [],
+      text,
+      already: true,
+    })
+  })
+  it("says what is wrong", () => {
+    const plan = (name: string, packageJson: string | undefined) =>
+      planAddCheck({ name, packageJson }).problems
+    expect(plan("Nope", manifest())).toEqual([
+      "unknown check: Nope. Available: AgentSkill, AmbientCapabilities.",
+    ])
+    expect(plan("toString", manifest())).toHaveLength(1)
+    expect(plan("AmbientCapabilities", undefined)).toEqual(["package.json does not exist here."])
+    expect(plan("AmbientCapabilities", "{")).toEqual(["package.json is not valid JSON."])
+    for (const bad of [[], 3]) {
+      expect(plan("AmbientCapabilities", manifest({ "internal-package-contract": bad }))).toEqual([
+        '"internal-package-contract" in package.json must be an object.',
+      ])
+    }
+    expect(
+      plan("AmbientCapabilities", manifest({ "internal-package-contract": { checks: "x" } })),
+    ).toEqual(['"internal-package-contract"."checks" must be a list of check names.'])
+  })
+})
+
+describe("add check (run)", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "ipc-add-check-"))
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+  const put = (text: string) => writeFileSync(path.join(dir, "package.json"), text)
+  const read = () => readFileSync(path.join(dir, "package.json"), "utf8")
+  const git = (...args: string[]) =>
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+      cwd: dir,
+      encoding: "utf8",
+    })
+  const add = (args: string[], formatted: string[][] = []) => {
+    const out: string[] = []
+    const err: string[] = []
+    const code = run(
+      args,
+      dir,
+      { out: (t) => out.push(t), err: (t) => err.push(t) },
+      {
+        format: (paths) => formatted.push(paths),
+      },
+    )
+    return { code, out: out.join(""), err: err.join("") }
+  }
+  const USAGE =
+    "Usage: internal-package-contract add export <name> [--dry-run]\n       internal-package-contract add check <Name> [--dry-run]\n"
+
+  it("asks for a name, and rejects an unknown flag", () => {
+    expect(add(["check"])).toEqual({
+      code: 2,
+      out: "",
+      err: `[add] expected: add check <Name> [--dry-run]\n${USAGE}`,
+    })
+    expect(add(["check", "AmbientCapabilities", "--nope"]).code).toBe(2)
+  })
+  it("says what is wrong and writes nothing", () => {
+    expect(add(["check", "AmbientCapabilities"])).toEqual({
+      code: 1,
+      out: "",
+      err: "[add] nothing was written:\n- package.json does not exist here.\n",
+    })
+    put("{}")
+    expect(add(["check", "Nope"]).err).toBe(
+      "[add] nothing was written:\n- unknown check: Nope. Available: AgentSkill, AmbientCapabilities.\n",
+    )
+    expect(read()).toBe("{}")
+  })
+  it("previews with --dry-run and changes nothing", () => {
+    put("{}\n")
+    expect(add(["check", "AmbientCapabilities", "--dry-run"])).toEqual({
+      code: 0,
+      out: "Would write:\n  update  package.json\n",
+      err: "",
+    })
+    expect(read()).toBe("{}\n")
+  })
+  it("turns the check on, formats the file, and says what to do next", () => {
+    put("{}\n")
+    const formatted: string[][] = []
+    const result = add(["check", "AmbientCapabilities"], formatted)
+    expect(result.code).toBe(0)
+    expect(result.out).toBe(
+      'Writing:\n  update  package.json\n\nNext: read the settings written under "internal-package-contract" in package.json and change what differs for this package, then run `npm run contract`.\n',
+    )
+    expect(JSON.parse(read())["internal-package-contract"].checks).toEqual(["AmbientCapabilities"])
+    expect(formatted).toEqual([["package.json"]])
+  })
+  it("says so when the check is already on, without formatting anything", () => {
+    put(JSON.stringify({ "internal-package-contract": { checks: ["AmbientCapabilities"] } }))
+    const formatted: string[][] = []
+    expect(add(["check", "AmbientCapabilities"], formatted)).toEqual({
+      code: 0,
+      out: "AmbientCapabilities is already turned on in package.json.\n",
+      err: "",
+    })
+    expect(formatted).toEqual([])
+  })
+  it("is not stopped by uncommitted changes to other files", () => {
+    put("{}\n")
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-qm", "init")
+    writeFileSync(path.join(dir, "other.txt"), "x")
+    expect(add(["check", "AmbientCapabilities"]).code).toBe(0)
+  })
+  it("formats with the package's own Prettier by default", () => {
+    put("{}\n")
+    const calls: unknown[][] = []
+    const code = run(
+      ["check", "AmbientCapabilities"],
+      dir,
+      { out: () => {}, err: () => {} },
+      { spawn: ((...args: unknown[]) => calls.push(args)) as never },
+    )
+    expect(code).toBe(0)
+    expect(calls).toEqual([
+      [
+        "npx",
+        ["--no-install", "prettier", "--write", "package.json"],
+        { cwd: dir, stdio: "ignore" },
+      ],
+    ])
+  })
+  it("refuses when package.json has uncommitted changes", () => {
+    put("{}\n")
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-qm", "init")
+    put('{ "name": "x" }\n')
+    const result = add(["check", "AmbientCapabilities"])
+    expect(result.code).toBe(1)
+    expect(result.err).toBe(
+      "[add] nothing was written: package.json has uncommitted changes, which a failed run could not tell apart from its own. Commit or stash them first.\n",
+    )
+    expect(read()).toBe('{ "name": "x" }\n')
   })
 })

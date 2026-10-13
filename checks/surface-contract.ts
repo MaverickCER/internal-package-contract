@@ -16,7 +16,7 @@
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type { SurfaceEvidence } from "../scripts/surface-contract/run.js"
-import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
+import { abnormalTermination, packageRoot, unparseableRationale } from "./shared.js"
 
 const script = path.join(packageRoot, "scripts", "surface-contract", "run.ts")
 const BASELINE = ".repo-contract/surface-contract/baseline.json"
@@ -84,11 +84,7 @@ export function surfaceContract(): CheckDefinitionConfig {
       const terminated = abnormalTermination(result, "the surface-contract check")
       if (terminated) return { outcome: "fail", rationale: terminated }
       if (!result.output?.success) {
-        const printed = combinedOutput(result)
-        return {
-          outcome: "fail",
-          rationale: `SurfaceContract: check output could not be parsed as JSON.${printed ? `\n${printed}` : ""}`,
-        }
+        return { outcome: "fail", rationale: unparseableRationale("SurfaceContract:", result) }
       }
       return evaluateSurfacePolicy(result.output.value as SurfaceEvidence)
     },

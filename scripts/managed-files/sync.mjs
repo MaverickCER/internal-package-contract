@@ -76,6 +76,10 @@ export function run(argv, cwd, packageRoot, io, copies = COPIES) {
     )
     return 2
   }
+  if (!existsSync(path.join(cwd, "package.json"))) {
+    io.err("[sync] there is no package.json here; run it from the package's root.\n")
+    return 2
+  }
   if (add !== undefined) {
     // Starting to carry a copy is an explicit act: it is recorded, then the file is written.
     const file = path.join(cwd, "package.json")

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process"
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -15,6 +16,8 @@ import { MANAGED_FILE_SCHEMA, managedFileId, managedFilesCheck } from "../checks
 import {
   COPIES,
   copyHeader,
+  docHeader,
+  docVars,
   enrolledCopies,
   inspectManaged,
   MANAGED,
@@ -37,9 +40,19 @@ describe("MANAGED", () => {
     expect(MANAGED.map((file) => file.to)).toEqual([
       ".github/workflows/release.yml",
       ".github/workflows/sync-internal-package-contract.yml",
+      ".github/workflows/env-rotation.yml",
+      ".github/workflows/scorecard.yml",
       ".changeset/config.json",
     ])
     for (const file of MANAGED) expect(existsSync(path.join(packageRoot, file.from))).toBe(true)
+  })
+})
+
+describe("meaning -- a copy and a document are compared as they are", () => {
+  it("returns the text unchanged for a copy and for a document, whatever it looks like", () => {
+    const text = "not json\n# a comment\nuses: x@" + SHA + "\n"
+    expect(meaning("copy", text)).toBe(text)
+    expect(meaning("doc", text)).toBe(text)
   })
 })
 
@@ -104,7 +117,13 @@ describe("inspectManaged", () => {
 
   it("reports every file missing in an empty repository, with the text it would write", () => {
     const entries = inspectManaged({ cwd: dir, packageRoot, pins: PINS })
-    expect(entries.map((entry) => entry.state)).toEqual(["missing", "missing", "missing"])
+    expect(entries.map((entry) => entry.state)).toEqual([
+      "missing",
+      "missing",
+      "missing",
+      "missing",
+      "missing",
+    ])
     expect(entries[0]?.have).toBeUndefined()
     expect(entries[0]?.wanted).toContain(`@${SHA} # v1.2.3`)
   })
@@ -113,6 +132,8 @@ describe("inspectManaged", () => {
     expect(states()).toEqual({
       ".github/workflows/release.yml": "current",
       ".github/workflows/sync-internal-package-contract.yml": "current",
+      ".github/workflows/env-rotation.yml": "current",
+      ".github/workflows/scorecard.yml": "current",
       ".changeset/config.json": "current",
     })
     const release = readFileSync(path.join(dir, ".github/workflows/release.yml"), "utf8")
@@ -155,6 +176,7 @@ describe("sync (run)", () => {
   let dir: string
   beforeEach(() => {
     dir = mkdtempSync(path.join(tmpdir(), "ipc-sync-"))
+    writeFileSync(path.join(dir, "package.json"), "{}")
     writeFileSync(
       path.join(dir, "package-lock.json"),
       JSON.stringify({
@@ -177,6 +199,14 @@ describe("sync (run)", () => {
     return { code: run(args, dir, packageRoot, s.io), out: s.out.join(""), err: s.err.join("") }
   }
 
+  it("says where to run it, and writes nothing, when there is no package.json here", () => {
+    rmSync(path.join(dir, "package.json"))
+    const result = sync("--apply")
+    expect(result.code).toBe(2)
+    expect(result.err).toContain("there is no package.json here")
+    expect(existsSync(path.join(dir, ".github"))).toBe(false)
+  })
+
   it("reports missing files and changes nothing without --apply", () => {
     const result = sync()
     expect(result.code).toBe(1)
@@ -195,7 +225,7 @@ describe("sync (run)", () => {
     const second = sync("--apply")
     expect(second.code).toBe(0)
     expect(second.out).toBe(
-      "current  .github/workflows/release.yml\ncurrent  .github/workflows/sync-internal-package-contract.yml\ncurrent  .changeset/config.json\n",
+      "current  .github/workflows/release.yml\ncurrent  .github/workflows/sync-internal-package-contract.yml\ncurrent  .github/workflows/env-rotation.yml\ncurrent  .github/workflows/scorecard.yml\ncurrent  .changeset/config.json\n",
     )
     expect(readFileSync(path.join(dir, ".changeset/config.json"), "utf8")).toBe(before)
     expect(sync().code).toBe(0)
@@ -331,10 +361,10 @@ describe("managedFilesCheck (policy)", () => {
     })
   })
   it("judges the supplied clock, not the real one", async () => {
-    registry([complete({ expires: "2026-10-12" })])
+    registry([complete({ expires: "2099-10-12" })])
     const result = await managedFilesCheck({
       cwd: dir,
-      now: new Date("2026-10-13T00:00:00Z"),
+      now: new Date("2100-10-13T00:00:00Z"),
     }).policy(makeContext(makeJsonResult(DRIFT)))
     expect(result.outcome).toBe("fail")
   })
@@ -404,6 +434,8 @@ describe("check-managed-files (script)", () => {
       files: [
         { to: ".github/workflows/release.yml", state: "missing" },
         { to: ".github/workflows/sync-internal-package-contract.yml", state: "missing" },
+        { to: ".github/workflows/env-rotation.yml", state: "missing" },
+        { to: ".github/workflows/scorecard.yml", state: "missing" },
         { to: ".changeset/config.json", state: "missing" },
       ],
     })
@@ -450,6 +482,7 @@ describe("unifiedDiff -- exact output and cleanup", () => {
 describe("sync -- exact lines", () => {
   it("reports a missing file with no suffix when a commit is known to pin it to", () => {
     const dir2 = mkdtempSync(path.join(tmpdir(), "ipc-sync-exact-"))
+    writeFileSync(path.join(dir2, "package.json"), "{}")
     try {
       writeFileSync(
         path.join(dir2, "package-lock.json"),
@@ -464,7 +497,9 @@ describe("sync -- exact lines", () => {
       const out: string[] = []
       run([], dir2, packageRoot, { out: (t) => out.push(t), err: () => {} })
       expect(out[0]).toBe("missing  .github/workflows/release.yml\n")
-      expect(out[2]).toBe("missing  .changeset/config.json\n")
+      expect(out[2]).toBe("missing  .github/workflows/env-rotation.yml\n")
+      expect(out[3]).toBe("missing  .github/workflows/scorecard.yml\n")
+      expect(out[4]).toBe("missing  .changeset/config.json\n")
     } finally {
       rmSync(dir2, { recursive: true, force: true })
     }
@@ -542,21 +577,75 @@ describe("managed copies of shared code", () => {
     readFileSync(path.join(packageRoot, "runtime", "generated-banner.ts"), "utf8")
 
   it("lists the copies this package offers, and a header that says where to change them", () => {
-    expect(COPIES.map(({ name, from, to }) => [name, from, to])).toEqual(
-      [
-        "generated-banner",
-        "display-path",
-        "glob",
-        "typescript",
-        "compiler-api",
-        "build-fs",
-        "resolve-tsconfig-paths",
-        "no-node-fs",
-      ].map((name) => [name, `runtime/${name}.ts`, `src/_ipc/${name}.ts`]),
-    )
+    const doc = (name: string, file: string) => [name, `template/package/${file}`, file]
+    const file = (name: string, from: string, to: string) => [name, `template/${from}`, to]
+    const code = (name: string) => [name, `runtime/${name}.ts`, `src/_ipc/${name}.ts`]
+    expect(COPIES.map(({ name, from, to }) => [name, from, to])).toEqual([
+      code("generated-banner"),
+      code("display-path"),
+      code("glob"),
+      code("typescript"),
+      code("compiler-api"),
+      code("build-fs"),
+      code("resolve-tsconfig-paths"),
+      doc("code-of-conduct", "CODE_OF_CONDUCT.md"),
+      doc("support", "SUPPORT.md"),
+      doc("releasing", "RELEASING.md"),
+      file("editorconfig", "editorconfig", ".editorconfig"),
+      file("benchmark-budgets", "package/benchmarks/budgets.mjs", "benchmarks/budgets.mjs"),
+      file(
+        "writing-benchmarks",
+        "benchmarks/WRITING-BENCHMARKS.md",
+        "benchmarks/WRITING-BENCHMARKS.md",
+      ),
+      file(
+        "reading-benchmarks",
+        "benchmarks/READING-BENCHMARKS.md",
+        "benchmarks/READING-BENCHMARKS.md",
+      ),
+      file("typedoc-markdown", "package/typedoc.markdown.json", "typedoc.markdown.json"),
+      code("no-node-fs"),
+    ])
+    expect(COPIES.filter((c) => c.kind === "doc").map((c) => c.name)).toEqual([
+      "code-of-conduct",
+      "support",
+      "releasing",
+    ])
     expect(copyHeader("runtime/x.ts")).toBe(
       "// Managed by internal-package-contract. Do not edit this file: change runtime/x.ts in the standard and run `internal-package-contract sync`.\n\n",
     )
+  })
+  it("carries a shared file's text exactly, never filling in anything that looks like a placeholder", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ipc-file-root-"))
+    try {
+      cpSync(path.join(packageRoot, "template"), path.join(root, "template"), { recursive: true })
+      writeFileSync(path.join(root, "template", "editorconfig"), "a {{ipcSha}} {{name}} b\n")
+      writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ "internal-package-contract": { copies: ["editorconfig"] } }),
+      )
+      const entry = inspectManaged({ cwd: dir, packageRoot: root, pins: PINS }).find(
+        (e) => e.to === ".editorconfig",
+      )
+      expect(entry?.wanted).toBe("a {{ipcSha}} {{name}} b\n")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+  it("carries a shared file as is, with no header, and reports any change to it as drift", () => {
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ "internal-package-contract": { copies: ["editorconfig"] } }),
+    )
+    const wanted = readFileSync(path.join(packageRoot, "template", "editorconfig"), "utf8")
+    const state = () =>
+      inspectManaged({ cwd: dir, packageRoot, pins: PINS }).find((e) => e.to === ".editorconfig")
+    expect(state()).toMatchObject({ state: "missing", wanted })
+    writeFileSync(path.join(dir, ".editorconfig"), wanted)
+    expect(state()?.state).toBe("current")
+    writeFileSync(path.join(dir, ".editorconfig"), `# note\n${wanted}`)
+    expect(state()?.state).toBe("drifted")
+    expect(meaning("file", " a \n# b")).toBe(" a \n# b")
   })
   it("reads the enrolled copies from package.json, and nothing from a missing or odd one", () => {
     expect(enrolledCopies(dir)).toEqual([])
@@ -634,7 +723,7 @@ describe("managed copies of shared code", () => {
     const unknown = sync("--add", "nope")
     expect(unknown.code).toBe(2)
     expect(unknown.err).toBe(
-      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, no-node-fs.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
     )
     expect(sync("--add").err).toContain("unknown managed copy: (none given).")
   })
@@ -774,5 +863,90 @@ describe("sync --add of a copy that imports other copies", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("managed documents", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "ipc-docs-"))
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({
+        name: "@Acme/widgets",
+        repository: { type: "git", url: "git+https://github.com/Acme/widgets.git" },
+        "internal-package-contract": { copies: ["releasing", "support", "code-of-conduct"] },
+      }),
+    )
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  it("renders a document with the package's own name and the owner of its repository", () => {
+    expect(docVars(dir)).toEqual({
+      name: "@Acme/widgets",
+      repo: "widgets",
+      owner: "Acme",
+      ownerLower: "acme",
+    })
+    const releasing = inspectManaged({ cwd: dir, packageRoot, pins: PINS }).find(
+      (entry) => entry.to === "RELEASING.md",
+    )
+    expect(releasing?.state).toBe("missing")
+    expect(releasing?.wanted.startsWith(docHeader("template/package/RELEASING.md"))).toBe(true)
+    expect(releasing?.wanted).toContain("# Releasing @Acme/widgets")
+    expect(releasing?.wanted).toContain("npm view @Acme/widgets")
+    expect(releasing?.wanted).toContain(
+      "https://github.com/Acme/widgets/blob/main/.github/workflows/release.yml",
+    )
+    expect(releasing?.wanted).toContain("Organization or user: `acme`")
+    expect(releasing?.wanted).not.toMatch(/\{\{|env-cap|data-cap/)
+  })
+  it("reads the owner from a repository given as a string too, and as empty when there is none", () => {
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "widgets", repository: "github:Acme/widgets" }),
+    )
+    expect(docVars(dir).owner).toBe("Acme")
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "widgets", repository: "somewhere else entirely" }),
+    )
+    expect(docVars(dir).owner).toBe("")
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "widgets", repository: "git@github.com:Acme/widgets.git" }),
+    )
+    expect(docVars(dir).owner).toBe("Acme")
+    writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "widgets" }))
+    expect(docVars(dir)).toEqual({ name: "widgets", repo: "widgets", owner: "", ownerLower: "" })
+  })
+  it("compares a document byte for byte, so a hand edit is drift and sync restores it", () => {
+    const out: string[] = []
+    const io = { out: (t: string) => out.push(t), err: () => undefined }
+    writeFileSync(
+      path.join(dir, "package-lock.json"),
+      JSON.stringify({
+        packages: {
+          "node_modules/internal-package-contract": {
+            resolved: `git+ssh://git@github.com/MaverickCER/internal-package-contract.git#${SHA}`,
+          },
+        },
+      }),
+    )
+    expect(run(["--apply"], dir, packageRoot, io)).toBe(0)
+    const states = () =>
+      inspectManaged({ cwd: dir, packageRoot, pins: PINS })
+        .filter((entry) => entry.to.endsWith(".md"))
+        .map((entry) => [entry.to, entry.state])
+    expect(states()).toEqual([
+      ["CODE_OF_CONDUCT.md", "current"],
+      ["SUPPORT.md", "current"],
+      ["RELEASING.md", "current"],
+    ])
+    const file = path.join(dir, "SUPPORT.md")
+    writeFileSync(file, `${readFileSync(file, "utf8")}\nan edit\n`)
+    expect(states()[1]).toEqual(["SUPPORT.md", "drifted"])
+    expect(run(["--apply", "--update"], dir, packageRoot, io)).toBe(0)
+    expect(states()[1]).toEqual(["SUPPORT.md", "current"])
   })
 })

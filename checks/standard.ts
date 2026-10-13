@@ -14,6 +14,7 @@ import { accessibility } from "./accessibility.js"
 import { apiContract } from "./api-contract.js"
 import { architecture } from "./architecture.js"
 import { benchmarkComplexityCheck } from "./benchmark-complexity.js"
+import { benchmarkCoverageCheck } from "./benchmark-coverage.js"
 import { benchmarkGuides } from "./benchmark-guides.js"
 import { arethetypeswrong } from "./arethetypeswrong.js"
 import { branchProtection } from "./branch-protection.js"
@@ -30,9 +31,15 @@ import { docsMarkdown } from "./docs-markdown.js"
 import { engineMatrixCheck } from "./engine-matrix.js"
 import { packedConsumerCheck } from "./packed-consumer.js"
 import { gitHooksCheck } from "./git-hooks.js"
+import { adoptionModeCheck } from "./adoption-mode.js"
+import { withErrorHeadline } from "./shared.js"
+import { envContractCheck } from "./env-contract.js"
+import { generatedRegionsCheck } from "./generated-regions.js"
+import { promptBlocksCheck } from "./prompt-blocks.js"
 import { landingPageCheck } from "./landing-page.js"
 import { readmeStructureCheck } from "./readme-structure.js"
 import { scorecardWorkflowCheck } from "./scorecard-workflow.js"
+import { cleanCheckoutCheck } from "./clean-checkout.js"
 import { gitHygiene } from "./git-hygiene.js"
 import { githubActions } from "./github-actions.js"
 import { managedFilesCheck } from "./managed-files.js"
@@ -50,7 +57,7 @@ import { securitySocket } from "./security-socket.js"
 import { tests } from "./tests.js"
 
 export function standardChecks() {
-  return {
+  return withErrorHeadline({
     // -- Writers --
     ApiDocs: npmScriptCheck({ script: "docs:api", label: "API docs" }),
     // The committed `docs/api-report/*` Markdown must already match what `docs:api:report`
@@ -93,6 +100,8 @@ export function standardChecks() {
     // The same semver gate for the rest of the public surface: CLI help, exported schemas, the Action.
     SurfaceContract: surfaceContract(),
     Typecheck: typecheck,
+    // The same type check on only what git tracks: a file hidden by .gitignore passes everything else.
+    CleanCheckout: cleanCheckoutCheck(),
     // `isolated` -- Vitest with V8 coverage instrumentation is the single
     // heaviest check, and a consumer's own subprocess-spawning integration tests
     // (a real `npm pack`, a spawned CLI, a full `ts-json-schema-generator`
@@ -105,6 +114,10 @@ export function standardChecks() {
     GitHygiene: gitHygiene,
     GitHooks: gitHooksCheck(),
     LandingPage: landingPageCheck(),
+    AdoptionMode: adoptionModeCheck(),
+    GeneratedRegions: generatedRegionsCheck(),
+    PromptBlocks: promptBlocksCheck(),
+    EnvContract: envContractCheck(),
     ReadmeStructure: readmeStructureCheck(),
     ScorecardWorkflow: scorecardWorkflowCheck(),
     EngineMatrix: engineMatrixCheck(),
@@ -130,6 +143,7 @@ export function standardChecks() {
     DocsMarkdown: docsMarkdown(),
     BenchmarkGuides: benchmarkGuides(),
     BenchmarkComplexity: benchmarkComplexityCheck(),
+    BenchmarkCoverage: benchmarkCoverageCheck(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     // No explicit dependsOn needed: declaration-order phasing (writers,
@@ -159,5 +173,5 @@ export function standardChecks() {
     // `warn` on every run, by design -- see checks/coderabbitai.ts.
     CodeRabbit: coderabbitai(),
     Mutation: { ...mutation(), isolated: true },
-  }
+  })
 }

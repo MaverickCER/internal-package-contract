@@ -1,0 +1,10 @@
+{
+  "entries": {
+    ".": {
+      "source": "src/",
+      "environment": "isomorphic, zero deps",
+      "tier": "Stable",
+      "purpose": "TODO: say what a reader gets from this entry point."
+    }
+  }
+}

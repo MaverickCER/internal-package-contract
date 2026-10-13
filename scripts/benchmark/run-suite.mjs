@@ -7,7 +7,8 @@
 //   --check   validate the suite's documentation and shape, measure nothing (cheap enough for CI)
 //   --quick   5 smaller sizes and short sampling -- a smoke test, never for committed results
 //   --only    run just these benchmark ids (use `end-to-end` for the end-to-end pair)
-//   --out     where to write results.json and BENCHMARKS.md (default: the suite's own directory)
+//   --out     where to write results.json and BENCHMARKS.md (default: the suite's own directory in CI, whose
+//             figures are the ones committed; `.benchmark-local/<suite>` anywhere else, which is never committed)
 //   --config  benchmark.config.json: { costRates?, bundleFiles?, root?, docsPath? } (default: next to the suite)
 //
 // Re-launches itself under `node --expose-gc` when needed so garbage from one sample is not billed
@@ -21,6 +22,7 @@ import { renderReport } from "./kit/report.mjs"
 import { analyze, runSuite } from "./kit/run.mjs"
 import { validateResults } from "./kit/results-contract.mjs"
 import { SuiteDefinitionError } from "./kit/define.mjs"
+import { defaultOutput } from "./results-location.mjs"
 
 function parse(argv) {
   const options = {
@@ -68,7 +70,7 @@ async function main() {
   }
 
   const suitePath = path.resolve(options.suite)
-  const outDir = path.resolve(options.out ?? path.dirname(suitePath))
+  const outDir = path.resolve(options.out ?? defaultOutput(path.dirname(suitePath), process.env))
   const configPath = path.resolve(
     options.config ?? path.join(path.dirname(suitePath), "benchmark.config.json"),
   )
@@ -95,7 +97,8 @@ async function main() {
   }
 
   if (options.render) {
-    const existing = JSON.parse(readFileSync(path.join(outDir, "results.json"), "utf8"))
+    const stored = existsSync(path.join(outDir, "results.json")) ? outDir : path.dirname(suitePath)
+    const existing = JSON.parse(readFileSync(path.join(stored, "results.json"), "utf8"))
     // Re-derive the analysis from the stored measurements, so a documentation fix (an expected
     // complexity, a call count) is reflected without measuring again.
     existing.analysis = analyze({
@@ -104,6 +107,7 @@ async function main() {
       tiers: existing.metadata.tiers,
       rates: existing.metadata.costRates,
     })
+    mkdirSync(outDir, { recursive: true })
     writeFileSync(path.join(outDir, "results.json"), `${JSON.stringify(existing, null, 2)}\n`)
     writeFileSync(
       path.join(outDir, "BENCHMARKS.md"),

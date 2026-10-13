@@ -17,19 +17,22 @@
 //     generatedBy, versions
 //   },
 //   results: {                                // one entry per measured group
-//     "<group>": {                            // "end-to-end:baseline" | "end-to-end:with-package" | "end-to-end:overhead" | "fn:<id>" | "fn:<id>@<variant>"
+//     "<group>": {                            // "end-to-end:baseline" | "end-to-end:with-package" | "end-to-end:overhead" | "fn:<id>" | "fn:<id>@<variant>" | "fn:<id>#<variable>" | "fn:<id>@<variant>#<variable>"
 //       area: "end-to-end" | "function", derived?: true,
-//       tiers: { "n<size>": { id, status: "completed"|"failed", inputs: { <unit>: size },
+//       // A group varies ONE variable: the suite's unit, or (after "#") another variable the function sweeps,
+//       // with the others held at their base values (`held`). Its growth class is that variable's alone.
+//       tiers: { "n<size>": { id, status: "completed"|"failed", inputs: { <variable>: size }, held?: { <other variable>: value },
 //                              durationMs: { minMs, medianMs, p95Ms, maxMs, stdDevMs, iterations, warmupIterations },
 //                              cpuMs: <same stats>, heapDeltaBytes, opsPerSecond, configuration }
 //                         | { id, status: "failed", inputs, error: { name, message } } }
 //     }
 //   },
 //   analysis: {
-//     complexity: { "<group>": { class, exponent, rSquared, reason?, notation, points, expected?, expectedNotation?, agreement? } },
+//     complexity: { "<group>": { class, exponent, rSquared, reason?, variable, discarded?, size?, unmeasured?, minRSquared?, notation, points, expected?, expectedNotation?, agreement? } },
 //     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCpuMs, overheadHeapBytes, cost } ],
 //     contribution: [ { id, group, description, rows: [ { n, calls, estimatedMs, exclusiveMs, shareOfTotal } ] } ],
-//     cost: { typicalN, typical, largest }
+//     cost: { typicalN, typical, largest },
+//     coverage: { benchmarks: [ { id, covers: { "<function>": { "<parameter or key>": "<accounting>" } } } ], notBenchmarked: { "<function>": "<why>" } }
 //   }
 // }
 

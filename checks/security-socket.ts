@@ -81,7 +81,7 @@ import type {
   PersistedExceptionRegistry,
 } from "./exception-record.js"
 import { abnormalTermination, packageRoot } from "./shared.js"
-import { isCiEnvironment, socketGuidance } from "./socket-guidance.js"
+import { socketGuidance } from "./socket-guidance.js"
 import type { SocketProblem } from "./socket-guidance.js"
 
 const SCRIPT_PATH = path.join(packageRoot, "scripts", "socket-package-score.mjs")
@@ -444,9 +444,9 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
   }
   if (!parsed["ok"]) {
     const problem = classifyProblem(result.stderr, parsed)
-    if (problem === "not-authenticated" && !isCiEnvironment(env)) {
-      // No API key on a developer machine: say so and let the rest of the contract run. In CI this stays a
-      // failure, because a scan that did not run there would let a package with alerts look clean.
+    if (problem === "not-authenticated") {
+      // No API key, here or in CI: say so, with the steps to get one, and let the rest of the contract run.
+      // The key is optional, so its absence is a warning; a key that is present and refused still fails.
       return {
         kind: "warn",
         rationale: `the Socket scan did not run, so its alerts were not checked.\n${socketGuidance(problem, env)}`,

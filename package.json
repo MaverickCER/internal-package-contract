@@ -43,22 +43,46 @@
     "./config/typedoc-a11y-search-label": "./config/typedoc-a11y-search-label.mjs",
     "./checks/standard": "./checks/standard.ts",
     "./checks/*": "./checks/*.ts",
+    "./logs": "./logs.ts",
+    "./env-cap": "./reexports/env-cap/index.ts",
+    "./env-cap/build": "./reexports/env-cap/build.ts",
+    "./env-cap/helpers": "./reexports/env-cap/helpers.ts",
+    "./env-cap/node": "./reexports/env-cap/node.ts",
+    "./env-cap/evidence": "./reexports/env-cap/evidence.ts",
+    "./env-cap/eslint-plugin": "./reexports/env-cap/eslint-plugin.ts",
+    "./data-cap": "./reexports/data-cap/index.ts",
+    "./data-cap/runtime": "./reexports/data-cap/runtime.ts",
+    "./data-cap/runtime/cache": "./reexports/data-cap/runtime-cache.ts",
+    "./data-cap/runtime/retry": "./reexports/data-cap/runtime-retry.ts",
+    "./data-cap/helpers": "./reexports/data-cap/helpers.ts",
+    "./data-cap/build": "./reexports/data-cap/build.ts",
+    "./data-cap/node": "./reexports/data-cap/node.ts",
+    "./data-cap/evidence": "./reexports/data-cap/evidence.ts",
+    "./data-cap/eslint-plugin": "./reexports/data-cap/eslint-plugin.ts",
+    "./scripts/check-*.mjs": "./scripts/check-*.mjs",
+    "./runtime/*": "./runtime/*.ts",
     "./package.json": "./package.json",
     "./benchmark": "./scripts/benchmark/kit/index.mjs"
   },
   "files": [
     "bin",
     "checks",
+    "ci/env.schema.ts",
     "config",
     "hooks",
     "runtime",
     "scripts",
     "template",
     "contract.ts",
+    "reexports",
+    "logs.ts",
     "eslint.config.mjs",
     "prettier.config.mjs",
     "tsconfig.json"
   ],
+  "envCap": {
+    "schema": "./ci/env.schema.ts"
+  },
   "engines": {
     "node": ">=24"
   },
@@ -70,7 +94,10 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "contract": "node scripts/run-contract.mjs",
-    "version": "changeset version"
+    "version": "changeset version",
+    "benchmark": "node scripts/benchmark/run-suite.mjs benchmarks/performance-checks/suite.mjs && node scripts/benchmark/run-suite.mjs benchmarks/performance-evidence/suite.mjs && node scripts/benchmark/run-suite.mjs benchmarks/performance-env/suite.mjs && prettier --write \"benchmarks/*/BENCHMARKS.md\" \"benchmarks/*/results.json\"",
+    "benchmark:check": "node scripts/benchmark/run-suite.mjs benchmarks/performance-checks/suite.mjs --check && node scripts/benchmark/run-suite.mjs benchmarks/performance-evidence/suite.mjs --check && node scripts/benchmark/run-suite.mjs benchmarks/performance-env/suite.mjs --check",
+    "docs:env": "node bin/contract.mjs env"
   },
   "dependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
@@ -80,6 +107,7 @@
     "@danibram/crap4ts": "^0.6.0",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.1",
+    "@maverickcer/env-cap": "^0.6.0",
     "@microsoft/api-extractor": "^7.58.13",
     "@microsoft/api-extractor-model": "^7.33.12",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.7",
@@ -90,6 +118,7 @@
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^24.19.1",
     "cross-spawn": "^7.0.6",
+    "data-cap": "^0.7.0",
     "dependency-cruiser": "^18.2.0",
     "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
@@ -106,7 +135,7 @@
     "prettier": "3.9.9",
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
-    "repo-contract": "~0.10.0",
+    "repo-contract": "~0.11.0",
     "secretlint": "^13.0.7",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
@@ -114,7 +143,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1",
+    "@changesets/cli": "^3.0.3",
     "@typescript-eslint/utils": "^8.68.0",
     "@vitest/coverage-v8": "^5.0.3",
     "vitest": "^5.0.3"

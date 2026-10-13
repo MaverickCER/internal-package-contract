@@ -1,7 +1,5 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "extends": ["internal-package-contract/config/typedoc-markdown"],
-  "entryPoints": ["src/index.ts"],
-  "out": "docs/api-report",
-  "readme": "none"
+  "extends": ["./typedoc.json", "internal-package-contract/config/typedoc-markdown"],
+  "out": "docs/api-report"
 }

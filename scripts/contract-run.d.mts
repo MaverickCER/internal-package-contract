@@ -13,4 +13,7 @@ export function runContract(input: {
   argv?: readonly string[]
   env?: NodeJS.ProcessEnv
   out?: { write(text: string): unknown }
+  err?: { write(text: string): unknown }
+  prepare?: (input: { cwd: string; out: { write(text: string): unknown } }) => void
 }): Promise<{ passed: boolean }>
+export function processTrouble(evidence: { status: string; exitCode: number | null }): string

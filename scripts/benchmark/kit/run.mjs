@@ -7,11 +7,11 @@
 //   3. contribution -- which functions make up the end-to-end operation, and how much time each is
 //                      responsible for (nested calls counted once, against the operation's total)?
 
-import { classifyGroup } from "../classify-complexity.mjs"
+import { classifyGroup, MIN_R_SQUARED } from "../classify-complexity.mjs"
 import { estimateCost, DEFAULT_RATES } from "./cost-model.mjs"
 import { collectBundleSizes, collectEnvironment, collectGit } from "./environment.mjs"
 import { computeDurationStats, sample } from "./measure.mjs"
-import { COMPLEXITY_NOTATION, expectationOf } from "./define.mjs"
+import { COMPLEXITY_NOTATION, expectationOf, groupName, parseGroup } from "./define.mjs"
 import { QUICK_TIERS, tierName } from "./tiers.mjs"
 
 export const RESULTS_SCHEMA_VERSION = 4
@@ -51,7 +51,7 @@ export function agreement(measured, expected) {
   return distance === 1 ? "close" : "differs"
 }
 
-async function measureTier({ n, unit, setup, run, teardown, fresh, sampling, group }) {
+async function measureTier({ n, unit, held, setup, run, teardown, fresh, sampling, group }) {
   let ctx
   const build = async () => {
     ctx = setup ? await setup(n) : undefined
@@ -70,6 +70,7 @@ async function measureTier({ n, unit, setup, run, teardown, fresh, sampling, gro
       id: `${group}@${tierName(n)}`,
       status: "completed",
       inputs: { [unit]: n },
+      ...heldField(held),
       durationMs,
       cpuMs: computeDurationStats(raw.cpuMs, raw.configuration.warmupIterations),
       heapDeltaBytes: median(raw.heapDeltaBytes),
@@ -81,6 +82,38 @@ async function measureTier({ n, unit, setup, run, teardown, fresh, sampling, gro
   }
 }
 
+/** @param {Record<string, number> | undefined} held @returns {{ held?: Record<string, number> }} the field, only when another variable was held. */
+function heldField(held) {
+  return held !== undefined && Object.keys(held).length > 0 ? { held } : {}
+}
+
+/**
+ * The value of every swept variable at one measurement: the one being swept at `n`, the others held at
+ * their base values (the suite's unit at `primaryValue`).
+ * @param {{ suiteUnit: string, variable: string, primaryValue: number, benchmark: object }} context
+ * @param {number} n - the size of the variable being swept.
+ * @returns {Record<string, number>} every variable's value.
+ */
+export function valuesAt({ suiteUnit, variable, primaryValue, benchmark }, n) {
+  const values = { [suiteUnit]: primaryValue }
+  for (const sweep of benchmark.sweeps ?? []) values[sweep.variable] = sweep.baseValue
+  values[variable] = n
+  return values
+}
+
+/**
+ * @param {object | undefined} context - see {@link valuesAt}; `undefined` for a group with one variable.
+ * @param {string} variable - the variable being swept.
+ * @param {number} n
+ * @returns {Record<string, number> | undefined} the values of every other variable at this size.
+ */
+function heldAt(context, variable, n) {
+  if (context === undefined) return undefined
+  return Object.fromEntries(
+    Object.entries(valuesAt(context, n)).filter(([name]) => name !== variable),
+  )
+}
+
 async function measureGroup({
   group,
   area,
@@ -90,6 +123,7 @@ async function measureGroup({
   variant,
   sampling,
   onProgress,
+  context,
 }) {
   const entries = {}
   for (const n of tiers) {
@@ -98,8 +132,18 @@ async function measureGroup({
       entries[tierName(n)] = await measureTier({
         n,
         unit,
+        held: heldAt(context, unit, n),
         group,
-        setup: benchmark.setup ? (size) => benchmark.setup(size, variant?.options) : undefined,
+        setup: benchmark.setup
+          ? (size) =>
+              benchmark.setup(
+                size,
+                variant?.options,
+                context === undefined
+                  ? undefined
+                  : { variable: unit, values: valuesAt(context, size) },
+              )
+          : undefined,
         run: (ctx) => benchmark.run(ctx),
         teardown: benchmark.teardown,
         fresh: benchmark.fresh === true,
@@ -110,6 +154,7 @@ async function measureGroup({
         id: `${group}@${tierName(n)}`,
         status: "failed",
         inputs: { [unit]: n },
+        ...heldField(heldAt(context, unit, n)),
         error: { name: error?.name ?? "Error", message: String(error?.message ?? error) },
       }
     }
@@ -184,17 +229,34 @@ export async function runSuite(suite, options = {}) {
     const variants = benchmark.variants?.length ? benchmark.variants : [undefined]
     const benchmarkTiers = benchmark.tiers ?? tiers
     for (const variant of variants) {
-      const group = variant ? `fn:${benchmark.id}@${variant.name}` : `fn:${benchmark.id}`
-      results[group] = await measureGroup({
-        group,
-        area: "function",
-        tiers: benchmarkTiers,
-        unit,
-        benchmark,
-        variant,
-        sampling,
-        onProgress: options.onProgress,
-      })
+      // The suite's own unit first, then each other variable the function declares, one at a time with the
+      // rest held at their base values, so every group has exactly one variable and one growth class.
+      const sweeps = [
+        { variable: unit, tiers: benchmarkTiers, primaryValue: suite.workload.typicalN },
+        ...(benchmark.sweeps ?? []).map((sweep) => ({
+          variable: sweep.variable,
+          tiers: sweep.tiers ?? benchmarkTiers,
+          primaryValue: sweep.primaryValue ?? suite.workload.typicalN,
+        })),
+      ]
+      for (const { variable, tiers: ladder, primaryValue } of sweeps) {
+        const group = groupName(
+          benchmark.id,
+          variant?.name,
+          variable === unit ? undefined : variable,
+        )
+        results[group] = await measureGroup({
+          group,
+          area: "function",
+          tiers: ladder,
+          unit: variable,
+          benchmark,
+          variant,
+          sampling,
+          onProgress: options.onProgress,
+          context: { suiteUnit: unit, variable, primaryValue, benchmark },
+        })
+      }
     }
   }
 
@@ -252,25 +314,40 @@ export async function runSuite(suite, options = {}) {
 /**
  * Derives the three analyses from raw measurements. Pure; exported for direct testing.
  * @param {{ suite: object, results: object, tiers: readonly number[], rates?: object }} input - the suite, its raw `results`, the tiers measured.
- * @returns {{ complexity: object, endToEnd: object[], contribution: object[], cost: object }} the analyses.
+ * @returns {{ complexity: object, endToEnd: object[], contribution: object[], cost: object, coverage: object }} the analyses.
  */
 export function analyze({ suite, results, tiers, rates }) {
   const complexity = {}
   for (const [group, value] of Object.entries(results)) {
     if (value.derived) continue
     const classification = classifyGroup(measurementsOf(value))
-    const documented = suite.functions.find(
-      (fn) => group === `fn:${fn.id}` || group.startsWith(`fn:${fn.id}@`),
-    )
-    const variant = documented?.variants?.find(
-      (candidate) => group === `fn:${documented.id}@${candidate.name}`,
-    )
-    const expected = documented ? expectationOf(documented, variant).expectedComplexity : undefined
+    const parts = parseGroup(group)
+    const documented = parts && suite.functions.find((fn) => fn.id === parts.id)
+    const variant = documented?.variants?.find((candidate) => candidate.name === parts.variant)
+    const expected = documented
+      ? expectationOf(documented, variant, parts.variable).expectedComplexity
+      : undefined
+    const unmeasured = Object.entries(value.tiers)
+      .filter(([, entry]) => entry.status !== "completed")
+      .map(([tier, entry]) => ({
+        tier,
+        status: entry.status,
+        ...((entry.error?.message ?? entry.reason)
+          ? { message: entry.error?.message ?? entry.reason }
+          : {}),
+      }))
     complexity[group] = {
       class: classification.complexityClass,
       exponent: classification.exponent,
       rSquared: classification.rSquared ?? null,
       ...(classification.reason ? { reason: classification.reason } : {}),
+      variable: parts?.variable ?? suite.workload.unit,
+      ...(classification.reason === "insufficient-data" && classification.discarded.length > 0
+        ? { discarded: classification.discarded }
+        : {}),
+      ...(classification.size === undefined ? {} : { size: classification.size }),
+      ...(unmeasured.length > 0 ? { unmeasured } : {}),
+      ...(classification.reason === "poor-fit" ? { minRSquared: MIN_R_SQUARED } : {}),
       notation: classification.complexityClass
         ? COMPLEXITY_NOTATION[classification.complexityClass]
         : null,
@@ -283,6 +360,15 @@ export function analyze({ suite, results, tiers, rates }) {
           }
         : {}),
     }
+  }
+
+  // What the suite says it covers of the package's public functions, so a check can compare it with the API
+  // without importing the suite.
+  const coverage = {
+    benchmarks: suite.functions
+      .filter((fn) => fn.covers !== undefined)
+      .map((fn) => ({ id: fn.id, covers: fn.covers })),
+    notBenchmarked: suite.notBenchmarked ?? {},
   }
 
   const baseline = results["end-to-end:baseline"]
@@ -367,5 +453,5 @@ export function analyze({ suite, results, tiers, rates }) {
     )[0] ??
     suite.workload.typicalN
   const largest = endToEnd[endToEnd.length - 1]
-  return { complexity, endToEnd, contribution, cost: { typicalN, typical, largest } }
+  return { complexity, endToEnd, contribution, cost: { typicalN, typical, largest }, coverage }
 }

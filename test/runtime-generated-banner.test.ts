@@ -53,6 +53,18 @@ describe("isGeneratedFile", () => {
     expect(isGeneratedFile(`${generatedBanner("markdown", "Run the thing.")}\n# T`)).toBe(true)
     expect(isGeneratedFile(`${generatedBanner("ts", "Run the thing.")}\nexport {}`)).toBe(true)
   })
+  it("accepts an indented marker, and a marker that opens either kind of comment", () => {
+    const { isGeneratedFile } = make()
+    expect(isGeneratedFile("  \t// GENERATED FILE -- do not edit by hand. x")).toBe(true)
+    expect(isGeneratedFile("<!-- GENERATED FILE -- do not edit by hand. x -->")).toBe(true)
+  })
+  it("does not take code or prose that only quotes the marker for a generated file", () => {
+    const { isGeneratedFile } = make()
+    expect(isGeneratedFile('const note = "GENERATED FILE -- do not edit by hand."')).toBe(false)
+    expect(isGeneratedFile("// this is not a GENERATED FILE -- do not edit by hand.")).toBe(false)
+    expect(isGeneratedFile("# GENERATED FILE -- do not edit by hand.")).toBe(false)
+    expect(isGeneratedFile("<!-- see GENERATED FILE -- do not edit by hand. -->")).toBe(false)
+  })
   it("still recognizes the banner pushed off line one by a shebang, pragma or license header", () => {
     const { generatedBanner, isGeneratedFile } = make()
     const content = `#!/usr/bin/env node\n"use strict"\n// Copyright\n${generatedBanner("ts")}\nreal content`
@@ -72,6 +84,25 @@ describe("isGeneratedFile", () => {
     const lines = (count: number) => Array.from({ length: count }, (_, i) => `line ${String(i)}`)
     expect(isGeneratedFile([...lines(19), generatedBanner("ts")].join("\n"))).toBe(true)
     expect(isGeneratedFile([...lines(20), generatedBanner("ts")].join("\n"))).toBe(false)
+  })
+  it("reads a banner on the last line even without a trailing newline, and under Windows line endings", () => {
+    const { generatedBanner, isGeneratedFile } = make()
+    expect(isGeneratedFile(`first\nsecond\n${generatedBanner("ts")}`)).toBe(true)
+    expect(isGeneratedFile(`first\r\n\r\n${generatedBanner("ts")}\r\nrest`)).toBe(true)
+  })
+  it("answers from the top of a very long file without needing the rest", () => {
+    const { generatedBanner, isGeneratedFile } = make()
+    const tail = "x\n".repeat(200_000)
+    expect(isGeneratedFile(`${generatedBanner("ts")}\n${tail}`)).toBe(true)
+    expect(isGeneratedFile(tail)).toBe(false)
+  })
+  it("needs the whole marker, not just its first words", () => {
+    const { isGeneratedFile } = make()
+    expect(isGeneratedFile("// GENERATED FILE")).toBe(false)
+    expect(isGeneratedFile("// GENERATED FILE -- see the docs")).toBe(false)
+    expect(isGeneratedFile("// GENERATED FILES -- do not edit by hand.")).toBe(false)
+    expect(isGeneratedFile("<!-- GENERATED FILE -->")).toBe(false)
+    expect(isGeneratedFile("// GENERATED FILE -- do not edit by hand")).toBe(true)
   })
   it("returns false for hand-written and empty content", () => {
     const { isGeneratedFile } = make()

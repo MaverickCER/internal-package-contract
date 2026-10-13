@@ -1,13 +1,10 @@
-// Highlighting thresholds for the pull-request summary -- NEVER a gate. A group is flagged when its
-// median grows by more than `maxRegressionPercent` between runs. Results are not comparable between
-// machines (see READING-BENCHMARKS.md), so a threshold must sit above ordinary run-to-run noise:
-// microsecond-scale operations routinely swing 30-40% with no code change.
+// Tuning for the benchmark gates. Nothing here is needed: the defaults in internal-package-contract
+// (scripts/benchmark/gates.mjs) apply to every group, and a package overrides only what it must, for
+// example `export const GATES = { normalizedOverheadMaxIncreasePercent: { millisecondScale: 60 } }`.
 //
-// Groups are named by the contract: "end-to-end:overhead", "end-to-end:with-package", "fn:<id>" and
-// "fn:<id>@<variant>". "*" applies to every group without its own entry.
+// There is no threshold on a raw time. Results are not comparable between machines (see
+// READING-BENCHMARKS.md), so a pull request is judged on properties of one run instead: the measured
+// big-O against the documented one (a function whose big-O cannot be determined is a warning), and the
+// overhead as a ratio to the bare baseline.
 
-export const BUDGETS = {
-  "*": { maxRegressionPercent: 40 },
-  // The headline number: tighter than the default, because it is what an adopter pays.
-  "end-to-end:overhead": { maxRegressionPercent: 25 },
-}
+export const GATES = {}

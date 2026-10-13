@@ -27,6 +27,12 @@ function writeCrapReport(value: unknown): void {
 }
 
 describe("crap", () => {
+  it("scores the package's own source and leaves out the managed copies under src/_ipc", () => {
+    expect(crap.run).toEqual(expect.arrayContaining(["crap4ts", "src", "--ignore", "**/_ipc/**"]))
+    const args = crap.run as readonly string[]
+    expect(args.indexOf("--ignore")).toBe(args.indexOf("src") + 1)
+  })
+
   it("fails when crap4ts terminated abnormally, naming crap4ts (not a blank tool name) in the rationale", async () => {
     const result = await crap.policy(makeContext(makeResult({ status: "timed_out" })))
     expect(result).toEqual({

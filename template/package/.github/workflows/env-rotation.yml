@@ -1,0 +1,31 @@
+# Opens (and closes) one issue when a credential described in ci/env.schema.ts is expiring or has expired, so a token
+# is rotated before the workflow that uses it stops working. A package with no ci/env.schema.ts has nothing to
+# report and this does nothing. Nothing about it is required.
+name: Credential rotation
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rotation:
+    name: Credentials due for rotation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+      - run: npm ci --ignore-scripts
+      - run: npx --no-install internal-package-contract env --rotation-issue
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -11,7 +11,7 @@
 // to be resolved) and `required_status_checks` (and which contexts it requires) -- the last is the
 // rule that stops a red CI run from being merged and, through the release pipeline, published.
 //
-// Read-only: never creates or modifies a ruleset. `bin/init.mjs`'s own `init`
+// Read-only: never creates or modifies a ruleset. `bin/scaffold.mjs`'s own `init`
 // command does that, sharing this script's owner/repo resolution
 // (scripts/github-repo.mjs).
 //

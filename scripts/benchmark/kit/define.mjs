@@ -3,6 +3,7 @@
 // what poor performance would mean, its expected big-O and the reason for it, and every variable that
 // could change its cost. `defineSuite` collects every gap and throws once, listing all of them.
 
+import { parseAccounting } from "../coverage/accounting.mjs"
 import { STANDARD_TIERS, validateTiers } from "./tiers.mjs"
 
 /** The complexity classes the kit can recognize, with their notation. Matches classify-complexity.mjs. */
@@ -15,15 +16,49 @@ export const COMPLEXITY_NOTATION = Object.freeze({
   "cubic-or-worse": "O(n³) or worse",
 })
 
+/**
+ * The name of one measured group: `fn:<id>`, then `@<variant>` when it is a variant, then `#<variable>`
+ * when it varies a variable other than the suite's own unit.
+ * @param {string} id - the function's id.
+ * @param {string | undefined} [variant] - the variant's name.
+ * @param {string | undefined} [variable] - a swept variable other than the suite's unit.
+ * @returns {string} the group name.
+ */
+export function groupName(id, variant, variable) {
+  return `fn:${id}${variant === undefined ? "" : `@${variant}`}${variable === undefined ? "" : `#${variable}`}`
+}
+
+/**
+ * @param {string} group - a group name as {@link groupName} writes it.
+ * @returns {{ id: string, variant?: string, variable?: string } | undefined} its parts, or `undefined` for a group that is not a function's.
+ */
+export function parseGroup(group) {
+  const match = /^fn:([^@#]+)(?:@([^#]+))?(?:#(.+))?$/.exec(group)
+  if (match === null) return undefined
+  return {
+    id: match[1],
+    ...(match[2] === undefined ? {} : { variant: match[2] }),
+    ...(match[3] === undefined ? {} : { variable: match[3] }),
+  }
+}
+
 /** Thrown by {@link defineSuite} with every documentation/shape problem found. */
 /**
- * The growth class and reason that apply to one measured group: the variant's own when it declares
- * one, otherwise the function's.
+ * The growth class and reason that apply to one measured group: the swept variable's own when it is
+ * not the suite's unit, else the variant's own when it declares one, otherwise the function's.
  * @param {object} fn - a function entry.
  * @param {object | undefined} variant - one of its variants, if measured as one.
+ * @param {string | undefined} [variable] - the swept variable the group varies, when it is not the unit.
  * @returns {{ expectedComplexity: string, complexityReason: string }} the expectation.
  */
-export function expectationOf(fn, variant) {
+export function expectationOf(fn, variant, variable) {
+  const sweep = fn.sweeps?.find((s) => s.variable === variable)
+  if (sweep !== undefined) {
+    return {
+      expectedComplexity: sweep.expectedComplexity,
+      complexityReason: sweep.complexityReason,
+    }
+  }
   return variant?.expectedComplexity === undefined
     ? { expectedComplexity: fn.expectedComplexity, complexityReason: fn.complexityReason }
     : { expectedComplexity: variant.expectedComplexity, complexityReason: variant.complexityReason }
@@ -118,10 +153,110 @@ function validateRunnable(runnable, at, problems) {
 function normalizeRunnable(runnable) {
   if (runnable.call === undefined) return runnable
   const { call, input, ...rest } = runnable
-  return { ...rest, setup: (n, options) => input(n, options), run: (args) => call(...args) }
+  return {
+    ...rest,
+    setup: (n, options, context) => input(n, options, context),
+    run: (args) => call(...args),
+  }
 }
 
-function validateBenchmark(benchmark, at, problems, { needsId }) {
+/**
+ * A function whose cost depends on more than one input declares each one it can sweep. The suite's
+ * unit is the first; every other is a `sweeps` entry, measured on its own (the others held at their
+ * base values) and given its own growth class, so one big-O never mixes two variables.
+ */
+function validateSweeps(benchmark, at, unit, problems) {
+  const sweeps = get(benchmark, "sweeps")
+  if (sweeps === undefined) return
+  if (!Array.isArray(sweeps) || sweeps.length === 0) {
+    problems.push(`${at}.sweeps must list at least one variable, or be left out.`)
+    return
+  }
+  const seen = new Set()
+  sweeps.forEach((sweep, index) => {
+    const here = `${at}.sweeps[${String(index)}]`
+    const name = get(sweep, "variable")
+    if (!isKebab(name)) problems.push(`${here}.variable must be kebab-case.`)
+    else if (name === unit) {
+      problems.push(`${here}.variable "${name}" is the suite's own unit, which is always swept.`)
+    } else if (seen.has(name)) problems.push(`${here}.variable "${name}" is listed twice.`)
+    seen.add(name)
+    text(get(sweep, "description"), `${here}.description`, problems, 10)
+    for (const key of ["baseValue", "primaryValue"]) {
+      const value = get(sweep, key)
+      if (key === "baseValue" || value !== undefined) {
+        if (!Number.isInteger(value) || value <= 0) {
+          problems.push(
+            `${here}.${key} must be a positive integer${key === "baseValue" ? ": the value held while another variable is swept" : ": the value the unit is held at while this one is swept (default: the typical size)"}.`,
+          )
+        }
+      }
+    }
+    if (!Object.hasOwn(COMPLEXITY_NOTATION, get(sweep, "expectedComplexity"))) {
+      problems.push(
+        `${here}.expectedComplexity must be one of: ${Object.keys(COMPLEXITY_NOTATION).join(", ")}.`,
+      )
+    }
+    text(get(sweep, "complexityReason"), `${here}.complexityReason (why that big-O)`, problems)
+    const tiers = get(sweep, "tiers")
+    if (tiers !== undefined) {
+      problems.push(...validateTiers(tiers).map((problem) => `${here}.tiers: ${problem}.`))
+    }
+    const variables = get(benchmark, "variables")
+    const declared =
+      Array.isArray(variables) &&
+      variables.some(
+        (variable) => get(variable, "name") === name && get(variable, "how") === "swept",
+      )
+    if (!declared) {
+      problems.push(
+        `${here}.variable "${String(name)}" must also be listed in ${at}.variables as "swept".`,
+      )
+    }
+  })
+}
+
+/**
+ * What a benchmark says about each parameter (or key) of the public functions it exercises: `covers` maps a
+ * function name to a parameter path (`options`, or `options.cache`) to one of the forms in accounting.mjs.
+ */
+function validateCovers(benchmark, at, problems) {
+  const covers = get(benchmark, "covers")
+  if (covers === undefined) return
+  if (covers === null || typeof covers !== "object" || Array.isArray(covers)) {
+    problems.push(`${at}.covers must map each public function it exercises to its parameters.`)
+    return
+  }
+  // Stryker disable next-line ArrayDeclaration: equivalent -- a placeholder string has no variable name, so it matches no sweep.
+  const sweeps = (get(benchmark, "sweeps") ?? []).map((sweep) => get(sweep, "variable"))
+  // Stryker disable next-line ArrayDeclaration: equivalent -- a placeholder string has no name, so it matches no variant.
+  const variants = (get(benchmark, "variants") ?? []).map((variant) => get(variant, "name"))
+  for (const [name, parameters] of Object.entries(covers)) {
+    const here = `${at}.covers.${name}`
+    if (parameters === null || typeof parameters !== "object" || Array.isArray(parameters)) {
+      problems.push(`${here} must map each parameter or key to what the benchmark does with it.`)
+      continue
+    }
+    for (const [path, value] of Object.entries(parameters)) {
+      const accounting = parseAccounting(value)
+      if (accounting === undefined) {
+        problems.push(
+          `${here}.${path} must be "swept", "sweep:<variable>", "variant:<name>", "fixed: <why>" or "not covered: <why>" (a reason is at least 10 characters).`,
+        )
+      } else if (accounting.kind === "sweep" && !sweeps.includes(accounting.name)) {
+        problems.push(
+          `${here}.${path} names the sweep "${accounting.name}", which ${at} does not declare.`,
+        )
+      } else if (accounting.kind === "variant" && !variants.includes(accounting.name)) {
+        problems.push(
+          `${here}.${path} names the variant "${accounting.name}", which ${at} does not declare.`,
+        )
+      }
+    }
+  }
+}
+
+function validateBenchmark(benchmark, at, problems, { needsId, unit }) {
   if (needsId && !isKebab(get(benchmark, "id")))
     problems.push(`${at}.id must be kebab-case (letters, digits, "-").`)
   text(get(benchmark, "why"), `${at}.why (why this is benchmarked)`, problems)
@@ -137,6 +272,8 @@ function validateBenchmark(benchmark, at, problems, { needsId }) {
   }
   text(get(benchmark, "complexityReason"), `${at}.complexityReason (why that big-O)`, problems)
   validateVariables(get(benchmark, "variables"), at, problems)
+  validateSweeps(benchmark, at, unit, problems)
+  validateCovers(benchmark, at, problems)
   validateRunnable(benchmark, at, problems)
   const tiers = get(benchmark, "tiers")
   if (tiers !== undefined) {
@@ -222,6 +359,21 @@ export function defineSuite(suite) {
   }
   validateVariables(get(endToEnd, "variables"), "endToEnd", problems)
 
+  const notBenchmarked = get(suite, "notBenchmarked")
+  if (notBenchmarked !== undefined) {
+    if (
+      notBenchmarked === null ||
+      typeof notBenchmarked !== "object" ||
+      Array.isArray(notBenchmarked)
+    ) {
+      problems.push("notBenchmarked must map each public function it leaves out to the reason.")
+    } else {
+      for (const [name, reason] of Object.entries(notBenchmarked)) {
+        text(reason, `notBenchmarked.${name} (why it has no benchmark)`, problems)
+      }
+    }
+  }
+
   const seen = new Set()
   const functions = get(suite, "functions") ?? []
   if (functions.length === 0)
@@ -229,7 +381,7 @@ export function defineSuite(suite) {
   functions.forEach((benchmark, index) => {
     const id = get(benchmark, "id")
     const at = `functions[${String(index)}]${id ? ` (${id})` : ""}`
-    validateBenchmark(benchmark, at, problems, { needsId: true })
+    validateBenchmark(benchmark, at, problems, { needsId: true, unit })
     if (seen.has(id)) problems.push(`${at}.id is duplicated.`)
     seen.add(id)
     if (get(benchmark, "inEndToEnd") !== undefined) {

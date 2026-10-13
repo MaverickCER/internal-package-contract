@@ -100,6 +100,17 @@ export interface LoadTsconfigPathsResult {
 }
 
 /**
+ * The compiler's own functions take a path written with `/` and assert it when they report a problem in the file, so
+ * a path with the platform's separator (a backslash on Windows) is written with `/` for them.
+ * @param file - an absolute path as the platform writes it.
+ * @param separator - the platform's path separator.
+ * @returns the same path written with `/`.
+ */
+export function typescriptPath(file: string, separator: string): string {
+  return file.split(separator).join("/")
+}
+
+/**
  * Loads and parses a `tsconfig.json` for alias resolution. Called exactly once per
  * `generate*()`/`computeArtifacts()` invocation, at the same point
  * `resolveAllowlistedPackages()` is already called once -- so at most one tsconfig-related
@@ -149,7 +160,9 @@ export async function loadTsconfigPaths(
   // stand. Without this, `ts.readConfigFile()` below would die with a raw "is not a function" when no
   // usable compiler resolved (the bundled TypeScript 6 stripped from an install).
   assertCompilerApi(product, ts)
-  const readResult = ts.readConfigFile(configFile, (p) => ts.sys.readFile(p))
+  const readResult = ts.readConfigFile(typescriptPath(configFile, path.sep), (p) =>
+    ts.sys.readFile(p),
+  )
   if (readResult.error) {
     const detail = ts.flattenDiagnosticMessageText(readResult.error.messageText, ts.sys.newLine)
     return {

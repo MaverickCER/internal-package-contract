@@ -109,6 +109,58 @@ describe("buildReport()", () => {
   })
 })
 
+describe("buildReport(): advisory failures", () => {
+  it("counts an advisory failure as a failure but does not let it fail the run", () => {
+    const report = build({
+      results: { Tests: results.Tests, Lint: results.Lint },
+      advisory: ["Tests"],
+    })
+    expect(report.counts.fail).toBe(1)
+    expect(report.passed).toBe(true)
+    expect(report.advisory).toEqual(["Tests"])
+  })
+  it("still fails when a failing check is not advisory, however many are", () => {
+    const failing = {
+      A: { outcome: "fail", rationale: "a" },
+      B: { outcome: "fail", rationale: "b" },
+    }
+    expect(build({ results: failing, advisory: ["A"] }).passed).toBe(false)
+    expect(build({ results: failing, advisory: ["A", "B"] }).passed).toBe(true)
+  })
+  it("leaves the report as it was when nothing is advisory", () => {
+    expect(build()).not.toHaveProperty("advisory")
+    expect(build({ advisory: [] })).not.toHaveProperty("advisory")
+  })
+})
+
+describe("renderMarkdown(): advisory failures", () => {
+  it("says so in the summary and marks the check, keeping its whole reason", () => {
+    const report = build({ results: { Tests: results.Tests }, advisory: ["Tests"] })
+    const md = renderMarkdown(report, { title: "Contract" })
+    expect(md).toContain(
+      "## Contract: passed\n\n1 failing check(s) are advisory, because the package is adopting the standard: Tests. They do not fail the run.\n",
+    )
+    expect(md).toContain("#### Tests (advisory)")
+    expect(md).toContain("2 failing\nfoo.test.ts")
+  })
+  it("lists several advisory checks separated by commas", () => {
+    const report = build({
+      results: {
+        Tests: results.Tests,
+        Lint: { outcome: "fail", rationale: "1 error" },
+      },
+      advisory: ["Tests", "Lint"],
+    })
+    expect(renderMarkdown(report, { title: "Contract" })).toContain(
+      "adopting the standard: Tests, Lint. They do not fail the run.",
+    )
+  })
+  it("adds nothing when no check is advisory", () => {
+    const md = renderMarkdown(build(), { title: "Contract" })
+    expect(md).not.toContain("advisory")
+  })
+})
+
 describe("renderMarkdown()", () => {
   it("leads with the verdict, groups by class, and shows full reasons for what needs action", () => {
     const md = renderMarkdown(build({ strict: true }), { title: "Contract" })

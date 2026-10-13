@@ -160,7 +160,7 @@ describe("pinConsistency (policy)", () => {
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("- a.yml:3: x\n- b.yml:9: y")
-    expect(result.rationale).toContain("--repin")
+    expect(result.rationale).toContain("internal-package-contract upgrade <tag>")
   })
   it("passes and says the pins agree when they were compared", async () => {
     const result = await pinConsistency().policy(

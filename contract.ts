@@ -46,17 +46,21 @@
  */
 import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
+import { optionalChecks, withOptionalChecks } from "./checks/optional.js"
 import { standardChecks } from "./checks/standard.js"
 
 export default defineRepoContract({
   // repo-contract never spawns a process or reads process.env itself (v0.2.0+,
   // ADR 0011 upstream) -- cross-spawn (already a dependency, used by
-  // bin/init.mjs too) resolves Windows .cmd/.bat shims the same way every
+  // bin/scaffold.mjs too) resolves Windows .cmd/.bat shims the same way every
   // check here already relies on; killProcessTree lets a timed-out/aborted
   // check's full process tree get cleaned up there too. See repo-contract's
   // README "Supplying spawn/env" section.
   spawn: crossSpawn,
   env: process.env,
   killProcessTree: crossSpawnSync,
-  checks: standardChecks(),
+  // The optional checks a package turns on are only known at run time, so their ids cannot be typed here.
+  checks: withOptionalChecks(standardChecks(), optionalChecks(process.cwd())) as ReturnType<
+    typeof standardChecks
+  >,
 })

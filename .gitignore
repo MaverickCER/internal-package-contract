@@ -1,8 +1,11 @@
-node_modules/
+node_modules
 dist/
-coverage/
+/coverage/
 reports/
 .stryker-tmp/
 *.log
 .DS_Store
 .eslintcache
+
+# A benchmark run outside CI is a gate, not a figure: only CI's results are committed.
+/.benchmark-local

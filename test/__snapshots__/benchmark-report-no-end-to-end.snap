@@ -31,14 +31,19 @@ The baseline is an empty or minimal function, so it costs almost nothing and the
 
 Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.
 
-| Function | Documented | Measured | Agreement | At 80 | At 160 |
-| --- | --- | --- | --- | --- | --- |
-| `sum` | O(n) | O(1) | ⚠️ differs | 1.00 ms | 1.00 ms |
-| `lookup` | O(1) | O(1) | ✅ matches | 1.00 ms | 1.00 ms |
+| Function | Varies | Documented | Measured | Agreement | At 80 | At 160 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sum` | item | O(n) | O(1) | ⚠️ differs | 1.00 ms | 1.00 ms |
+| `lookup` | item | O(1) | O(1) | ✅ matches | 1.00 ms | 1.00 ms |
 
 > **Needs attention.** These functions grow at a different rate than documented. Either the code regressed or the documentation is wrong -- decide which, then fix it:
 >
-> - `sum`: documented O(n), measured O(1) (exponent 0.00)
+> - `sum` (varying item): documented O(n), measured O(1) (exponent 0.00)
+
+> **Could not be determined.** The big-O of these could not be measured, so they are not checked against their documentation:
+>
+> - `end-to-end:baseline` (varying item): only 0 item sizes gave a usable measurement and a growth rate needs at least 2; lost: n20 failed (no); n40 failed (no); n80 failed (no); n160 failed (no)
+> - `end-to-end:with-package` (varying item): only 0 item sizes gave a usable measurement and a growth rate needs at least 2; lost: n20 failed (no); n40 failed (no); n80 failed (no); n160 failed (no)
 
 ### `sum`
 

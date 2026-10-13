@@ -16,3 +16,6 @@ jobs:
     uses: MaverickCER/internal-package-contract/.github/workflows/dependency-pin-sync.yml@{{ipcSha}} # {{ipcRef}}
     with:
       dependency-name: internal-package-contract
+    secrets:
+      # Optional. Without it the run uses GITHUB_TOKEN, which GitHub does not allow to change workflow files.
+      PIN_SYNC_TOKEN: ${{ secrets.PIN_SYNC_TOKEN }}

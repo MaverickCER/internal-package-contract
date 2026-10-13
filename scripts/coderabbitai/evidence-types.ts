@@ -67,7 +67,8 @@ export type CoderabbitEvidence =
     }
   | {
       readonly status: "unavailable"
-      readonly reason: "cli-not-installed" | "git-context-unavailable"
+      readonly reason:
+        "cli-not-installed" | "git-context-unavailable" | "not-signed-in" | "network-unreachable"
       readonly registryPath: string
       readonly existingRecordCount: number
       readonly registryError?: readonly string[]

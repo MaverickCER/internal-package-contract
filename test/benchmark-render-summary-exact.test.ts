@@ -47,11 +47,10 @@ function results(over: Record<string, unknown> = {}) {
   }
 }
 
-const BUDGETS = `export const BUDGETS = { "fn:alpha": { maxRegressionPercent: 10 }, "*": { maxRegressionPercent: 30 } }
-export const GATES = {}`
+const BUDGETS = "export const GATES = {}"
 
 describe("summarize -- exact output", () => {
-  it("a full comparison: shifts, gate failures, notes, a version mismatch, failed tiers and budget breaches", async () => {
+  it("a full comparison: shifts, gate failures, notes, a version mismatch, failed tiers and a derived row", async () => {
     const previous = results({
       metadata: {
         versions: { benchmarkSuiteVersion: 0 },
@@ -136,70 +135,105 @@ describe("summarize -- exact output", () => {
     await expect(markdown).toMatchFileSnapshot("./__snapshots__/render-summary-full.snap")
   })
 
-  it("change cells: faster, slower, unchanged, no previous, a failed previous, a zero previous, exactly at the budget", async () => {
-    const previous = {
-      metadata: { versions: { benchmarkSuiteVersion: 1 } },
-      results: {
-        "fn:faster": { tiers: { t: done(10, 20) } },
-        "fn:same": { tiers: { t: done(10, 7) } },
-        "fn:edge": { tiers: { t: done(10, 10) } },
-        "fn:failedBefore": { tiers: { t: { status: "failed", durationMs: { medianMs: 1 } } } },
-        "fn:zeroBefore": { tiers: { t: done(10, 0) } },
-        "fn:noMedianNow": { tiers: { t: done(10, 5) } },
-      },
-    }
-    const current = {
-      metadata: { versions: { benchmarkSuiteVersion: 1 } },
-      results: {
-        "fn:faster": { tiers: { t: done(10, 10) } },
-        "fn:same": { tiers: { t: done(10, 7) } },
-        "fn:edge": { tiers: { t: done(10, 11) } },
-        "fn:fresh": { tiers: { t: done(10, 3) } },
-        "fn:failedBefore": { tiers: { t: done(10, 2) } },
-        "fn:zeroBefore": { tiers: { t: done(10, 4) } },
-        "fn:noMedianNow": { tiers: { t: { status: "completed", inputs: { n: 10 } } } },
-      },
-    }
+  it("shows each function's big-O and how it moved, and no raw time at all", async () => {
+    const group = (cls: string | null, notation: string | null, extra: object = {}) => ({
+      class: cls,
+      notation,
+      variable: "item",
+      ...extra,
+    })
+    const previous = results({
+      analysis: analysis(100, 2, {
+        "fn:same": group("linear", "O(n)"),
+        "fn:worse": group("linear", "O(n)"),
+        "fn:better": group("quadratic", "O(n²)"),
+        "fn:was-unknown": group(null, null),
+        "fn:now-unknown": group("linear", "O(n)"),
+      }),
+    })
+    const current = results({
+      analysis: analysis(100, 2, {
+        "fn:same": group("linear", "O(n)"),
+        "fn:worse": group("quadratic", "O(n²)"),
+        "fn:better": group("linear", "O(n)"),
+        "fn:was-unknown": group("linear", "O(n)"),
+        "fn:now-unknown": group(null, null),
+        "fn:fresh": group("constant", "O(1)"),
+        "fn:cold@warm#width": group("linear", "O(n)", { variable: "width" }),
+      }),
+    })
     const { markdown } = await summarize({
       marker: "m",
-      budgetsPath: write(
-        "budgets.mjs",
-        `export const BUDGETS = { "*": { maxRegressionPercent: 10 } }`,
-      ),
       examples: [`R|${write("p.json", previous)}|${write("c.json", current)}|`],
     })
-    const rows = Object.fromEntries(
-      markdown
-        .split("\n")
-        .filter((l) => l.startsWith("| `fn:"))
-        .map((l) => [l.split("`")[1], l]),
+    expect(markdown).toContain(
+      [
+        "| Function | Variable | Big-O | Since the last run |",
+        "|---|---|---|---|",
+        "| `same` | item | O(n) | same |",
+        "| `worse` | item | O(n²) | worse (O(n) → O(n²)) |",
+        "| `better` | item | O(n) | improved (O(n²) → O(n)) |",
+        "| `was-unknown` | item | O(n) | N/A (the previous run could not determine it) |",
+        "| `now-unknown` | item | undetermined | N/A (this run could not determine it) |",
+        "| `fresh` | item | O(1) | N/A (not measured in the previous run) |",
+        "| `cold (warm)` | width | O(n) | N/A (not measured in the previous run) |",
+        "",
+      ].join("\n"),
     )
-    expect(rows["fn:faster"]).toBe("| `fn:faster` | t | 10.00ms | -50.0% | 10% |")
-    expect(rows["fn:same"]).toBe("| `fn:same` | t | 7.00ms | +0.0% | 10% |")
-    expect(rows["fn:edge"]).toBe("| `fn:edge` | t | 11.00ms | +10.0% | 10% |")
-    expect(rows["fn:fresh"]).toBe("| `fn:fresh` | t | 3.00ms | — | 10% |")
-    expect(rows["fn:failedBefore"]).toBe("| `fn:failedBefore` | t | 2.00ms | — | 10% |")
-    expect(rows["fn:zeroBefore"]).toBe("| `fn:zeroBefore` | t | 4.00ms | — | 10% |")
-    expect(rows["fn:noMedianNow"]).toBe("| `fn:noMedianNow` | t | — | — | 10% |")
-    expect(markdown).not.toContain("Exceeds budget")
+    expect(markdown).not.toMatch(/\d ms|\dms|Median|Budget/)
   })
 
-  it("flags only growth strictly over the budget", async () => {
-    const run = async (now: number) =>
-      (
-        await summarize({
-          marker: "m",
-          budgetsPath: write(
-            "b.mjs",
-            `export const BUDGETS = { "*": { maxRegressionPercent: 10 } }`,
-          ),
-          examples: [
-            `R|${write("p.json", { results: { g: { tiers: { t: done(10, 10) } } } })}|${write("c.json", { results: { g: { tiers: { t: done(10, now) } } } })}|`,
-          ],
-        })
-      ).markdown
-    expect(await run(11)).not.toContain("Exceeds budget")
-    expect(await run(11.1)).toContain("- ⚠️ `g.t` +11.0% (budget: 10%) — human review suggested.")
+  it("says there is no previous run to compare with on a first run", async () => {
+    const current = results({
+      analysis: analysis(100, 2, {
+        "fn:a": { class: "linear", notation: "O(n)", variable: "item" },
+      }),
+    })
+    for (const previous of [write("e.json", {}), ""]) {
+      const { markdown } = await summarize({
+        marker: "m",
+        examples: [`R|${previous}|${write("c.json", current)}|`],
+      })
+      expect(markdown).toContain("| `a` | item | O(n) | N/A (no previous run) |")
+    }
+  })
+
+  it("warns, and does not fail, for a group whose big-O could not be determined", async () => {
+    const current = write(
+      "u.json",
+      results({
+        analysis: analysis(100, 2, {
+          "fn:alpha": {
+            class: null,
+            reason: "insufficient-data",
+            points: 1,
+            variable: "item",
+            expectedNotation: "O(n)",
+          },
+          "fn:beta": { class: "linear", agreement: "matches" },
+        }),
+      }),
+    )
+    const { markdown, failures } = await summarize({
+      marker: "m",
+      examples: [`R||${current}|`],
+    })
+    expect(failures).toEqual([])
+    expect(markdown).toContain("## ⚠️ Gates passed, 1 warning\n")
+    expect(markdown).toContain(
+      "- ⚠️ **R** — `fn:alpha` (varying item): the big-O could not be determined: only 1 item size gave a usable measurement and a growth rate needs at least 2. It is not checked against the documented O(n).",
+    )
+    expect(markdown).toContain("A function whose big-O could not be determined is a warning")
+    expect(markdown).toMatch(/documented O\(n\)\.\n\n## R\n/)
+    const two = write(
+      "u2.json",
+      results({
+        analysis: analysis(100, 2, { a: { class: null }, b: { class: null } }),
+      }),
+    )
+    expect((await summarize({ marker: "m", examples: [`R||${two}|`] })).markdown).toContain(
+      "## ⚠️ Gates passed, 2 warnings\n",
+    )
   })
 
   it("tells people about a complexity shift, quoting both classes, and keeps a blank line after one failure and one note", async () => {
@@ -335,25 +369,13 @@ describe("summarize -- exact output", () => {
     )
   })
 
-  it("reads budgets and gates from the budgets module, defaulting both when there is none", async () => {
+  it("reads the gates from the budgets module, defaulting them when there is none", async () => {
     const cur = write("cur.json", results())
-    const prev = write(
-      "prev.json",
-      results({
-        results: { "fn:alpha": { tiers: { baseline: done(10, 5), stress: done(100, 50) } } },
-      }),
-    )
-    const none = (await summarize({ marker: "m", examples: [`R|${prev}|${cur}|`] })).markdown
-    expect(none).toContain("(unbudgeted)")
     const noExports = write("empty.mjs", "export const OTHER = 1")
-    const empty = (
-      await summarize({ marker: "m", budgetsPath: noExports, examples: [`R|${prev}|${cur}|`] })
-    ).markdown
-    expect(empty).toContain("(unbudgeted)")
-    const off = write(
-      "off.mjs",
-      `export const GATES = { complexity: false }\nexport const BUDGETS = {}`,
-    )
+    expect(
+      (await summarize({ marker: "m", budgetsPath: noExports, examples: [`R||${cur}|`] })).failures,
+    ).toEqual([])
+    const off = write("off.mjs", "export const GATES = { complexity: false }")
     const noGate = write(
       "gate.json",
       results({

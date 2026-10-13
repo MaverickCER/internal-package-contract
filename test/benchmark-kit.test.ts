@@ -11,6 +11,8 @@ import {
   defineSuite,
   estimateCost,
   expectationOf,
+  groupName,
+  parseGroup,
   formatBytes,
   formatMs,
   formatUsd,
@@ -652,6 +654,41 @@ describe("per-variant expectations", () => {
     })
     expect(expectationOf(fn, fn.variants![1])).toMatchObject({ expectedComplexity: "constant" })
     expect(expectationOf(fn, undefined).expectedComplexity).toBe("linear")
+  })
+  it("uses a swept variable's own expectation over the variant's and the function's", () => {
+    const fn = {
+      ...withVariants().functions[0]!,
+      sweeps: [
+        { variable: "width", expectedComplexity: "quadratic", complexityReason: "wide is slow" },
+      ],
+    }
+    expect(expectationOf(fn, fn.variants![1], "width")).toEqual({
+      expectedComplexity: "quadratic",
+      complexityReason: "wide is slow",
+    })
+    expect(expectationOf(fn, fn.variants![1], "other").expectedComplexity).toBe("constant")
+    expect(expectationOf({ ...fn, sweeps: undefined }, undefined, "width").expectedComplexity).toBe(
+      "linear",
+    )
+  })
+  it("names and parses the group of a function, a variant and a swept variable", () => {
+    expect(groupName("sum")).toBe("fn:sum")
+    expect(groupName("sum", "cold")).toBe("fn:sum@cold")
+    expect(groupName("sum", undefined, "width")).toBe("fn:sum#width")
+    expect(groupName("sum", "cold", "width")).toBe("fn:sum@cold#width")
+    expect(parseGroup("fn:sum")).toStrictEqual({ id: "sum" })
+    expect(parseGroup("fn:sum@cold")).toStrictEqual({ id: "sum", variant: "cold" })
+    expect(parseGroup("fn:sum#width")).toStrictEqual({ id: "sum", variable: "width" })
+    expect(parseGroup("fn:sum#")).toBeUndefined()
+    expect(parseGroup("fn:sum@")).toBeUndefined()
+    expect(parseGroup("fn:sum@cold#width")).toStrictEqual({
+      id: "sum",
+      variant: "cold",
+      variable: "width",
+    })
+    expect(parseGroup("end-to-end:baseline")).toBeUndefined()
+    expect(parseGroup("xfn:sum")).toBeUndefined()
+    expect(parseGroup("fn:")).toBeUndefined()
   })
   it("validates a variant's expectation and reason", () => {
     const messages = (
@@ -1391,10 +1428,10 @@ describe("report presentation", () => {
   }
   it("shows an enormous relative overhead as a multiple of the baseline, and a modest one as a percent", () => {
     const huge = fakeResults(0.0001, 0.2, 0.2)
-    expect(renderReport(huge.results, huge.suite)).toContain("× baseline")
+    expect(renderReport(huge.results, huge.suite)).toMatch(/\*\*[\d,]+× the baseline\*\*/)
     const modest = fakeResults(1, 1.5, 1.5)
     const text = renderReport(modest.results, modest.suite)
-    expect(text).toContain("50%")
+    expect(text).toContain("**50% of the baseline**")
     expect(text).not.toContain("× baseline")
     const tiny = fakeResults(10, 10.5, 10.5)
     expect(renderReport(tiny.results, tiny.suite)).toContain("5.0%")
@@ -1418,7 +1455,9 @@ describe("report presentation", () => {
     const text = renderReport({ ...fakeResults(1, 2, 2).results, results, analysis }, suite)
     expect(text).toContain("(at 40)")
     expect(text).toContain("> **Needs attention.**")
-    expect(text).toContain("> - `sum`: documented O(n), measured O(n²) (exponent 2.00)")
+    expect(text).toContain(
+      "> - `sum` (varying item): documented O(n), measured O(n²) (exponent 2.00)",
+    )
   })
   it("prints a price range smallest first even when CPU time exceeds wall time", () => {
     const { suite, results } = fakeResults(0.001, 0.5, 5)

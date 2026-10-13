@@ -12,3 +12,14 @@ export function run(
   cwd: string,
   io: { out: (text: string) => void; err: (text: string) => void },
 ): number
+export function mutationDetails(
+  report: { files?: Record<string, { mutants?: { status: string }[] }> },
+  percent: number,
+): {
+  schemaVersion: 1
+  headline: { value: number; statistic: string; of: string; meaning: string }
+  detected: number
+  applicable: number
+  byStatus: Record<string, number>
+}
+export function detailsPathOf(badge: string): string

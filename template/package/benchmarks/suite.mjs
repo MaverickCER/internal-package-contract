@@ -86,6 +86,12 @@ export default defineSuite({
             "The function is synchronous and keeps no shared state, so concurrency cannot change its cost.",
         },
       ],
+      // Every public function with more than one input (several parameters, or an object with several keys)
+      // must say what it does with each one, or the `BenchmarkCoverage` check fails. This function takes
+      // none, so there is nothing to account for; for a function that does, list every parameter and key:
+      //   covers: { yourFunction: { schema: "swept", "options.cache": "fixed: reset before every run" } }
+      // and list a public function you do not benchmark at all under a suite-level `notBenchmarked`.
+      covers: { packageName: {} },
       // How the end-to-end run uses this function, so section 3 can attribute the overhead to it.
       inEndToEnd: { callsPerOperation: (n) => n, description: "Called once per unit of n." },
       call: (n) => {

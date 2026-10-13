@@ -6,6 +6,7 @@ import {
   runCoderabbitCli,
 } from "../../../scripts/coderabbitai/review.js"
 import type { CliDependencies, CliSpawnResult } from "../../../scripts/coderabbitai/review.js"
+import { unavailableReason } from "../../../scripts/coderabbitai/review.js"
 
 /**
  * Fixtures are the real `coderabbit review --agent` event stream shapes repo-contract captured
@@ -308,6 +309,27 @@ describe("interpretCliResult()", () => {
     })
   })
 
+  it("reports a CLI that could not run here as unavailable, not as a failed review", () => {
+    for (const [stderr, reason] of [
+      ["Error: Failed to get branch information in directory '/tmp/x'", "git-context-unavailable"],
+      ["You are not logged in. Run login first.", "not-signed-in"],
+      ["getaddrinfo ENOTFOUND api.coderabbit.ai", "network-unreachable"],
+    ] as const) {
+      expect(interpretCliResult(result({ stdout: REVIEW_CONTEXT, status: 1, stderr }))).toEqual({
+        status: "unavailable",
+        reason,
+      })
+    }
+  })
+
+  it("still reports an unrecognised failure as an error", () => {
+    expect(
+      interpretCliResult(
+        result({ stdout: REVIEW_CONTEXT, status: 1, stderr: "segmentation fault" }),
+      ).status,
+    ).toBe("error")
+  })
+
   it("returns the findings of a completed review", () => {
     const out = interpretCliResult(
       result({ stdout: [REVIEW_CONTEXT, finding(), COMPLETE].join("\n") }),
@@ -367,5 +389,56 @@ describe("runCoderabbitCli()", () => {
       status: "unavailable",
       reason: "cli-not-installed",
     })
+  })
+})
+
+describe("unavailableReason", () => {
+  it("recognises each way the CLI cannot run on this machine", () => {
+    for (const text of [
+      "Failed to get git information",
+      "fatal: not a git repository",
+      "unknown revision origin/x",
+      "bad revision 'x'",
+    ]) {
+      expect(unavailableReason(text)).toBe("git-context-unavailable")
+    }
+    for (const text of [
+      "not logged in",
+      "Not signed in",
+      "login required",
+      "Unauthorized",
+      "authentication failed",
+      "invalid api token",
+      "HTTP 401",
+      "log in required",
+      "Not logged in",
+      "unauthorised",
+      "authentication required",
+      "invalid token",
+      "status: 401",
+      "code 401",
+      "request failed with HTTP 401 Unauthorized",
+    ]) {
+      expect(unavailableReason(text)).toBe("not-signed-in")
+    }
+    for (const text of ["error at line 401", "port 4010", "http 4010"]) {
+      expect(unavailableReason(text)).toBeUndefined()
+    }
+    for (const text of [
+      "ENOTFOUND",
+      "connect ECONNREFUSED",
+      "ECONNRESET",
+      "EAI_AGAIN",
+      "ETIMEDOUT",
+      "network unreachable",
+      "fetch failed",
+    ]) {
+      expect(unavailableReason(text)).toBe("network-unreachable")
+    }
+  })
+  it("says nothing about output that is not about the environment", () => {
+    expect(unavailableReason("")).toBeUndefined()
+    expect(unavailableReason("a finding about line 401 of a file")).toBeUndefined()
+    expect(unavailableReason("segmentation fault")).toBeUndefined()
   })
 })

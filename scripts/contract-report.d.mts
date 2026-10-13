@@ -11,6 +11,8 @@ export interface ContractReport {
   strict: boolean
   passed: boolean
   counts: Record<ResultClass, number>
+  /** Failing checks that did not decide the exit code; present only when there are some. */
+  advisory?: string[]
   totalDurationMs: number
   checks: {
     id: string
@@ -36,6 +38,7 @@ export function buildReport(input: {
   skipped: readonly string[]
   strict: boolean
   generatedAt: string
+  advisory?: readonly string[]
 }): ContractReport
 export function renderMarkdown(report: ContractReport, options?: { title?: string }): string
 export function writeReportFiles(

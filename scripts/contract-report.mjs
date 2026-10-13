@@ -70,7 +70,14 @@ export function mergeEvidence(documents) {
  * @param {boolean} input.strict - whether an unexcepted "not evaluated" result fails the run.
  * @param {string} input.generatedAt
  */
-export function buildReport({ results, evidenceChecks, skipped, strict, generatedAt }) {
+export function buildReport({
+  results,
+  evidenceChecks,
+  skipped,
+  strict,
+  generatedAt,
+  advisory = [],
+}) {
   const checks = [
     ...Object.entries(results).map(([id, result]) => ({
       id,
@@ -90,13 +97,16 @@ export function buildReport({ results, evidenceChecks, skipped, strict, generate
   /** @type {Record<ResultClass, number>} */
   const counts = { pass: 0, warn: 0, "not-evaluated": 0, unexcepted: 0, fail: 0, skipped: 0 }
   for (const check of checks) counts[check.class] += 1
-  const failed = counts.fail > 0 || (strict && counts.unexcepted > 0)
+  // A failure of an advisory check (one a package that is adopting has not promoted) is reported but does not
+  // decide the exit code.
+  const failed = counts.fail > advisory.length || (strict && counts.unexcepted > 0)
   return {
     version: 1,
     generatedAt,
     strict,
     passed: !failed,
     counts,
+    ...(advisory.length > 0 ? { advisory } : {}),
     totalDurationMs: checks.reduce((sum, c) => sum + c.durationMs, 0),
     checks,
   }
@@ -135,6 +145,12 @@ export function renderMarkdown(report, options = {}) {
   const { counts } = report
   const lines = [
     `## ${options.title ?? "Contract"}: ${report.passed ? "passed" : "FAILED"}${report.strict ? " (strict)" : ""}`,
+    ...(report.advisory
+      ? [
+          "",
+          `${String(report.advisory.length)} failing check(s) are advisory, because the package is adopting the standard: ${report.advisory.join(", ")}. They do not fail the run.`,
+        ]
+      : []),
     "",
     "| Class | Count |",
     "| --- | ---: |",
@@ -151,7 +167,7 @@ export function renderMarkdown(report, options = {}) {
       if (klass === "fail" || klass === "unexcepted") {
         // What a reader needs to act without re-running anything: the whole reason, bounded.
         lines.push(
-          `#### ${check.id}`,
+          `#### ${check.id}${report.advisory?.includes(check.id) ? " (advisory)" : ""}`,
           "",
           "```text",
           check.rationale.slice(0, MAX_DETAIL),

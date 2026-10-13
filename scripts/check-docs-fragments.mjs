@@ -33,8 +33,6 @@
 //     `[text][ref]` / `[ref]: target` definitions (none exist in this
 //     organization's docs today -- confirmed by direct search across every
 //     consumer repo before this check was written).
-//   - an explicit HTML anchor (`<a id="foo">`) is not recognized as a valid
-//     fragment target, only an auto-generated heading anchor.
 //   - a target file that does not exist on disk is skipped, not reported --
 //     that is `DocsLinks`' job (linkinator does correctly catch a missing
 //     *file*, just not a missing *fragment*).
@@ -83,6 +81,17 @@ function toPlainHeadingText(raw) {
   return stripped
 }
 
+/** Every explicit HTML anchor (`<a id="x">`, `<a name="x">`) outside a code block: GitHub and every renderer resolve `#x` to it, and a generated document (the environment catalog) relies on them. */
+function extractHtmlAnchors(content) {
+  const ids = new Set()
+  for (const match of stripFencedCodeBlocks(content).matchAll(
+    /<a\s[^>]*?\b(?:id|name)\s*=\s*["']([^"']+)["']/gi,
+  )) {
+    ids.add(match[1].toLowerCase())
+  }
+  return ids
+}
+
 /** Every heading in `content`, as `{ line, slug }`, in document order -- duplicate heading text gets GitHub's own `-1`/`-2`/... suffix, via one `GithubSlugger` instance per file (its dedup state is intentionally per-document). */
 function extractHeadingSlugs(content) {
   const slugger = new GithubSlugger()
@@ -96,6 +105,7 @@ function extractHeadingSlugs(content) {
     if (text.length === 0) continue
     slugs.add(slugger.slug(text))
   }
+  for (const id of extractHtmlAnchors(content)) slugs.add(id)
   return slugs
 }
 

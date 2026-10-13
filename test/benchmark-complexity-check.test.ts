@@ -7,7 +7,7 @@ import {
   BENCHMARK_COMPLEXITY_SCHEMA,
   benchmarkComplexityCheck,
 } from "../checks/benchmark-complexity.js"
-import { scanComplexity, suiteDirectories } from "../scripts/benchmark/complexity-scan.mjs"
+import { scanComplexity, undeterminedGroups } from "../scripts/benchmark/complexity-scan.mjs"
 import { REQUIRED_FIELDS } from "../scripts/benchmark/complexity-gain.mjs"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
@@ -49,20 +49,15 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-describe("suiteDirectories", () => {
-  it("lists only directories under benchmarks that have committed results, sorted", () => {
-    expect(suiteDirectories(dir)).toEqual([])
-    put("benchmarks/b/results.json", {})
-    put("benchmarks/a/results.json", {})
-    put("benchmarks/empty/other.json", {})
-    writeFileSync(path.join(dir, "benchmarks", "README.md"), "x")
-    expect(suiteDirectories(dir)).toEqual(["a", "b"])
-  })
-})
-
 describe("scanComplexity", () => {
   it("has nothing to scan without suites", () => {
-    expect(scanComplexity(dir)).toEqual({ state: "none", tag: null, suites: [], gains: [] })
+    expect(scanComplexity(dir)).toEqual({
+      state: "none",
+      tag: null,
+      suites: [],
+      gains: [],
+      undetermined: [],
+    })
   })
   it("has no baseline without a release tag", () => {
     put("benchmarks/perf/results.json", results(1))
@@ -72,7 +67,42 @@ describe("scanComplexity", () => {
       tag: null,
       suites: ["perf"],
       gains: [],
+      undetermined: [],
     })
+  })
+  it("lists the groups whose big-O could not be determined, in every suite", () => {
+    const withAnalysis = (complexity: object) => ({ ...results(1), analysis: { complexity } })
+    put(
+      "benchmarks/b/results.json",
+      withAnalysis({
+        g: { class: null, reason: "no-size-variation", size: 10, variable: "file" },
+      }),
+    )
+    put(
+      "benchmarks/a/results.json",
+      withAnalysis({ ok: { class: "linear" }, h: { class: null }, none: null }),
+    )
+    put("benchmarks/c/results.json", results(1))
+    put("benchmarks/n/results.json", null)
+    expect(undeterminedGroups(dir, ["a", "b", "c", "n"])).toStrictEqual([
+      {
+        suite: "a",
+        group: "h",
+        reason:
+          "the results record no reason (they were written before reasons were recorded); run the benchmark again to get one",
+      },
+      {
+        suite: "b",
+        group: "g",
+        variable: "file",
+        reason:
+          "every usable measurement is at the same file size (10), so there is no growth to measure",
+      },
+    ])
+    commit("first")
+    expect(scanComplexity(dir).undetermined).toHaveLength(2)
+    git("tag", "v0.1.0")
+    expect(scanComplexity(dir).undetermined).toHaveLength(2)
   })
   it("reports a group that got worse since the last release tag", () => {
     put("benchmarks/perf/results.json", results(1))
@@ -260,6 +290,87 @@ describe("benchmarkComplexityCheck (policy)", () => {
   })
 })
 
+describe("benchmarkComplexityCheck (policy) -- undetermined big-O", () => {
+  const UNKNOWN = [
+    { suite: "perf", group: "fn:a", variable: "file", reason: "only 1 file size was usable" },
+    { suite: "perf", group: "fn:b", reason: "every size is the same" },
+  ]
+  const LIST =
+    "2 benchmark group(s) have a big-O that could not be determined, so they are not checked against their documentation:\n- perf / fn:a (varying file): only 1 file size was usable\n- perf / fn:b: every size is the same"
+  it("warns instead of passing when nothing got worse but some big-O is unknown", async () => {
+    expect(
+      await judge({
+        ok: true,
+        state: "no-baseline",
+        tag: null,
+        suites: ["perf"],
+        gains: [],
+        undetermined: UNKNOWN,
+      }),
+    ).toEqual({
+      outcome: "warn",
+      rationale: `BenchmarkComplexity: no release tag exists yet, so there is no released complexity to compare with.\n${LIST}`,
+    })
+    expect(
+      await judge({
+        ok: true,
+        state: "compared",
+        tag: "v1",
+        suites: ["perf"],
+        gains: [],
+        undetermined: UNKNOWN,
+      }),
+    ).toEqual({
+      outcome: "warn",
+      rationale: `BenchmarkComplexity: no benchmark group got worse at big-O across 1 suite(s) since v1.\n${LIST}`,
+    })
+  })
+  it("warns when every increase is accepted but some big-O is unknown", async () => {
+    registry([complete()])
+    const result = await judge({
+      ok: true,
+      state: "compared",
+      tag: "v1",
+      suites: ["perf"],
+      gains: [GAIN],
+      undetermined: UNKNOWN,
+    })
+    expect(result.outcome).toBe("warn")
+    expect(result.rationale).toContain("each accepted by a reviewed record")
+    expect(result.rationale.endsWith(LIST)).toBe(true)
+  })
+  it("still fails for a real increase, and lists the unknown ones after it", async () => {
+    const result = await judge({
+      ok: true,
+      state: "compared",
+      tag: "v1",
+      suites: ["perf"],
+      gains: [GAIN],
+      undetermined: UNKNOWN,
+    })
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale.endsWith(LIST)).toBe(true)
+  })
+  it("passes when none is unknown, and tolerates an envelope without the list", async () => {
+    expect(
+      (
+        await judge({
+          ok: true,
+          state: "compared",
+          tag: "v1",
+          suites: ["perf"],
+          gains: [],
+          undetermined: [],
+        })
+      ).outcome,
+    ).toBe("pass")
+    expect(
+      (await judge({ ok: true, state: "compared", tag: "v1", suites: ["perf"], gains: [] }))
+        .outcome,
+    ).toBe("pass")
+  })
+})
+
 describe("benchmarkComplexityCheck (policy) -- edges", () => {
   it("names the tool when it did not run to completion or could not be spawned", async () => {
     const check = benchmarkComplexityCheck()
@@ -269,15 +380,15 @@ describe("benchmarkComplexityCheck (policy) -- edges", () => {
     })
   })
   it("judges against the supplied clock, not the real one", async () => {
-    registry([complete({ expires: "2026-10-12" })])
-    const later = new Date("2026-10-13T12:00:00Z")
+    registry([complete({ expires: "2099-10-12" })])
+    const later = new Date("2100-10-13T12:00:00Z")
     const result = await benchmarkComplexityCheck({ cwd: dir, now: later }).policy(
       makeContext(
         makeJsonResult({ ok: true, state: "compared", tag: "v1", suites: ["perf"], gains: [GAIN] }),
       ),
     )
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("expires (2026-10-12 has passed)")
+    expect(result.rationale).toContain("expires (2099-10-12 has passed)")
   })
   it("lists every problem when the registry is malformed in more than one way", async () => {
     registry([

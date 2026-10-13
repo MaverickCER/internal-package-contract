@@ -16,4 +16,4 @@ and packaging, so a reviewer spends their attention on what a tool cannot judge.
 - **Exceptions** -- every waiver in `.repo-contract/exceptions/` needs a specific, honest reason.
 - **Docs** -- README and API docs reflect the change.
 
-<!-- TODO({{name}}): add package-specific review points. -->
+<!-- ipc:prompt: add package-specific review points. -->

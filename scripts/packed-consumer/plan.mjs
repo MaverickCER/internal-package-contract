@@ -137,13 +137,14 @@ export function classifyFailure(output, manifest) {
 const BLOCK = 512
 
 /**
- * The files in an npm tarball, read in Node so no external `tar` is needed (the one on a Windows runner can
- * treat `C:\path` as a remote host). Handles the long-name forms npm writes: the ustar `prefix` field and a
- * pax extended header's `path` record.
+ * The files in an npm tarball and what each holds, read in Node so no external `tar` is needed (the one on a
+ * Windows runner can treat `C:\path` as a remote host). Handles the long-name forms npm writes: the ustar `prefix`
+ * field and a pax extended header's `path` record.
  * @param {Buffer} gzipped - the contents of the `.tgz`.
- * @returns {string[]} each file's path inside the package, without the leading `package/`.
+ * @returns {{ name: string, content: Buffer }[]} each file's path inside the package, without the leading `package/`,
+ *   and its bytes.
  */
-export function tarballFiles(gzipped) {
+export function readTarball(gzipped) {
   const tar = gunzipSync(gzipped)
   const files = []
   let offset = 0
@@ -167,10 +168,18 @@ export function tarballFiles(gzipped) {
     } else if (type === "0" || type === "\0") {
       const prefix = field(345, 155)
       const name = extendedPath ?? (prefix === "" ? field(0, 100) : `${prefix}/${field(0, 100)}`)
-      files.push(name.replace(/^package\//, ""))
+      files.push({ name: name.replace(/^package\//, ""), content: body })
       extendedPath = undefined
     }
     offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK
   }
   return files
+}
+
+/**
+ * @param {Buffer} gzipped - the contents of the `.tgz`.
+ * @returns {string[]} each file's path inside the package, without the leading `package/`.
+ */
+export function tarballFiles(gzipped) {
+  return readTarball(gzipped).map((file) => file.name)
 }

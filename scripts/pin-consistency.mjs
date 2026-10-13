@@ -4,7 +4,7 @@
 // `package.json`, the commit `package-lock.json` resolved it to, and the commit SHA (with a `# vX`
 // comment) of every reusable workflow it calls. They drift apart when one is bumped by hand, and
 // the symptom is a repository that runs one revision's checks and another revision's release.
-// This module only compares; it never rewrites (`--repin` and `dependency-pin-sync.yml` do that).
+// This module only compares; it never rewrites (`upgrade` and `dependency-pin-sync.yml` do that).
 //
 // It cannot tell whether the commit is reachable from this repository's default branch -- that needs
 // the network and is a separate, scheduled audit.

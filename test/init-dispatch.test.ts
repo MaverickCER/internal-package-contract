@@ -1,14 +1,15 @@
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 /**
- * `internal-package-contract init` is how a package adopts the standard, and the only way a user
- * reaches `bin/init.mjs` is through the dispatcher in `bin/contract.mjs`. The argument parser has its
- * own unit tests; this runs the real command so a mismatch between what the dispatcher passes along
- * and what `init` expects (the subcommand name itself arriving as an unknown argument) cannot hide.
+ * `internal-package-contract init` is the one command that brings a package under the standard, and the only
+ * way a user reaches the orchestrator in `scripts/init/run.mjs` is through the dispatcher in `bin/contract.mjs`.
+ * The orchestrator has its own unit tests with a fake runner; this runs the real command, offline (every case
+ * here either stops early or is a dry run), so a mismatch between what the dispatcher passes along and what the
+ * orchestrator expects cannot hide.
  */
 const bin = path.resolve(import.meta.dirname, "../bin/contract.mjs")
 let cwd: string
@@ -17,10 +18,12 @@ function init(...args: string[]): { status: number | null; output: string } {
   const run = spawnSync(process.execPath, [bin, "init", ...args], { cwd, encoding: "utf8" })
   return { status: run.status, output: `${run.stdout}${run.stderr}` }
 }
+const git = (...args: string[]) =>
+  spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd })
 
 beforeEach(() => {
   cwd = mkdtempSync(path.join(tmpdir(), "ipc-init-dispatch-"))
-  spawnSync("git", ["init", "-q"], { cwd })
+  git("init", "-q")
 })
 
 afterEach(() => {
@@ -28,36 +31,42 @@ afterEach(() => {
 })
 
 describe("internal-package-contract init (through the dispatcher)", () => {
-  it("scaffolds the repository hygiene files when given no flags", () => {
+  it("asks for a name when there is no package here to bring under the standard", () => {
     const { status, output } = init()
-    expect(output).not.toContain("Unknown argument")
-    expect(status).toBe(0)
-    expect(existsSync(path.join(cwd, ".gitignore"))).toBe(true)
-    expect(existsSync(path.join(cwd, ".github", "workflows", "contract.yml"))).toBe(true)
+    expect(status).toBe(2)
+    expect(output).toContain("there is no package.json here")
+    expect(output).toContain("`init --name <package>`")
   })
 
-  it("scaffolds a complete package from --name, --owner and --description", () => {
-    const { status, output } = init(
-      "--name",
-      "dispatch-demo",
-      "--owner",
-      "ExampleOwner",
-      "--description",
-      "A demo",
-    )
-    expect(output).not.toContain("Unknown argument")
+  it("says what it would do for a new package, and changes nothing, on a dry run", () => {
+    const { status, output } = init("--name", "dispatch-demo", "--dry-run")
     expect(status).toBe(0)
-    const pkg = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")) as {
-      name: string
-      description: string
-    }
-    expect(pkg.name).toBe("dispatch-demo")
-    expect(pkg.description).toBe("A demo")
+    expect(output).toContain("would scaffold dispatch-demo here")
   })
 
-  it("still rejects a genuinely unknown argument", () => {
+  it("rejects an unknown argument, naming it", () => {
     const { status, output } = init("--bogus")
-    expect(status).not.toBe(0)
-    expect(output).toContain('Unknown argument "--bogus"')
+    expect(status).toBe(2)
+    expect(output).toContain("unknown argument: --bogus")
+  })
+
+  it("prints the plan for an existing package on a dry run, naming its owner and what it would add", () => {
+    writeFileSync(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ name: "@acme/w", version: "1.0.0" }),
+    )
+    git("add", "-A")
+    git("commit", "-q", "-m", "chore: init")
+    const { status, output } = init("--dry-run", "--owner", "Acme", "--spec", "file:/x")
+    expect(status).toBe(0)
+    expect(output).toContain("@acme/w, owned by Acme, to internal-package-contract file:/x:")
+    expect(output).toContain("dry run: nothing was changed.")
+  })
+
+  it("refuses to start over uncommitted changes, so the adoption is a diff that can be undone", () => {
+    writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ name: "@acme/w" }))
+    const { status, output } = init("--owner", "Acme", "--spec", "file:/x")
+    expect(status).toBe(1)
+    expect(output).toContain("commit or stash these first")
   })
 })

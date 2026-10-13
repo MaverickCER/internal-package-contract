@@ -1,5 +1,5 @@
 // Parses `git remote get-url origin` into a GitHub `{ owner, repo }` pair.
-// Shared by scripts/check-branch-protection.mjs and bin/init.mjs -- neither
+// Shared by scripts/check-branch-protection.mjs and bin/scaffold.mjs -- neither
 // this package nor repo-contract had this logic before either needed to talk
 // to `gh api repos/{owner}/{repo}/...`.
 
@@ -25,7 +25,7 @@ export function resolveOwnerRepo(cwd = process.cwd()) {
 
 /**
  * Whether a ruleset's `ref_name` conditions cover the given branch. Shared by
- * scripts/check-branch-protection.mjs (reading) and bin/init.mjs (writing) so
+ * scripts/check-branch-protection.mjs (reading) and bin/scaffold.mjs (writing) so
  * both agree on which ruleset "is the one guarding the default branch."
  * @param {{ conditions?: { ref_name?: { include?: string[] } } }} ruleset
  * @param {string} branch

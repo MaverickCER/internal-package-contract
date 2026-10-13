@@ -164,6 +164,34 @@ Add the \`${pkg}/${name}\` entry point. Replace \`unset\` above with \`patch\`, 
  * @returns {{ writes: { path: string, text: string, created: boolean }[], problems: string[] }} every file to
  *   write, with its complete new text, or the reasons nothing can be written.
  */
+/**
+ * @param {string} text - `docs/surface.json`.
+ * @param {string} name - the new entry point's folder name.
+ * @param {string[]} problems
+ * @returns {string} the text with the new entry added, or the text unchanged when a problem was recorded.
+ */
+function addSurfaceEntry(text, name, problems) {
+  const surface = json(text, "docs/surface.json", problems)
+  if (surface === undefined) return text
+  const entries = surface.entries
+  if (entries === null || typeof entries !== "object" || Array.isArray(entries)) {
+    problems.push('docs/surface.json has no "entries" object to add the new entry point to.')
+    return text
+  }
+  if (`./${name}` in entries) {
+    problems.push(`docs/surface.json already describes "./${name}".`)
+    return text
+  }
+  entries[`./${name}`] = {
+    source: `src/${name}/`,
+    environment: "isomorphic",
+    // The tier is the maintainer's decision to change; a new entry point starts as the safer one.
+    tier: "Experimental",
+    purpose: "TODO: say what a reader gets from this entry point.",
+  }
+  return serialize(surface)
+}
+
 export function planAddExport({ name, files }) {
   const problems = []
   const nameProblem = validateExportName(name)
@@ -213,6 +241,8 @@ export function planAddExport({ name, files }) {
   edit("knip.json", (text) =>
     addToList(text, "knip.json", "entry", `src/${name}/index.ts!`, problems),
   )
+
+  optional("docs/surface.json", (text) => addSurfaceEntry(text, name, problems))
 
   create(`src/${name}/index.ts`, moduleText(pkg, name))
   create(`test/${name}.test.ts`, testText(pkg, name))

@@ -8,6 +8,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
+import { MUTATION_MEANING } from "./meaning.mjs"
+
 const DETECTED = new Set(["Killed", "RuntimeError", "CompileError"])
 const APPLICABLE = new Set([...DETECTED, "Survived", "NoCoverage", "Timeout"])
 const USAGE =
@@ -33,7 +35,50 @@ export function mutationScore(report) {
  */
 export function mutationBadge(percent) {
   const color = percent >= 95 ? "brightgreen" : percent >= 80 ? "yellow" : "red"
-  return { schemaVersion: 1, label: "mutation", message: `${percent.toFixed(1)}%`, color }
+  return {
+    schemaVersion: 1,
+    label: "mutation",
+    message: `${percent.toFixed(1)}% (detected of applicable)`,
+    color,
+  }
+}
+
+/**
+ * @param {{ files?: Record<string, { mutants?: { status: string }[] }> }} report - a Stryker JSON report.
+ * @param {number} percent - the score {@link mutationScore} gave it.
+ * @returns {object} the same score, what it is, and how many mutants of each status it is made of.
+ */
+export function mutationDetails(report, percent) {
+  /** @type {Record<string, number>} */
+  const byStatus = {}
+  for (const file of Object.values(report.files ?? {})) {
+    for (const mutant of file.mutants ?? [])
+      byStatus[mutant.status] = (byStatus[mutant.status] ?? 0) + 1
+  }
+  const count = (/** @type {Set<string>} */ statuses) =>
+    Object.entries(byStatus).reduce((sum, [status, n]) => sum + (statuses.has(status) ? n : 0), 0)
+  return {
+    schemaVersion: 1,
+    headline: {
+      value: Number(percent.toFixed(1)),
+      statistic: "share",
+      of: "applicable mutants",
+      meaning: MUTATION_MEANING,
+    },
+    detected: count(DETECTED),
+    applicable: count(APPLICABLE),
+    byStatus,
+  }
+}
+
+/**
+ * @param {string} badge - where the badge is written.
+ * @returns {string} where its details go, beside it: `mutation-badge.json` has `mutation.json`, and any other name gets `.details.json`.
+ */
+export function detailsPathOf(badge) {
+  return /-badge\.json$/.test(badge)
+    ? badge.replace(/-badge\.json$/, ".json")
+    : badge.replace(/(?:\.json)?$/, ".details.json")
 }
 
 function parseArgs(argv) {
@@ -83,6 +128,10 @@ export function run(argv, cwd, io) {
   const outPath = path.resolve(cwd, args.out)
   mkdirSync(path.dirname(outPath), { recursive: true })
   writeFileSync(outPath, `${JSON.stringify(mutationBadge(percent), null, 2)}\n`)
-  io.out(`[mutation-badge] wrote ${args.out} (${percent.toFixed(1)}%)\n`)
+  const detailsPath = detailsPathOf(outPath)
+  writeFileSync(detailsPath, `${JSON.stringify(mutationDetails(report, percent), null, 2)}\n`)
+  io.out(
+    `[mutation-badge] wrote ${args.out} and ${path.relative(path.resolve(cwd), detailsPath).split(path.sep).join("/")} (${percent.toFixed(1)}%)\n`,
+  )
   return 0
 }

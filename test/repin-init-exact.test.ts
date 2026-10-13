@@ -159,9 +159,9 @@ describe("initFlags()", () => {
   })
 
   it("keeps every argument when init.mjs is run directly, even one whose value is the word init", () => {
-    expect(initFlags(["node", "init.mjs", "--name", "demo"])).toEqual(["--name", "demo"])
-    expect(initFlags(["node", "init.mjs", "--name", "init"])).toEqual(["--name", "init"])
-    expect(initFlags(["node", "init.mjs"])).toEqual([])
+    expect(initFlags(["node", "scaffold.mjs", "--name", "demo"])).toEqual(["--name", "demo"])
+    expect(initFlags(["node", "scaffold.mjs", "--name", "init"])).toEqual(["--name", "init"])
+    expect(initFlags(["node", "scaffold.mjs"])).toEqual([])
   })
 })
 
@@ -243,6 +243,7 @@ describe("buildVars()", () => {
       name: "w",
       repo: "w",
       owner: "o",
+      ownerLower: "o",
       description: "TODO: describe w.",
       year: "2030",
       ipcRef: "main",

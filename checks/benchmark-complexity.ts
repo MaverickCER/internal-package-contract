@@ -104,6 +104,12 @@ interface ScanReport {
   readonly tag: string | null
   readonly suites: readonly string[]
   readonly gains: readonly Gain[]
+  readonly undetermined?: readonly {
+    suite: string
+    group: string
+    variable?: string
+    reason: string
+  }[]
 }
 
 /**
@@ -125,7 +131,23 @@ export function benchmarkComplexityCheck(
         "BenchmarkComplexity:",
       )
       if (!envelope.ok) return envelope.result
-      const { state, tag, suites, gains } = envelope.value
+      const { state, tag, suites, gains, undetermined = [] } = envelope.value
+      // Nothing is known to be wrong about a group whose big-O could not be determined, but nothing is
+      // checked either, so it is told, never failed. A real failure below still leads.
+      const unknown =
+        undetermined.length === 0
+          ? []
+          : [
+              `${String(undetermined.length)} benchmark group(s) have a big-O that could not be determined, so they are not checked against their documentation:`,
+              ...undetermined.map(
+                ({ suite, group, variable, reason }) =>
+                  `- ${suite} / ${group}${variable === undefined ? "" : ` (varying ${variable})`}: ${reason}`,
+              ),
+            ]
+      const warnIfUnknown = (rationale: string): PolicyResult =>
+        unknown.length === 0
+          ? { outcome: "pass", rationale }
+          : { outcome: "warn", rationale: [rationale, ...unknown].join("\n") }
       if (state === "none") {
         return {
           outcome: "pass",
@@ -134,17 +156,14 @@ export function benchmarkComplexityCheck(
         }
       }
       if (state === "no-baseline") {
-        return {
-          outcome: "pass",
-          rationale:
-            "BenchmarkComplexity: no release tag exists yet, so there is no released complexity to compare with.",
-        }
+        return warnIfUnknown(
+          "BenchmarkComplexity: no release tag exists yet, so there is no released complexity to compare with.",
+        )
       }
       if (gains.length === 0) {
-        return {
-          outcome: "pass",
-          rationale: `BenchmarkComplexity: no benchmark group got worse at big-O across ${String(suites.length)} suite(s) since ${String(tag)}.`,
-        }
+        return warnIfUnknown(
+          `BenchmarkComplexity: no benchmark group got worse at big-O across ${String(suites.length)} suite(s) since ${String(tag)}.`,
+        )
       }
       const loaded = await loadExceptionRegistry({
         path: path.join(input.cwd ?? process.cwd(), REGISTRY_RELATIVE_PATH),
@@ -173,16 +192,16 @@ export function benchmarkComplexityCheck(
               ({ gain, id, reason }) =>
                 `- ${describeGain(gain)}; add or complete ${id} (${reason})`,
             ),
+            ...unknown,
           ].join("\n"),
         }
       }
-      return {
-        outcome: "pass",
-        rationale: [
+      return warnIfUnknown(
+        [
           `BenchmarkComplexity: ${String(judged.accepted.length)} complexity increase(s) since ${String(tag)}, each accepted by a reviewed record:`,
           ...judged.accepted.map(({ gain, id }) => `- ${describeGain(gain)} (${id})`),
         ].join("\n"),
-      }
+      )
     },
   }
 }

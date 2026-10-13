@@ -1,6 +1,11 @@
 export interface Finding {
-  level: "fail" | "note"
-  kind: "complexity" | "complexity-gain" | "normalized-overhead" | "environment"
+  level: "fail" | "warn" | "note"
+  kind:
+    | "complexity"
+    | "complexity-undetermined"
+    | "complexity-gain"
+    | "normalized-overhead"
+    | "environment"
   message: string
 }
 export interface Gates {
@@ -19,6 +24,7 @@ export function resolveGates(
   },
 ): Gates
 export function complexityFindings(current: object | undefined): Finding[]
+export function undeterminedFindings(current: object | undefined): Finding[]
 export function complexityGainFindings(input: {
   suite: string
   release: object | null | undefined

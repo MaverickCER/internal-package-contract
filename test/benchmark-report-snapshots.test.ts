@@ -421,3 +421,74 @@ describe("formatters at their boundaries", () => {
     expect(formatBytes(bytes)).toBe(shown)
   })
 })
+
+describe("renderReport -- a function that depends on more than one variable", () => {
+  it("reports each variable on its own: documented, measured, and why one could not be determined", async () => {
+    const suite = suiteWith({
+      functions: [
+        {
+          id: "load",
+          name: "load",
+          why: "Loads every field of every item once.",
+          poorPerformanceMeans: "Start-up grows with the data.",
+          expectedComplexity: "linear",
+          complexityReason: LONG,
+          variables: [
+            { name: "items", how: "swept", description: "The tier axis." },
+            { name: "widths", how: "swept", description: "How many fields each item has." },
+            { name: "size", how: "swept", description: "How deeply each item nests." },
+          ],
+          sweeps: [
+            {
+              variable: "widths",
+              description: "How many fields each item has.",
+              baseValue: 4,
+              expectedComplexity: "quadratic",
+              complexityReason: "Every field is compared with every other field of the item.",
+            },
+            {
+              variable: "size",
+              description: "How deeply each item nests.",
+              baseValue: 2,
+              tiers: [5, 10, 15, 20],
+              expectedComplexity: "constant",
+              complexityReason: "Nesting is flattened in one step, whatever its size.",
+            },
+          ],
+          setup: (n: number) => n,
+          run: (n: number) => n,
+        },
+      ],
+    } as Partial<Suite>)
+    const widthEntry = (n: number, medianMs: number) =>
+      entry(n, medianMs, { inputs: { widths: n }, held: { item: 80, size: 2 } })
+    const results = {
+      "end-to-end:baseline": group("end-to-end", (n) => 0.01 * n),
+      "end-to-end:with-package": group("end-to-end", (n) => 0.03 * n + 0.2),
+      "fn:load": group("function", (n) => 0.01 * n),
+      "fn:load#widths": {
+        area: "function",
+        tiers: Object.fromEntries(TIERS.map((n) => [tierName(n), widthEntry(n, 0.0001 * n * n)])),
+      },
+      "fn:load#size": {
+        area: "function",
+        tiers: {
+          n5: entry(5, 1, { inputs: { size: 5 }, held: { item: 80, widths: 4 } }),
+          n10: {
+            id: "x",
+            status: "failed",
+            inputs: { size: 10 },
+            error: { name: "E", message: "boom" },
+          },
+        },
+      },
+    }
+    const analysis = analyze({ suite, results, tiers: TIERS })
+    const text = renderReport({ metadata: metadata(suite), results, analysis }, suite)
+    await expect(text).toMatchFileSnapshot("./__snapshots__/benchmark-report-multi-variable.snap")
+    expect(text).toContain("##### Varying `widths`")
+    expect(text).toContain("**Expected: O(n²).**")
+    expect(text).toContain("| `load` | widths | O(n²) | O(n²) | ✅ matches |")
+    expect(text).toContain("`load` (varying size): only 1 size size gave a usable measurement")
+  })
+})

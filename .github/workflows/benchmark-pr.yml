@@ -60,7 +60,7 @@ on:
         type: string
         default: npm run build
       budgets-path:
-        description: Path to the package's benchmarks/budgets.mjs (BUDGETS export; a "*" entry is the default highlight threshold; an optional GATES export tunes the gates).
+        description: Path to the package's benchmarks/budgets.mjs (an optional GATES export tunes the gates; there is no threshold on a raw time).
         required: true
         type: string
       comment-marker:

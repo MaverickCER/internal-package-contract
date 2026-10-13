@@ -14,7 +14,8 @@
  * indistinguishable from "CodeRabbit found nothing":
  * - `not-applicable` (`CI` is set) -- review is delegated to CodeRabbit's own GitHub App, which
  *   posts findings on the pull request. `warn`, naming `coderabbit-github-app`.
- * - `unavailable` (`cli-not-installed`, or a detached `HEAD` a diff-based review can't anchor) --
+ * - `unavailable` (`cli-not-installed`, a detached `HEAD` or other git state a diff-based review can't
+ *   anchor, not being signed in, or no network) --
  *   `warn`, exactly like `SecuritySocket`'s own not-authenticated case and `Accessibility`'s
  *   no-system-Chrome case. This check cannot distinguish "genuinely clean" from "never ran," so it
  *   never fails closed on absence alone.
@@ -187,9 +188,16 @@ export function evaluateCoderabbitPolicy(input: {
   }
 
   if (evidence.status === "unavailable") {
+    const hint = {
+      "cli-not-installed": "Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli)",
+      "git-context-unavailable":
+        "Run it from a branch git can diff against its base (a checked-out branch with a remote)",
+      "not-signed-in": "Sign in with the CodeRabbit CLI",
+      "network-unreachable": "Check the network connection",
+    }[evidence.reason]
     return {
       outcome: "warn",
-      rationale: `CodeRabbit did not run (${evidence.reason}) -- findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) and run from a real branch to enable real enforcement.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
+      rationale: `CodeRabbit did not run (${evidence.reason}) -- findings were not evaluated. ${hint} to enable real enforcement.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
     }
   }
 

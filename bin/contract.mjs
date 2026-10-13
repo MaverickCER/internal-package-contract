@@ -6,13 +6,24 @@
 //   internal-package-contract --skip a,b      run every check except a, b
 //   internal-package-contract --strict        also fail on a "not evaluated" result no exception covers
 //                                             (the default under CI; --no-strict turns it off)
-//   internal-package-contract init            scaffold repo files + git wiring
+//   internal-package-contract init            one command: bring this package under the standard, or `init --name <pkg>` to start one
+//   internal-package-contract env             document the variables and secrets the package needs (ci/env.schema.ts)
+//   internal-package-contract skill           write the package's agent skill (a short manual an AI loads) from docs/skill.json
+//   internal-package-contract mutation        mutation-test what a change touched, as a fast loop
+//   internal-package-contract report          what this change does to the package, as Markdown for a pull request
+//   internal-package-contract verify-consumers <checkout>...   would this version of the standard make a dependent package worse?
+//   internal-package-contract tool <name>    a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation
+//   internal-package-contract doctor          what is set up, what to run next, what only a person can do
 //   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
 //   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
 //   internal-package-contract update-baseline regenerate every ApiContract target's baseline
 //   internal-package-contract add export <name>   wire a new subpath export into every place that lists one
 //   internal-package-contract sync            report (or with --apply, restore) the files this package owns
 //   internal-package-contract site            generate the landing page and one-page brief from docs/site.json
+//   internal-package-contract generate       write the generated regions of the documents (--check to verify)
+//   internal-package-contract new adr "<title>"   start a decision record with the next number and its prompts
+//   internal-package-contract promote <Check>  enforce a check that adoption mode reports as a warning (--all ends it)
+//   internal-package-contract upgrade <tag>   move to a release and bring everything it owns up to date
 //   internal-package-contract install-hooks   point git at the bundled hooks (once per clone)
 //
 // A consuming package's package.json only needs
@@ -27,17 +38,30 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { helpText, wantsHelp } from "../scripts/contract-help.mjs"
+import { commandHelp, helpText, unknownCommand, wantsHelp } from "../scripts/contract-help.mjs"
 import { runContract } from "../scripts/contract-run.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 // Subcommand dispatch.
-if (wantsHelp(process.argv.slice(2))) {
-  process.stdout.write(helpText())
+if (unknownCommand(process.argv.slice(2)) !== undefined) {
+  process.stderr.write(unknownCommand(process.argv.slice(2)))
+  process.exitCode = 1
+} else if (wantsHelp(process.argv.slice(2))) {
+  process.stdout.write(commandHelp(process.argv[2]) ?? helpText())
 } else if (process.argv[2] === "init") {
-  await import(pathToFileURL(path.join(packageRoot, "bin", "init.mjs")).href)
-  // init sets its own exit behaviour; nothing else to do here.
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "init", "run.mjs")).href
+  )
+  process.exitCode = run(
+    process.argv.slice(3),
+    process.cwd(),
+    {
+      out: (text) => process.stdout.write(text),
+      err: (text) => process.stderr.write(text),
+    },
+    { packageRoot },
+  )
 } else if (process.argv[2] === "exceptions") {
   const { runInventory } = await import(
     pathToFileURL(path.join(packageRoot, "scripts", "exceptions-inventory.mjs")).href
@@ -56,6 +80,90 @@ if (wantsHelp(process.argv.slice(2))) {
 } else if (process.argv[2] === "add") {
   const { run } = await import(
     pathToFileURL(path.join(packageRoot, "scripts", "recipes", "apply.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "promote") {
+  const { promote } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "adoption", "mode.mjs")).href
+  )
+  const config = await loadContractConfig()
+  process.exitCode = promote(process.argv.slice(3), process.cwd(), Object.keys(config.checks), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "generate") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "generate", "run.mjs")).href
+  )
+  process.exitCode = await run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "env") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "env", "run.mjs")).href
+  )
+  process.exitCode = await run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "skill") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "skill", "run.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "mutation") {
+  process.argv.splice(2, 1)
+  await import(pathToFileURL(path.join(packageRoot, "scripts", "run-mutation-changed.mjs")).href)
+} else if (process.argv[2] === "report") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "report", "run.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "verify-consumers") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "verify-consumers", "run.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "tool") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "package-tools", "index.mjs")).href
+  )
+  process.exitCode = await run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "doctor") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "doctor", "run.mjs")).href
+  )
+  process.exitCode = await run(process.argv.slice(3), process.cwd(), packageRoot, {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "new") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "new", "adr.mjs")).href
+  )
+  process.exitCode = run(process.argv.slice(3), process.cwd(), {
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+  })
+} else if (process.argv[2] === "upgrade") {
+  const { run } = await import(
+    pathToFileURL(path.join(packageRoot, "scripts", "upgrade", "run.mjs")).href
   )
   process.exitCode = run(process.argv.slice(3), process.cwd(), {
     out: (text) => process.stdout.write(text),
@@ -83,7 +191,14 @@ if (wantsHelp(process.argv.slice(2))) {
   await import(pathToFileURL(path.join(packageRoot, "bin", "update-baseline.mjs")).href)
   // update-baseline sets its own exit behaviour; nothing else to do here.
 } else {
-  await runConsumerContract()
+  try {
+    await runConsumerContract()
+  } catch (error) {
+    // A mistake in how the command was typed is told in one line; anything else keeps its stack.
+    if (!(error instanceof Error) || error.usage !== true) throw error
+    process.stderr.write(`internal-package-contract: ${error.message}\n`)
+    process.exitCode = 1
+  }
 }
 
 async function runConsumerContract() {
@@ -110,11 +225,7 @@ async function runConsumerContract() {
     process.env.PATH = [...binDirs, process.env.PATH ?? ""].join(path.delimiter)
   }
 
-  const configUrl = pathToFileURL(path.join(packageRoot, "contract.ts")).href
-  const { register } = await import("tsx/esm/api")
-  const unregister = register()
-  const { default: config } = await import(configUrl)
-  await unregister()
+  const config = await loadContractConfig()
 
   await runContract({
     runRepoContract,
@@ -122,4 +233,14 @@ async function runConsumerContract() {
     cwd: process.cwd(),
     title: "internal-package-contract",
   })
+}
+
+/** @returns {Promise<{ checks: Record<string, unknown> }>} this package's contract, whose checks a consumer runs. */
+async function loadContractConfig() {
+  const configUrl = pathToFileURL(path.join(packageRoot, "contract.ts")).href
+  const { register } = await import("tsx/esm/api")
+  const unregister = register()
+  const { default: config } = await import(configUrl)
+  await unregister()
+  return config
 }

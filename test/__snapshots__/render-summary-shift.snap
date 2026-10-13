@@ -4,13 +4,13 @@
 
 ## ⚠️ Complexity shifts
 
-The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary budget breach below -- it means the shape of the cost curve changed, not just its slope.
+The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary slowdown below -- it means the shape of the cost curve changed, not just its slope.
 
 - 🔺 **R / `fn:alpha`**: `quadratic` → `linear`
 
 ## ❌ 1 gate failed
 
-Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. Raw time deltas against another run (the tables below) are highlights only.
+Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.
 
 - ❌ **R** — `fn:alpha`: documented undefined, measured undefined (exponent 1.00, R² n/a). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
 - ℹ️ **R** — The previous run used Node v20.0.0 and this one Node v22.0.0: raw time deltas are not comparable (the engine differs), only the same-run gates are meaningful.
@@ -21,12 +21,6 @@ Three things can fail a benchmark run, because only they are properties of a sin
 
 - `fn:alpha.bogus`: failed
 
-| Benchmark | Tier | Median | Change | Budget |
-|---|---|---|---|---|
-| `fn:alpha` | a | 10.00ms | — | (unbudgeted) |
-| `fn:alpha` | b | 100.00ms | — | (unbudgeted) |
-| `fn:alpha` | noMedian | — | — | (unbudgeted) |
-| `noHistory` | a | 1.00ms | — | (unbudgeted) |
-| `noHistory` | b | 2.00ms | — | (unbudgeted) |
-| `flat` | a | 1.00ms | — | (unbudgeted) |
-| `flat` | b | 1.00ms | — | (unbudgeted) |
+| Function | Variable | Big-O | Since the last run |
+|---|---|---|---|
+| `alpha` | — | undetermined | N/A (this run could not determine it) |

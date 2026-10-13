@@ -20,8 +20,47 @@ const CLEAN_EVIDENCE = {
   nvmrcPresent: true,
   tracked: ["src/index.ts"],
   conflictFiles: [],
+  untrackedTargets: [],
   pkg: CLEAN_PKG,
 }
+
+describe("gitHygiene: imports of files git does not track", () => {
+  const hidden = {
+    file: "scripts/run.mjs",
+    specifier: "./coverage/scan.mjs",
+    target: "scripts/coverage/scan.mjs",
+  }
+  it("blocks, naming each import and the file it resolves to, since a clean checkout will not have it", async () => {
+    const result = await gitHygiene.policy(
+      makeContext(makeJsonResult({ ...CLEAN_EVIDENCE, untrackedTargets: [hidden] })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain(
+      "1 import(s) that resolve only to a file git does not track, so a clean checkout (CI, a consumer) will not have it",
+    )
+    expect(result.rationale).toContain(
+      "scripts/run.mjs imports ./coverage/scan.mjs (scripts/coverage/scan.mjs)",
+    )
+  })
+  it("lists the first ten and says there are more", async () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ ...hidden, file: `f${String(i)}.mjs` }))
+    const result = await gitHygiene.policy(
+      makeContext(makeJsonResult({ ...CLEAN_EVIDENCE, untrackedTargets: many })),
+    )
+    expect(result.rationale).toContain("11 import(s)")
+    expect(result.rationale).toContain("f9.mjs imports")
+    expect(result.rationale).not.toContain("f10.mjs imports")
+    expect(result.rationale).toContain(" …")
+    const ten = await gitHygiene.policy(
+      makeContext(makeJsonResult({ ...CLEAN_EVIDENCE, untrackedTargets: many.slice(0, 10) })),
+    )
+    expect(ten.rationale).not.toContain(" …")
+    expect(ten.rationale).toMatch(/\(scripts\/coverage\/scan\.mjs\)(?:\n|$)/)
+    expect(ten.rationale).toContain(
+      "f0.mjs imports ./coverage/scan.mjs (scripts/coverage/scan.mjs); f1.mjs imports",
+    )
+  })
+})
 
 describe("gitHygiene", () => {
   it("fails, naming the tool, when the evidence gatherer terminated abnormally", async () => {

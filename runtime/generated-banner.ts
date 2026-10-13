@@ -35,7 +35,7 @@ export interface GeneratedBanner {
    */
   readonly generatedBanner: (format?: "ts" | "markdown", regenerate?: string) => string
   /**
-   * Whether `content` carries a marker, in either format, within its first 20 non-empty lines.
+   * Whether `content` carries a marker, as the opening of a `//` or `<!--` comment, within its first 20 non-empty lines.
    * @param content - A file's text.
    * @returns `true` when the file is generated.
    */
@@ -56,7 +56,7 @@ export interface GeneratedBanner {
  * coverage (a false survivor); a function's literal is evaluated per call, like any other code.
  */
 function marker(): string {
-  return "GENERATED FILE"
+  return "GENERATED FILE -- do not edit by hand"
 }
 
 /**
@@ -74,7 +74,7 @@ export function createGeneratedBanner(describe: () => GeneratedBannerOptions): G
       format = "ts",
       regenerate = `Run \`${describe().cliCommand}\` to regenerate.`,
     ) => {
-      const text = `${marker()} -- do not edit by hand. ${regenerate}`
+      const text = `${marker()}. ${regenerate}`
       // An object lookup, not a `format === "ts" ? ... : ...` ternary: with only two values, a ternary's
       // untaken branch is an equivalent-mutant magnet. A mutated key here returns `undefined`, which every
       // caller and test can observe.
@@ -85,12 +85,21 @@ export function createGeneratedBanner(describe: () => GeneratedBannerOptions): G
     // off line one, and a stricter check would read a genuinely generated file as hand-written, which a
     // dependency scan would take as "a real consumer imports this" and so permanently mask an abandoned
     // contract. The first 20 non-empty lines clear every realistic preamble without scanning a whole file.
-    isGeneratedFile: (content) =>
-      content
-        .split("\n")
-        .filter((line) => line.trim().length > 0)
-        .slice(0, 20)
-        .some((line) => line.includes(marker())),
+    // A line counts only when the marker opens a comment, as `generatedBanner` writes it, so code or prose that
+    // merely quotes the marker is not mistaken for a generated file.
+    isGeneratedFile: (content) => {
+      // Lines are produced one at a time and reading stops at the twentieth non-empty one, so a file of any
+      // length costs the same; splitting the whole text first made the cost grow with the file.
+      let seen = 0
+      for (const [line] of content.matchAll(/[^\n]*/g)) {
+        const text = line.trimStart()
+        if (text === "") continue
+        if (text.startsWith(`// ${marker()}`) || text.startsWith(`<!-- ${marker()}`)) return true
+        seen += 1
+        if (seen === 20) break
+      }
+      return false
+    },
 
     evidenceDisclaimer: () =>
       "Machine-generated engineering artifact assembled from statically-provable code facts and author-declared documentation. It can support a security, privacy, or compliance review. It does not itself establish compliance with any standard.",

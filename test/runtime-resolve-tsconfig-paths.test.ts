@@ -8,6 +8,7 @@ import {
   loadTsconfigPaths,
   pathMappingOptions,
   resolveAliasImport,
+  typescriptPath,
 } from "../runtime/resolve-tsconfig-paths.js"
 import type { BuildFileSystem } from "../runtime/build-fs.js"
 
@@ -132,6 +133,17 @@ afterAll(async () => {
 function root(name: string): string {
   return path.join(fixtureRoot, name)
 }
+
+describe("typescriptPath", () => {
+  it("writes a path with / for the compiler, whatever separator the platform uses", () => {
+    expect(typescriptPath("C:\\Users\\me\\app\\tsconfig.json", "\\")).toBe(
+      "C:/Users/me/app/tsconfig.json",
+    )
+    expect(typescriptPath("/home/me/app/tsconfig.json", "/")).toBe("/home/me/app/tsconfig.json")
+    // Only the platform's own separator is one; a backslash in a name on another platform is part of the name.
+    expect(typescriptPath("/home/a\\b/tsconfig.json", "/")).toBe("/home/a\\b/tsconfig.json")
+  })
+})
 
 describe("loadTsconfigPaths", () => {
   it("auto-detects root/tsconfig.json by default", async () => {

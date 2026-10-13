@@ -23,6 +23,7 @@ interface GitHygieneEvidence {
   readonly nvmrcPresent: boolean
   readonly tracked: readonly string[]
   readonly conflictFiles: readonly string[]
+  readonly untrackedTargets: readonly { file: string; specifier: string; target: string }[]
   readonly pkg: {
     readonly private: boolean
     readonly hasFiles: boolean
@@ -71,6 +72,15 @@ function collectBlockingIssues(ev: GitHygieneEvidence): string[] {
 
   if (ev.conflictFiles.length > 0) {
     blocking.push(`unresolved merge-conflict marker(s) in: ${ev.conflictFiles.join(", ")}`)
+  }
+
+  if (ev.untrackedTargets.length > 0) {
+    blocking.push(
+      `${String(ev.untrackedTargets.length)} import(s) that resolve only to a file git does not track, so a clean checkout (CI, a consumer) will not have it -- add the file, or fix the .gitignore pattern that hides it: ${ev.untrackedTargets
+        .slice(0, 10)
+        .map(({ file, specifier, target }) => `${file} imports ${specifier} (${target})`)
+        .join("; ")}${ev.untrackedTargets.length > 10 ? " …" : ""}`,
+    )
   }
 
   if (!ev.pkg.private && !ev.pkg.hasFiles) {

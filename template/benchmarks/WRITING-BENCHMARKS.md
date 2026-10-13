@@ -149,6 +149,54 @@ One row per variable from the checklist above, each marked:
 - `fixed` -- held constant on purpose; give the `value`, so a reader knows what was and was not
   covered.
 
+### `covers` and `notBenchmarked` -- every input of every public function
+
+A public function with more than one input (several parameters, or an object with several keys) has
+several things that can change its cost, and the `BenchmarkCoverage` check fails until each one is
+accounted for. In the benchmark that exercises the function, list what you did with every parameter, and
+with every key of an object parameter:
+
+```js
+covers: {
+  validateEnv: {
+    "options.schema": "swept",
+    "options.values": "variant:invalid-values",
+    "options.cache": "fixed: reset before every sample, so each run measures a cold validation",
+    "options.strict": "not covered: strict mode only changes the error message, not the work done",
+  },
+},
+```
+
+Each is one of `swept` (the suite's unit varies it), `sweep:<variable>` (one of the function's `sweeps`),
+`variant:<name>` (one of its `variants`), `fixed: <why>` (held at one value, and why) or `not covered: <why>`
+(left out, and why). A function that has no benchmark at all is listed in the suite's `notBenchmarked` with
+the reason, for example because a benchmarked function that calls it already accounts for its cost.
+
+### `sweeps` -- a second variable that scales
+
+Some functions grow with more than one input: the number of records _and_ how many fields each record
+has. One big-O for both would be wrong, because the two do not have to grow at the same rate. List each
+other variable that scales under `sweeps` and the suite measures it on its own, with every other variable
+held at its `baseValue` (the suite's own unit is held at `primaryValue`, by default the typical size):
+
+```js
+sweeps: [
+  {
+    variable: "width",
+    description: "How many fields each record has.",
+    baseValue: 4,
+    expectedComplexity: "quadratic",
+    complexityReason: "Every field is compared with every other field of the record.",
+  },
+],
+```
+
+The variable must also be listed under `variables` as `swept`. `setup` (or `input`) receives a third
+argument, `{ variable, values }`: the variable being swept and the value of every variable at this
+measurement, so one function builds its input for any of them. In a sweep of another variable, `n` is that variable's value, not the size of the unit: always read every variable from `context.values`, which is right for the primary sweep too. Each sweep is its own group
+(`fn:<id>#<variable>`), with its own growth class, its own documented big-O, and its own row in the
+report, the history and the pull-request summary.
+
 ### `variants` -- measured alternatives
 
 When a variable changes the algorithm (cache hit vs miss, flat vs nested, success vs error), measure
@@ -192,7 +240,7 @@ Before you open a pull request:
 ## Commands
 
 ```sh
-npm run benchmark          # full ladder -> benchmarks/results.json and benchmarks/BENCHMARKS.md
+npm run benchmark          # full ladder -> results.json and BENCHMARKS.md in each benchmarks/performance-*/ folder
 npm run benchmark -- --quick        # smoke test; never commit its output
 npm run benchmark -- --only package-name,end-to-end   # run a subset while developing
 npm run benchmark:check    # validate documentation and shape; measures nothing

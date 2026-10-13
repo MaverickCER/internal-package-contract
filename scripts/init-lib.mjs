@@ -1,4 +1,4 @@
-// Pure helpers for `internal-package-contract init` (bin/init.mjs): argument parsing, placeholder
+// Pure helpers for `internal-package-contract init` (bin/scaffold.mjs): argument parsing, placeholder
 // rendering and template discovery. Kept free of side effects so each piece is unit-testable.
 
 import { readdirSync } from "node:fs"
@@ -9,13 +9,13 @@ import path from "node:path"
  * and the two pins of this package: `{{ipcRef}}` (the release tag, e.g. `v0.8.1`) and `{{ipcSha}}`
  * (the commit that tag points at -- what a workflow `uses:` line is pinned to).
  */
-const PLACEHOLDER = /\{\{(name|repo|owner|description|year|ipcRef|ipcSha)\}\}/g
+const PLACEHOLDER = /\{\{(name|repo|owner|ownerLower|description|year|ipcRef|ipcSha)\}\}/g
 
 const VALUE_FLAGS = ["name", "owner", "description"]
 
 /**
  * The flags `init` was given. It is reached two ways: `bin/contract.mjs init ...`, the documented
- * command, where the subcommand name itself is the first argument, and `bin/init.mjs ...` directly.
+ * command, where the subcommand name itself is the first argument, and `bin/scaffold.mjs ...` directly.
  * @param {readonly string[]} argv - the full `process.argv`.
  * @returns {string[]} everything after the script, without the subcommand name.
  */
@@ -25,7 +25,7 @@ export function initFlags(argv) {
 
 /**
  * @param {readonly string[]} argv - the arguments after the script name.
- * @returns {{ force: boolean, name?: string, owner?: string, description?: string, errors: string[] }}
+ * @returns {{ force: boolean, noGithub?: boolean, name?: string, owner?: string, description?: string, errors: string[] }}
  */
 export function parseInitArgs(argv) {
   const result = { force: false, errors: [] }
@@ -38,6 +38,10 @@ export function parseInitArgs(argv) {
     }
     if (arg === "--force") {
       result.force = true
+      continue
+    }
+    if (arg === "--no-github") {
+      result.noGithub = true
       continue
     }
     const match = /^--([a-z]+)(?:=(.*))?$/.exec(arg)
@@ -74,7 +78,7 @@ export function validatePackageName(name) {
 
 /**
  * @param {{ name: string, owner: string, description?: string, year?: number, ipcRef?: string, ipcSha?: string }} input
- * @returns {{ name: string, repo: string, owner: string, description: string, year: string, ipcRef: string, ipcSha: string }}
+ * @returns {{ name: string, repo: string, owner: string, ownerLower: string, description: string, year: string, ipcRef: string, ipcSha: string }}
  */
 export function buildVars({
   name,
@@ -89,6 +93,7 @@ export function buildVars({
     // Without a slash `indexOf` is -1, so the whole name is kept.
     repo: name.slice(name.indexOf("/") + 1),
     owner,
+    ownerLower: owner.toLowerCase(),
     description: description ?? `TODO: describe ${name}.`,
     year: String(year),
     ipcRef,

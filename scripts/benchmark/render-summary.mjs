@@ -2,16 +2,17 @@
 // Diffs a "previous" and "current" results.json for one or more named
 // examples (env-cap/data-cap each have exactly two -- runtime and
 // build-time -- but nothing here assumes that count), renders a single
-// Markdown PR-comment summary. Highlights entries that exceed their own
-// budgets.mjs threshold, and leads with any complexity-shift flags (see
+// Markdown PR-comment summary. It leads with any complexity-shift flags (see
 // classify-complexity.mjs) -- a change in a group's inferred Big-O shape,
-// not just an ordinary "got somewhat slower."
+// not just an ordinary "got somewhat slower." The table gives each function's big-O and how it moved;
+// a raw time against another run is not shown, because it is not comparable between machines.
 //
 // What may FAIL a run is deliberately narrow (see gates.mjs): only properties of one run, or ratios
 // between quantities measured in the same run -- a function whose measured growth class differs from
 // its documented one, and the package's overhead as a percentage of the bare baseline growing past a
-// threshold against the last run on main and the last release. Raw millisecond deltas between two
-// runs on different machines stay highlights. With `--gate` the script exits 1 when a gate fails;
+// threshold against the last run on main and the last release. A function whose big-O cannot be
+// determined is a warning. Raw millisecond deltas between two runs on different machines are not
+// shown. With `--gate` the script exits 1 when a gate fails;
 // without it, it exits 0 and only renders.
 //
 // Generalizes env-cap's scripts/render-benchmark-summary.mjs and data-cap's
@@ -31,7 +32,7 @@
 // Each --example's fields are pipe-separated: label, previous results.json
 // path (empty string for "no prior run," e.g. first-ever run), current
 // results.json path (required), history.json path (empty string to skip
-// complexity-shift detection for that example -- the ordinary budget table
+// complexity-shift detection for that example -- the ordinary table
 // still renders), and optionally the results.json of the last release (a
 // fixed reference, so a series of small regressions cannot ratchet the
 // previous run upward unnoticed). Any missing/unreadable "previous" or
@@ -42,10 +43,10 @@ import { pathToFileURL } from "node:url"
 import { isDerivedGroup } from "./page-sections.mjs"
 import { detectComplexityShift } from "./classify-complexity.mjs"
 import { evaluateGates } from "./gates.mjs"
+import { renderTrendTable, trendRows } from "./trend.mjs"
 import {
   collectEntries,
   latestHistoryEntry,
-  primaryMedianMs,
   resultsToMeasurements,
   tryReadJson,
 } from "./lib/results.mjs"
@@ -99,8 +100,8 @@ function complexityShifts(label, current, historyPath) {
   })
 }
 
-/** Finds the first `medianMs`-bearing field on an entry, for a simple regression-percent story. Not every benchmark shape has one -- those are reported without a percent. */
-function renderExample(label, previous, current, budgets) {
+/** One example's section: anything that did not complete, then each function's big-O and how it moved. */
+function renderExample(label, previous, current) {
   const lines = [`## ${label}`, ""]
 
   if (!current) {
@@ -125,12 +126,7 @@ function renderExample(label, previous, current, budgets) {
     )
   }
 
-  const currentEntries = collectEntries(current)
-  const previousByKey = new Map(
-    collectEntries(previous ?? {}).map((e) => [`${e.name}.${e.tier}`, e.entry]),
-  )
-
-  const notCompleted = currentEntries.filter((e) => e.entry.status !== "completed")
+  const notCompleted = collectEntries(current).filter((e) => e.entry.status !== "completed")
   if (notCompleted.length > 0) {
     lines.push("**Failed / skipped:**", "")
     for (const { name, tier, entry } of notCompleted) {
@@ -141,62 +137,15 @@ function renderExample(label, previous, current, budgets) {
     lines.push("")
   }
 
-  lines.push("| Benchmark | Tier | Median | Change | Budget |", "|---|---|---|---|---|")
-  const highlights = []
-  for (const { name, tier, entry } of currentEntries) {
-    if (entry.status !== "completed") continue
-    const medianMs = primaryMedianMs(entry)
-    const previousEntry = previousByKey.get(`${name}.${tier}`)
-    const previousMedianMs =
-      previousEntry && previousEntry.status === "completed"
-        ? primaryMedianMs(previousEntry)
-        : undefined
-
-    let changeCell = "—"
-    let changePercent
-    if (medianMs !== undefined && previousMedianMs > 0) {
-      changePercent = ((medianMs - previousMedianMs) / previousMedianMs) * 100
-      changeCell = `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(1)}%`
-    }
-
-    // A group with no entry of its own falls back to the "*" default, so a suite whose groups are
-    // generated (one per function and variant) needs no per-group list.
-    // The derived overhead (the difference of two medians) is the noisiest number in a run, so a raw
-    // delta against another run's is not even highlighted; the same-run overhead RATIO is gated instead.
-    const derived = current.results[name].derived === true
-    const budget = derived ? undefined : (budgets[name] ?? budgets["*"])
-    const budgetCell = derived
-      ? "(gated as a ratio)"
-      : budget
-        ? `${budget.maxRegressionPercent}%`
-        : "(unbudgeted)"
-    if (budget && changePercent > budget.maxRegressionPercent) {
-      highlights.push({ name, tier, changePercent, budget: budget.maxRegressionPercent })
-    }
-
-    lines.push(
-      `| \`${name}\` | ${tier} | ${medianMs !== undefined ? medianMs.toFixed(2) + "ms" : "—"} | ${changeCell} | ${budgetCell} |`,
-    )
-  }
-  lines.push("")
-
-  if (highlights.length > 0) {
-    lines.push("**Exceeds budget (raw time against another run — a highlight, not a gate):**", "")
-    for (const h of highlights) {
-      lines.push(
-        `- ⚠️ \`${h.name}.${h.tier}\` +${h.changePercent.toFixed(1)}% (budget: ${h.budget}%) — human review suggested.`,
-      )
-    }
-    lines.push("")
-  }
+  lines.push(...renderTrendTable(trendRows(current, previous)), "")
 
   return lines.join("\n")
 }
 
-async function loadBudgetsModule(budgetsPath) {
-  if (!budgetsPath) return { budgets: {}, gates: undefined }
-  const mod = await import(pathToFileURL(path.resolve(budgetsPath)).href)
-  return { budgets: mod.BUDGETS ?? {}, gates: mod.GATES }
+/** @returns {Promise<object | undefined>} the package's `GATES`, when it has a file that exports them. */
+async function loadGates(budgetsPath) {
+  if (!budgetsPath) return undefined
+  return (await import(pathToFileURL(path.resolve(budgetsPath)).href)).GATES
 }
 
 /**
@@ -211,7 +160,7 @@ export async function summarize({
   marker,
   now = new Date(),
 }) {
-  const { budgets, gates } = await loadBudgetsModule(budgetsPath)
+  const gates = await loadGates(budgetsPath)
   // Stryker disable next-line ArrayDeclaration: equivalent -- a stray element has no suite or group, so it matches no gain.
   const records = tryReadJson(exceptionsPath)?.exceptions ?? []
 
@@ -222,7 +171,7 @@ export async function summarize({
     const release = tryReadJson(releasePath)
     return {
       shifts: complexityShifts(label, current ?? {}, historyPath),
-      section: renderExample(label, previous, current, budgets),
+      section: renderExample(label, previous, current),
       // With no current results there is nothing to judge: every gate returns no findings.
       findings: evaluateGates({
         previous,
@@ -240,19 +189,20 @@ export async function summarize({
   const sections = perExample.map((example) => example.section)
   const findings = perExample.flatMap((example) => example.findings)
   const failures = findings.filter((finding) => finding.level === "fail")
+  const warnings = findings.filter((finding) => finding.level === "warn")
   const notes = findings.filter((finding) => finding.level === "note")
 
   const lines = [marker, "", "# Benchmark summary", ""]
 
   // Complexity shifts lead, ahead of the ordinary per-example tables and
-  // their own "Exceeds budget" call-outs -- a shift in a group's inferred
+  // their own tables -- a shift in a group's inferred
   // algorithmic shape is a structurally different (and rarer, and more
   // serious) signal than "this run was somewhat slower," so it's surfaced
   // first regardless of which example it came from.
   if (allShifts.length > 0) {
     lines.push("## ⚠️ Complexity shifts", "")
     lines.push(
-      "The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary budget breach below -- it means the shape of the cost curve changed, not just its slope.",
+      "The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary slowdown below -- it means the shape of the cost curve changed, not just its slope.",
       "",
     )
     for (const shift of allShifts) {
@@ -266,13 +216,16 @@ export async function summarize({
   lines.push(
     failures.length > 0
       ? `## ❌ ${String(failures.length)} gate${failures.length === 1 ? "" : "s"} failed`
-      : "## ✅ Gates passed",
+      : warnings.length > 0
+        ? `## ⚠️ Gates passed, ${String(warnings.length)} warning${warnings.length === 1 ? "" : "s"}`
+        : "## ✅ Gates passed",
     "",
-    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. Raw time deltas against another run (the tables below) are highlights only.",
+    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.",
     "",
     ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
+    ...warnings.map((finding) => `- ⚠️ **${finding.label}** — ${finding.message}`),
     ...notes.map((finding) => `- ℹ️ **${finding.label}** — ${finding.message}`),
-    ...(failures.length + notes.length > 0 ? [""] : []),
+    ...(failures.length + warnings.length + notes.length > 0 ? [""] : []),
     ...sections,
   )
 
