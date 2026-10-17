@@ -191,6 +191,25 @@ describe("what the package adds", () => {
   })
 })
 
+describe("what the package adds, in more than one category", () => {
+  it("gives each category's heading its own id, so the page has no duplicate ids", async () => {
+    const write = (name: string) => {
+      const file = path.join(dir, name)
+      writeFileSync(file, JSON.stringify({ historySchemaVersion: 2, entries: [entry(0)] }))
+      return file
+    }
+    const model = await buildPageModel({
+      histories: [`Runtime|${write("a.json")}`, `Build-time|${write("b.json")}`],
+      maxEntries: 50,
+    })
+    const html = renderHtml({ ...model, generatedAt: "2026-03-01T00:00:00.000Z" })
+    expect(html).toContain('<section class="package-cost" aria-labelledby="cost0"><h3 id="cost0">')
+    expect(html).toContain('<section class="package-cost" aria-labelledby="cost1"><h3 id="cost1">')
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1])
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([])
+  })
+})
+
 describe("what the package adds: edge cases", () => {
   const both = (baseline: unknown, withPackage: unknown, over: Record<string, unknown> = {}) =>
     entry(0, {

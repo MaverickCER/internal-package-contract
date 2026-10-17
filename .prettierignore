@@ -1,2 +1,8 @@
 # Scaffold templates carry {{placeholders}} and are formatted in the scaffolded package, not here.
 template/package
+
+# A local benchmark run (never committed).
+.benchmark-local/
+
+# Written by `internal-package-contract skill` and checked against what it would write, so reformatting it would only make that check fail.
+/skills/

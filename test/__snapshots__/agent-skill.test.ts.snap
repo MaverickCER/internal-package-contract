@@ -1,0 +1,100 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderSkill and renderApi, exactly > is exactly this for a package that has told it nothing 1`] = `
+"---
+name: plain
+description: Use when working with plain: Plain.
+---
+
+# plain
+
+Plain.
+
+## Verify
+
+1. Run the project's type check and tests.
+
+Report any check you could not run, and any assumption you made.
+
+## Go deeper
+
+- [Every public signature](https://github.com/a/plain/blob/main/skills/plain/references/api.md)
+
+## Authority
+
+Target \`plain@0.1.0\`. The installed package's exports and type declarations are the API: do not invent exports, options or return values. Behaviour is established by its tests and examples. If this skill and the code disagree, say so rather than guessing.
+"
+`;
+
+exports[`renderSkill and renderApi, exactly > is exactly this for a package with everything 1`] = `
+"---
+name: widget
+description: Load when making widgets.
+---
+
+# @acme/widget
+
+Widgets, made correctly.
+
+Not for: gadgets.
+
+## Use it
+
+\`\`\`ts
+const w = makeWidget(3)
+\`\`\`
+
+From \`examples/basic.ts\`.
+
+## Import from
+
+| Import | For |
+| --- | --- |
+| \`@acme/widget\` | \`makeWidget\`, the widget types |
+| \`@acme/widget/extra\` | extra helpers |
+
+## Rules
+
+- Always pass a size.
+- Never mutate a widget.
+
+## Rely on
+
+- Making a widget is synchronous.
+
+## Common mistakes
+
+| Instead of | Do this |
+| --- | --- |
+| \`new Widget()\` | \`makeWidget(size)\` |
+
+## Verify
+
+1. Run the type check.
+2. Run the tests.
+
+Report any check you could not run, and any assumption you made.
+
+## Go deeper
+
+- [Sizes in depth](https://github.com/acme/widget/blob/main/GUIDE.md#sizes)
+- [Every public signature](https://github.com/acme/widget/blob/main/skills/widget/references/api.md)
+
+## Authority
+
+Target \`@acme/widget@1.2.3\`. The installed package's exports and type declarations are the API: do not invent exports, options or return values. Behaviour is established by its tests and examples. If this skill and the code disagree, say so rather than guessing.
+"
+`;
+
+exports[`renderSkill and renderApi, exactly > is exactly this for a package with everything 2`] = `
+"# @acme/widget public API
+
+Every export a consumer can import, by entry point, for version 1.2.3. Generated from the package's committed API baselines; the type declarations in the installed package are the authority.
+
+## \`@acme/widget\`
+
+- \`makeWidget\` (function): \`function makeWidget(size: number): Widget\`
+- \`Widget\` (interface): \`interface Widget { size: number; }\`
+- \`betaThing\` (function, beta): \`function betaThing(): void\`
+"
+`;

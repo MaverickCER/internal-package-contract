@@ -17,7 +17,11 @@
 //                     on main and the results at the last release, so a series of small regressions
 //                     cannot ratchet the previous run upward unnoticed.
 //
-//   3. complexity gain   a group whose fitted growth class got worse than at the last release. Getting worse
+//   3. undetermined   a group whose growth class could not be measured at all (too few usable sizes, or no
+//                     variation in size). Nothing is known to be wrong, but nothing is known to be right,
+//                     so it is a warning, never a failure.
+//
+//   4. complexity gain   a group whose fitted growth class got worse than at the last release. Getting worse
 //                     at big-O is a decision, so it fails until a human records that they accepted it
 //                     (see complexity-gain.mjs); an improvement never fails.
 //
@@ -26,6 +30,7 @@
 // to grow by 70% before a human is stopped; millisecond-scale work, which is steadier, by 50%. Either
 // still catches the 2x-and-worse changes that mean an algorithmic or implementation mistake.
 
+import { explainUndetermined } from "./explain-undetermined.mjs"
 import {
   complexityGains,
   describeGain,
@@ -51,8 +56,8 @@ export const DEFAULT_GATES = Object.freeze({
 
 /**
  * @typedef {object} Finding
- * @property {"fail" | "note"} level - `fail` fails a gated run; `note` is information.
- * @property {"complexity" | "complexity-gain" | "normalized-overhead" | "environment"} kind
+ * @property {"fail" | "warn" | "note"} level - `fail` fails a gated run; `warn` needs a look but never fails it; `note` is information.
+ * @property {"complexity" | "complexity-undetermined" | "complexity-gain" | "normalized-overhead" | "environment"} kind
  * @property {string} message
  */
 
@@ -95,6 +100,23 @@ export function complexityFindings(current) {
       level: "fail",
       kind: "complexity",
       message: `\`${group}\`: documented ${value.expectedNotation ?? value.expected}, measured ${value.notation ?? value.class} (exponent ${typeof value.exponent === "number" ? value.exponent.toFixed(2) : "n/a"}, R² ${typeof value.rSquared === "number" ? value.rSquared.toFixed(2) : "n/a"}). Either the code regressed or the documented big-O is wrong -- decide which and fix it.`,
+    })
+  }
+  return findings
+}
+
+/**
+ * @param {object | undefined} current - this run's results.json.
+ * @returns {Finding[]} one warning per group whose big-O could not be determined, with why.
+ */
+export function undeterminedFindings(current) {
+  const findings = []
+  for (const [group, value] of Object.entries(current?.analysis?.complexity ?? {})) {
+    if (value?.class !== null) continue
+    findings.push({
+      level: "warn",
+      kind: "complexity-undetermined",
+      message: `\`${group}\`${value.variable === undefined ? "" : ` (varying ${value.variable})`}: the big-O could not be determined: ${explainUndetermined(value)}. It is not checked against ${value.expectedNotation === undefined ? "its documentation" : `the documented ${value.expectedNotation}`}.`,
     })
   }
   return findings
@@ -190,6 +212,7 @@ export function evaluateGates({ previous, release, current, gates: overrides, ex
   const gates = resolveGates(overrides)
   return [
     ...(gates.complexity ? complexityFindings(current) : []),
+    ...undeterminedFindings(current),
     ...overheadFindings(
       current,
       [

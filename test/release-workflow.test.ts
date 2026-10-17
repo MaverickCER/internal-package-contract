@@ -75,6 +75,12 @@ describe("release workflows", () => {
     expect(text).toContain("name: ${{ steps.info.outputs.name }}")
     expect(text).toContain('echo "name=$NAME"\n            echo "version=$VERSION"')
     expect(text).toContain("- name: Verify what npm now serves")
+    // Before the tarball is packed, so an unanswered prompt cannot reach the publish job.
+    const prompts = text.indexOf("- name: Check that no prompt is left unanswered")
+    expect(prompts).toBeGreaterThan(text.indexOf("- name: Verify\n"))
+    expect(prompts).toBeLessThan(text.indexOf("- name: Pack the tarball to publish"))
+    expect(text).toContain('IPC_RELEASE: "1"')
+    expect(text).toContain("run: npx internal-package-contract --checks PromptBlocks")
     expect(text).toContain('npm view "$NAME@$VERSION" version')
     expect(text).toContain('npm view "$NAME@$VERSION" dist.attestations --json')
     // The verification is the last thing the publish job does.

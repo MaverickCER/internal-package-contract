@@ -47,7 +47,8 @@ type CoderabbitCliResult =
     }
   | {
       readonly status: "unavailable"
-      readonly reason: "cli-not-installed" | "git-context-unavailable"
+      readonly reason:
+        "cli-not-installed" | "git-context-unavailable" | "not-signed-in" | "network-unreachable"
     }
   | { readonly status: "error"; readonly message: string }
 
@@ -289,6 +290,38 @@ export interface CliSpawnResult {
 }
 
 /**
+ * @param output - what the CLI printed when it stopped without finishing.
+ * @returns why it could not run here, when the output says so, else `undefined`.
+ * @internal Exported for direct unit coverage.
+ */
+export function unavailableReason(
+  output: string,
+): "git-context-unavailable" | "not-signed-in" | "network-unreachable" | undefined {
+  if (
+    /failed to get (?:branch|git) information|not a git repository|unknown revision|bad revision/i.test(
+      output,
+    )
+  ) {
+    return "git-context-unavailable"
+  }
+  if (
+    /not (?:logged|signed) in|log ?in required|unauthori[sz]ed|authentication (?:required|failed)|invalid (?:api )?token|\b(?:http|status|code)[ :]*401\b/i.test(
+      output,
+    )
+  ) {
+    return "not-signed-in"
+  }
+  if (
+    /ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ETIMEDOUT|network (?:is )?unreachable|fetch failed/i.test(
+      output,
+    )
+  ) {
+    return "network-unreachable"
+  }
+  return undefined
+}
+
+/**
  * Turns what the spawned CLI did into a normalized result. Never throws.
  * @param result - The spawn result.
  * @returns the normalized CLI result.
@@ -322,6 +355,10 @@ export function interpretCliResult(result: CliSpawnResult): CoderabbitCliResult 
 
   if (!parsed.completed) {
     const stderrDetail = result.stderr.trim()
+    // The CLI could not get what it needs from this machine (no branch to diff, no sign-in, no network). That says
+    // nothing about the code, so it is "did not run", not a failed review.
+    const unavailable = unavailableReason(`${stderrDetail}\n${result.stdout}`)
+    if (unavailable !== undefined) return { status: "unavailable", reason: unavailable }
     const ended = `coderabbit review --agent ended without a "complete" event (exit code ${String(result.status)})`
     return {
       status: "error",

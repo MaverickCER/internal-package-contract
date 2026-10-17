@@ -4,7 +4,7 @@ What does adopting this package add to latency, CPU, memory and compute spend --
 
 ## What adopting this package costs
 
-For a typical workload of **80 items** per operation, routing the work through `demo` adds **1.00 ms** per operation compared with a bare-minimum baseline (**100%** of the baseline). Overall, it grows O(1) with workload size (measured exponent 0.00). At list prices that is on the order of **~$0.001 – $0.01 per million operations** of compute.
+For a typical workload of **80 items** per operation, routing the work through `demo` adds **1.00 ms** per operation compared with a bare-minimum baseline (**100% of the baseline**). Overall, it grows O(1) with workload size (measured exponent 0.00). At list prices that is on the order of **~$0.001 – $0.01 per million operations** of compute.
 
 > The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
 
@@ -49,11 +49,15 @@ The baseline is an empty or minimal function, so it costs almost nothing and the
 
 Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.
 
-| Function | Documented | Measured | Agreement | At 80 | At 320 |
-| --- | --- | --- | --- | --- | --- |
-| `scan` (all) | O(n) | O(n) | ✅ matches | 8.00 ms | 16.0 ms (at 160) |
-| `scan` (one) | O(1) | n/a | ❔ not enough data | 1.00 ms (at 20) | 1.00 ms (at 20) |
-| `plain` | O(1) | n/a | ❔ not enough data | n/a | n/a |
+| Function | Varies | Documented | Measured | Agreement | At 80 | At 320 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `scan` (all) | item | O(n) | O(n) | ✅ matches | 8.00 ms | 16.0 ms (at 160) |
+| `scan` (one) | item | O(1) | n/a | ❔ not enough data | 1.00 ms (at 20) | 1.00 ms (at 20) |
+| `plain` | item | O(1) | n/a | ❔ not enough data | n/a | n/a |
+
+> **Could not be determined.** The big-O of these could not be measured, so they are not checked against their documentation:
+>
+> - `scan (one)` (varying item): only 1 item size gave a usable measurement and a growth rate needs at least 2; lost: n40 failed; n80 failed
 
 ### `scan`
 

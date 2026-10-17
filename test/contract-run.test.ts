@@ -106,8 +106,8 @@ describe("runContract()", () => {
     })
     expect(result.passed).toBe(true)
     expect(run).toHaveBeenCalledTimes(2)
-    expect(run.mock.calls[0]?.[1]).toEqual({ checks: ["Lint", "Tests"] })
-    expect(run.mock.calls[1]?.[1]).toEqual({ checks: ["SecuritySocket"] })
+    expect(run.mock.calls[0]?.[1]).toMatchObject({ checks: ["Lint", "Tests"] })
+    expect(run.mock.calls[1]?.[1]).toMatchObject({ checks: ["SecuritySocket"] })
     expect(process.exitCode).toBe(0)
     const report = JSON.parse(readFileSync(path.join(cwd, REPORT_DIR, "report.json"), "utf8"))
     expect(report.passed).toBe(true)
@@ -122,6 +122,29 @@ describe("runContract()", () => {
     expect(cap.text()).toContain("[PASS] Lint: r")
     expect(cap.text()).toContain("3 pass, 0 warn")
     expect(cap.text()).toContain("PASS\n")
+  })
+
+  it("prepares what the checks expect on disk, once, before any check runs", async () => {
+    const order: string[] = []
+    const run = fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" })
+    const cap = capture()
+    await runContract({
+      runRepoContract: ((...args: Parameters<typeof run>) => {
+        order.push("checks")
+        return run(...args)
+      }) as never,
+      config,
+      cwd,
+      title: "T",
+      argv: [],
+      env: {},
+      out: cap.out,
+      prepare: (input) => {
+        order.push("prepare")
+        expect(input).toEqual({ cwd, out: cap.out })
+      },
+    })
+    expect(order).toEqual(["prepare", "checks", "checks"])
   })
 
   it("skips the Socket scan, and says so, when an earlier check failed", async () => {
@@ -157,7 +180,7 @@ describe("runContract()", () => {
       out: cap.out,
     })
     expect(run).toHaveBeenCalledTimes(1)
-    expect(run.mock.calls[0]?.[1]).toEqual({ checks: ["Lint"] })
+    expect(run.mock.calls[0]?.[1]).toMatchObject({ checks: ["Lint"] })
     expect(cap.text()).toContain("T (Lint)")
   })
 
@@ -172,7 +195,7 @@ describe("runContract()", () => {
       env: {},
       out: capture().out,
     })
-    expect(run.mock.calls[0]?.[1]).toBeUndefined()
+    expect(run.mock.calls[0]?.[1]).not.toHaveProperty("checks")
   })
 
   it("fails a strict run on an unexcepted degradation, and explains it on a non-strict one", async () => {

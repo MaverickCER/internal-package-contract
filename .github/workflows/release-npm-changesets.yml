@@ -203,6 +203,14 @@ jobs:
             npm run build --if-present
           fi
 
+      # A released package must not ship a document that still asks its author a question. The same check
+      # only warns during development; `IPC_RELEASE=1` is what turns it into a failure.
+      - name: Check that no prompt is left unanswered
+        if: steps.info.outputs.should-publish == 'true'
+        env:
+          IPC_RELEASE: "1"
+        run: npx internal-package-contract --checks PromptBlocks
+
       - name: Pack the tarball to publish
         if: steps.info.outputs.should-publish == 'true'
         run: |

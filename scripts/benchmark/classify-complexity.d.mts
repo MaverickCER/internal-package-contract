@@ -19,6 +19,10 @@ export interface ClassificationResult {
   readonly points: number
   readonly rSquared?: number
   readonly reason?: "insufficient-data" | "no-size-variation" | "poor-fit"
+  /** Why each unusable tier was left out (only for `insufficient-data`). */
+  readonly discarded?: readonly { tier: string; why: string }[]
+  /** The one size every usable tier shares (only for `no-size-variation`). */
+  readonly size?: number
 }
 
 export interface GrowthFit {
@@ -50,6 +54,8 @@ export const MIN_R_SQUARED: number
 export function inputTotal(
   inputs: Readonly<Record<string, unknown>> | undefined | null,
 ): number | undefined
+
+export function discardedTiers(tiers: TierMeasurements | undefined): { tier: string; why: string }[]
 
 export function buildSizeSeries(tiers: TierMeasurements | undefined): SizeSeriesPoint[]
 

@@ -6,6 +6,7 @@ import {
   evaluateGates,
   overheadFindings,
   resolveGates,
+  undeterminedFindings,
 } from "../scripts/benchmark/gates.mjs"
 
 const run = (overheadPercent: number | null, baselineMs: number, extra: object = {}) => ({
@@ -52,6 +53,53 @@ describe("gates -- complexity", () => {
   it("finds nothing without an analysis", () => {
     expect(complexityFindings(undefined)).toEqual([])
     expect(complexityFindings({})).toEqual([])
+  })
+})
+
+describe("gates -- undetermined big-O", () => {
+  it("warns, never fails, once per group whose class could not be determined, with why", () => {
+    const findings = undeterminedFindings({
+      analysis: {
+        complexity: {
+          "fn:a": {
+            class: null,
+            reason: "insufficient-data",
+            points: 1,
+            variable: "item",
+            expectedNotation: "O(n)",
+          },
+          "fn:b": { class: null },
+          "fn:c": { class: "linear", agreement: "matches" },
+          "fn:d": null,
+          "fn:e": {},
+        },
+      },
+    })
+    expect(findings).toEqual([
+      {
+        level: "warn",
+        kind: "complexity-undetermined",
+        message:
+          "`fn:a` (varying item): the big-O could not be determined: only 1 item size gave a usable measurement and a growth rate needs at least 2. It is not checked against the documented O(n).",
+      },
+      {
+        level: "warn",
+        kind: "complexity-undetermined",
+        message:
+          "`fn:b`: the big-O could not be determined: the results record no reason (they were written before reasons were recorded); run the benchmark again to get one. It is not checked against its documentation.",
+      },
+    ])
+  })
+  it("finds nothing without an analysis", () => {
+    expect(undeterminedFindings(undefined)).toEqual([])
+    expect(undeterminedFindings({})).toEqual([])
+  })
+  it("is part of every evaluation, even with the complexity gate off", () => {
+    const current = { analysis: { complexity: { "fn:a": { class: null } } } }
+    expect(evaluateGates({ current }).map((f) => f.kind)).toEqual(["complexity-undetermined"])
+    expect(evaluateGates({ current, gates: { complexity: false } }).map((f) => f.kind)).toEqual([
+      "complexity-undetermined",
+    ])
   })
 })
 

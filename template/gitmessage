@@ -1,4 +1,4 @@
-# <type>(<scope>): <subject>   -- max ~50 chars, imperative, lowercase, no period
+# <type>(<scope>): <subject>   -- the whole header at most 100 characters, imperative, lowercase, no period
 #
 # <body>   -- what & why, wrap at 72
 #

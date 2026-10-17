@@ -19,10 +19,14 @@ Nothing in this folder implements timing, statistics or reporting.
 
 The history page on the project website and the pull-request summaries link back here.
 
+Only CI's figures are committed. A run on your own machine writes to `.benchmark-local/<suite>/` (never committed)
+and is still what the contract checks read while it exists, so the benchmarks gate a change locally without
+publishing a number from a laptop. Delete `.benchmark-local/` to fall back to the committed figures.
+
 ## Commands
 
 ```sh
-npm run benchmark                   # full ladder -> results.json + BENCHMARKS.md
+npm run benchmark                   # full ladder -> results.json + BENCHMARKS.md (in CI), .benchmark-local/ (anywhere else)
 npm run benchmark -- --quick        # smoke test; never commit its output
 npm run benchmark -- --only <id>    # run a subset while developing
 npm run benchmark:check             # validate the suite's documentation; measures nothing

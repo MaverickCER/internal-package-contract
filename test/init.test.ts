@@ -13,8 +13,9 @@ import {
   shaFromLockfile,
   validatePackageName,
 } from "../scripts/init-lib.mjs"
+import { inspectManaged } from "../scripts/managed-files/inspect.mjs"
 
-const initScript = path.resolve(__dirname, "../bin/init.mjs")
+const initScript = path.resolve(__dirname, "../bin/scaffold.mjs")
 const packageTemplate = path.resolve(__dirname, "../template/package")
 
 describe("parseInitArgs()", () => {
@@ -22,6 +23,11 @@ describe("parseInitArgs()", () => {
     expect(
       parseInitArgs(["--name", "demo", "--owner=Acme", "--description", "A thing", "--force"]),
     ).toEqual({ force: true, name: "demo", owner: "Acme", description: "A thing", errors: [] })
+  })
+  it("understands --no-github as a switch, and leaves it out when not given", () => {
+    expect(parseInitArgs(["--no-github"])).toEqual({ force: false, noGithub: true, errors: [] })
+    expect(parseInitArgs(["--name", "x", "--no-github"]).noGithub).toBe(true)
+    expect(parseInitArgs(["--name", "x"])).not.toHaveProperty("noGithub")
   })
   it("defaults to no force and no values", () => {
     expect(parseInitArgs([])).toEqual({ force: false, errors: [] })
@@ -105,6 +111,7 @@ describe("buildVars() / render() / renderJson()", () => {
       name: "@acme/demo",
       repo: "demo",
       owner: "Acme",
+      ownerLower: "acme",
       description: "TODO: describe @acme/demo.",
       year: "2030",
       ipcRef: "main",
@@ -187,9 +194,46 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     )
     for (const file of allFiles()) {
       expect(readFileSync(file, "utf8"), file).not.toMatch(
-        /\{\{(name|repo|owner|description|year)\}\}/,
+        /\{\{(name|repo|owner|ownerLower|description|year)\}\}/,
       )
     }
+  })
+
+  it("without --name, writes the Scorecard workflow and the pin-sync workflow, pinned to a commit", () => {
+    expect(init().status).toBe(0)
+    expect(existsSync(path.join(cwd, ".github/workflows/scorecard.yml"))).toBe(true)
+    const sync = readFileSync(
+      path.join(cwd, ".github/workflows/sync-internal-package-contract.yml"),
+      "utf8",
+    )
+    expect(sync).toMatch(/@[0-9a-f]{40} # v\d+\.\d+\.\d+/)
+    expect(sync).not.toMatch(/\{\{(ipcSha|ipcRef)\}\}/)
+  })
+
+  it("scaffolds the generated regions already written, so GeneratedRegions has nothing to report", () => {
+    expect(init("--name", "@acme/demo-pkg", "--owner", "Acme").status).toBe(0)
+    const agents = readFileSync(path.join(cwd, "AGENTS.md"), "utf8")
+    expect(agents).toContain("| `@acme/demo-pkg` | `src/`")
+    expect(agents).toMatch(/<!-- ipc:begin entry-points -->\n\n\| Export/)
+  })
+
+  it("scaffolds the shared documents already enrolled and current, so the first `sync` has nothing to report", () => {
+    expect(init("--name", "@acme/demo-pkg", "--owner", "Acme").status).toBe(0)
+    const states = inspectManaged({
+      cwd,
+      packageRoot: path.resolve(__dirname, ".."),
+      pins: { ipcRef: "main", ipcSha: "" },
+    }).filter((entry) => entry.to.endsWith(".md"))
+    expect(states.map((entry) => [entry.to, entry.state])).toEqual([
+      ["CODE_OF_CONDUCT.md", "current"],
+      ["SUPPORT.md", "current"],
+      ["RELEASING.md", "current"],
+      ["benchmarks/WRITING-BENCHMARKS.md", "current"],
+      ["benchmarks/READING-BENCHMARKS.md", "current"],
+    ])
+    expect(readFileSync(path.join(cwd, "RELEASING.md"), "utf8")).toContain(
+      "# Releasing @acme/demo-pkg",
+    )
   })
 
   it("scaffolds a documented benchmark suite, its guides and its scripts", () => {

@@ -131,6 +131,24 @@ export function buildSizeSeries(tiers) {
 }
 
 /**
+ * Why each tier that {@link buildSizeSeries} leaves out was left out, so a group whose big-O could not be
+ * determined can say what to fix.
+ * @param {Record<string, { medianMs?: number, inputs?: Record<string, unknown> }> | undefined} tiers - the same measurements.
+ * @returns {{ tier: string, why: string }[]} one entry per unusable tier, in the order given.
+ */
+export function discardedTiers(tiers) {
+  const discarded = []
+  for (const [tier, measurement] of Object.entries(tiers ?? {})) {
+    if (!(inputTotal(measurement?.inputs) > 0)) {
+      discarded.push({ tier, why: "it recorded no size" })
+    } else if (!(Number.isFinite(measurement.medianMs) && measurement.medianMs > 0)) {
+      discarded.push({ tier, why: "its time was zero, below the timer's resolution" })
+    }
+  }
+  return discarded
+}
+
+/**
  * Least-squares slope of ln(medianMs) against ln(size) across `series`
  * (already filtered to positive size/medianMs by `buildSizeSeries`). Returns
  * `null` when fewer than 2 points are given, or when every point shares the
@@ -226,6 +244,7 @@ export function classifyGroup(tiers) {
       exponent: null,
       points: series.length,
       reason: "insufficient-data",
+      discarded: discardedTiers(tiers),
     }
   }
 
@@ -236,6 +255,7 @@ export function classifyGroup(tiers) {
       exponent: null,
       points: series.length,
       reason: "no-size-variation",
+      size: series[0].size,
     }
   }
 

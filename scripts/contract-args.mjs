@@ -6,6 +6,8 @@
 // `--skip` is how the bundled pre-push hook leaves out the slow analyses without an allow-list that
 // silently excludes every check added later (a new check is in the pre-push set unless named here).
 
+import { nearest } from "./contract-help.mjs"
+
 /** @param {string} value */
 function splitIds(value) {
   return value
@@ -43,7 +45,13 @@ export function selectChecks(argv, available) {
   const skipped = skip === undefined ? [] : splitIds(skip)
   for (const id of [...(requested ?? []), ...skipped]) {
     if (!known.has(id)) {
-      throw new Error(`Unknown check "${id}". Declared checks: ${available.join(", ")}.`)
+      const closest = nearest(id, available)
+      throw Object.assign(
+        new Error(
+          `Unknown check "${id}".${closest === undefined ? "" : ` Did you mean ${closest}?`} Declared checks: ${available.join(", ")}.`,
+        ),
+        { usage: true },
+      )
     }
   }
   if (requested === undefined && skipped.length === 0) return undefined

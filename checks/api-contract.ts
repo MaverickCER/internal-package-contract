@@ -2,7 +2,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { abnormalTermination, combinedOutput } from "./shared.js"
+import { abnormalTermination, unparseableRationale } from "./shared.js"
 import type {
   ApiContractEvidence,
   ApiContractTargetResult,
@@ -221,11 +221,7 @@ export const apiContract: CheckDefinitionConfig = hasTypedocConfig
         if (terminated) return { outcome: "fail", rationale: terminated }
 
         if (!result.output?.success) {
-          const printed = combinedOutput(result)
-          return {
-            outcome: "fail",
-            rationale: `ApiContract: check output could not be parsed as JSON.${printed ? `\n${printed}` : ""}`,
-          }
+          return { outcome: "fail", rationale: unparseableRationale("ApiContract:", result) }
         }
 
         return evaluateApiContractPolicy({ evidence: result.output.value as ApiContractEvidence })

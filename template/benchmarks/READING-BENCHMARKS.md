@@ -140,10 +140,10 @@ What the numbers **are** good for:
 Even on a quiet machine, repeated runs differ. Very fast operations (microseconds and below) are the
 noisiest in relative terms; the engine batches them and reports the per-operation value, but a 30-40%
 swing between runs on those is ordinary. Slow operations are steadier. Read the median and p95
-together, and trust a trend over a single run. The pull-request summary highlights movements beyond a
-per-benchmark threshold; those raw comparisons are prompts to look, never automatic failures (they
-compare two runs on different machines). What can fail a pull request is limited to things measured
-within one run: see "History, pull requests and the history page".
+together, and trust a trend over a single run. The pull-request summary shows the change against the last
+run, but never judges it: a raw comparison is between two runs on different machines. What can fail a pull request is limited to growth classes and
+baseline-relative ratios, which are far less sensitive to the machine than a raw time: see "History, pull
+requests and the history page".
 
 ## How the documentation is done
 
@@ -165,11 +165,16 @@ If a section reads as vague, that is a documentation bug: open an issue or fix i
 
 When a pull request touches benchmarked code, CI re-runs the suite and posts a summary: the end-to-end
 change first, then any function whose growth class shifted, then ordinary timing movements beyond
-their thresholds. Two gates can fail the run, because only they are properties of a single run, so they
-are far less sensitive to the machine than a raw time is: a function whose measured growth class **differs** from its
-documented big-O, and the package's overhead _relative to its own baseline_ growing past an allowance
-(50% for millisecond-scale work, 70% for microsecond-scale work, which is noisier) against both the
-last run on main and the last release. Raw time against another run is a highlight only.
+their thresholds. Three gates can fail the run. None of them compares a raw time with another run's, because
+two runs are on different machines. Two compare growth classes, which describe the shape of the curve and
+not the speed of the machine: the measured class against the documented big-O (a function whose class
+**differs** fails), and against the class at the last release (a function whose class has gotten **worse**
+fails, unless `.repo-contract/exceptions/benchmark-complexity.json` records a person's acceptance of it).
+The third is a ratio: the package's overhead _relative to its own baseline_, measured in the same run,
+growing past an allowance (50% for millisecond-scale work, 70% for microsecond-scale work, which is
+noisier) against both the last run on main and the last release. A function whose big-O could not be
+determined (too few sizes, or no difference between them) is a **warning**: nothing is known to be wrong, but
+nothing is checked. Raw time against another run is shown, never judged.
 
 After a merge, a job measures the merge commit and records it -- the results file and a history entry
 naming the commit, pull request and version -- through its own small pull request. Each entry also keeps

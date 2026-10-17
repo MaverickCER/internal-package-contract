@@ -14,7 +14,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 /** Where a repository keeps its exception registries. */
-export const REGISTRY_DIR = path.join(".repo-contract", "exceptions")
+export const REGISTRY_DIR = ".repo-contract/exceptions"
 
 const V2_FIELDS = [
   "ruleBroken",

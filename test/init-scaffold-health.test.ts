@@ -38,23 +38,37 @@ beforeAll(() => {
       "ExampleOwner",
       "--description",
       "A health demo",
+      "--spec",
+      `file:${root}`,
     ],
     { cwd: dir, encoding: "utf8" },
   )
   expect(run.status, `${run.stdout}${run.stderr}`).toBe(0)
-})
+  // A throwaway repository for the test, so its own hooks (the full contract) are not what is under test.
+  git("add", "-A")
+  git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "chore: scaffold")
+}, 180_000)
+
+/** Runs git in the scaffolded package, as a throwaway committer. */
+function git(...args: string[]): void {
+  const run = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {
+    cwd: dir,
+    encoding: "utf8",
+  })
+  expect(run.status, `git ${args.join(" ")}: ${run.stdout}${run.stderr}`).toBe(0)
+}
 
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
 describe("a freshly scaffolded package", () => {
-  it("is left byte-for-byte unchanged by running init again", () => {
+  it("is left byte-for-byte unchanged by running init again, which only finishes what is missing", () => {
     const snapshot = (): Record<string, string> => {
       const files: Record<string, string> = {}
       const walk = (current: string): void => {
         for (const entry of readdirSync(current, { withFileTypes: true })) {
-          if (entry.name === ".git") continue
+          if (entry.name === ".git" || entry.name === "node_modules") continue
           const full = path.join(current, entry.name)
           if (entry.isDirectory()) walk(full)
           else files[path.relative(dir, full)] = readFileSync(full, "utf8")
@@ -64,20 +78,10 @@ describe("a freshly scaffolded package", () => {
       return files
     }
     const before = snapshot()
-    const again = spawnSync(
-      process.execPath,
-      [
-        bin,
-        "init",
-        "--name",
-        "health-demo",
-        "--owner",
-        "ExampleOwner",
-        "--description",
-        "A health demo",
-      ],
-      { cwd: dir, encoding: "utf8" },
-    )
+    const again = spawnSync(process.execPath, [bin, "init", "--owner", "ExampleOwner"], {
+      cwd: dir,
+      encoding: "utf8",
+    })
     expect(again.status, `${again.stdout}${again.stderr}`).toBe(0)
     expect(snapshot()).toEqual(before)
   })

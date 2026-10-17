@@ -17,10 +17,13 @@
   },
   "include": [
     "contract.ts",
+    "logs.ts",
+    "ci/**/*.ts",
     "repo-contract.config.ts",
     "vitest.config.ts",
     "checks/**/*.ts",
     "scripts/**/*.ts",
+    "runtime/**/*.ts",
     "test/**/*.ts"
   ]
 }

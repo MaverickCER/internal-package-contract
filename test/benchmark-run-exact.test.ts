@@ -249,11 +249,122 @@ describe("runSuite() measuring each tier", () => {
       }),
       { only: ["sum", "other"], sampling: SAMPLING(10), root: process.cwd() },
     )
+    const context = { variable: "item", values: { item: 20 } }
     expect(seen).toEqual([
-      [20, { warm: false }],
-      [20, undefined],
-      [20, undefined],
+      [20, { warm: false }, context],
+      [20, undefined, context],
+      [20, undefined, context],
     ])
+  })
+
+  describe("a function that depends on more than one variable", () => {
+    const multi = (extra: Loose = {}) =>
+      suiteOf({
+        tiers: [20, 40],
+        workload: { unit: "item", description: "One item.", typicalN: 40 },
+        functions: [
+          {
+            id: "load",
+            variants: [{ name: "cold" }],
+            sweeps: [
+              { variable: "width", baseValue: 3, expectedComplexity: "linear" },
+              { variable: "depth", baseValue: 2, primaryValue: 10, tiers: [5, 15] },
+            ],
+            ...extra,
+          },
+        ],
+      })
+
+    it("measures each variable on its own, the others held at their base values", async () => {
+      const seen: { n: number; context: unknown }[] = []
+      const results = await runSuite(
+        multi({
+          setup: (n: number, _options: unknown, context: unknown) => {
+            seen.push({ n, context })
+          },
+          run: () => 1,
+        }),
+        { only: ["load"], sampling: SAMPLING(10), root: process.cwd() },
+      )
+      expect(Object.keys(results.results)).toEqual([
+        "fn:load@cold",
+        "fn:load@cold#width",
+        "fn:load@cold#depth",
+      ])
+      expect(Object.keys(results.results["fn:load@cold"].tiers)).toEqual(["n20", "n40"])
+      expect(Object.keys(results.results["fn:load@cold#width"].tiers)).toEqual(["n20", "n40"])
+      expect(Object.keys(results.results["fn:load@cold#depth"].tiers)).toEqual(["n5", "n15"])
+      expect(seen).toEqual([
+        { n: 20, context: { variable: "item", values: { item: 20, width: 3, depth: 2 } } },
+        { n: 40, context: { variable: "item", values: { item: 40, width: 3, depth: 2 } } },
+        { n: 20, context: { variable: "width", values: { item: 40, width: 20, depth: 2 } } },
+        { n: 40, context: { variable: "width", values: { item: 40, width: 40, depth: 2 } } },
+        { n: 5, context: { variable: "depth", values: { item: 10, width: 3, depth: 5 } } },
+        { n: 15, context: { variable: "depth", values: { item: 10, width: 3, depth: 15 } } },
+      ])
+    })
+
+    it("records the one variable swept as the input, and the others as held", async () => {
+      const results = await runSuite(multi({ run: () => 1, setup: () => 1 }), {
+        only: ["load"],
+        sampling: SAMPLING(10),
+        root: process.cwd(),
+      })
+      expect(results.results["fn:load@cold"].tiers.n20.inputs).toEqual({ item: 20 })
+      expect(results.results["fn:load@cold"].tiers.n20.held).toEqual({ width: 3, depth: 2 })
+      expect(results.results["fn:load@cold#width"].tiers.n20.inputs).toEqual({ width: 20 })
+      expect(results.results["fn:load@cold#width"].tiers.n20.held).toEqual({ item: 40, depth: 2 })
+      expect(results.results["fn:load@cold#depth"].tiers.n5.inputs).toEqual({ depth: 5 })
+    })
+
+    it("records what was held on a tier that failed too", async () => {
+      const results = await runSuite(
+        multi({
+          run: () => {
+            throw new Error("boom")
+          },
+        }),
+        { only: ["load"], sampling: SAMPLING(10), root: process.cwd() },
+      )
+      const failed = results.results["fn:load@cold#width"].tiers.n20
+      expect(failed.status).toBe("failed")
+      expect(failed.held).toEqual({ item: 40, depth: 2 })
+    })
+
+    it("gives each variable its own documented growth class, and says which it varied", async () => {
+      const results = await runSuite(
+        multi({
+          expectedComplexity: "constant",
+          sweeps: [
+            {
+              variable: "width",
+              baseValue: 3,
+              expectedComplexity: "linear",
+              complexityReason: "r",
+            },
+          ],
+          run: () => 1,
+          setup: () => 1,
+        }),
+        { only: ["load"], sampling: SAMPLING(10), root: process.cwd() },
+      )
+      const analysis = results.analysis.complexity
+      expect(analysis["fn:load@cold"]).toMatchObject({ variable: "item", expected: "constant" })
+      expect(analysis["fn:load@cold#width"]).toMatchObject({
+        variable: "width",
+        expected: "linear",
+        expectedNotation: "O(n)",
+      })
+    })
+  })
+
+  it("leaves held out of the record of a function with only one variable", async () => {
+    const results = await runSuite(suiteOf({ tiers: [20] }), {
+      only: ["sum"],
+      sampling: SAMPLING(10),
+      root: process.cwd(),
+    })
+    expect(results.results["fn:sum"].tiers.n20).not.toHaveProperty("held")
   })
 
   it("lets a function override the sampling for itself, keeping the rest", async () => {
@@ -678,7 +789,126 @@ describe("analyze() complexity", () => {
       "notation",
       "points",
       "rSquared",
+      "variable",
     ])
+  })
+
+  it("records what the suite says it covers, so a check can read it without importing the suite", () => {
+    const covered = {
+      workload: { unit: "item", typicalN: 40 },
+      notBenchmarked: { other: "Costed by sum." },
+      functions: [
+        {
+          id: "sum",
+          expectedComplexity: "linear",
+          complexityReason: "r",
+          covers: { sum: { a: "swept" } },
+        },
+        { id: "plain", expectedComplexity: "linear", complexityReason: "r" },
+      ],
+    }
+    expect(analyze({ suite: covered, results: {}, tiers: [10] }).coverage).toEqual({
+      benchmarks: [{ id: "sum", covers: { sum: { a: "swept" } } }],
+      notBenchmarked: { other: "Costed by sum." },
+    })
+    expect(
+      analyze({
+        suite: { ...covered, notBenchmarked: undefined, functions: [] },
+        results: {},
+        tiers: [10],
+      }).coverage,
+    ).toEqual({ benchmarks: [], notBenchmarked: {} })
+  })
+
+  it("records which variable a group varies, defaulting to the suite's unit", () => {
+    const withUnit = (results: Loose) =>
+      analyze({
+        suite: {
+          workload: { unit: "item", typicalN: 40 },
+          functions: [
+            {
+              id: "load",
+              expectedComplexity: "constant",
+              complexityReason: "r",
+              sweeps: [
+                { variable: "width", expectedComplexity: "quadratic", complexityReason: "w" },
+              ],
+            },
+          ],
+        },
+        results,
+        tiers: [10, 20, 40, 80, 160],
+      }).complexity
+    const complexity = withUnit({
+      "fn:load": fnGroup(ladder(() => 5)),
+      "fn:load#width": fnGroup(ladder((n) => n * n)),
+      "end-to-end:baseline": e2eGroup(ladder(() => 5)),
+      "fn:unknown#depth": fnGroup(ladder(() => 5)),
+    })
+    expect(complexity["fn:load"]).toMatchObject({ variable: "item", expected: "constant" })
+    expect(complexity["fn:load#width"]).toMatchObject({
+      variable: "width",
+      expected: "quadratic",
+      agreement: "matches",
+    })
+    expect(complexity["end-to-end:baseline"]?.variable).toBe("item")
+    expect(complexity["fn:unknown#depth"]).toMatchObject({ variable: "depth" })
+    expect(complexity["fn:unknown#depth"]).not.toHaveProperty("expected")
+  })
+
+  it("keeps what is needed to explain a group whose class could not be determined", () => {
+    const complexity = analyzed({
+      "fn:sum": fnGroup({
+        n10: entry(10, 1),
+        n20: {
+          id: "x",
+          status: "failed",
+          inputs: { items: 20 },
+          error: { name: "E", message: "boom" },
+        },
+        n40: { id: "y", status: "skipped", inputs: { items: 40 }, reason: "too slow" },
+        n80: { id: "z", status: "failed", inputs: { items: 80 } },
+        n160: entry(160, 0),
+      }),
+      "fn:sum@fast": fnGroup({ n10: entry(10, 1), n20: entry(10, 2) }),
+      "fn:sum@plain": fnGroup(ladder((n) => (n < 80 ? 1 : 100))),
+      "fn:sum-two": fnGroup(ladder((n) => n)),
+    })
+    expect(complexity["fn:sum"]).toMatchObject({
+      class: null,
+      reason: "insufficient-data",
+      points: 1,
+      discarded: [{ tier: "n160", why: "its time was zero, below the timer's resolution" }],
+      unmeasured: [
+        { tier: "n20", status: "failed", message: "boom" },
+        { tier: "n40", status: "skipped", message: "too slow" },
+        { tier: "n80", status: "failed" },
+      ],
+    })
+    expect(complexity["fn:sum"]?.unmeasured[2]).not.toHaveProperty("message")
+    expect(complexity["fn:sum@fast"]).toMatchObject({ reason: "no-size-variation", size: 10 })
+    expect(complexity["fn:sum@fast"]).not.toHaveProperty("discarded")
+    expect(complexity["fn:sum@plain"]).toMatchObject({ reason: "poor-fit", minRSquared: 0.8 })
+    expect(complexity["fn:sum@plain"]).not.toHaveProperty("size")
+    for (const key of ["discarded", "size", "unmeasured", "minRSquared"]) {
+      expect(complexity["fn:sum-two"]).not.toHaveProperty(key)
+    }
+  })
+
+  it("lists nothing discarded when every unusable size was a failure", () => {
+    const complexity = analyzed({
+      "fn:sum": fnGroup({
+        n10: entry(10, 1),
+        n20: {
+          id: "x",
+          status: "failed",
+          inputs: { items: 20 },
+          error: { name: "E", message: "m" },
+        },
+      }),
+    })
+    expect(complexity["fn:sum"]).not.toHaveProperty("discarded")
+    expect(complexity["fn:sum"]?.unmeasured).toHaveLength(1)
   })
 
   it("skips derived groups, and says why a group could not be classified", () => {

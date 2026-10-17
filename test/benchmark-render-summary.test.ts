@@ -44,81 +44,15 @@ function makeResults(overrides: Record<string, unknown> = {}) {
 describe("renderSummary", () => {
   it("renders a marker, heading, and per-example table even with no prior data (first-ever run)", async () => {
     const curPath = write("cur.json", makeResults())
-    const budgetsPath = writeRaw(
-      "budgets.mjs",
-      'export const BUDGETS = { "cold-start": { maxRegressionPercent: 10 } }',
-    )
-
     const output = await renderSummary({
       marker: "<!-- test-marker -->",
-      budgetsPath,
       examples: [`Runtime|${""}|${curPath}|${""}`],
     })
 
     expect(output).toContain("<!-- test-marker -->")
     expect(output).toContain("# Benchmark summary")
     expect(output).toContain("## Runtime")
-    expect(output).toContain("`cold-start`")
-    expect(output).toContain("10.00ms")
     expect(output).not.toContain("Complexity shifts")
-  })
-
-  it("computes a percent change and flags a budget breach", async () => {
-    const prevPath = write("prev.json", makeResults())
-    const curPath = write(
-      "cur.json",
-      makeResults({
-        results: {
-          "cold-start": {
-            tiers: {
-              baseline: { status: "completed", inputs: { n: 10 }, durationMs: { medianMs: 20 } }, // +100%
-              stress: { status: "completed", inputs: { n: 100 }, durationMs: { medianMs: 100 } },
-            },
-          },
-        },
-      }),
-    )
-    const budgetsPath = writeRaw(
-      "budgets.mjs",
-      'export const BUDGETS = { "cold-start": { maxRegressionPercent: 10 } }',
-    )
-
-    const output = await renderSummary({
-      budgetsPath,
-      examples: [`Runtime|${prevPath}|${curPath}|`],
-    })
-
-    expect(output).toContain("+100.0%")
-    expect(output).toContain("Exceeds budget")
-    expect(output).toContain("cold-start.baseline")
-  })
-
-  it('falls back to the "*" default budget for a group with no entry of its own', async () => {
-    const prevPath = write("prev.json", makeResults())
-    const curPath = write(
-      "cur.json",
-      makeResults({
-        results: {
-          "cold-start": {
-            tiers: {
-              baseline: { status: "completed", inputs: { n: 10 }, durationMs: { medianMs: 20 } },
-              stress: { status: "completed", inputs: { n: 100 }, durationMs: { medianMs: 100 } },
-            },
-          },
-        },
-      }),
-    )
-    const budgetsPath = writeRaw(
-      "budgets.mjs",
-      'export const BUDGETS = { "*": { maxRegressionPercent: 10 } }',
-    )
-    const output = await renderSummary({
-      budgetsPath,
-      examples: [`Runtime|${prevPath}|${curPath}|`],
-    })
-    expect(output).toContain("Exceeds budget")
-    expect(output).toContain("10%")
-    expect(output).not.toContain("(unbudgeted)")
   })
 
   it("treats a first-run previous file (missing/unreadable) as no prior data, not a crash", async () => {
@@ -314,7 +248,7 @@ describe("summarize() -- gates", () => {
     const cur = write("cur.json", withAnalysis(300))
     const budgetsPath = writeRaw(
       "budgets.mjs",
-      "export const BUDGETS = {}\nexport const GATES = { normalizedOverheadMaxIncreasePercent: { millisecondScale: 500 } }",
+      "export const GATES = { normalizedOverheadMaxIncreasePercent: { millisecondScale: 500 } }",
     )
     const { failures } = await summarize({
       marker: "<!-- m -->",
@@ -335,32 +269,5 @@ describe("summarize() -- gates", () => {
       examples: [`Runtime|${prev}|${cur}||`],
     })
     expect(markdown).toContain("ℹ️ **Runtime** — The previous run used Node v22.0.0")
-  })
-
-  it("does not highlight the derived overhead group's raw delta, and says it is gated as a ratio", async () => {
-    const derived = (ms: number) => ({
-      ...makeResults(),
-      results: {
-        "end-to-end:overhead": {
-          derived: true,
-          tiers: {
-            n640: { status: "completed", inputs: { n: 640 }, durationMs: { medianMs: ms } },
-          },
-        },
-      },
-    })
-    const prev = write("prev.json", derived(1))
-    const cur = write("cur.json", derived(10))
-    const budgetsPath = writeRaw(
-      "budgets.mjs",
-      'export const BUDGETS = { "*": { maxRegressionPercent: 10 } }',
-    )
-    const { markdown } = await summarize({
-      marker: "<!-- m -->",
-      budgetsPath,
-      examples: [`Runtime|${prev}|${cur}||`],
-    })
-    expect(markdown).toContain("(gated as a ratio)")
-    expect(markdown).not.toContain("**Exceeds budget")
   })
 })

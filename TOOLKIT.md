@@ -54,6 +54,24 @@ the table or in the repository. Checked against each repository's default branch
 | `.nvmrc`: 22 in `env-cap`, 24 in the others                                                                                                                                                  | Converge    | `repo-contract`'s CONTRIBUTING says to develop on Node 24 and let CI prove the Node 22 floor.                                                                                                               |
 | `repo-contract` pins this repository at `v0.9.0`; `env-cap` and `data-cap` at `v0.10.0`                                                                                                      | Converge    | Pin-sync lag; the pin-sync PR moves it.                                                                                                                                                                     |
 
+## Duplication left between `env-cap` and `data-cap`
+
+Measured on 2026-10-13 with jscpd (clones of 8 lines or more) over each package's `src/`: 829 lines are still duplicated
+between the two packages, and none involve `repo-contract`. Code is moved into the managed set (see
+[Shared files](README.md#shared-files)) only when that lowers the cost of maintaining it. Looking alike is not the test:
+a managed copy has to be identical in both packages, so the two must really want the same behaviour, and bending
+one to fit the other is a cost. The three decisions, with how much of the 829 lines each covers:
+
+| Decision                                       | Lines | Files                                                                                                                  | Why                                                                                                                                                                                                |
+| ---------------------------------------------- | ----: | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Move into the managed set**                  |   244 | `cli/filesystem.ts`, `resolve-within-root.ts`, `resolve-import.ts`, `resolve-tsconfig-paths.ts`, `generated-banner.ts` | 80% to 100% identical once the package name is set aside, small, and the same job in both. What is left to settle is a parameter (an error type, a label), not a difference of behaviour.          |
+| **Reconcile the behaviour first, then decide** |   205 | `resolve-package-schema.ts`                                                                                            | 54% identical across 548 and 467 lines: both discover a schema across a package boundary but disagree in places that matter. Copying it would freeze a difference nobody has chosen.               |
+| **Keep separate**                              |   380 | `define-projection.ts`, `cli/init.ts`, `cli/index.ts`, `sarif.ts`, `literal-eval.ts`, `discover.ts`                    | 18% to 69% identical: the clones are shared structure around code that differs on purpose (what each package reads, reports and prints). A shared module would need a switch for every difference. |
+
+Moving code into the managed set adds no dependency and no release to coordinate (the copy is checked, not installed),
+so the cost to weigh is the parameterisation, not versioning. Re-measure after each move; the number to watch is the
+duplication that is not a verified copy.
+
 ## Part of the MaverickCER toolkit
 
 The shared paragraph every README carries (kept identical on purpose; a test in this repository checks that it matches):

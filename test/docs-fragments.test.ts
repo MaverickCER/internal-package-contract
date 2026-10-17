@@ -198,6 +198,32 @@ describe("check-docs-fragments.mjs (scan script)", () => {
     expect(report.broken).toEqual([])
   })
 
+  it("accepts a link to an explicit HTML anchor, and still catches one to nothing", async () => {
+    write(
+      "README.md",
+      [
+        "# Title",
+        "",
+        '<a id="Set-Up"></a> and <a class="x" name="other">x</a>',
+        "",
+        "[a](#set-up) [b](README.md#other) [c](#missing)",
+        "",
+        "```html",
+        '<a id="fenced"></a>',
+        "```",
+        "",
+        "[d](#fenced)",
+        "",
+      ].join("\n"),
+    )
+    const report = await runScan()
+    expect(report.broken?.map((b) => (b as { fragment: string }).fragment)).toEqual([
+      "missing",
+      "fenced",
+    ])
+    expect(report.broken?.[0]).toMatchObject({ availableFragments: ["other", "set-up", "title"] })
+  })
+
   it("never treats content inside a fenced code block as a real heading or a real link", async () => {
     write(
       "README.md",

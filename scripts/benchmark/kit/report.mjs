@@ -3,7 +3,9 @@
 // monthly bill and a cold start -- the benefits live in the rest of the repository. Every number is a
 // single run's measurement on one machine; the report says so, and links the reading guide.
 
-import { COMPLEXITY_NOTATION, expectationOf } from "./define.mjs"
+import { explainUndetermined } from "../explain-undetermined.mjs"
+import { describeGroup } from "../trend.mjs"
+import { COMPLEXITY_NOTATION, expectationOf, groupName } from "./define.mjs"
 import { formatUsd } from "./cost-model.mjs"
 
 /**
@@ -37,6 +39,15 @@ const percent = (value) => {
   if (value >= 1000) return `${Math.round(value / 100 + 1).toLocaleString("en-US")}× baseline`
   return `${value.toFixed(value < 10 ? 1 : 0)}%`
 }
+/** @param {number | null} value @returns {string} how large the overhead is, against the baseline. */
+const againstBaseline = (value) => {
+  const text = percent(value)
+  return text.endsWith("× baseline")
+    ? `${text.slice(0, -" baseline".length)} the baseline`
+    : `${text} of the baseline`
+}
+/** @param {string} name - a variable's name. @returns {string} a column heading for how many of it there are. */
+const plural = (name) => (name.endsWith("s") ? name : `${name}s`)
 /** A price range, smallest first (CPU time can exceed wall time, so "low" is not always lower). */
 const range = (a, b) => {
   const low = Math.min(a, b)
@@ -92,7 +103,7 @@ function glance(results) {
   }
   const overheadComplexity = analysis.complexity["end-to-end:with-package"]
   lines.push(
-    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds **${formatMs(typical.overheadMs)}** per operation compared with a bare-minimum baseline (**${percent(typical.overheadPercent)}** of the baseline). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
+    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds **${formatMs(typical.overheadMs)}** per operation compared with a bare-minimum baseline (**${againstBaseline(typical.overheadPercent)}**). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
     "",
     "> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
     "",
@@ -208,7 +219,7 @@ function endToEndSection(results, suite) {
 }
 
 function groupTable(group, unit) {
-  const header = [unit + "s", "Median", "p95", "CPU (median)", "Heap Δ", "Ops/s"]
+  const header = [plural(unit), "Median", "p95", "CPU (median)", "Heap Δ", "Ops/s"]
   const rows = Object.values(group.tiers).map((entry) =>
     entry.status === "completed"
       ? [
@@ -226,6 +237,15 @@ function groupTable(group, unit) {
   return table(header, rows)
 }
 
+/**
+ * @param {object} fn - a function entry.
+ * @param {string} unit - the suite's own unit.
+ * @returns {string[]} every variable the function is swept over: the unit, then each other.
+ */
+function variablesOf(fn, unit) {
+  return [unit, ...(fn.sweeps ?? []).map((sweep) => sweep.variable)]
+}
+
 function functionsSection(results, suite) {
   const { analysis, metadata } = results
   const unit = metadata.workload.unit
@@ -238,37 +258,42 @@ function functionsSection(results, suite) {
   const summary = []
   for (const fn of suite.functions) {
     for (const variant of fn.variants?.length ? fn.variants : [undefined]) {
-      const group = variant ? `fn:${fn.id}@${variant.name}` : `fn:${fn.id}`
-      const found = results.results[group]
-      const measured = analysis.complexity[group]
-      // A function measured on a shorter ladder shows its nearest measured size, labelled.
-      const at = (target) => {
-        const done = Object.values(found?.tiers ?? {}).filter(
-          (entry) => entry.status === "completed",
-        )
-        const nearest = done.sort(
-          (a, b) => Math.abs(a.inputs[unit] - target) - Math.abs(b.inputs[unit] - target),
-        )[0]
-        if (!nearest) return "n/a"
-        const text = formatMs(nearest.durationMs.medianMs)
-        return nearest.inputs[unit] === target
-          ? text
-          : `${text} (at ${String(nearest.inputs[unit])})`
+      for (const variable of variablesOf(fn, unit)) {
+        const group = groupName(fn.id, variant?.name, variable === unit ? undefined : variable)
+        const found = results.results[group]
+        const measured = analysis.complexity[group]
+        // A function measured on a shorter ladder shows its nearest measured size, labelled.
+        const at = (target) => {
+          const done = Object.values(found?.tiers ?? {}).filter(
+            (entry) => entry.status === "completed",
+          )
+          const nearest = done.sort(
+            (a, b) => Math.abs(a.inputs[variable] - target) - Math.abs(b.inputs[variable] - target),
+          )[0]
+          if (!nearest) return "n/a"
+          const text = formatMs(nearest.durationMs.medianMs)
+          return nearest.inputs[variable] === target
+            ? text
+            : `${text} (at ${String(nearest.inputs[variable])})`
+        }
+        summary.push([
+          `\`${fn.name}\`${variant ? ` (${variant.name})` : ""}`,
+          variable,
+          // The unit is never a sweep (the definition rejects one), so it falls through to the function's own.
+          COMPLEXITY_NOTATION[expectationOf(fn, variant, variable).expectedComplexity],
+          measured?.notation ?? "n/a",
+          AGREEMENT_LABEL[measured?.agreement ?? "unknown"],
+          at(analysis.cost.typicalN),
+          at(metadata.tiers[metadata.tiers.length - 1]),
+        ])
       }
-      summary.push([
-        `\`${fn.name}\`${variant ? ` (${variant.name})` : ""}`,
-        COMPLEXITY_NOTATION[expectationOf(fn, variant).expectedComplexity],
-        measured?.notation ?? "n/a",
-        AGREEMENT_LABEL[measured?.agreement ?? "unknown"],
-        at(analysis.cost.typicalN),
-        at(metadata.tiers[metadata.tiers.length - 1]),
-      ])
     }
   }
   lines.push(
     ...table(
       [
         "Function",
+        "Varies",
         "Documented",
         "Measured",
         "Agreement",
@@ -288,7 +313,20 @@ function functionsSection(results, suite) {
       ">",
       ...differing.map(
         ([group, value]) =>
-          `> - \`${group.slice(3)}\`: documented ${value.expectedNotation}, measured ${value.notation} (exponent ${value.exponent.toFixed(2)})`,
+          `> - \`${describeGroup(group).name}\` (varying ${value.variable}): documented ${value.expectedNotation}, measured ${value.notation} (exponent ${value.exponent.toFixed(2)})`,
+      ),
+      "",
+    )
+  }
+
+  const unknown = Object.entries(analysis.complexity).filter(([, value]) => value.class === null)
+  if (unknown.length > 0) {
+    lines.push(
+      "> **Could not be determined.** The big-O of these could not be measured, so they are not checked against their documentation:",
+      ">",
+      ...unknown.map(
+        ([group, value]) =>
+          `> - \`${describeGroup(group).name}\` (varying ${value.variable}): ${explainUndetermined(value)}`,
       ),
       "",
     )
@@ -328,8 +366,6 @@ function functionsSection(results, suite) {
     }
     if (fn.inEndToEnd) lines.push(`**In the end-to-end run:** ${fn.inEndToEnd.description}`, "")
     for (const variant of fn.variants?.length ? fn.variants : [undefined]) {
-      const group = variant ? `fn:${fn.id}@${variant.name}` : `fn:${fn.id}`
-      const measured = analysis.complexity[group]
       if (variant) {
         lines.push(`#### Variant \`${variant.name}\``, "", variant.description, "")
         if (variant.expectedComplexity !== undefined) {
@@ -339,13 +375,29 @@ function functionsSection(results, suite) {
           )
         }
       }
-      if (measured?.class) {
-        lines.push(
-          `**Measured: ${measured.notation}** (exponent ${measured.exponent.toFixed(2)}, ${String(measured.points)} sizes) -- ${AGREEMENT_LABEL[measured.agreement]}.`,
-          "",
-        )
+      for (const variable of variablesOf(fn, unit)) {
+        const other = variable === unit ? undefined : variable
+        const group = groupName(fn.id, variant?.name, other)
+        const measured = analysis.complexity[group]
+        if (other !== undefined) {
+          const sweep = fn.sweeps.find((candidate) => candidate.variable === other)
+          lines.push(
+            `##### Varying \`${other}\``,
+            "",
+            sweep.description,
+            "",
+            `**Expected: ${COMPLEXITY_NOTATION[sweep.expectedComplexity]}.** ${sweep.complexityReason}`,
+            "",
+          )
+        }
+        if (measured?.class) {
+          lines.push(
+            `**Measured: ${measured.notation}** (exponent ${measured.exponent.toFixed(2)}, ${String(measured.points)} sizes) -- ${AGREEMENT_LABEL[measured.agreement]}.`,
+            "",
+          )
+        }
+        if (results.results[group]) lines.push(...groupTable(results.results[group], variable), "")
       }
-      if (results.results[group]) lines.push(...groupTable(results.results[group], unit), "")
     }
   }
   return lines

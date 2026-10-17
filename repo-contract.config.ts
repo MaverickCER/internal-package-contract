@@ -51,6 +51,7 @@ import { duplication } from "./checks/duplication.js"
 import { docsFragments } from "./checks/docs-fragments.js"
 import { docsLinks } from "./checks/docs-links.js"
 import { docsMarkdown } from "./checks/docs-markdown.js"
+import { cleanCheckoutCheck } from "./checks/clean-checkout.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
@@ -112,6 +113,7 @@ export default defineRepoContract({
     Architecture: architectureOverScope(architecture()),
     GithubActions: githubActions,
     GitHygiene: gitHygiene,
+    CleanCheckout: cleanCheckoutCheck(),
     BranchProtection: createBranchProtection(),
     Coverage: { ...coverage, dependsOn: ["Tests"] },
     Crap: { ...crapOverScope(crap), dependsOn: ["Coverage"] },

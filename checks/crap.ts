@@ -46,6 +46,11 @@ export const crap: CheckDefinitionConfig = {
   run: [
     "crap4ts",
     "src",
+    // Managed copies of this package's runtime modules are covered and mutation-tested here, not in the
+    // consumer, so scoring them against the consumer's (excluded) coverage would only report them as untested.
+    // The leading `**/` matters: crap4ts does not match `src/_ipc/**` against paths that begin with `src`.
+    "--ignore",
+    "**/_ipc/**",
     "--coverage",
     "coverage/coverage-final.json",
     "--threshold",

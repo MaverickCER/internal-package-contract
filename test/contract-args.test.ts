@@ -34,3 +34,24 @@ describe("selectChecks()", () => {
     expect(() => selectChecks(["--checks", "Lint,Nope"], available)).toThrow(/Unknown check/)
   })
 })
+
+describe("selectChecks on a mistyped id", () => {
+  const declared = ["Lint", "Format", "Typecheck"]
+  it("suggests the closest check first, before the long list, and marks the error as a usage error", () => {
+    let caught: unknown
+    try {
+      selectChecks(["--checks", "Lnt"], declared)
+    } catch (error) {
+      caught = error
+    }
+    expect((caught as Error).message).toBe(
+      'Unknown check "Lnt". Did you mean Lint? Declared checks: Lint, Format, Typecheck.',
+    )
+    expect((caught as { usage?: boolean }).usage).toBe(true)
+  })
+  it("makes no suggestion when nothing is close", () => {
+    expect(() => selectChecks(["--checks", "Completely"], declared)).toThrow(
+      'Unknown check "Completely". Declared checks: Lint, Format, Typecheck.',
+    )
+  })
+})

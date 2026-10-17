@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import type { CheckEvidence, PolicyResult } from "repo-contract"
+import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"
 
 /** This package's own root, from `checks/shared.ts` -> `..`. */
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -38,6 +38,73 @@ export function resolveConfig(
 /** stdout + stderr, trimmed and joined -- for surfacing a tool's own error text in a rationale. */
 export function combinedOutput(result: CheckEvidence): string {
   return [result.stdout.trim(), result.stderr.trim()].filter((s) => s.length > 0).join("\n")
+}
+
+/** What a tool prints when it dies: `Error: ...`, `ConfigError: ...`, `Error [ERR_MODULE_NOT_FOUND]: ...`. */
+const ERROR_LINE = /^[A-Za-z]*Error(?:\s\[\w+\])?: .+$/m
+
+/**
+ * @param result - a check's raw execution evidence.
+ * @returns the first line on stderr that reads as an error a tool died with, or `undefined`.
+ */
+export function crashLine(result: CheckEvidence): string | undefined {
+  return ERROR_LINE.exec(result.stderr)?.[0]
+}
+
+/** Starts a rationale that says a tool produced nothing usable, whatever the reason. */
+const NOTHING_USABLE = /could not be parsed|did not evaluate|produced no output|exited \d+/i
+
+/**
+ * Makes a failing check lead with the error its tool died with. A tool that crashes before it prints leaves a
+ * stack trace after a headline that blames something else ("output could not be parsed as JSON", "exited 1"),
+ * so the cause sits below tens of lines. The whole original rationale, stack included, is kept after the
+ * headline: the stack is what is needed to debug it.
+ * @param checks - a set of check definitions, keyed by id.
+ * @returns the same checks, each policy's failure led by the error when one is on stderr.
+ */
+export function withErrorHeadline<T extends Record<string, CheckDefinitionConfig>>(checks: T): T {
+  return Object.fromEntries(
+    Object.entries(checks).map(([id, definition]) => [
+      id,
+      {
+        ...definition,
+        policy: async (context: Parameters<CheckDefinitionConfig["policy"]>[0]) => {
+          const verdict = await definition.policy(context)
+          const crash = crashLine(context.result)
+          if (
+            verdict.outcome !== "fail" ||
+            crash === undefined ||
+            !NOTHING_USABLE.test(verdict.rationale.split("\n")[0] ?? "") ||
+            verdict.rationale.split("\n")[0]?.includes(crash)
+          ) {
+            return verdict
+          }
+          return {
+            ...verdict,
+            rationale: `${id}: the tool stopped with an error before it produced a result: ${crash}\n${verdict.rationale}`,
+          }
+        },
+      },
+    ]),
+  ) as T
+}
+
+/**
+ * Why a check that should have printed one JSON document did not. A script that throws before it prints
+ * leaves a stack trace on stderr and nothing on stdout; calling that "output could not be parsed as JSON" sends
+ * the reader to the wrong place, so the first line of the error leads when there is one.
+ * @param prefix - everything before the reason, for example `"ApiContract:"`.
+ * @param result - the check's raw execution evidence.
+ * @returns the rationale: the error that stopped the check when stderr has one, else the unparseable-output text, then whatever the tool printed.
+ */
+export function unparseableRationale(prefix: string, result: CheckEvidence): string {
+  const printed = combinedOutput(result)
+  const crash = crashLine(result)
+  const head =
+    crash === undefined
+      ? `${prefix} check output could not be parsed as JSON.`
+      : `${prefix} the check stopped with an error before it produced a result: ${crash}`
+  return `${head}${printed ? `\n${printed}` : ""}`
 }
 
 /** A non-`completed` terminal status (timeout, signal, spawn error) -- the process never ran to its own exit, so its exit code means nothing. */

@@ -116,6 +116,9 @@ describe("runContract()", () => {
     checks,
   })
   type Phase = { passed: boolean; checks: Record<string, { outcome: string; rationale: string }> }
+  /** The check ids each phase was asked to run; the progress hooks the runner also passes are not what is under test. */
+  const selected = (calls: unknown[]) =>
+    calls.map((options) => (options as { checks?: string[] } | undefined)?.checks)
   const fake = (phases: Phase[], calls: unknown[] = []) => {
     let index = 0
     const run = (_config: unknown, options?: { checks: readonly string[] }) => {
@@ -124,7 +127,23 @@ describe("runContract()", () => {
       if (!phase) throw new Error("unexpected phase")
       return Promise.resolve({
         evidence: evidence(
-          Object.fromEntries(Object.keys(phase.checks).map((id) => [id, { durationMs: 1000 }])),
+          Object.fromEntries(
+            Object.keys(phase.checks).map((id) => [
+              id,
+              {
+                command: "tool",
+                args: [],
+                status: "completed",
+                exitCode: 0,
+                signal: null,
+                startedAt: "2026-01-01T00:00:00.000Z",
+                completedAt: "2026-01-01T00:00:01.000Z",
+                durationMs: 1000,
+                stdout: "",
+                stderr: "",
+              },
+            ]),
+          ),
         ),
         verdict: phase,
       })
@@ -168,7 +187,7 @@ describe("runContract()", () => {
     })
     expect(result).toEqual({ passed: true })
     expect(process.exitCode).toBe(0)
-    expect(calls).toEqual([undefined])
+    expect(selected(calls)).toEqual([undefined])
     expect(output.text()).toBe(
       [
         "",
@@ -179,6 +198,7 @@ describe("runContract()", () => {
         "",
         "1 pass, 1 warn, 0 not evaluated (accepted), 0 not evaluated (no exception recorded), 0 fail, 0 skipped.",
         `Report: ${path.join("reports", "contract", "report.json")}`,
+        "Logs: reports/contract/logs/<Check>.log (checks that did not pass)",
         "",
         "PASS",
         "",
@@ -219,7 +239,7 @@ describe("runContract()", () => {
       env: {},
       out: output.out,
     })
-    expect(calls).toEqual([{ checks: ["Lint", "Docs"] }])
+    expect(selected(calls)).toEqual([["Lint", "Docs"]])
     expect(output.text().split("\n")[1]).toBe("T (Lint, Docs)")
     expect(selectChecks(["--checks", "Lint,Docs"], ["Lint", "Docs", "Tests"])).toEqual([
       "Lint",
@@ -245,7 +265,7 @@ describe("runContract()", () => {
       env: {},
       out: output.out,
     })
-    expect(calls).toEqual([{ checks: ["Lint"] }, { checks: ["SecuritySocket"] }])
+    expect(selected(calls)).toEqual([["Lint"], ["SecuritySocket"]])
     expect(result.passed).toBe(true)
     expect(output.text()).toContain("[PASS] SecuritySocket: scanned")
     expect(output.text()).toContain("2 pass, 0 warn")

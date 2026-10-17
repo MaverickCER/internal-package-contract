@@ -51,6 +51,7 @@
     "format:check": "prettier --check .",
     "docs:api": "typedoc",
     "docs:api:report": "typedoc --options typedoc.markdown.json",
+    "docs:env": "internal-package-contract env",
     "contract": "internal-package-contract",
     "version": "changeset version && npm run build",
     "release": "changeset publish",
@@ -76,6 +77,18 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "internal-package-contract": {
+    "copies": [
+      "benchmark-budgets",
+      "code-of-conduct",
+      "editorconfig",
+      "reading-benchmarks",
+      "releasing",
+      "support",
+      "typedoc-markdown",
+      "writing-benchmarks"
+    ]
   },
   "overrides": {
     "adm-zip": "0.6.1"

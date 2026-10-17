@@ -1,7 +1,8 @@
 {
   // Generated API reports are produced verbatim by typedoc-plugin-markdown and drift-checked, so
   // hand-editing (or linting) them is pointless. Hand-authored Markdown stays linted.
-  "ignores": ["docs/api-report/**", "benchmarks/BENCHMARKS.md"],
+  // docs/ENVIRONMENT.md is written by `internal-package-contract env`, in env-cap's format, and drift-checked.
+  "ignores": ["docs/api-report/**", "docs/ENVIRONMENT.md", "benchmarks/BENCHMARKS.md"],
   "config": {
     "default": true,
     "MD013": false, // line length

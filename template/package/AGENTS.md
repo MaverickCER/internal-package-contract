@@ -29,3 +29,11 @@ Rules for AI coding agents working in `{{name}}`. They are the same rules a huma
 - A suppression comment (`eslint-disable`, `@ts-expect-error`, `// Stryker disable`) says why, on the
   same line, in words a reviewer can check.
 - Public API is what `package.json` `exports` lists; everything else can change freely.
+
+## Public API map
+
+One row per entry point `package.json` exports. The table is generated: describe a new entry point in
+`docs/surface.json`, then run `npx internal-package-contract generate`.
+
+<!-- ipc:begin entry-points -->
+<!-- ipc:end entry-points -->

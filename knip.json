@@ -4,7 +4,9 @@
     "bin/**/*.mjs!",
     "scripts/**/*.mjs!",
     "scripts/**/*.ts!",
+    "runtime/**/*.ts!",
     "contract.ts!",
+    "logs.ts!",
     "repo-contract.config.ts!",
     "eslint.config.mjs!",
     "prettier.config.mjs!",
@@ -12,7 +14,13 @@
     "stryker.config.mjs!",
     ".dependency-cruiser.cjs!"
   ],
-  "project": ["checks/**/*.ts", "bin/**/*.mjs", "scripts/**/*.mjs", "scripts/**/*.ts"],
+  "project": [
+    "checks/**/*.ts",
+    "runtime/**/*.ts",
+    "bin/**/*.mjs",
+    "scripts/**/*.mjs",
+    "scripts/**/*.ts"
+  ],
   "ignore": ["template/**", "coverage/**", "reports/**", ".stryker-tmp/**"],
   "ignoreDependencies": [
     "@arethetypeswrong/cli",

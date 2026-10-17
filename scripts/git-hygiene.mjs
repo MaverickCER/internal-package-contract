@@ -2,8 +2,10 @@
 // check's policy interprets it. Always exits 0.
 
 import { sync as spawnSync } from "cross-spawn"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
+
+import { SOURCE_FILE, untrackedImports } from "./git-hygiene/imports.mjs"
 
 const cwd = process.cwd()
 
@@ -37,6 +39,25 @@ const conflictFiles = conflict.ok
       .filter(Boolean)
   : []
 
+// Imports in tracked source that only resolve to a file git does not track (ignored, or never added).
+const trackedSet = new Set(tracked)
+const sources = Object.fromEntries(
+  tracked
+    .filter((file) => SOURCE_FILE.test(file) && !file.startsWith("node_modules/"))
+    .map((file) => [file, readIfExists(file) ?? ""]),
+)
+const untrackedTargets = untrackedImports({
+  files: sources,
+  tracked: trackedSet,
+  existsOnDisk: (file) => {
+    try {
+      return statSync(path.join(cwd, file)).isFile()
+    } catch {
+      return false
+    }
+  },
+})
+
 const pkg = (() => {
   try {
     return JSON.parse(readIfExists("package.json") ?? "{}")
@@ -54,6 +75,7 @@ process.stdout.write(
     nvmrcPresent: existsSync(path.join(cwd, ".nvmrc")),
     tracked,
     conflictFiles,
+    untrackedTargets,
     pkg: {
       private: pkg.private === true,
       hasFiles: Array.isArray(pkg.files) && pkg.files.length > 0,

@@ -3,7 +3,7 @@
  * commit `package-lock.json` resolved it to, and the commit SHA of every reusable workflow it calls --
  * and they must name one revision, or the repository runs one revision's checks and another
  * revision's release. This reads all three offline and fails on any disagreement (see
- * {@link file://../scripts/pin-consistency.mjs}); it never rewrites anything (`--repin` and the
+ * {@link file://../scripts/pin-consistency.mjs}); it never rewrites anything (`upgrade` and the
  * pin-sync workflow do that).
  *
  * A repository that does not depend on this package, including this one, passes vacuously.
@@ -41,7 +41,7 @@ export function pinConsistency(): CheckDefinitionConfig {
         return {
           outcome: "fail",
           rationale: [
-            "The pins of internal-package-contract disagree; re-sync them (`internal-package-contract --repin`) and commit the result:",
+            "The pins of internal-package-contract disagree; re-sync them with `internal-package-contract upgrade <tag>` (the tag you want everything on) and commit the result:",
             ...problems.map((problem) => `- ${problem}`),
           ].join("\n"),
         }

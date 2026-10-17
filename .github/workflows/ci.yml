@@ -70,7 +70,7 @@ jobs:
       - run: npm ci
       - run: npx --yes -p typescript@7 tsc --noEmit -p tsconfig.self.json
 
-  # bin/init.mjs does path/file-I/O and git-hook wiring -- verify it (and the
+  # bin/scaffold.mjs does path/file-I/O and git-hook wiring -- verify it (and the
   # unit suite) actually work on Windows, not just macOS/Linux. Not the full
   # `npm run contract` here: Mutation/Accessibility need Stryker/a system
   # Chrome, well beyond what a cross-platform path-handling smoke test needs.
@@ -86,7 +86,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - name: init.mjs smoke test in a scratch consumer
+      - name: scaffold.mjs smoke test in a scratch consumer
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/scratch-consumer"
@@ -94,7 +94,7 @@ jobs:
           git init -q
           git remote add origin https://github.com/MaverickCER/scratch.git
           printf '{"name":"scratch","version":"0.0.0"}' > package.json
-          node "$GITHUB_WORKSPACE/bin/init.mjs"
+          node "$GITHUB_WORKSPACE/bin/scaffold.mjs"
           test -f .gitignore
           test -f CODEOWNERS
           test -f SECURITY.md

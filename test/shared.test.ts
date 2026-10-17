@@ -6,6 +6,9 @@ import {
   abnormalTermination,
   bundledConfig,
   combinedOutput,
+  unparseableRationale,
+  crashLine,
+  withErrorHeadline,
   consumerScripts,
   firstExisting,
   hasScript,
@@ -13,7 +16,8 @@ import {
   parseToolEnvelope,
   resolveConfig,
 } from "../checks/shared.js"
-import { makeResult } from "./support.js"
+import type { CheckDefinitionConfig } from "repo-contract"
+import { makeContext, makeResult } from "./support.js"
 
 describe("packageRoot", () => {
   it("resolves to this package's own root (one level up from checks/)", () => {
@@ -235,5 +239,122 @@ describe("parseToolEnvelope", () => {
       "Prefix:",
     )
     expect(result).toEqual({ ok: true, value: { ok: true, data: 1 } })
+  })
+})
+
+describe("unparseableRationale", () => {
+  it("says the output could not be parsed when the tool printed no error", () => {
+    expect(unparseableRationale("X:", makeResult())).toBe(
+      "X: check output could not be parsed as JSON.",
+    )
+    expect(unparseableRationale("X:", makeResult({ stdout: "oops" }))).toBe(
+      "X: check output could not be parsed as JSON.\noops",
+    )
+  })
+  it("leads with the error that stopped the check, then everything it printed", () => {
+    const stderr =
+      "node:internal/x\n  throw new E\n        ^\n\nError: Cannot find module './b.js'\n    at foo (a.ts:1:1)\n"
+    expect(unparseableRationale("ApiContract:", makeResult({ stderr }))).toBe(
+      `ApiContract: the check stopped with an error before it produced a result: Error: Cannot find module './b.js'\n${stderr.trim()}`,
+    )
+  })
+  it("recognises the other error classes, including a code in brackets", () => {
+    for (const line of [
+      "TypeError: x is not a function",
+      "UnknownCheckIdError [CODE]: bad id",
+      "RangeError: out",
+    ]) {
+      expect(unparseableRationale("X:", makeResult({ stderr: `noise\n${line}\nat y` }))).toContain(
+        `error before it produced a result: ${line}`,
+      )
+    }
+  })
+  it("does not mistake prose that merely mentions an error for one", () => {
+    expect(unparseableRationale("X:", makeResult({ stderr: "see Error: in the docs" }))).toContain(
+      "could not be parsed as JSON",
+    )
+    expect(unparseableRationale("X:", makeResult({ stderr: "an Error: x" }))).toContain(
+      "could not be parsed",
+    )
+  })
+})
+
+describe("crashLine", () => {
+  it("finds the first error line a tool died with, in any of its usual shapes", () => {
+    for (const line of [
+      "Error: boom",
+      "TypeError: x is not a function",
+      'ConfigError: Config "x": bad',
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'typedoc'",
+    ]) {
+      expect(crashLine(makeResult({ stderr: `warning\n${line}\n    at a (b.js:1:1)\n` }))).toBe(
+        line,
+      )
+    }
+  })
+  it("ignores a line that only mentions an error, and stdout", () => {
+    expect(crashLine(makeResult({ stderr: "an Error: in prose" }))).toBeUndefined()
+    expect(crashLine(makeResult({ stdout: "Error: only on stdout" }))).toBeUndefined()
+    expect(crashLine(makeResult())).toBeUndefined()
+  })
+})
+
+describe("withErrorHeadline", () => {
+  const fail = (rationale: string) => ({ outcome: "fail" as const, rationale })
+  const wrapped = (verdict: { outcome: "pass" | "fail" | "warn"; rationale: string }) =>
+    withErrorHeadline<Record<string, CheckDefinitionConfig>>({
+      Lint: { run: ["x"], policy: () => verdict },
+    })["Lint"]!.policy
+  const stack = "Error: Cannot find module 'x'\n    at a (b.js:1:1)\n    at c (d.js:2:2)"
+  it("leads a failure that blames something else with the error the tool died with, keeping the whole reason", async () => {
+    const policy = wrapped(
+      fail("ESLint output could not be parsed as JSON. ESLint printed:\nline\n"),
+    )
+    const result = await policy(makeContext(makeResult({ stderr: stack })))
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: `Lint: the tool stopped with an error before it produced a result: Error: Cannot find module 'x'\nESLint output could not be parsed as JSON. ESLint printed:\nline\n`,
+    })
+  })
+  it("covers each kind of headline that hides a crash", async () => {
+    for (const first of [
+      "could not be parsed",
+      "licensee did not evaluate any dependency licenses",
+      "tool produced no output",
+      "API docs: `npm run docs:api` exited 1.",
+    ]) {
+      const result = await wrapped(fail(first))(makeContext(makeResult({ stderr: stack })))
+      expect(result.rationale.startsWith("Lint: the tool stopped with an error")).toBe(true)
+    }
+  })
+  it("leaves a failure whose headline is not about missing output alone", async () => {
+    const verdict = fail("3 errors found in src/a.ts")
+    expect(await wrapped(verdict)(makeContext(makeResult({ stderr: stack })))).toBe(verdict)
+  })
+  it("leaves a pass, a warning, and a failure with no error on stderr alone", async () => {
+    const pass = { outcome: "pass" as const, rationale: "output could not be parsed" }
+    expect(await wrapped(pass)(makeContext(makeResult({ stderr: stack })))).toBe(pass)
+    const warn = { outcome: "warn" as const, rationale: "output could not be parsed" }
+    expect(await wrapped(warn)(makeContext(makeResult({ stderr: stack })))).toBe(warn)
+    const noError = fail("output could not be parsed")
+    expect(await wrapped(noError)(makeContext(makeResult({ stderr: "plain text" })))).toBe(noError)
+  })
+  it("does not repeat an error the headline already names", async () => {
+    const verdict = fail("output could not be parsed: Error: Cannot find module 'x'")
+    expect(await wrapped(verdict)(makeContext(makeResult({ stderr: stack })))).toBe(verdict)
+  })
+  it("keeps every other property of a check, and awaits an async policy", async () => {
+    const check = {
+      run: ["x"],
+      isolated: true,
+      dependsOn: ["A"],
+      policy: () => Promise.resolve(fail("exited 2")),
+    }
+    const out = withErrorHeadline<Record<string, CheckDefinitionConfig>>({ A: check })["A"]!
+    expect(out.isolated).toBe(true)
+    expect((out as { dependsOn?: string[] }).dependsOn).toEqual(["A"])
+    expect((await out.policy(makeContext(makeResult({ stderr: stack })))).rationale).toContain(
+      "stopped with an error",
+    )
   })
 })

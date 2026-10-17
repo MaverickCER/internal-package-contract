@@ -25,4 +25,4 @@ large enough bump:
 Neither check sees a change in behaviour behind an unchanged signature or `--help` text, or in the
 files a command writes. Those are judged in review, and a changeset says so when they matter.
 
-<!-- TODO({{name}}): list stable / experimental / private surfaces here when they diverge. -->
+<!-- ipc:prompt: list stable / experimental / private surfaces here when they diverge. -->

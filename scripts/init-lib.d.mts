@@ -1,4 +1,5 @@
 export interface InitArgs {
+  noGithub?: boolean
   force: boolean
   name?: string
   owner?: string

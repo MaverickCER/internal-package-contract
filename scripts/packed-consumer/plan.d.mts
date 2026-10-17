@@ -1,3 +1,4 @@
+export function readTarball(gzipped: Buffer): { name: string; content: Buffer }[]
 export function tarballFiles(gzipped: Buffer): string[]
 export function targetFiles(target: unknown): string[]
 export function entryPoints(manifest: {

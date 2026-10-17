@@ -850,9 +850,10 @@ describe("interpretSocketRun()", () => {
     expect(result.kind === "warn" && result.rationale).toContain("socket login")
   })
 
-  it("still fails when no API key is available in CI, where a skipped scan would hide alerts", () => {
+  it("warns, as it does locally, when no API key is available in CI: the key is optional", () => {
     const authFailure = scriptOutput({ ok: false, message: "Auth Error" })
-    expect(interpretSocketRun(authFailure, CI_ENV).kind).toBe("fail")
+    expect(interpretSocketRun(authFailure, CI_ENV).kind).toBe("warn")
+    expect(interpretSocketRun(authFailure, LOCAL_ENV).kind).toBe("warn")
   })
 
   it("fails, not warns, when a key exists but Socket rejects it", () => {
@@ -901,7 +902,9 @@ describe("interpretSocketRun()", () => {
 
   it("gives CI-specific steps (secret setup) instead of local sign-in when running in CI", () => {
     const outcome = interpretSocketRun(scriptOutput({ ok: false, message: "Auth Error" }), CI_ENV)
-    const rationale = outcome.kind === "fail" ? outcome.rationale : ""
+    const rationale = outcome.kind === "warn" ? outcome.rationale : ""
+    expect(outcome.kind).toBe("warn")
+    expect(rationale).toContain("the Socket scan did not run, so its alerts were not checked.")
     expect(rationale).toContain("no Socket API token is available to this CI run")
     expect(rationale).toContain("SOCKET_SECURITY_API_KEY")
     expect(rationale).not.toContain("socket login")

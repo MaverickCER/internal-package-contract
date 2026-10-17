@@ -7,9 +7,14 @@ export type ComplexityClass =
   "constant" | "logarithmic" | "linear" | "linearithmic" | "quadratic" | "cubic-or-worse"
 
 export const COMPLEXITY_NOTATION: Readonly<Record<ComplexityClass, string>>
+export function groupName(id: string, variant?: string, variable?: string): string
+export function parseGroup(
+  group: string,
+): { id: string; variant?: string; variable?: string } | undefined
 export function expectationOf(
   fn: any,
   variant?: any,
+  variable?: string,
 ): { expectedComplexity: ComplexityClass; complexityReason: string }
 export class SuiteDefinitionError extends Error {
   constructor(problems: readonly string[])
@@ -30,6 +35,21 @@ export interface SuiteBenchmark {
   expectedComplexity: ComplexityClass
   complexityReason: string
   variables: SuiteVariable[]
+  /**
+   * What the function does with each parameter (or key) of the public functions it exercises:
+   * `swept`, `sweep:<variable>`, `variant:<name>`, `fixed: <why>` or `not covered: <why>`.
+   */
+  covers?: Record<string, Record<string, string>>
+  /** Other variables the function sweeps, each measured on its own with the rest held at their base values. */
+  sweeps?: {
+    variable: string
+    description: string
+    baseValue: number
+    primaryValue?: number
+    tiers?: readonly number[]
+    expectedComplexity: ComplexityClass
+    complexityReason: string
+  }[]
   variants?: {
     name: string
     description: string
@@ -56,10 +76,18 @@ export interface SuiteBenchmark {
     maxIterations?: number
     minSampleMs?: number
   }
-  setup?: (n: number, options?: unknown) => unknown
+  setup?: (
+    n: number,
+    options?: unknown,
+    context?: { variable: string; values: Record<string, number> },
+  ) => unknown
   run?: (ctx: any) => unknown
   call?: (...args: any[]) => unknown
-  input?: (n: number, options?: unknown) => unknown[]
+  input?: (
+    n: number,
+    options?: unknown,
+    context?: { variable: string; values: Record<string, number> },
+  ) => unknown[]
   teardown?: (ctx: any) => unknown
 }
 export interface SuiteSide {
@@ -83,6 +111,8 @@ export interface Suite {
     variables?: SuiteVariable[]
   }
   functions: SuiteBenchmark[]
+  /** Public functions with several inputs that have no benchmark, each with the reason. */
+  notBenchmarked?: Record<string, string>
 }
 export function defineSuite(suite: Suite): Suite & { tiers: readonly number[] }
 

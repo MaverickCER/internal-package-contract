@@ -6,6 +6,8 @@ import { sync as spawnSync } from "cross-spawn"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { run as runGenerate } from "../scripts/generate/run.mjs"
+import { COPIES, docHeader } from "../scripts/managed-files/inspect.mjs"
 import {
   REQUIRED_STATUS_CHECK_CONTEXT,
   mergeRequiredRules,
@@ -31,7 +33,7 @@ const force = args.force
 const done = []
 const skipped = []
 
-const USAGE = `Usage: internal-package-contract init [--name <package-name> [--owner <github-owner>] [--description <text>]] [--force]
+const USAGE = `Usage: internal-package-contract init [--name <package-name> [--owner <github-owner>] [--description <text>]] [--force] [--no-github]
 
   Without --name: scaffolds repo-hygiene files and git wiring only.
   With --name:    ALSO scaffolds a complete, working package (package.json, src/, test/, tsup/tsconfig/
@@ -39,6 +41,8 @@ const USAGE = `Usage: internal-package-contract init [--name <package-name> [--o
                   templates and workflows), replacing {{name}}/{{repo}}/{{owner}}/{{description}}/{{year}}.
                   --owner defaults to the origin remote's owner, else MaverickCER.
   --force:        overwrite files that already exist.
+  --no-github:    do not touch the repository's settings (branch protection); the default applies them
+                  when the gh CLI is installed and signed in.
 `
 
 /**
@@ -71,6 +75,11 @@ if (args.errors.length > 0 || nameProblem !== undefined) {
   process.exit(1)
 }
 
+/** The documents this package keeps current in every package it scaffolds, by destination. */
+const MANAGED_DOCS = new Map(
+  COPIES.filter((copy) => copy.kind === "doc").map((copy) => [copy.to, copy]),
+)
+
 /** Writes `template/package/<rel>` to `<cwd>/<rel>` with placeholders rendered, unless it exists (or --force). */
 function scaffoldPackageFile(rel, vars) {
   const dest = path.join(cwd, rel)
@@ -80,11 +89,12 @@ function scaffoldPackageFile(rel, vars) {
   }
   const source = readFileSync(path.join(packageRoot, "template", "package", rel), "utf8")
   mkdirSync(path.dirname(dest), { recursive: true })
+  const managed = MANAGED_DOCS.get(rel)
   writeFileSync(
     dest,
     rel.endsWith(".json") && rel === "package.json"
       ? renderJson(source, vars)
-      : render(source, vars),
+      : `${managed === undefined ? "" : docHeader(managed.from)}${render(source, vars)}`,
   )
   done.push(rel)
 }
@@ -101,6 +111,20 @@ if (args.name !== undefined) {
     }
     scaffoldPackageFile(rel, vars)
   }
+  // The scaffold's own documents carry generated regions; fill them now so the first `GeneratedRegions` run
+  // finds them current. The package's Prettier configuration imports this package, which is not installed yet,
+  // so the defaults format them -- the same text, since a table is aligned the same way under any setting here.
+  const generated = []
+  const code = await runGenerate(
+    [],
+    cwd,
+    { out: (text) => generated.push(text), err: (text) => generated.push(text) },
+    {
+      formatOptions: () => Promise.resolve({}),
+    },
+  )
+  if (code === 0) done.push("generated regions (docs/surface.json)")
+  else skipped.push(`generated regions (${generated.join(" ").trim()})`)
 }
 
 /** Copy `template/<from>` to `<cwd>/<to>` unless it exists (or --force). */
@@ -139,6 +163,17 @@ if (pins.ipcSha === "") {
   )
 } else {
   scaffoldRendered("release.yml", ".github/workflows/release.yml")
+}
+scaffold("package/.github/workflows/scorecard.yml", ".github/workflows/scorecard.yml")
+if (pins.ipcSha === "") {
+  skipped.push(
+    ".github/workflows/sync-internal-package-contract.yml (it is pinned to a commit of internal-package-contract, and none could be resolved: run `npm install` so the lockfile pins one, then `init` again)",
+  )
+} else {
+  scaffoldRendered(
+    "package/.github/workflows/sync-internal-package-contract.yml",
+    ".github/workflows/sync-internal-package-contract.yml",
+  )
 }
 scaffold("dependabot.yml", ".github/dependabot.yml")
 scaffold("codeowners", "CODEOWNERS")
@@ -334,7 +369,11 @@ function upsertBranchProtection() {
   )
 }
 
-upsertBranchProtection()
+if (args.noGithub) {
+  skipped.push("GitHub branch protection (--no-github: no repository setting was changed)")
+} else {
+  upsertBranchProtection()
+}
 
 process.stdout.write("\ninternal-package-contract init\n\n")
 for (const d of done) process.stdout.write(`  + ${d}\n`)

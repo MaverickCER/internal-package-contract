@@ -196,8 +196,24 @@ describe("evaluateCoderabbitPolicy", () => {
     ).toEqual({
       outcome: "warn",
       rationale:
-        "CodeRabbit did not run (cli-not-installed) -- findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) and run from a real branch to enable real enforcement.",
+        "CodeRabbit did not run (cli-not-installed) -- findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) to enable real enforcement.",
     })
+  })
+
+  it("says what to do for each reason it could not run here", () => {
+    const hint = (reason: "git-context-unavailable" | "not-signed-in" | "network-unreachable") =>
+      evaluateCoderabbitPolicy({
+        evidence: { status: "unavailable", reason, registryPath: REGISTRY, existingRecordCount: 0 },
+      }).rationale
+    expect(hint("git-context-unavailable")).toBe(
+      "CodeRabbit did not run (git-context-unavailable) -- findings were not evaluated. Run it from a branch git can diff against its base (a checked-out branch with a remote) to enable real enforcement.",
+    )
+    expect(hint("not-signed-in")).toContain(
+      "Sign in with the CodeRabbit CLI to enable real enforcement.",
+    )
+    expect(hint("network-unreachable")).toContain(
+      "Check the network connection to enable real enforcement.",
+    )
   })
 
   it("fails on a real CLI-reported error", () => {

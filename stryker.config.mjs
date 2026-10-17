@@ -21,8 +21,13 @@ export default {
     ...SCOPE_DIRS.map((dir) => `${dir}/**/*.{ts,mjs}`),
     ...[...NON_RUNTIME, ...ENTRY_SHELLS].map((glob) => `!${glob}`),
   ],
-  disableTypeChecks: "{checks,scripts,bin,test}/**/*.{ts,mjs}",
+  disableTypeChecks: "{checks,scripts,bin,runtime,test}/**/*.{ts,mjs}",
   // Several suites run the real TypeScript compiler and API Extractor; a mutant that slows them must
-  // not be mistaken for a hang on a runner slower than a developer's machine.
-  timeoutMS: 120_000,
+  // not be mistaken for a hang on a runner slower than a developer's machine, or on a laptop that is swapping:
+  // a different mutant timed out in each of five full runs and none did alone, so 2 minutes was a stall, not a loop.
+  timeoutMS: 300_000,
+  // One runner serves every mutant. A mutant that its tests kill in 15 seconds timed out at 120 only in the
+  // full run, never alone or with its folder, which points at a runner worn down late in a run (the cause is
+  // not proven). A fresh runner every so often is the cheap guard, and the run stays cold and exact.
+  maxTestRunnerReuse: 1500,
 }

@@ -44,6 +44,14 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      PIN_SYNC_TOKEN:
+        description: >-
+          Optional. A token allowed to push workflow files, such as a fine-grained personal access token with
+          "Contents", "Pull requests" and "Workflows" write access. Without it the run uses GITHUB_TOKEN, which
+          GitHub does not allow to change `.github/workflows/*` -- so a release that changes a pinned workflow
+          cannot be pushed -- and whose pushes do not start CI on the pull request.
+        required: false
 
 jobs:
   sync:
@@ -56,6 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          token: ${{ secrets.PIN_SYNC_TOKEN || github.token }}
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -82,7 +91,14 @@ jobs:
                 echo "::error::${REPO_SLUG} has no vX.Y.Z release tag to pin ${DEP} to."
                 exit 1
               fi
-              npm install --save-dev --ignore-scripts "${DEP}@github:${REPO_SLUG}#${LATEST_TAG}"
+              npm ci --ignore-scripts
+              if [ -f "node_modules/${DEP}/scripts/upgrade/run.mjs" ]; then
+                # The installed release knows how to bring everything the new one owns up to date: the pin, the
+                # workflows, the managed files, the landing page and the benchmark guides.
+                node "node_modules/${DEP}/bin/contract.mjs" upgrade "${LATEST_TAG}"
+              else
+                npm install --save-dev --ignore-scripts "${DEP}@github:${REPO_SLUG}#${LATEST_TAG}"
+              fi
               TARGET="${LATEST_TAG}"
               ;;
             git+*|git@*|https://*|ssh://*)
@@ -109,7 +125,7 @@ jobs:
           if [ -n "$NEW_SHA" ] && [ -d .github/workflows ]; then
             node node_modules/internal-package-contract/scripts/repin-workflows.mjs "$DEP" "$NEW_SHA" "$TARGET"
           fi
-          if git diff --quiet -- package.json package-lock.json .github/workflows; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "${DEP} is already current (${TARGET}); nothing to do."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -147,7 +163,7 @@ jobs:
         id: pr
         if: ${{ steps.bump.outputs.changed == 'true' }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PIN_SYNC_TOKEN || github.token }}
           DEP: ${{ inputs.dependency-name }}
           TARGET: ${{ steps.bump.outputs.target }}
         run: |
@@ -161,7 +177,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- package.json package-lock.json .changeset .github/workflows
+          git add -A
           git checkout -b "$BRANCH"
           git commit -m "chore(deps): bump ${DEP} to ${TARGET}"
           # --force: the branch is this bot's own, and a stale one left behind by a pull request that
@@ -182,7 +198,7 @@ jobs:
       - name: Dispatch CI, then merge only if it comes back green
         if: steps.pr.outputs.branch
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PIN_SYNC_TOKEN || github.token }}
           BRANCH: ${{ steps.pr.outputs.branch }}
         run: |
           SHA=$(git rev-parse HEAD)
