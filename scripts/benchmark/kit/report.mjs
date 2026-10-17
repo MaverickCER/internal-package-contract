@@ -232,7 +232,14 @@ function groupTable(group, unit) {
             ? "n/a"
             : Math.round(entry.opsPerSecond).toLocaleString("en-US"),
         ]
-      : [String(entry.inputs[unit]), `❌ ${entry.error?.message ?? "failed"}`, "", "", "", ""],
+      : [
+          String(entry.inputs[unit]),
+          `❌ ${firstLine(entry.error?.message ?? "failed")}`,
+          "",
+          "",
+          "",
+          "",
+        ],
   )
   return table(header, rows)
 }
@@ -463,13 +470,23 @@ function contributionSection(results) {
   return lines
 }
 
+/**
+ * A failure's message as a report shows it: its first line only, so a stack trace (and the absolute paths of the
+ * machine that ran it) stays in `results.json` and out of the published page.
+ * @param {string} message
+ * @returns {string}
+ */
+function firstLine(message) {
+  return message.split("\n")[0]
+}
+
 function failures(results) {
   const failed = []
   for (const [group, value] of Object.entries(results.results)) {
     for (const [tier, entry] of Object.entries(value.tiers)) {
       if (entry.status !== "completed")
         failed.push(
-          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${entry.error?.message ?? ""}`,
+          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${firstLine(entry.error?.message ?? "")}`,
         )
     }
   }

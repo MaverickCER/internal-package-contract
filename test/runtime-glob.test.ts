@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { globToRegExp } from "../runtime/glob.js"
+import { globToRegExp, matchesAllowList } from "../runtime/glob.js"
 
 // discover.ts's schema-discovery walk only ever exercises this module
 // through `**`-heavy patterns in its own test fixtures -- a bare single `*`
@@ -123,5 +123,25 @@ describe("globToRegExp", () => {
     expect(globToRegExp("**/*.ts").source).toBe("^(?:.*\\/)?[^/]*\\.ts$")
     expect(globToRegExp("a**b").source).toBe("^a.*b$")
     expect(globToRegExp("?").source).toBe("^[^/]$")
+  })
+})
+
+describe("matchesAllowList", () => {
+  const cli = ["src/cli/**"]
+  it("matches a relative pattern against the path as given", () => {
+    expect(matchesAllowList(cli, "src/cli/index.ts", "/repo")).toBe(true)
+    expect(matchesAllowList(cli, "src/build/index.ts", "/repo")).toBe(false)
+  })
+  it("matches it against an absolute path inside the working directory, on Windows too", () => {
+    expect(matchesAllowList(cli, "/repo/src/cli/index.ts", "/repo")).toBe(true)
+    expect(matchesAllowList(cli, "C:\\repo\\src\\cli\\index.ts", "C:\\repo")).toBe(true)
+  })
+  it("never treats a folder that only starts like the working directory, or one outside it, as inside", () => {
+    expect(matchesAllowList(cli, "/repoXsrc/cli/index.ts", "/repo")).toBe(false)
+    expect(matchesAllowList(cli, "/zzzz/src/cli/index.ts", "/repo")).toBe(false)
+  })
+  it("is true when any one pattern matches, and false for an empty list", () => {
+    expect(matchesAllowList(["docs/**", ...cli], "/repo/src/cli/index.ts", "/repo")).toBe(true)
+    expect(matchesAllowList([], "src/cli/index.ts", "/repo")).toBe(false)
   })
 })

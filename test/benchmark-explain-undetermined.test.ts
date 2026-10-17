@@ -9,7 +9,11 @@ describe("explainUndetermined", () => {
         points: 1,
         variable: "file",
         unmeasured: [
-          { tier: "n20", status: "failed", message: "boom" },
+          {
+            tier: "n20",
+            status: "failed",
+            message: "boom\n    at run (/home/runner/work/pkg/suite.mjs:1:1)",
+          },
           { tier: "n40", status: "skipped" },
         ],
         discarded: [{ tier: "n80", why: "its time was zero, below the timer's resolution" }],

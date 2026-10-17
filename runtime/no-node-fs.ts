@@ -2,7 +2,7 @@
 // subpath keeps the loaded surface small, and the main entry is only needed for the node-type enum.
 import { RuleCreator } from "@typescript-eslint/utils/eslint-utils"
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils"
-import { globToRegExp } from "./glob.js"
+import { matchesAllowList } from "./glob.js"
 
 /** What differs between the packages that carry the rule: where its documentation lives and what to read. */
 export interface NoNodeFsWording {
@@ -33,8 +33,8 @@ function fsSpecifier(source: unknown): string | undefined {
 }
 
 /**
- * Flags any `import`/`require`/dynamic `import()` of `node:fs` in library
- * code, so a library surface acquires its filesystem capability from the
+ * Flags any `import`, re-export (`export ... from`, `export * from`), `require`, TypeScript
+ * `import x = require()` or dynamic `import()` of `node:fs` in library code, so a library surface acquires its filesystem capability from the
  * caller instead of reaching for `node:fs` itself (the same discipline
  * `repo-contract`'s ADR-0011 established for `child_process`/`process.env`).
  * The wording passed in names the package's own documentation and decision record.
@@ -68,16 +68,33 @@ export function createNoNodeFs(wording: NoNodeFsWording) {
     },
     defaultOptions: [{ allow: [] }],
     create(context, [options]) {
-      const filename = context.filename
       // `RuleCreator` merges `defaultOptions` onto the configured options, so `allow` is always set.
-      const allowPatterns = options.allow as readonly string[]
-      if (allowPatterns.some((p) => globToRegExp(p).test(filename))) return {}
+      if (matchesAllowList(options.allow as readonly string[], context.filename, context.cwd))
+        return {}
+
+      const reportSource = (node: TSESTree.Node, source: TSESTree.Literal | null): void => {
+        // A declaration with no source (`export { x }`, `export const x = 1`) re-exports nothing.
+        const specifier = source === null ? undefined : fsSpecifier(source.value)
+        if (specifier !== undefined) {
+          context.report({ node, messageId: "noNodeFs", data: { specifier } })
+        }
+      }
 
       return {
         ImportDeclaration(node) {
-          const specifier = fsSpecifier(node.source.value)
-          if (specifier !== undefined) {
-            context.report({ node, messageId: "noNodeFs", data: { specifier } })
+          reportSource(node, node.source)
+        },
+        // A re-export reaches the module as surely as an import does.
+        ExportNamedDeclaration(node) {
+          reportSource(node, node.source)
+        },
+        ExportAllDeclaration(node) {
+          reportSource(node, node.source)
+        },
+        // TypeScript's `import fs = require("node:fs")`; `import x = A.B` names no module.
+        TSImportEqualsDeclaration(node) {
+          if (node.moduleReference.type === AST_NODE_TYPES.TSExternalModuleReference) {
+            reportSource(node, node.moduleReference.expression)
           }
         },
         ImportExpression(node) {
