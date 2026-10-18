@@ -1,6 +1,8 @@
 // Says why a group's big-O could not be determined, in terms of what the run measured, so the person reading
 // a warning knows what to change. Pure: it reads one `analysis.complexity` entry of a results.json. A failure's
-// message is cut to its first line, so a stack trace (and the paths of the machine that ran it) is never published.
+// message is shown as `publicMessage` makes it, so a stack trace and the machine's paths are never published.
+
+import { publicMessage } from "./public-message.mjs"
 
 /** @param {number} count @param {string} noun @returns {string} `1 size`, `3 sizes`. */
 function counted(count, noun) {
@@ -18,7 +20,7 @@ export function explainUndetermined(value) {
       const lost = [
         ...(value.unmeasured ?? []).map(
           ({ tier, status, message }) =>
-            `${tier} ${status}${message === undefined ? "" : ` (${message.split("\n")[0]})`}`,
+            `${tier} ${status}${message === undefined ? "" : ` (${publicMessage(message)})`}`,
         ),
         ...(value.discarded ?? []).map(({ tier, why }) => `${tier} was unusable: ${why}`),
       ]

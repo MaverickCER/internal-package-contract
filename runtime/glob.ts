@@ -52,13 +52,15 @@ export function matchesAllowList(
   filename: string,
   cwd: string,
 ): boolean {
-  const separator = filename.charAt(cwd.length)
+  // A filesystem root (`/`, `C:\\`) already ends in its separator; anything else is followed by one.
+  const base = cwd.endsWith("/") || cwd.endsWith("\\") ? cwd.slice(0, -1) : cwd
+  const separator = filename.charAt(base.length)
   const names =
-    filename.startsWith(cwd) && (separator === "/" || separator === "\\")
+    filename.startsWith(base) && (separator === "/" || separator === "\\")
       ? [
           filename,
           filename
-            .slice(cwd.length + 1)
+            .slice(base.length + 1)
             .split("\\")
             .join("/"),
         ]

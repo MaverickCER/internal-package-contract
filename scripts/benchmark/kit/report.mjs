@@ -3,6 +3,7 @@
 // monthly bill and a cold start -- the benefits live in the rest of the repository. Every number is a
 // single run's measurement on one machine; the report says so, and links the reading guide.
 
+import { publicMessage } from "../public-message.mjs"
 import { explainUndetermined } from "../explain-undetermined.mjs"
 import { describeGroup } from "../trend.mjs"
 import { COMPLEXITY_NOTATION, expectationOf, groupName } from "./define.mjs"
@@ -234,7 +235,7 @@ function groupTable(group, unit) {
         ]
       : [
           String(entry.inputs[unit]),
-          `❌ ${firstLine(entry.error?.message ?? "failed")}`,
+          `❌ ${publicMessage(entry.error?.message ?? "failed")}`,
           "",
           "",
           "",
@@ -470,23 +471,13 @@ function contributionSection(results) {
   return lines
 }
 
-/**
- * A failure's message as a report shows it: its first line only, so a stack trace (and the absolute paths of the
- * machine that ran it) stays in `results.json` and out of the published page.
- * @param {string} message
- * @returns {string}
- */
-function firstLine(message) {
-  return message.split("\n")[0]
-}
-
 function failures(results) {
   const failed = []
   for (const [group, value] of Object.entries(results.results)) {
     for (const [tier, entry] of Object.entries(value.tiers)) {
       if (entry.status !== "completed")
         failed.push(
-          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${firstLine(entry.error?.message ?? "")}`,
+          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${publicMessage(entry.error?.message ?? "")}`,
         )
     }
   }

@@ -140,6 +140,11 @@ describe("matchesAllowList", () => {
     expect(matchesAllowList(cli, "/repoXsrc/cli/index.ts", "/repo")).toBe(false)
     expect(matchesAllowList(cli, "/zzzz/src/cli/index.ts", "/repo")).toBe(false)
   })
+  it("matches inside a working directory that is a filesystem root", () => {
+    expect(matchesAllowList(cli, "/src/cli/index.ts", "/")).toBe(true)
+    expect(matchesAllowList(cli, "C:\\src\\cli\\index.ts", "C:\\")).toBe(true)
+    expect(matchesAllowList(cli, "/src/build/index.ts", "/")).toBe(false)
+  })
   it("is true when any one pattern matches, and false for an empty list", () => {
     expect(matchesAllowList(["docs/**", ...cli], "/repo/src/cli/index.ts", "/repo")).toBe(true)
     expect(matchesAllowList([], "src/cli/index.ts", "/repo")).toBe(false)
