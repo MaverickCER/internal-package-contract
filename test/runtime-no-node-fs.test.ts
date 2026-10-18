@@ -1,5 +1,6 @@
 import { RuleTester } from "eslint"
 import type { Rule } from "eslint"
+import tseslint from "typescript-eslint"
 import { describe, expect, it } from "vitest"
 import { createNoNodeFs } from "../runtime/no-node-fs.js"
 
@@ -95,6 +96,86 @@ ruleTester.run("no-node-fs", noNodeFs as unknown as Rule.RuleModule, {
     },
   ],
 })
+
+// ESLint gives a rule the absolute path of the file; an allow pattern is written relative to the working directory.
+const cwd = process.cwd()
+const allowCli = [{ allow: ["src/cli/**"] }]
+
+ruleTester.run(
+  "no-node-fs: re-exports and allow patterns",
+  noNodeFs as unknown as Rule.RuleModule,
+  {
+    valid: [
+      { code: `export const x = 1;`, filename: "src/build/discover.ts" },
+      { code: `const x = 1; export { x };`, filename: "src/build/discover.ts" },
+      { code: `export { x } from "./local.js";`, filename: "src/build/discover.ts" },
+      { code: `export * from "node:path";`, filename: "src/build/discover.ts" },
+      // An absolute path inside the working directory, as a real run passes it.
+      {
+        code: `import fs from "node:fs";`,
+        filename: `${cwd}/src/cli/index.ts`,
+        options: allowCli,
+      },
+      // The same on Windows, where the separator is a backslash.
+      {
+        code: `import fs from "node:fs";`,
+        filename: `${cwd}\\src\\cli\\index.ts`,
+        options: allowCli,
+      },
+    ],
+    invalid: [
+      {
+        code: `export { readFile } from "node:fs";`,
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "node:fs" } }],
+      },
+      {
+        code: `export * from "fs/promises";`,
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "fs/promises" } }],
+      },
+      // A folder whose name only starts like the working directory is not inside it.
+      {
+        code: `import fs from "node:fs";`,
+        filename: `${cwd}Xsrc/cli/index.ts`,
+        options: allowCli,
+        errors: [{ messageId: "noNodeFs" }],
+      },
+      // A path outside the working directory is matched only as given.
+      {
+        code: `import fs from "node:fs";`,
+        filename: `${"z".repeat(cwd.length)}/src/cli/index.ts`,
+        options: allowCli,
+        errors: [{ messageId: "noNodeFs" }],
+      },
+    ],
+  },
+)
+
+const typescriptTester = new RuleTester({
+  languageOptions: { parser: tseslint.parser, ecmaVersion: 2022, sourceType: "module" },
+})
+
+typescriptTester.run(
+  "no-node-fs: TypeScript import-equals",
+  noNodeFs as unknown as Rule.RuleModule,
+  {
+    valid: [
+      { code: `import path = require("node:path");`, filename: "src/build/discover.ts" },
+      {
+        code: `namespace A { export const b = 1 } import x = A.b;`,
+        filename: "src/build/discover.ts",
+      },
+    ],
+    invalid: [
+      {
+        code: `import fs = require("node:fs");`,
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "node:fs" } }],
+      },
+    ],
+  },
+)
 
 describe("createNoNodeFs wording", () => {
   const rule = createNoNodeFs({

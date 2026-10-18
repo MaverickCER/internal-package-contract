@@ -3,6 +3,7 @@
 // monthly bill and a cold start -- the benefits live in the rest of the repository. Every number is a
 // single run's measurement on one machine; the report says so, and links the reading guide.
 
+import { publicMessage } from "../public-message.mjs"
 import { explainUndetermined } from "../explain-undetermined.mjs"
 import { describeGroup } from "../trend.mjs"
 import { COMPLEXITY_NOTATION, expectationOf, groupName } from "./define.mjs"
@@ -232,7 +233,14 @@ function groupTable(group, unit) {
             ? "n/a"
             : Math.round(entry.opsPerSecond).toLocaleString("en-US"),
         ]
-      : [String(entry.inputs[unit]), `❌ ${entry.error?.message ?? "failed"}`, "", "", "", ""],
+      : [
+          String(entry.inputs[unit]),
+          `❌ ${publicMessage(entry.error?.message ?? "failed")}`,
+          "",
+          "",
+          "",
+          "",
+        ],
   )
   return table(header, rows)
 }
@@ -469,7 +477,7 @@ function failures(results) {
     for (const [tier, entry] of Object.entries(value.tiers)) {
       if (entry.status !== "completed")
         failed.push(
-          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${entry.error?.message ?? ""}`,
+          `- **${group}** at ${tier}: ${entry.error?.name ?? entry.status}: ${publicMessage(entry.error?.message ?? "")}`,
         )
     }
   }

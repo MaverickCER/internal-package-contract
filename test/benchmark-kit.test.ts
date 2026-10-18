@@ -1202,7 +1202,7 @@ describe("runSuite() and renderReport()", () => {
             ...validSuite().functions[0]!,
             inEndToEnd: undefined,
             run: () => {
-              throw new Error("bad")
+              throw new Error("bad\n    at run (/home/runner/work/pkg/suite.mjs:1:1)")
             },
             notCovered: [{ name: "threads", reason: "Single threaded by design." }],
             variants: [{ name: "cold", description: "A cold cache." }],
@@ -1223,7 +1223,9 @@ describe("runSuite() and renderReport()", () => {
     })
     const failedReport = renderReport(failedRun, failing)
     expect(failedReport).toContain("## Failed measurements")
-    expect(failedReport).toContain("❌ bad")
+    expect(failedReport).toContain("❌ bad |")
+    expect(failedReport).toMatch(/: Error: bad\n/)
+    expect(failedReport).not.toContain("/home/runner/work")
     expect(failedReport).toContain("**Deliberately not covered**")
     expect(failedReport).toContain("Variant `cold`")
     expect(failedReport).toContain("not enough data")

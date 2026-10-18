@@ -66,8 +66,11 @@ from `O(n log n)` or `O(1)` from `O(log n)`. A ladder spanning more than two ord
 ten points, can. `typicalN` (default 640) marks the size the cost summary quotes -- choose the size a
 real operation of this package typically handles, and say why in `workload.description`.
 
-Never shorten the ladder for committed results. `--quick` exists for a smoke test and says so in its
-output; do not commit what it produces.
+Never shorten the ladder for committed results, with one recorded exception: a function too slow to
+measure at the largest sizes (it compiles a package, or spawns a process, per unit) may list its own
+`tiers` -- at least four ascending sizes -- together with a `tiersReason` saying why, which the report
+prints beside its results. `--quick` exists for a smoke test and says so in its output; do not commit
+what it produces.
 
 ## How to test
 
@@ -86,7 +89,9 @@ output; do not commit what it produces.
   function that resolves from a prepared pool; keep the real code path (queues, deduplication, error
   handling) intact, because that is what the package contributes.
 - **Import the package the way a consumer does.** Its built entry point, never a source path. The
-  published `exports` map is part of the cost (and of the risk).
+  published `exports` map is part of the cost (and of the risk). A package whose costly code is internal
+  (an engine no entry point exposes on its own) may import that source instead, and its benchmarks
+  README says so and why.
 - **Let the engine handle fast operations.** Operations faster than about a millisecond are repeated
   back to back inside one sample and the result divided, because timers cannot resolve them. You
   do nothing; the report records the batch size.

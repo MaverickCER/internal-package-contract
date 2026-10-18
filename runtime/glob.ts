@@ -36,3 +36,34 @@ export function globToRegExp(pattern: string): RegExp {
   }
   return new RegExp(`^${out}$`)
 }
+
+/**
+ * Whether a lint rule's `allow` list covers a file. ESLint gives a rule the file's absolute path, while a config
+ * writes its patterns relative to the working directory (`src/cli/**`), so each pattern is tested against the path
+ * as given and, when the file is inside `cwd`, against the path from there, written with `/` on every platform.
+ * (`split`/`join`, not `replaceAll`: a package that carries this copy may compile for ES2020.)
+ * @param patterns - the rule's `allow` globs.
+ * @param filename - the file as ESLint names it (`context.filename`).
+ * @param cwd - ESLint's working directory (`context.cwd`).
+ * @returns true when any pattern matches either name.
+ */
+export function matchesAllowList(
+  patterns: readonly string[],
+  filename: string,
+  cwd: string,
+): boolean {
+  // A filesystem root (`/`, `C:\\`) already ends in its separator; anything else is followed by one.
+  const base = cwd.endsWith("/") || cwd.endsWith("\\") ? cwd.slice(0, -1) : cwd
+  const separator = filename.charAt(base.length)
+  const names =
+    filename.startsWith(base) && (separator === "/" || separator === "\\")
+      ? [
+          filename,
+          filename
+            .slice(base.length + 1)
+            .split("\\")
+            .join("/"),
+        ]
+      : [filename]
+  return patterns.some((pattern) => names.some((name) => globToRegExp(pattern).test(name)))
+}
