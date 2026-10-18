@@ -1,5 +1,46 @@
 # internal-package-contract
 
+## 0.12.0
+
+### Minor Changes
+
+- 49c9641: feat(adoption): a package that adopts the standard starts in adoption mode, where every failing check is a warning until it is promoted; `adopt` now adds every config, script and template the package lacks
+- 49c9641: feat(skill): `skill [--check]` writes a package's agent skill (`skills/<name>/SKILL.md` within a word budget, and `references/api.md`) from `package.json`, `docs/surface.json`, the API baselines and the few things the author writes in `docs/skill.json`; the optional `AgentSkill` check fails on a stale or invalid skill
+- 49c9641: feat(benchmark): require every parameter and key of every public function to be benchmarked or accounted for, and measure a second variable on its own (`BenchmarkCoverage`, `covers`, `sweeps`)
+- 49c9641: feat(contract): build the benchmark page before the checks when the package defines `docs:benchmarks`, so the link check behaves the same locally and in CI
+- 49c9641: feat(report): `report` writes what a change does to the package as Markdown to paste into a pull request, from git, the changesets, the exception registries, the decision records, the manifest and the contract's last report
+- 49c9641: feat(clean-checkout): the `CleanCheckout` check type-checks only what git tracks (the index, so staged files count), in a temporary copy with this installation's dependencies linked, so a file hidden by `.gitignore` or never added fails on the machine that has it and not only in CI
+- 49c9641: fix(mutation): a mutant that times out is run again alone before it counts, so a stalled machine is not reported as a loop, and the reuse of an earlier run keeps only a run in which every mutant was caught or left out
+- 49c9641: feat(badges): every published figure says what it is. The coverage badge reads "lowest of 4" and `coverage.json` beside it gives all four measures (lines, statements, functions, branches) with what each counts; the mutation badge says "detected of applicable" and `mutation.json` gives the count of each status; the size badge shows the size against its budget, with `size.json`. `tool badges` takes `--coverage <file>` and `--no-size`, so a package with its own coverage aggregate uses it instead of keeping a copy of the generator
+- 49c9641: feat(benchmark): a benchmark run outside CI writes to `.benchmark-local/<suite>/`, which is never committed, and the checks read it in preference to the committed results; only CI's figures are committed and published
+- 49c9641: feat(docs): keep the shared process documents (code of conduct, support, releasing) current in every package, and scaffold them in full
+- 49c9641: Take any check apart and put it back: `internal-package-contract/checks/parts` splits a check into its evidence and its policy (`evidenceOf`, `policyOf`, `composeCheck`, `withEvidence`, `withPolicy`, `evidenceOfAll`, `policiesOfAll`). The evidence scripts (`./scripts/*`) and the shared runtime modules (`./runtime/*`) are now exported directly, and an IPC benchmark suite covers the new exports.
+
+  `internal-package-contract/logs` re-exports repo-contract's `onEvidenceSaveToRepoContractLogs` and `onVerdictPrependRepoContractLogs` (and `repoContractLogs`), so a package that runs its own contract gets the one-log-per-check hooks without installing `repo-contract`. The contract run itself now uses them, and prints a failure as soon as its verdict exists. Needs `repo-contract` 0.11.0 or later.
+
+  `env-cap` and `data-cap` are now dependencies of this package, and every entry point is exported (`internal-package-contract/env-cap`, `/env-cap/build`, `/data-cap`, ...), so a package that uses this one installs neither itself. A new `env` command documents the credentials and settings a package depends on from `ci/env.schema.ts` into `docs/ENVIRONMENT.md`; a new `EnvContract` check warns (never fails) about a credential that is expiring or expired and a document that is out of date; `init` scaffolds the contract, the `docs:env` script and a weekly `env-rotation.yml` workflow (managed by `sync`) that opens one issue when a credential is due; and `doctor` reports it. Nothing in it is required: a package with no contract passes. A missing Socket API key is now a warning in CI as well as locally.
+
+- 49c9641: feat(mutation): `mutation [--base <ref>] [file...]` mutation-tests what a change touched, and the source files the changed tests import, as a fast loop while writing: every mutant of those files, never an earlier result, under the package's own concurrency; it is advice, and the full `Mutation` check stays the gate
+- 49c9641: feat(mutation): a mutation run over inputs that have not changed in any way is not run again: the evidence of the last clean run for the same hash of every file git does not ignore (and of the Node.js version) is put back for the check to judge, never under CI; `IPC_MUTATION_MEMO=0` runs it regardless
+
+  The `Mutation` check also always runs every mutant (`--force`), ignoring any incremental file, so a result carried over from a run made under other conditions can no longer stand in for a cold run.
+
+- 49c9641: feat(benchmark): remove the per-benchmark regression threshold, and warn when a function's big-O cannot be determined
+- 49c9641: feat(setup): one command to adopt this standard in an existing package or start a new one, with `adopt`, `setup` and a read-only `doctor` that lists what is left
+- 49c9641: feat(tools): run the size, badge, API-report, CommonJS-interop and compiler-isolation helpers from here, add an optional AmbientCapabilities check with `add check`, and keep more of the files every package shares current
+- 49c9641: feat(env): the standard ships the contract for what it reads from the environment, and `env` includes it in every package's `docs/ENVIRONMENT.md`; the scaffolded `ci/env.schema.ts` no longer repeats it, so the explanation lives in one place and cannot drift
+- 49c9641: fix(git-hygiene): `GitHygiene` fails on an import in tracked source that resolves only to a file git does not track, which is how a `.gitignore` pattern that was too wide hid source from every clean checkout while every local check passed
+- 49c9641: feat(upgrade): `upgrade <tag>` moves a package to a release and updates the pin, workflows, managed files, landing page and benchmark guides in one step
+- 49c9641: feat(verify-consumers): `verify-consumers <checkout>...` runs each dependent package's fast offline checks with the standard it has installed and with this one, in throwaway copies, and names every check that got worse; it also says where an install would add its own copy of a package the standard depends on
+
+### Patch Changes
+
+- 49c9641: fix(runtime): recognise a generated file only by a marker that opens a comment, so code or prose that quotes the marker is not taken for one
+- 49c9641: fix(tests): tests start without the variables a git hook supplies (the repository, the settings and the author of the commit being checked), so they no longer fail under a hook that passes by hand or run git against the real repository
+- 8ac8b1f: The shared `no-node-fs` rule also reports `node:fs` reached through a re-export (`export ... from`, `export * from`) or TypeScript's `import x = require()`, and matches an `allow` pattern written relative to the working directory (`src/cli/**`) against the absolute path ESLint gives it, on Windows too, and when the working directory is a filesystem root; the matching is the shared `glob` copy's new `matchesAllowList`, so a package's own lint rules can use the same. A benchmark report shows only the first line of a failure's message, with every absolute path in it cut to its file name, so a stack trace and the paths of the machine that ran it stay out of the published page. WRITING-BENCHMARKS.md records the two exceptions suites already use (a per-function `tiers` with its `tiersReason`, and benchmarking internal source), and the scaffolded and environment-rotation workflows pin the same v7 checkout, setup-node and upload-artifact actions as the rest. This package's own release works again under Changesets 3, which stopped versioning a private package unless `privatePackages.version` is set: the Version Packages pull request for this release could not be opened without it.
+- 49c9641: fix(benchmarks): give each category's package-cost heading its own id, and say in the reading guide that a worse growth class is a third failing gate
+- 49c9641: A mistyped command now stops with a suggestion instead of starting the whole contract. `isGeneratedFile` in the shared runtime reads only the first twenty non-empty lines instead of splitting the entire file, so its cost no longer grows with the file; packages pick it up with `sync --apply --update`.
+
 ## 0.11.0
 
 ### Minor Changes
