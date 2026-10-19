@@ -92,7 +92,7 @@ function growthSentence(complexity) {
 
 /**
  * @param {{ baselineMs: number, withPackageMs: number }} row - one end-to-end size.
- * @returns {boolean} whether the run measured the package adding time: a median below the baseline's is noise.
+ * @returns {boolean} whether the run measured the package adding time: a median at or below the baseline's is noise.
  */
 function measurable(row) {
   return row.withPackageMs > row.baselineMs
@@ -122,7 +122,7 @@ function glance(results) {
   }
   const overheadComplexity = analysis.complexity["end-to-end:with-package"]
   lines.push(
-    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds ${measurable(typical) ? `**${formatMs(typical.overheadMs)}**` : "**no overhead this run could measure** (its median was below the baseline's, which is run-to-run noise, not a speed-up)"} per operation compared with a bare-minimum baseline (**${againstBaseline(typical.overheadPercent)}**). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
+    `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds ${measurable(typical) ? `**${formatMs(typical.overheadMs)}**` : "**no overhead this run could measure** (its median was at or below the baseline's, which is run-to-run noise, not a speed-up)"} per operation compared with a bare-minimum baseline (**${againstBaseline(typical.overheadPercent)}**). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
     "",
     "> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
     "",
@@ -253,8 +253,11 @@ function groupTable(group, unit) {
         ]
       : [
           String(entry.inputs[unit]),
-          // A `|` would end the table cell; escaped, it reads as itself.
+          // A `|` would end the table cell; escaped, it reads as itself. Backslashes are escaped first, so a
+          // message's own `\|` cannot turn the added escape into an escaped backslash.
           `❌ ${publicMessage(entry.error?.message ?? "failed")
+            .split("\\")
+            .join("\\\\")
             .split("|")
             .join("\\|")}`,
           "",

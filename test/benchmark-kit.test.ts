@@ -1145,7 +1145,7 @@ describe("runSuite() and renderReport()", () => {
     expect(results.metadata.bundleSizes["missing.js"]).toEqual({ bytes: null, gzipBytes: null })
   })
 
-  it("says no overhead was measured when the package's median is below the baseline's", async () => {
+  it("says no overhead was measured when the package's median is at or below the baseline's", async () => {
     const results = await run()
     const { typical, largest } = results.analysis.cost
     typical.baselineMs = 2
@@ -1155,12 +1155,16 @@ describe("runSuite() and renderReport()", () => {
     largest.cost.opsPerSecondPerCore = 1000
     const report = renderReport(results, smallSuite)
     expect(report).toContain(
-      "adds **no overhead this run could measure** (its median was below the baseline's",
+      "adds **no overhead this run could measure** (its median was at or below the baseline's",
     )
     expect(report).toMatch(
       /Single-core throughput ceiling of the overhead alone \| not measurable \(no overhead measured\) \| 1,000 ops\/s \|/,
     )
     // Equal medians are not a measured overhead either.
+    typical.withPackageMs = 2
+    expect(renderReport(results, smallSuite)).toContain(
+      "adds **no overhead this run could measure**",
+    )
     largest.withPackageMs = 1
     expect(renderReport(results, smallSuite)).toMatch(
       /Single-core throughput ceiling of the overhead alone \| not measurable \(no overhead measured\) \| not measurable/,
@@ -1224,7 +1228,9 @@ describe("runSuite() and renderReport()", () => {
             ...validSuite().functions[0]!,
             inEndToEnd: undefined,
             run: () => {
-              throw new Error("bad | worse\n    at run (/home/runner/work/pkg/suite.mjs:1:1)")
+              throw new Error(
+                "bad | worse \\| still\n    at run (/home/runner/work/pkg/suite.mjs:1:1)",
+              )
             },
             notCovered: [{ name: "threads", reason: "Single threaded by design." }],
             variants: [{ name: "cold", description: "A cold cache." }],
@@ -1245,8 +1251,9 @@ describe("runSuite() and renderReport()", () => {
     })
     const failedReport = renderReport(failedRun, failing)
     expect(failedReport).toContain("## Failed measurements")
-    expect(failedReport).toContain("❌ bad \\| worse |")
-    expect(failedReport).toMatch(/: Error: bad \| worse\n/)
+    // The message's own backslash is escaped too, so its pipe stays escaped instead of ending the cell.
+    expect(failedReport).toContain("❌ bad \\| worse \\\\\\| still |")
+    expect(failedReport).toMatch(/: Error: bad \| worse \\\| still\n/)
     expect(failedReport).not.toContain("/home/runner/work")
     expect(failedReport).toContain("**Deliberately not covered**")
     expect(failedReport).toContain("Variant `cold`")

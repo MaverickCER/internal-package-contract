@@ -162,10 +162,19 @@ export async function loadTsconfigPaths(
   assertCompilerApi(product, ts)
   // The config itself is read through the filesystem the build was handed; an `extends` chain and the file
   // inclusion are still resolved through the compiler's own `ts.sys`.
-  const readResult = ts.parseConfigFileTextToJson(
-    typescriptPath(configFile, path.sep),
-    await fs.readFile(configFile, "utf8"),
-  )
+  let text: string
+  try {
+    text = await fs.readFile(configFile, "utf8")
+  } catch (error) {
+    return {
+      resolution: undefined,
+      warning: {
+        file: configFile,
+        message: `Could not read "${configFile}": ${(error as Error).message}`,
+      },
+    }
+  }
+  const readResult = ts.parseConfigFileTextToJson(typescriptPath(configFile, path.sep), text)
   if (readResult.error) {
     const detail = ts.flattenDiagnosticMessageText(readResult.error.messageText, ts.sys.newLine)
     return {

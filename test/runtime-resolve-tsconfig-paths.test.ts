@@ -279,6 +279,21 @@ describe("loadTsconfigPaths", () => {
     expect(resolution?.compilerOptions.paths).toStrictEqual({ "@/*": ["./src/*"] })
   })
 
+  it("warns, instead of rejecting, when the config exists but cannot be read", async () => {
+    const configFile = path.join(root("injected"), "tsconfig.json")
+    const unreadable: BuildFileSystem = {
+      ...nodeBuildFs,
+      readFile: () => Promise.reject(new Error("EACCES: permission denied")),
+    }
+    expect(await loadTsconfigPaths("demo-pkg", root("injected"), undefined, unreadable)).toEqual({
+      resolution: undefined,
+      warning: {
+        file: configFile,
+        message: `Could not read "${configFile}": EACCES: permission denied`,
+      },
+    })
+  })
+
   it("resolves paths declared only through an extends chain", async () => {
     const { resolution, warning } = await loadTsconfigPaths(
       "demo-pkg",

@@ -84,7 +84,12 @@ describe("release workflows", () => {
     expect(text).toContain('npm view "$NAME@$VERSION" version')
     expect(text).toContain('npm view "$NAME@$VERSION" dist.attestations --json')
     // Bypasses npm's own cache, which can hold the package document from before the publish.
-    expect(text).toContain('npm view "$NAME@$VERSION" version --prefer-online')
+    expect(text).toContain(
+      'npm view "$NAME@$VERSION" version --prefer-online --fetch-timeout=20000 --fetch-retries=0',
+    )
+    // A deadline, not an attempt count: a hanging query cannot stretch the wait past ten minutes.
+    expect(text).toContain("deadline=$((SECONDS + 600))")
+    expect(text).toContain('while [ "$SECONDS" -lt "$deadline" ]; do')
     // The verification is the last thing the publish job does.
     expect(
       text

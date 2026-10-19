@@ -311,10 +311,13 @@ jobs:
         run: |
           set -eu
           # --prefer-online: `npm view` otherwise answers from npm's own cache, which can hold the package
-          # document from before the publish and report the new version missing for minutes.
+          # document from before the publish and report the new version missing for minutes. Each query is
+          # bounded (20 s, no retries; npm's own default waits five minutes) and the loop stops at a ten-minute
+          # deadline, so a registry that hangs cannot hold the job past it.
           served=""
-          for _ in $(seq 1 40); do
-            served=$(npm view "$NAME@$VERSION" version --prefer-online 2>/dev/null || true)
+          deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            served=$(npm view "$NAME@$VERSION" version --prefer-online --fetch-timeout=20000 --fetch-retries=0 2>/dev/null || true)
             [ "$served" = "$VERSION" ] && break
             sleep 15
           done
@@ -322,7 +325,7 @@ jobs:
             echo "::error::npm does not serve $NAME@$VERSION ten minutes after publishing it."
             exit 1
           fi
-          attestations=$(npm view "$NAME@$VERSION" dist.attestations --json --prefer-online 2>/dev/null || true)
+          attestations=$(npm view "$NAME@$VERSION" dist.attestations --json --prefer-online --fetch-timeout=20000 2>/dev/null || true)
           if [ -z "$attestations" ] || [ "$attestations" = "undefined" ] || [ "$attestations" = "null" ]; then
             echo "::error::$NAME@$VERSION is on npm but carries no provenance attestation."
             exit 1

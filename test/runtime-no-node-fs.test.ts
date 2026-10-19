@@ -176,6 +176,8 @@ ruleTester.run(
       { code: 'getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
       { code: 'a.b.getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
       { code: 'process.versions.getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
+      // A chained call's callee is itself a call, with no object or property to read.
+      { code: 'factory()("node:fs");', filename: "src/build/discover.ts" },
     ],
     invalid: [
       {

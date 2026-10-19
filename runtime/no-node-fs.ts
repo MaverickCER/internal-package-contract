@@ -46,16 +46,16 @@ function staticValue(node: TSESTree.Node | undefined): unknown {
 }
 
 /**
- * Whether a call loads a module by name: `require(...)` or Node's `process.getBuiltinModule(...)`. A callee of
- * any other shape has no such names, so reading them gives `undefined` and the call is not a load.
+ * Whether a call loads a module by name: `require(...)` or Node's `process.getBuiltinModule(...)`. Any other
+ * callee is not a load: a chained call (`factory()("x")`) has no object to read, and a member whose object or
+ * property is not a plain name has no such names, so reading them gives `undefined`.
  */
 function loadsModule(callee: TSESTree.Expression): boolean {
   if (callee.type === AST_NODE_TYPES.Identifier) return callee.name === "require"
-  const member = callee as TSESTree.MemberExpression
+  if (callee.type !== AST_NODE_TYPES.MemberExpression || callee.computed) return false
   return (
-    !member.computed &&
-    (member.object as TSESTree.Identifier).name === "process" &&
-    (member.property as TSESTree.Identifier).name === "getBuiltinModule"
+    (callee.object as TSESTree.Identifier).name === "process" &&
+    (callee.property as TSESTree.Identifier).name === "getBuiltinModule"
   )
 }
 
