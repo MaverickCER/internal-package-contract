@@ -65,6 +65,10 @@ beforeAll(async () => {
 
   // Scenario: tsconfig.json with neither `paths` nor `baseUrl`.
   await writeJson("no-paths/tsconfig.json", { compilerOptions: { target: "ES2020" } })
+  await writeJson("diagnostics/tsconfig.json", {
+    compilerOptions: { target: "ES2099", module: "ES2099", paths: { "@/*": ["./src/*"] } },
+  })
+  await writeJson("injected/tsconfig.json", { compilerOptions: { target: "ES2020" } })
 
   // Scenario: `paths` is present but declares zero entries (distinct from
   // `paths` being entirely absent -- `paths !== undefined` alone doesn't
@@ -244,6 +248,35 @@ describe("loadTsconfigPaths", () => {
     expect(resolution).toBeDefined()
     const options = resolution?.compilerOptions
     expect(options && pathMappingOptions(options).baseUrl).toBeDefined()
+  })
+
+  it("reports what the compiler rejects in the config, and still uses the paths that parsed", async () => {
+    const { resolution, warning } = await loadTsconfigPaths(
+      "demo-pkg",
+      root("diagnostics"),
+      undefined,
+      nodeBuildFs,
+    )
+    expect(warning?.file).toBe(path.join(root("diagnostics"), "tsconfig.json"))
+    expect(warning?.message).toContain("has problems the compiler reported: ")
+    expect(warning?.message).toContain("--target")
+    expect(warning?.message).toMatch(/--target.*; .*--module|--module.*; .*--target/)
+    expect(resolution?.compilerOptions.paths).toStrictEqual({ "@/*": ["./src/*"] })
+  })
+
+  it("reads the config through the filesystem it is handed, not the disk directly", async () => {
+    const injected: BuildFileSystem = {
+      ...nodeBuildFs,
+      readFile: async () => JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+    }
+    const { resolution, warning } = await loadTsconfigPaths(
+      "demo-pkg",
+      root("injected"),
+      undefined,
+      injected,
+    )
+    expect(warning).toBeUndefined()
+    expect(resolution?.compilerOptions.paths).toStrictEqual({ "@/*": ["./src/*"] })
   })
 
   it("resolves paths declared only through an extends chain", async () => {

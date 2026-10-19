@@ -152,6 +152,56 @@ ruleTester.run(
   },
 )
 
+ruleTester.run(
+  "no-node-fs: templates and getBuiltinModule",
+  noNodeFs as unknown as Rule.RuleModule,
+  {
+    valid: [
+      // A template with a substitution cannot be read statically.
+      { code: "const x = 'fs'; const p = import(`node:${x}`);", filename: "src/build/discover.ts" },
+      { code: "const x = 'fs'; require(`node:${x}`);", filename: "src/build/discover.ts" },
+      { code: 'process.getBuiltinModule("node:path");', filename: "src/build/discover.ts" },
+      // Only the text before a `${}` would name `fs`: still not statically known.
+      { code: "const x = '/promises'; require(`fs${x}`);", filename: "src/build/discover.ts" },
+      // A computed member, even one whose key is a variable named like the method.
+      {
+        code: 'const getBuiltinModule = "x"; process[getBuiltinModule]("node:fs");',
+        filename: "src/build/discover.ts",
+      },
+      // Not the global `process`, not the method, or a computed property name.
+      { code: 'other.getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
+      { code: 'process.getOtherModule("node:fs");', filename: "src/build/discover.ts" },
+      { code: 'process["getBuiltinModule"]("node:fs");', filename: "src/build/discover.ts" },
+      { code: "process.getBuiltinModule;", filename: "src/build/discover.ts" },
+      { code: 'getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
+      { code: 'a.b.getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
+      { code: 'process.versions.getBuiltinModule("node:fs");', filename: "src/build/discover.ts" },
+    ],
+    invalid: [
+      {
+        code: "const fs = await import(`node:fs`);",
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "node:fs" } }],
+      },
+      {
+        code: "const fs = require(`fs/promises`);",
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "fs/promises" } }],
+      },
+      {
+        code: 'const fs = process.getBuiltinModule("node:fs");',
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "node:fs" } }],
+      },
+      {
+        code: "const fs = process.getBuiltinModule(`fs`);",
+        filename: "src/build/discover.ts",
+        errors: [{ messageId: "noNodeFs", data: { specifier: "fs" } }],
+      },
+    ],
+  },
+)
+
 const typescriptTester = new RuleTester({
   languageOptions: { parser: tseslint.parser, ecmaVersion: 2022, sourceType: "module" },
 })

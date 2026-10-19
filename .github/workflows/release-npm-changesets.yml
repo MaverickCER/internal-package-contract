@@ -71,7 +71,7 @@ jobs:
           # would be readable by every script the version step runs.
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
 
@@ -161,7 +161,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
 
@@ -229,7 +229,7 @@ jobs:
           [ "$#" -eq 1 ] || { echo "::error::Expected exactly one tarball, found $#."; exit 1; }
           node node_modules/internal-package-contract/scripts/check-packed-consumer.mjs --strict --tarball "$1"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.info.outputs.should-publish == 'true'
         with:
           name: release-tarball
@@ -256,11 +256,11 @@ jobs:
       version: ${{ needs.build.outputs.version }}
       bump-type: ${{ needs.build.outputs.bump-type }}
     steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-tarball
           path: ${{ runner.temp }}/release
@@ -310,17 +310,19 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -eu
+          # --prefer-online: `npm view` otherwise answers from npm's own cache, which can hold the package
+          # document from before the publish and report the new version missing for minutes.
           served=""
-          for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            served=$(npm view "$NAME@$VERSION" version 2>/dev/null || true)
+          for _ in $(seq 1 40); do
+            served=$(npm view "$NAME@$VERSION" version --prefer-online 2>/dev/null || true)
             [ "$served" = "$VERSION" ] && break
-            sleep 10
+            sleep 15
           done
           if [ "$served" != "$VERSION" ]; then
-            echo "::error::npm does not serve $NAME@$VERSION two minutes after publishing it."
+            echo "::error::npm does not serve $NAME@$VERSION ten minutes after publishing it."
             exit 1
           fi
-          attestations=$(npm view "$NAME@$VERSION" dist.attestations --json 2>/dev/null || true)
+          attestations=$(npm view "$NAME@$VERSION" dist.attestations --json --prefer-online 2>/dev/null || true)
           if [ -z "$attestations" ] || [ "$attestations" = "undefined" ] || [ "$attestations" = "null" ]; then
             echo "::error::$NAME@$VERSION is on npm but carries no provenance attestation."
             exit 1

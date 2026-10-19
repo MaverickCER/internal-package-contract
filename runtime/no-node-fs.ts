@@ -33,8 +33,36 @@ function fsSpecifier(source: unknown): string | undefined {
 }
 
 /**
- * Flags any `import`, re-export (`export ... from`, `export * from`), `require`, TypeScript
- * `import x = require()` or dynamic `import()` of `node:fs` in library code, so a library surface acquires its filesystem capability from the
+ * What a module source or the first argument of a loading call names, when it can be read statically: a literal's
+ * value, or the text of a template literal with no `${}`. Anything else is `undefined`, which names no module.
+ */
+function staticValue(node: TSESTree.Node | undefined): unknown {
+  if (node?.type === AST_NODE_TYPES.Literal) return node.value
+  if (node?.type === AST_NODE_TYPES.TemplateLiteral && node.expressions.length === 0) {
+    // Stryker disable next-line OptionalChaining: equivalent -- a template literal always has at least one quasi.
+    return node.quasis[0]?.value.cooked
+  }
+  return undefined
+}
+
+/**
+ * Whether a call loads a module by name: `require(...)` or Node's `process.getBuiltinModule(...)`. A callee of
+ * any other shape has no such names, so reading them gives `undefined` and the call is not a load.
+ */
+function loadsModule(callee: TSESTree.Expression): boolean {
+  if (callee.type === AST_NODE_TYPES.Identifier) return callee.name === "require"
+  const member = callee as TSESTree.MemberExpression
+  return (
+    !member.computed &&
+    (member.object as TSESTree.Identifier).name === "process" &&
+    (member.property as TSESTree.Identifier).name === "getBuiltinModule"
+  )
+}
+
+/**
+ * Flags any `import`, re-export (`export ... from`, `export * from`), `require`, `process.getBuiltinModule`,
+ * TypeScript `import x = require()` or dynamic `import()` of `node:fs` (a string or a `${}`-free template) in
+ * library code, so a library surface acquires its filesystem capability from the
  * caller instead of reaching for `node:fs` itself (the same discipline
  * `repo-contract`'s ADR-0011 established for `child_process`/`process.env`).
  * The wording passed in names the package's own documentation and decision record.
@@ -97,22 +125,16 @@ export function createNoNodeFs(wording: NoNodeFsWording) {
             reportSource(node, node.moduleReference.expression)
           }
         },
+        // A source that is a variable, or a template with a `${}`, cannot be read statically, so it never matches.
         ImportExpression(node) {
-          // A source that is not a literal (an identifier, a template) has no `value`, so it never matches.
-          const specifier = fsSpecifier((node.source as TSESTree.Literal).value)
+          const specifier = fsSpecifier(staticValue(node.source))
           if (specifier !== undefined) {
             context.report({ node, messageId: "noNodeFs", data: { specifier } })
           }
         },
         CallExpression(node) {
-          // Only an `Identifier` callee has a `name`; any other callee reads `undefined` and is not `require`.
-          if (
-            (node.callee as TSESTree.Identifier).name !== "require" ||
-            node.arguments[0]?.type !== AST_NODE_TYPES.Literal
-          ) {
-            return
-          }
-          const specifier = fsSpecifier(node.arguments[0].value)
+          if (!loadsModule(node.callee)) return
+          const specifier = fsSpecifier(staticValue(node.arguments[0]))
           if (specifier !== undefined) {
             context.report({ node, messageId: "noNodeFs", data: { specifier } })
           }

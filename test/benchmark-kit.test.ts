@@ -1145,6 +1145,28 @@ describe("runSuite() and renderReport()", () => {
     expect(results.metadata.bundleSizes["missing.js"]).toEqual({ bytes: null, gzipBytes: null })
   })
 
+  it("says no overhead was measured when the package's median is below the baseline's", async () => {
+    const results = await run()
+    const { typical, largest } = results.analysis.cost
+    typical.baselineMs = 2
+    typical.withPackageMs = 1
+    largest.baselineMs = 1
+    largest.withPackageMs = 2
+    largest.cost.opsPerSecondPerCore = 1000
+    const report = renderReport(results, smallSuite)
+    expect(report).toContain(
+      "adds **no overhead this run could measure** (its median was below the baseline's",
+    )
+    expect(report).toMatch(
+      /Single-core throughput ceiling of the overhead alone \| not measurable \(no overhead measured\) \| 1,000 ops\/s \|/,
+    )
+    // Equal medians are not a measured overhead either.
+    largest.withPackageMs = 1
+    expect(renderReport(results, smallSuite)).toMatch(
+      /Single-core throughput ceiling of the overhead alone \| not measurable \(no overhead measured\) \| not measurable/,
+    )
+  })
+
   it("renders a cost-first report with every documented section", async () => {
     const results = await run()
     const report = renderReport(results, smallSuite)
@@ -1202,7 +1224,7 @@ describe("runSuite() and renderReport()", () => {
             ...validSuite().functions[0]!,
             inEndToEnd: undefined,
             run: () => {
-              throw new Error("bad\n    at run (/home/runner/work/pkg/suite.mjs:1:1)")
+              throw new Error("bad | worse\n    at run (/home/runner/work/pkg/suite.mjs:1:1)")
             },
             notCovered: [{ name: "threads", reason: "Single threaded by design." }],
             variants: [{ name: "cold", description: "A cold cache." }],
@@ -1223,8 +1245,8 @@ describe("runSuite() and renderReport()", () => {
     })
     const failedReport = renderReport(failedRun, failing)
     expect(failedReport).toContain("## Failed measurements")
-    expect(failedReport).toContain("❌ bad |")
-    expect(failedReport).toMatch(/: Error: bad\n/)
+    expect(failedReport).toContain("❌ bad \\| worse |")
+    expect(failedReport).toMatch(/: Error: bad \| worse\n/)
     expect(failedReport).not.toContain("/home/runner/work")
     expect(failedReport).toContain("**Deliberately not covered**")
     expect(failedReport).toContain("Variant `cold`")

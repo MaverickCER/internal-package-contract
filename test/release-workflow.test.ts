@@ -83,6 +83,8 @@ describe("release workflows", () => {
     expect(text).toContain("run: npx internal-package-contract --checks PromptBlocks")
     expect(text).toContain('npm view "$NAME@$VERSION" version')
     expect(text).toContain('npm view "$NAME@$VERSION" dist.attestations --json')
+    // Bypasses npm's own cache, which can hold the package document from before the publish.
+    expect(text).toContain('npm view "$NAME@$VERSION" version --prefer-online')
     // The verification is the last thing the publish job does.
     expect(
       text

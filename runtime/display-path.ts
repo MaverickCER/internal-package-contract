@@ -32,7 +32,9 @@ import path from "node:path"
 export function displayPath(root: string, filePath: string): string {
   if (!path.isAbsolute(filePath)) return filePath.split(path.sep).join("/")
   const relative = path.relative(root, filePath)
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return filePath
+  // Outside `root` means a `..` segment, not a name that merely starts with two dots (`..cache/x.ts` is inside).
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+    return filePath
   return relative.split(path.sep).join("/")
 }
 
