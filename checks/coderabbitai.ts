@@ -1,7 +1,8 @@
 /**
  * AI code review via the real, installed CodeRabbit CLI (`coderabbit review --agent
- * --uncommitted`, or the committed branch diff against the base branch when the tree is clean), with every finding gated on a complete, finding-specific waiver in the
- * consumer's own `.repo-contract/exceptions/coderabbit.json` -- a generic recreation of
+ * --uncommitted`, or the committed branch diff against the base branch when the tree is clean), whose findings are
+ * advisory: each one is reported as a suggestion to adopt where it improves the code, and a finding-specific record in
+ * the consumer's own `.repo-contract/exceptions/coderabbit.json` documents why one was not taken -- a generic recreation of
  * repo-contract's own `coderabbitai` check (`checks/coderabbitai.ts` +
  * `scripts/coderabbitai/{review,evidence-types,policy-config,registry}.ts` in that repo, designed
  * in its specs/decisions/0014-coderabbit-as-a-surfaced-check.md on top of
@@ -19,8 +20,8 @@
  *   `warn`, exactly like `SecuritySocket`'s own not-authenticated case and `Accessibility`'s
  *   no-system-Chrome case. This check cannot distinguish "genuinely clean" from "never ran," so it
  *   never fails closed on absence alone.
- * - `error` (the CLI ran but produced a malformed event stream, timed out, or failed) -- `fail`,
- *   the same fail-closed stance `Mutation` takes for a malformed Stryker report.
+ * - `error` (the CLI ran but produced a malformed event stream, timed out, or failed) -- `warn`:
+ *   the run simply has no suggestions to offer.
  *
  * The `coderabbit` CLI is deliberately NOT a dependency of this package (unlike `pa11y`,
  * `@socketsecurity/cli`, Stryker, ...): it is a credentialed, network-bound developer tool
@@ -29,7 +30,10 @@
  *
  * ## Exception policy
  *
- * Every finding requires a complete, finding-specific record regardless of severity -- there is no
+ * Findings are advisory, never a reason to stop a commit: a review of the same diff words them differently on every
+ * run, so a record keyed by the wording cannot be relied on to match the next one. A finding without a complete record,
+ * and a record that matches no finding this run, are listed as a `warn`; only a broken registry fails. A record still
+ * needs every field below when it is written, regardless of severity -- there is no
  * severity tier the way Socket alerts have one, because a CodeRabbit finding is an AI opinion, not
  * a deterministic tool result (`scripts/coderabbitai/policy-config.ts`). Required fields:
  * `justification`, `remediation`, `method`, `exceptionType`. `method` may only ever be
@@ -138,7 +142,7 @@ export function evaluateFinding(
  * `not-applicable` (CI, review delegated to the GitHub App) / `unavailable` is a `warn`, always
  * visibly recorded. `error` fails closed. A malformed/unreconcilable registry (`registryError`)
  * fails regardless of status. A `reviewed` run: any `forbidden` / `insufficient` / `unmatched`
- * verdict or stale record fails, listed individually.
+ * verdict or stale record warns (CodeRabbit is advisory), listed individually; an `error` review warns too.
  * @param input - Wraps the evidence to evaluate.
  * @param input.evidence - The `CoderabbitEvidence` emitted by `scripts/coderabbitai/review.ts`.
  * @returns The check's `PolicyResult`.
@@ -201,8 +205,10 @@ export function evaluateCoderabbitPolicy(input: {
     }
   }
 
+  // CodeRabbit is advisory: a review that cannot be read leaves the run without suggestions, which is
+  // visible, not a failure of the change under review.
   if (evidence.status === "error") {
-    return { outcome: "fail", rationale: `CodeRabbit review failed: ${evidence.message}` }
+    return { outcome: "warn", rationale: `CodeRabbit review failed: ${evidence.message}` }
   }
 
   // Independent re-validation of what the wrapper script actually wrote: the policy never trusts
@@ -279,10 +285,13 @@ export function evaluateCoderabbitPolicy(input: {
     return `- ${d.finding.file} [${d.finding.severity}]: ${detail} -- ${d.finding.summary}`
   })
 
+  // Advisory: CodeRabbit's findings are suggestions, adopted where they improve the code. A review of the same
+  // diff words them differently on every run, so no record can be relied on to match the next one; they are
+  // reported, never a reason to stop a commit.
   return {
-    outcome: "fail",
+    outcome: "warn",
     rationale: [
-      `${String(offenders.length + evidence.staleExceptions.length)} CodeRabbit finding(s) or stale record(s) need attention:`,
+      `${String(offenders.length + evidence.staleExceptions.length)} CodeRabbit suggestion(s) to consider (advisory: adopt one where it improves the code; a record only documents why one was not taken):`,
       ...offenderLines,
       ...staleLines,
     ].join("\n"),

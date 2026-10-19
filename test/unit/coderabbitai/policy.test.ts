@@ -216,7 +216,7 @@ describe("evaluateCoderabbitPolicy", () => {
     )
   })
 
-  it("fails on a real CLI-reported error", () => {
+  it("warns on a real CLI-reported error: CodeRabbit is advisory", () => {
     const result = evaluateCoderabbitPolicy({
       evidence: {
         status: "error",
@@ -225,7 +225,7 @@ describe("evaluateCoderabbitPolicy", () => {
         existingRecordCount: 0,
       },
     })
-    expect(result.outcome).toBe("fail")
+    expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("unexpected shape")
   })
 
@@ -249,31 +249,31 @@ describe("evaluateCoderabbitPolicy", () => {
     })
   })
 
-  it("fails a 0-findings review with a stale record", () => {
+  it("warns on a 0-findings review with a stale record", () => {
     const gone = finding({ file: "src/gone.ts" })
     const result = evaluateCoderabbitPolicy({
       evidence: reviewed([], { stale: [record(gone, COMPLETE)] }),
     })
-    expect(result.outcome).toBe("fail")
+    expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("Stale exception")
     expect(result.rationale).toContain(gone.id)
   })
 
-  it("fails a finding backed only by a blank stub", () => {
+  it("warns on a finding backed only by a blank stub", () => {
     const f = finding()
     const result = evaluateCoderabbitPolicy({
       evidence: reviewed([{ finding: f, record: record(f) }]),
     })
-    expect(result.outcome).toBe("fail")
+    expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("missing:")
   })
 
-  it("fails a finding whose record fills every field but `remediation`", () => {
+  it("warns on a finding whose record fills every field but `remediation`", () => {
     const f = finding()
     const result = evaluateCoderabbitPolicy({
       evidence: reviewed([{ finding: f, record: record(f, { ...COMPLETE, remediation: "" }) }]),
     })
-    expect(result.outcome).toBe("fail")
+    expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("remediation")
   })
 
@@ -285,14 +285,14 @@ describe("evaluateCoderabbitPolicy", () => {
     expect(result.outcome).toBe("pass")
   })
 
-  it("requires the same complete record at every severity -- there is no lighter tier", () => {
+  it("treats every severity the same: an incomplete record warns, a complete one passes", () => {
     for (const severity of ["critical", "major", "minor", "unknown"] as const) {
       const f = finding({ severity })
       expect(
         evaluateCoderabbitPolicy({ evidence: reviewed([{ finding: f, record: record(f) }]) })
           .outcome,
         severity,
-      ).toBe("fail")
+      ).toBe("warn")
       expect(
         evaluateCoderabbitPolicy({
           evidence: reviewed([{ finding: f, record: record(f, COMPLETE) }]),
@@ -395,7 +395,7 @@ describe("evaluateCoderabbitPolicy", () => {
     })
   })
 
-  it("fails with the exact offender line, missing-field list and combined count", () => {
+  it("warns with the exact suggestion line, missing-field list and combined count", () => {
     const f = finding({ file: "src/resolve.ts", summary: "Consider returning early." })
     const gone = finding({ file: "src/gone.ts", summary: "A finding no longer raised." })
     const result = evaluateCoderabbitPolicy({
@@ -404,9 +404,9 @@ describe("evaluateCoderabbitPolicy", () => {
       }),
     })
     expect(result).toEqual({
-      outcome: "fail",
+      outcome: "warn",
       rationale: [
-        "2 CodeRabbit finding(s) or stale record(s) need attention:",
+        "2 CodeRabbit suggestion(s) to consider (advisory: adopt one where it improves the code; a record only documents why one was not taken):",
         "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen) -- Consider returning early.",
         `- Stale exception in ${REGISTRY}: ${JSON.stringify(gone.id)} -- CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
       ].join("\n"),

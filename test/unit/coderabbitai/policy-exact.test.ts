@@ -43,14 +43,14 @@ describe("coderabbitai().policy", () => {
     expect(result.rationale).toContain("environment:CodeRabbit:unavailable")
   })
 
-  it("fails a review error outright, and passes a clean review, neither as a degradation", async () => {
+  it("warns on a review error, since CodeRabbit is advisory, and passes a clean review, neither as a degradation", async () => {
     const failed = await run({
       status: "error",
       message: "boom",
       registryPath: REGISTRY,
       existingRecordCount: 0,
     })
-    expect(failed).toEqual({ outcome: "fail", rationale: "CodeRabbit review failed: boom" })
+    expect(failed).toEqual({ outcome: "warn", rationale: "CodeRabbit review failed: boom" })
     const clean = await run({
       status: "reviewed",
       registryPath: REGISTRY,
