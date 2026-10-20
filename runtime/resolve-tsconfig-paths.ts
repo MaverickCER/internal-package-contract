@@ -160,9 +160,21 @@ export async function loadTsconfigPaths(
   // stand. Without this, `ts.readConfigFile()` below would die with a raw "is not a function" when no
   // usable compiler resolved (the bundled TypeScript 6 stripped from an install).
   assertCompilerApi(product, ts)
-  const readResult = ts.readConfigFile(typescriptPath(configFile, path.sep), (p) =>
-    ts.sys.readFile(p),
-  )
+  // The config itself is read through the filesystem the build was handed; an `extends` chain and the file
+  // inclusion are still resolved through the compiler's own `ts.sys`.
+  let text: string
+  try {
+    text = await fs.readFile(configFile, "utf8")
+  } catch (error) {
+    return {
+      resolution: undefined,
+      warning: {
+        file: configFile,
+        message: `Could not read "${configFile}": ${(error as Error).message}`,
+      },
+    }
+  }
+  const readResult = ts.parseConfigFileTextToJson(typescriptPath(configFile, path.sep), text)
   if (readResult.error) {
     const detail = ts.flattenDiagnosticMessageText(readResult.error.messageText, ts.sys.newLine)
     return {
@@ -175,14 +187,28 @@ export async function loadTsconfigPaths(
   }
 
   const parsed = ts.parseJsonConfigFileContent(readResult.config, ts.sys, path.dirname(configFile))
+  // TS18003 ("No inputs were found") only says the config's `include` matches nothing, which alias resolution
+  // does not need. Anything else is reported, and whatever paths did parse are still used.
+  const problems = parsed.errors.filter((diagnostic) => diagnostic.code !== 18003)
+  const warning: TsconfigWarning | undefined =
+    problems.length === 0
+      ? undefined
+      : {
+          file: configFile,
+          message: `"${configFile}" has problems the compiler reported: ${problems
+            .map((diagnostic) =>
+              ts.flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine),
+            )
+            .join("; ")}`,
+        }
   const { paths, baseUrl } = pathMappingOptions(parsed.options)
 
   const hasPaths = paths !== undefined && Object.keys(paths).length > 0
   if (!hasPaths && baseUrl === undefined) {
-    return { resolution: undefined, warning: undefined }
+    return { resolution: undefined, warning }
   }
 
-  return { resolution: { compilerOptions: parsed.options, configFile }, warning: undefined }
+  return { resolution: { compilerOptions: parsed.options, configFile }, warning }
 }
 
 /**

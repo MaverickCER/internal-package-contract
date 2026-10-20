@@ -1,8 +1,12 @@
 // What a published benchmark page shows of a failure's message: its first line, with every absolute path cut to
 // its file name. A stack trace and the paths of the machine that ran the benchmark stay in results.json.
 
-/** Characters that delimit a path inside a message: whitespace, quotes and parentheses. */
-const DELIMITER = /([\s'"`()])/
+/**
+ * Where a path inside a message can start: after whitespace, a quote, a parenthesis or `=` (`path=/tmp/x.json`),
+ * or after a `:` that follows a word of two or more characters and comes directly before a single `/`
+ * (`key:/tmp/x.json`) -- never inside a URL (`https://`) or after a drive letter (`D:/`).
+ */
+const DELIMITER = /([\s'"`()=]|(?<=[^\s'"`()=]{2}):(?=\/(?!\/)))/
 
 /**
  * @param {string} token - one word of a message.

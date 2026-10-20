@@ -43,6 +43,15 @@ describe("displayPath", () => {
     expect(result.startsWith("..")).toBe(false)
   })
 
+  it("keeps a file inside root whose folder name starts with two dots inside root", () => {
+    expect(displayPath("/project", "/project/..cache/x.ts")).toBe("..cache/x.ts")
+    expect(displayPath("/project", "/project/..x")).toBe("..x")
+  })
+
+  it("treats root's own parent as outside root", () => {
+    expect(displayPath("/a/b", "/a")).toBe("/a")
+  })
+
   it("keeps a sibling whose name merely starts with the root's name outside root", () => {
     expect(displayPath("/work/app", "/work/app-two/a.ts")).toBe("/work/app-two/a.ts")
   })
