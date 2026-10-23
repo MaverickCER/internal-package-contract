@@ -130,12 +130,12 @@
     "knip": "^6.32.3",
     "licensee": "^12.0.2",
     "linkinator": "^8.0.4",
-    "markdownlint-cli2": "^0.23.3",
+    "markdownlint-cli2": "^0.24.0",
     "pa11y": "^10.0.0",
     "prettier": "3.9.9",
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
-    "repo-contract": "~0.11.0",
+    "repo-contract": "~0.11.3",
     "secretlint": "^13.0.7",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
@@ -154,7 +154,8 @@
     "pa11y": {
       "puppeteer": "npm:puppeteer-core@^25.9.0"
     },
-    "adm-zip": "0.6.1"
+    "adm-zip": "0.6.1",
+    "katex": "^0.18.2"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

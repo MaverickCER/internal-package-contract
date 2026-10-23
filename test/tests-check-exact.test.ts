@@ -48,6 +48,7 @@ const file = (name: string, statuses: string[]) => ({
 const results = (testResults: unknown[], total = 10) => ({
   numFailedTests: 0,
   numFailedTestSuites: 0,
+  numPassedTests: total,
   numTotalTests: total,
   numTotalTestSuites: 3,
   testResults,
