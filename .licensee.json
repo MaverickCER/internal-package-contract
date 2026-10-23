@@ -5,7 +5,7 @@
     "osi": true
   },
   "packages": {
-    "argparse": "3.0.2"
+    "argparse": "3.0.2 - 3.0.3"
   },
   "corrections": true
 }

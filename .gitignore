@@ -9,3 +9,4 @@ reports/
 
 # A benchmark run outside CI is a gate, not a figure: only CI's results are committed.
 /.benchmark-local
+.env

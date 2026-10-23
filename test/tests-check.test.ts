@@ -81,6 +81,7 @@ describe("tests", () => {
     writeResults({
       numFailedTests: 0,
       numFailedTestSuites: 0,
+      numPassedTests: 42,
       numTotalTests: 42,
       numTotalTestSuites: 6,
       testResults: [],
@@ -139,6 +140,7 @@ describe("tests -- skipped tests are findings, not silence", () => {
   const results = (testResults: unknown[], total = 10) => ({
     numFailedTests: 0,
     numFailedTestSuites: 0,
+    numPassedTests: total,
     numTotalTests: total,
     numTotalTestSuites: 3,
     testResults,

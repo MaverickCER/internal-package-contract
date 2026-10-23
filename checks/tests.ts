@@ -125,19 +125,12 @@ export function skippedByFile(
  * A run of "N tests, 0 failures" says nothing about the tests that did not run. This holds the
  * skips to the same standard as every other exception: a test file that skips needs a complete
  * `skipped-test:<file>` record saying why (a platform-only suite, a fixture installed by a separate
- * CI job), and a run in which no test ran at all fails.
+ * CI job). A run in which no test ran at all already fails in repo-contract's `test` preset.
  * @param report - Vitest's JSON report.
  * @param passRationale - the delegated pass verdict's rationale.
  * @returns the verdict for the run's skips.
  */
 async function judgeSkips(report: VitestReport, passRationale: string): Promise<PolicyResult> {
-  const total = report.numTotalTests ?? 0
-  if (total === 0) {
-    return {
-      outcome: "fail",
-      rationale: "Tests: Vitest ran 0 tests -- a suite that runs nothing proves nothing.",
-    }
-  }
   const skips = skippedByFile(report, process.cwd())
   if (skips.size === 0) return { outcome: "pass", rationale: passRationale }
 
