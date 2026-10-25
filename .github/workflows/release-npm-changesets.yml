@@ -250,7 +250,7 @@ jobs:
       # own job must grant this same permission -- GitHub caps a called workflow's effective
       # permissions at the intersection of what the caller grants and what this file declares.
       id-token: write
-      # Creates the release tag and moves the floating major tag through the API.
+      # Creates the release tag, moves the floating major tag through the API, and creates the GitHub Release.
       contents: write
     outputs:
       version: ${{ needs.build.outputs.version }}
@@ -299,6 +299,35 @@ jobs:
               gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
                 -f ref="refs/tags/$MAJOR_TAG" -f sha="$GITHUB_SHA" > /dev/null
             fi
+          fi
+
+      # The GitHub Releases page is the first place many people look for what shipped, so each version
+      # gets a Release for the tag just created. The notes are that version's section of the CHANGELOG in
+      # the published tarball: data read out of the tarball, never code run from it, because this job holds
+      # the publishing identity. A package that ships no CHANGELOG gets GitHub's generated notes instead.
+      # Safe to re-run: a Release that already exists is left alone. A failure here is shown on the step but
+      # must not skip the npm verification that follows, which stays the last thing this job does.
+      - name: Create the GitHub Release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -eu
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "Release v$VERSION already exists."
+            exit 0
+          fi
+          set -- "$RUNNER_TEMP"/release/*.tgz
+          [ "$#" -eq 1 ] || { echo "::error::Expected exactly one tarball, found $#."; exit 1; }
+          notes="$RUNNER_TEMP/release-notes.md"
+          tar -xzOf "$1" package/CHANGELOG.md 2> /dev/null \
+            | awk -v heading="## $VERSION" '$0 == heading { found = 1; next } found && /^## / { exit } found' \
+            > "$notes" || true
+          if [ -s "$notes" ]; then
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$notes"
+          else
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --generate-notes
           fi
 
       # Publishing succeeded as far as npm's client knows; this asks the registry what it now serves. A
