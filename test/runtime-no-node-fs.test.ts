@@ -244,3 +244,20 @@ describe("createNoNodeFs wording", () => {
     )
   })
 })
+
+describe("createNoNodeFs default options", () => {
+  const rule = createNoNodeFs({
+    docsUrl: (name) => `https://example.test/docs#${name}`,
+    adr: "ADR 7",
+    guide: "the demo guide",
+  })
+
+  it("exempts nothing when no options are configured, in both places a version of @typescript-eslint/utils reads them", () => {
+    // `meta.defaultOptions` is read from 8.55 on; the top-level property by every release before that, and
+    // by the later ones as a fallback. Read through a cast: the property is deprecated, and this checks it
+    // is still passed.
+    const legacy = (rule as { defaultOptions?: unknown }).defaultOptions
+    expect(rule.meta.defaultOptions).toEqual([{ allow: [] }])
+    expect(legacy).toEqual([{ allow: [] }])
+  })
+})
