@@ -62,6 +62,23 @@ describe("release workflows", () => {
     expect(text).toContain('npm publish "$1" --provenance --access public --ignore-scripts')
   })
 
+  it("tags and then creates a GitHub Release for the repository's own release, only when a new tag was made", () => {
+    const text = workflows.find((w) => w.name === "release.yml")?.text ?? ""
+    const tag = text.indexOf("- name: Tag the released version")
+    const release = text.indexOf("- name: Create the GitHub Release")
+    expect(tag).toBeGreaterThan(-1)
+    expect(release).toBeGreaterThan(tag)
+    const step = text.slice(release)
+    expect(step).toContain("if: steps.tag.outputs.new-tag != ''")
+    // A Release problem must not turn a tagged release red.
+    expect(step).toContain("continue-on-error: true")
+    expect(step).toContain('gh release create "$TAG" --verify-tag')
+    // Re-running a release must not fail on a Release that already exists.
+    expect(step).toContain('gh release view "$TAG"')
+    expect(step).toContain("--generate-notes")
+    expect(step).toContain("CHANGELOG.md")
+  })
+
   it("keep the publishing identity out of every job but publish", () => {
     const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
     const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
