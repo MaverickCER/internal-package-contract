@@ -78,3 +78,26 @@ jobs:
             git push origin "$MAJOR_TAG" --force
             echo "new-tag=$VERSION" >> "$GITHUB_OUTPUT"
           fi
+
+      # The GitHub Releases page is the first place many people look for what shipped, and this private package
+      # is consumed by tag, so each new tag gets a Release. The notes are that version's section of CHANGELOG.md.
+      # The consumers' shared release workflow does the same for what it publishes.
+      - name: Create the GitHub Release
+        if: steps.tag.outputs.new-tag != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.new-tag }}
+        run: |
+          set -eu
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          notes="$RUNNER_TEMP/release-notes.md"
+          awk -v heading="## ${TAG#v}" '$0 == heading { found = 1; next } found && /^## / { exit } found' CHANGELOG.md > "$notes" || true
+          if [ -s "$notes" ]; then
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          fi

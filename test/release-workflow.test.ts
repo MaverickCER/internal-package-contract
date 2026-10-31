@@ -62,12 +62,59 @@ describe("release workflows", () => {
     expect(text).toContain('npm publish "$1" --provenance --access public --ignore-scripts')
   })
 
+  it("tags and then creates a GitHub Release for the repository's own release, only when a new tag was made", () => {
+    const text = workflows.find((w) => w.name === "release.yml")?.text ?? ""
+    const tag = text.indexOf("- name: Tag the released version")
+    const release = text.indexOf("- name: Create the GitHub Release")
+    expect(tag).toBeGreaterThan(-1)
+    expect(release).toBeGreaterThan(tag)
+    const step = text.slice(release)
+    expect(step).toContain("if: steps.tag.outputs.new-tag != ''")
+    // A Release problem must not turn a tagged release red.
+    expect(step).toContain("continue-on-error: true")
+    expect(step).toContain('gh release create "$TAG" --verify-tag')
+    // Re-running a release must not fail on a Release that already exists.
+    expect(step).toContain('gh release view "$TAG"')
+    expect(step).toContain("--generate-notes")
+    expect(step).toContain("CHANGELOG.md")
+  })
+
   it("keep the publishing identity out of every job but publish", () => {
     const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
     const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
     const withToken = jobs.filter((job) => /id-token:\s*write/.test(job))
     expect(withToken).toHaveLength(1)
     expect(withToken[0]).toMatch(/^publish:/)
+  })
+
+  it("creates a GitHub Release for the new tag from the published tarball's CHANGELOG, in the publish job only", () => {
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    const step = text.slice(text.indexOf("- name: Create the GitHub Release"))
+    const body = step.slice(0, step.indexOf("\n      # Publishing succeeded"))
+
+    // After the tag exists, and before the verification, which stays the last step of the job. The step
+    // cannot fail the job, so a Release problem never skips the npm verification.
+    expect(text.indexOf("- name: Create the GitHub Release")).toBeGreaterThan(
+      text.indexOf("- name: Tag the release"),
+    )
+    expect(text.indexOf("- name: Create the GitHub Release")).toBeLessThan(
+      text.indexOf("- name: Verify what npm now serves"),
+    )
+    expect(body).toContain("continue-on-error: true")
+    expect(body).toContain('gh release create "v$VERSION" --verify-tag')
+    // Notes come out of the tarball as data; nothing from it is executed.
+    expect(body).toContain("tar -xzOf")
+    expect(body).not.toMatch(/\bnode\b|\bnpm\b|\bnpx\b/)
+    // Re-running a release must not fail on a Release that already exists.
+    expect(body).toContain('gh release view "v$VERSION"')
+    // A package without a CHANGELOG still gets notes.
+    expect(body).toContain("--generate-notes")
+    // Only the publish job holds a write token; the step must sit in it.
+    const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
+    expect(jobs.filter((job) => job.includes("Create the GitHub Release"))).toHaveLength(1)
+    expect(jobs.find((job) => job.includes("Create the GitHub Release"))).toContain(
+      "id-token: write",
+    )
   })
 
   it("ask the registry afterwards for the published version and its provenance", () => {

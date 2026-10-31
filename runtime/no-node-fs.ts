@@ -73,6 +73,15 @@ function loadsModule(callee: TSESTree.Expression): boolean {
  * adapter); a consuming project sets its own `allow` for its own entry
  * points.
  */
+/** The rule's options when none are configured: nothing is exempt. */
+const DEFAULT_RULE_OPTIONS = [{ allow: [] as string[] }] as const
+
+// @typescript-eslint/utils before 8.55 reads a rule's default options from this top-level property only. Later
+// releases read `meta.defaultOptions` and mark the top-level one deprecated. The peer range still covers the
+// earlier releases, so it is passed too, spread from a plain object so the call does not name the deprecated
+// property itself.
+const LEGACY_DEFAULT_OPTIONS = { defaultOptions: DEFAULT_RULE_OPTIONS }
+
 export function createNoNodeFs(wording: NoNodeFsWording) {
   const createRule = RuleCreator(wording.docsUrl)
   return createRule<[RuleOptions], "noNodeFs">({
@@ -93,10 +102,11 @@ export function createNoNodeFs(wording: NoNodeFsWording) {
       messages: {
         noNodeFs: `Importing '{{specifier}}' makes this a filesystem-acquiring surface. Accept a filesystem capability as an argument instead, and let an executable entry point construct the node:fs adapter (see ${wording.adr} / ${wording.guide} for the allow-list escape hatch).`,
       },
+      defaultOptions: [{ allow: [] }],
     },
-    defaultOptions: [{ allow: [] }],
+    ...LEGACY_DEFAULT_OPTIONS,
     create(context, [options]) {
-      // `RuleCreator` merges `defaultOptions` onto the configured options, so `allow` is always set.
+      // `RuleCreator` merges the default options onto the configured options, so `allow` is always set.
       if (matchesAllowList(options.allow as readonly string[], context.filename, context.cwd))
         return {}
 
