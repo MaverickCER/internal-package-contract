@@ -1359,3 +1359,107 @@ describe("describeIgnored() -- the file-list boundary", () => {
     )
   })
 })
+
+describe("mutation() -- a narrowed run", () => {
+  const narrowed = (mutate: string[]) => ({
+    scope: {
+      schemaVersion: 1 as const,
+      scope: "affected" as const,
+      reason: "r",
+      changedFiles: [],
+      tests: [],
+      sources: [],
+      mutate,
+    },
+  })
+
+  it("passes without a report when no source is affected, saying nothing was mutated", async () => {
+    const result = await mutation().policy({
+      ...makeContext(makeResult()),
+      ...narrowed([]),
+    } as never)
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Mutation: no source file is affected by this change, so nothing was mutated.",
+    })
+  })
+
+  it("judges the mutants it was given by the same rule as a full run", async () => {
+    writeReport(
+      makeReport("a.ts", "const x = 1", [
+        {
+          status: "Survived",
+          mutatorName: "NumberLiteral",
+          replacement: "0",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 12 },
+        },
+      ]),
+    )
+    writeRegistry([])
+    const result = await mutation().policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["a.ts"]),
+    } as never)
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("1 survived")
+  })
+
+  it("does not call a record for a mutant it did not run stale, since only a full run can say so", async () => {
+    writeReport(
+      makeReport("a.ts", "const x = 1", [
+        {
+          status: "Killed",
+          mutatorName: "NumberLiteral",
+          replacement: "0",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 12 },
+        },
+      ]),
+    )
+    const elsewhere = {
+      file: "b.ts",
+      mutator: "BooleanLiteral",
+      original: "false",
+      replacement: "true",
+    }
+    writeRegistry([
+      {
+        id: deriveMutationId(elsewhere),
+        version: 1,
+        justification: "real, in another file",
+        ...elsewhere,
+      },
+    ])
+    const narrowedResult = await mutation().policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["a.ts"]),
+    } as never)
+    expect(narrowedResult.outcome).toBe("pass")
+    const full = await mutation().policy(makeContext(makeResult()))
+    expect(full.outcome).toBe("fail")
+    expect(full.rationale).toContain("no longer matches any mutant in the report")
+  })
+
+  it("still fails a record that is incomplete, narrowed or not", async () => {
+    writeReport(
+      makeReport("a.ts", "const x = 1", [
+        {
+          status: "Killed",
+          mutatorName: "NumberLiteral",
+          replacement: "0",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 12 },
+        },
+      ]),
+    )
+    const record = { file: "a.ts", mutator: "NumberLiteral", original: "1", replacement: "0" }
+    writeRegistry([{ id: deriveMutationId(record), version: 1, justification: "", ...record }])
+    const result = await mutation().policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["a.ts"]),
+    } as never)
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("missing: justification")
+  })
+})

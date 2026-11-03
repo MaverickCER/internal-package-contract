@@ -15,5 +15,11 @@ export function runContract(input: {
   out?: { write(text: string): unknown }
   err?: { write(text: string): unknown }
   prepare?: (input: { cwd: string; out: { write(text: string): unknown } }) => void
+  changed?: (cwd: string) => string[] | undefined
+  scope?: (input: {
+    argv: readonly string[]
+    env: NodeJS.ProcessEnv
+    cwd: string
+  }) => Promise<import("./affected-scope.mjs").ScopeDocument>
 }): Promise<{ passed: boolean }>
 export function processTrouble(evidence: { status: string; exitCode: number | null }): string

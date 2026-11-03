@@ -19,6 +19,7 @@ import { test as testPreset } from "repo-contract/presets"
 import { incompleteFields } from "./environment-exceptions.js"
 import { isValidNonEmptyStringField, validateExceptionRegistry } from "./exception-record.js"
 import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
+import { narrowedScope } from "./scope.js"
 import { abnormalTermination, combinedOutput } from "./shared.js"
 
 const SKIPPED_REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/skipped-tests.json"
@@ -205,6 +206,10 @@ export function tests(): CheckDefinitionConfig {
       `--outputFile=${VITEST_RESULTS_PATH}`,
     ],
     policy: async (ctx): Promise<PolicyResult> => {
+      // A narrowed run with no affected test file runs nothing, and that is the whole answer.
+      if (narrowedScope(ctx)?.tests.length === 0) {
+        return { outcome: "pass", rationale: "Tests: no test file is affected by this change." }
+      }
       const terminated = abnormalTermination(ctx.result, "Vitest")
       if (terminated) return { outcome: "fail", rationale: terminated }
 

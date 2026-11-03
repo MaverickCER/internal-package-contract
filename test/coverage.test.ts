@@ -276,3 +276,43 @@ describe("coverage", () => {
     expect(result.rationale).toContain("no coverage/coverage-summary.json")
   })
 })
+
+describe("coverage -- a narrowed run", () => {
+  const narrowed = (tests: string[]) => ({
+    scope: {
+      schemaVersion: 1 as const,
+      scope: "affected" as const,
+      reason: "r",
+      changedFiles: [],
+      tests,
+      sources: [],
+      mutate: [],
+    },
+  })
+
+  it("does not weigh the package-wide aggregate, and says why, without reading any summary", async () => {
+    const result = await coverage.policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["test/a.test.ts", "test/b.test.ts"]),
+    } as never)
+    expect(result).toEqual({
+      outcome: "warn",
+      rationale:
+        "Coverage: not evaluated -- this run covers the 2 test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.",
+    })
+  })
+
+  it("is not fooled by a scope that says the run was full", async () => {
+    writeSummary({
+      lines: { pct: 10 },
+      statements: { pct: 10 },
+      functions: { pct: 10 },
+      branches: { pct: 10 },
+    })
+    const result = await coverage.policy({
+      ...makeContext(makeResult()),
+      scope: { scope: "full" },
+    } as never)
+    expect(result.outcome).toBe("fail")
+  })
+})

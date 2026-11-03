@@ -34,10 +34,11 @@ const GENERATED = ["reports", "coverage", ".stryker-tmp", "node_modules"]
 /**
  * @param {string} cwd - the package.
  * @param {string} [node] - the Node.js version, which is an input too.
- * @returns {string} a hash of every file git does not ignore (named and by content), and of the Node.js version.
+ * @param {string} [narrowing] - what the run was restricted to, if anything: a run of part of the package is not a run of all of it.
+ * @returns {string} a hash of every file git does not ignore (named and by content), of the Node.js version, and of the restriction.
  */
-export function inputsHash(cwd, node = process.version) {
-  const hash = createHash("sha256").update(`${FORMAT}\0${node}\0`)
+export function inputsHash(cwd, node = process.version, narrowing = "") {
+  const hash = createHash("sha256").update(`${FORMAT}\0${node}\0${narrowing}\0`)
   const present = filesOf(cwd)
     .filter((file) => !GENERATED.includes(String(file.split(/[\\/]/, 1))))
     .filter((file) => existsSync(path.join(cwd, file)))

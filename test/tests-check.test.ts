@@ -277,3 +277,44 @@ describe("SKIPPED_TESTS_SCHEMA", () => {
     if (!mismatch.ok) expect(mismatch.errors[0]).toContain("does not match the id derived")
   })
 })
+
+describe("tests -- a narrowed run", () => {
+  const narrowed = (tests: string[]) => ({
+    scope: {
+      schemaVersion: 1 as const,
+      scope: "affected" as const,
+      reason: "r",
+      changedFiles: [],
+      tests,
+      sources: [],
+      mutate: [],
+    },
+  })
+
+  it("passes, saying no test is affected, when there is nothing to run and no results", async () => {
+    const result = await tests().policy({ ...makeContext(makeResult()), ...narrowed([]) } as never)
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "Tests: no test file is affected by this change.",
+    })
+  })
+
+  it("judges the results of the tests it did run exactly as a full run is judged", async () => {
+    const noResults = await tests().policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["t"]),
+    } as never)
+    expect(noResults.outcome).toBe("fail")
+    expect(noResults.rationale).toContain(`Vitest did not produce ${VITEST_RESULTS_PATH}`)
+    const terminated = await tests().policy({
+      ...makeContext(makeResult({ status: "timed_out" })),
+      ...narrowed(["t"]),
+    } as never)
+    expect(terminated.outcome).toBe("fail")
+  })
+
+  it("still wants results from a full run that has no test file at all named", async () => {
+    const result = await tests().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+  })
+})

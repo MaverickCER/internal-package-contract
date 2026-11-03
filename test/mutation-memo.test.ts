@@ -202,3 +202,17 @@ describe("remember and recall", () => {
     expect(recall(dir, "h1", {})).toBe(false)
   })
 })
+
+describe("inputsHash: a restricted run is not the whole run", () => {
+  it("differs when the run was restricted, and between restrictions, and is stable for the same one", () => {
+    const whole = inputsHash(dir)
+    expect(inputsHash(dir, process.version, "src/a.ts")).not.toBe(whole)
+    expect(inputsHash(dir, process.version, "src/a.ts")).not.toBe(
+      inputsHash(dir, process.version, "src/b.ts"),
+    )
+    expect(inputsHash(dir, process.version, "src/a.ts")).toBe(
+      inputsHash(dir, process.version, "src/a.ts"),
+    )
+    expect(inputsHash(dir, process.version, "")).toBe(whole)
+  })
+})

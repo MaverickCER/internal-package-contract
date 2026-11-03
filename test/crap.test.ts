@@ -243,3 +243,84 @@ describe("crap", () => {
     expect(highIdx).toBeLessThan(lowIdx)
   })
 })
+
+describe("crap -- a narrowed run", () => {
+  const narrowed = (sources: string[], tests = ["test/a.test.ts"]) => ({
+    scope: {
+      schemaVersion: 1 as const,
+      scope: "affected" as const,
+      reason: "r",
+      changedFiles: [],
+      tests,
+      sources,
+      mutate: [],
+    },
+  })
+  const fn = (file: string, crap: number, complexity = 2) => ({
+    file,
+    name: "f",
+    startLine: 1,
+    complexity,
+    crap,
+  })
+
+  it("passes without a report when no test is affected", async () => {
+    const result = await crap.policy({ ...makeContext(makeResult()), ...narrowed([], []) } as never)
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: "CRAP: no test file is affected, so no function was measured.",
+    })
+  })
+
+  it("weighs only the functions of the affected files: the rest read as untested only because their tests did not run", async () => {
+    writeCrapReport({ functions: [fn("src/a.ts", 5), fn("src/other.ts", 900, 99)] })
+    const result = await crap.policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["src/a.ts"]),
+    } as never)
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale: `CRAP: no function above CRAP ${String(CRAP_THRESHOLD)} or complexity ${String(MAX_COMPLEXITY)} (1 analyzed in the affected files).`,
+    })
+  })
+
+  it("still fails an affected file's function that is too risky or too complex", async () => {
+    writeCrapReport({
+      functions: [
+        fn("src/a.ts", CRAP_THRESHOLD + 1),
+        fn("src/b.ts", 1, MAX_COMPLEXITY + 1),
+        fn("src/c.ts", 999),
+      ],
+    })
+    const result = await crap.policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["src/a.ts", "src/b.ts"]),
+    } as never)
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("src/a.ts:1")
+    expect(result.rationale).toContain("src/b.ts:1")
+    expect(result.rationale).not.toContain("src/c.ts")
+  })
+
+  it("matches files whether crap4ts reports them relative or absolute", async () => {
+    writeCrapReport({
+      functions: [
+        fn(path.join(cwd, "src", "a.ts"), CRAP_THRESHOLD + 5),
+        fn("./src/b.ts", CRAP_THRESHOLD + 5),
+      ],
+    })
+    const result = await crap.policy({
+      ...makeContext(makeResult()),
+      ...narrowed(["src/a.ts", "src/b.ts"]),
+    } as never)
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("a.ts:1")
+    expect(result.rationale).toContain("b.ts:1")
+  })
+
+  it("judges the whole report when the run was not narrowed", async () => {
+    writeCrapReport({ functions: [fn("src/other.ts", 900, 99)] })
+    const result = await crap.policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+  })
+})

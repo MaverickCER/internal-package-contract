@@ -49,3 +49,6 @@ export function withoutMachine(
 ): string
 
 export function isCaseless(platform: string): boolean
+
+/** The patterns that leave out everything in a package but its `ci/` contract. */
+export function outsideContract(cwd: string): string[]
