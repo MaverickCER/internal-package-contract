@@ -5,6 +5,7 @@
 
 import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"
+import { describeScope, resolveRunScope, withScope, writeScope } from "./affected-scope.mjs"
 import { changedFiles, selectChanged } from "./changed.mjs"
 import { selectChecks } from "./contract-args.mjs"
 import { parseRunOptions } from "./contract-options.mjs"
@@ -88,6 +89,7 @@ export function processTrouble(evidence) {
  * @param {NodeJS.WritableStream} [input.err] - where notes about the environment (not the verdict) go.
  * @param {(input: { cwd: string, out: NodeJS.WritableStream }) => void} [input.prepare] - builds what the checks expect on disk; a test seam.
  * @param {(cwd: string) => string[] | undefined} [input.changed] - the files that changed, for `--changed`; a test seam.
+ * @param {typeof resolveRunScope} [input.scope] - decides what the run covers (`--scope`); a test seam.
  * @returns {Promise<{ passed: boolean }>}
  */
 export async function runContract({
@@ -101,6 +103,7 @@ export async function runContract({
   err = process.stderr,
   prepare = prepareRun,
   changed = changedFiles,
+  scope = resolveRunScope,
 }) {
   const options = parseRunOptions(argv, env, cwd)
   // `--json` prints one JSON document on stdout and nothing else, so everything meant for a person goes nowhere.
@@ -129,6 +132,11 @@ export async function runContract({
     coverage: !existsSync(path.join(cwd, "coverage")),
     reports: !existsSync(path.join(cwd, "reports")),
   }
+  // What the run covers: everything unless asked for less. The checks that can use it read it from disk.
+  const runScope = await scope({ argv, env, cwd })
+  writeScope(cwd, runScope)
+  human.write(`[contract] ${describeScope(runScope)}\n`)
+  const scoped = withScope(config, runScope)
 
   // A log is written the moment a check's evidence exists, and rewritten to lead with the verdict once it is
   // known. A disk problem is reported once and never stops the run.
@@ -169,7 +177,7 @@ export async function runContract({
   let passed
   let skippedDeferred = false
   try {
-    const phaseOne = await runRepoContract(config, {
+    const phaseOne = await runRepoContract(scoped, {
       ...(deferred || checkIds ? { checks: first } : {}),
       ...progress,
     })
@@ -178,7 +186,7 @@ export async function runContract({
     passed = phaseOne.verdict.passed
     if (deferred !== undefined) {
       if (passed) {
-        const phaseTwo = await runRepoContract(config, { checks: [deferred], ...progress })
+        const phaseTwo = await runRepoContract(scoped, { checks: [deferred], ...progress })
         documents.push(phaseTwo.evidence)
         Object.assign(results, phaseTwo.verdict.checks)
         passed = phaseTwo.verdict.passed

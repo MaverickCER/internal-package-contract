@@ -190,6 +190,7 @@ describe("runContract()", () => {
     expect(selected(calls)).toEqual([undefined])
     expect(output.text()).toBe(
       [
+        "[contract] scope: full (nothing asked for less (--scope affected or auto does))",
         "",
         "My contract",
         "",
@@ -240,7 +241,7 @@ describe("runContract()", () => {
       out: output.out,
     })
     expect(selected(calls)).toEqual([["Lint", "Docs"]])
-    expect(output.text().split("\n")[1]).toBe("T (Lint, Docs)")
+    expect(output.text().split("\n")[2]).toBe("T (Lint, Docs)")
     expect(selectChecks(["--checks", "Lint,Docs"], ["Lint", "Docs", "Tests"])).toEqual([
       "Lint",
       "Docs",

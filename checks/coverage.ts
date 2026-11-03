@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import { narrowedScope } from "./scope.js"
 
 /** The minimum aggregate coverage every publishable package must hold, per metric. */
 export const COVERAGE_THRESHOLDS = {
@@ -34,6 +35,13 @@ export const coverage: CheckDefinitionConfig = {
   // signal is in the artifact `Tests` produced.
   run: ["node", "--version"],
   policy: async (ctx): Promise<PolicyResult> => {
+    const narrowed = narrowedScope(ctx)
+    if (narrowed !== undefined) {
+      return {
+        outcome: "warn",
+        rationale: `Coverage: not evaluated -- this run covers the ${String(narrowed.tests.length)} test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.`,
+      }
+    }
     let summary: CoverageSummary
     try {
       // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFile(path, "")`

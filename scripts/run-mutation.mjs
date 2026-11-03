@@ -22,7 +22,9 @@ import { existsSync, rmSync } from "node:fs"
 import path from "node:path"
 
 import { confirmEvidence, strykerRerun } from "./mutation/confirm-timeouts.mjs"
+import { readScope } from "./affected-scope.mjs"
 import { MEMO_DIRECTORY, inputsHash, recall, remember } from "./mutation/memo.mjs"
+import { narrowMutation } from "./mutation/narrow.mjs"
 import { ensureStrykerVitest5Compat } from "./stryker-vitest5-compat.mjs"
 
 for (let dir = import.meta.dirname; ;) {
@@ -53,12 +55,16 @@ const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd
 // iterating by hand, but the check's evidence must be a full analysis: a result carried over from a run made under other
 // conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in for
 // a run that would not have said the same, and CI, starting cold, would then fail what a local gate passed.
-const args = ["run", "--reporters", "json,clear-text", "--force"]
+// A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
+const narrowed = narrowMutation(readScope(process.cwd()))
+const args = ["run", "--reporters", "json,clear-text", "--force", ...narrowed.args]
 if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
 
-const inputs = inputsHash(process.cwd())
+const inputs = inputsHash(process.cwd(), process.version, narrowed.key)
 
-if (recall(process.cwd(), inputs, process.env)) {
+if (narrowed.skip) {
+  process.stderr.write("[mutation] skipped: no source file is affected by this change.\n")
+} else if (recall(process.cwd(), inputs, process.env)) {
   process.stderr.write(
     `[mutation] reused: nothing a mutation run depends on has changed since the last clean run (inputs ${inputs.slice(0, 12)}). Set IPC_MUTATION_MEMO=0 to run it anyway.\n`,
   )

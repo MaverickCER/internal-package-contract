@@ -32,7 +32,8 @@ jobs:
         with:
           node-version: 24.x
       - run: npm ci
-      - run: npm run contract
+      # A pull request runs what its changes can affect; a push to main and a release run everything.
+      - run: npm run contract -- --scope auto
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
           GH_TOKEN: ${{ github.token }}

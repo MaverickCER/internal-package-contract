@@ -22,6 +22,7 @@ import {
   inspectEnv,
   lintFriendly,
   loadEnvCap,
+  outsideContract,
   run,
   syncRotationIssue,
   withoutMachine,
@@ -683,5 +684,14 @@ describe("lintFriendly", () => {
     const text = read(DOCS_PATH)
     expect(text).not.toMatch(/^>.*\n\n>/m)
     expect(text).not.toMatch(/[^<\]]\(?https?:\/\//)
+  })
+})
+
+describe("outsideContract", () => {
+  it("leaves out every top-level entry but ci, directories as globs and files by name", () => {
+    mkdirSync(path.join(dir, "ci"))
+    mkdirSync(path.join(dir, "src"))
+    write("README.md", "")
+    expect(outsideContract(dir).sort()).toEqual(["README.md", "src/**"])
   })
 })

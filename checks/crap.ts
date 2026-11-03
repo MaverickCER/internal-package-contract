@@ -22,9 +22,18 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import { narrowedScope } from "./scope.js"
 import { abnormalTermination, combinedOutput } from "./shared.js"
 
 const crapReportPath = path.join("reports", "crap.json")
+
+/**
+ * @param file - a path crap4ts reported, relative to the working directory or absolute.
+ * @returns the same file relative to the repository, with forward slashes.
+ */
+function repoRelative(file: string): string {
+  return path.relative(process.cwd(), path.resolve(process.cwd(), file)).split(path.sep).join("/")
+}
 
 /** CRAP ceiling. Above this a function is too risky for its coverage. */
 export const CRAP_THRESHOLD = 30
@@ -60,7 +69,17 @@ export const crap: CheckDefinitionConfig = {
     "--output",
     crapReportPath,
   ],
-  policy: async ({ result, evidence }): Promise<PolicyResult> => {
+  policy: async (ctx): Promise<PolicyResult> => {
+    const { result, evidence } = ctx
+    // A narrowed run executed only the tests a change affects, so only the files those tests exercise have
+    // coverage worth weighing complexity against; the rest would read as untested.
+    const narrowed = narrowedScope(ctx)
+    if (narrowed?.tests.length === 0) {
+      return {
+        outcome: "pass",
+        rationale: "CRAP: no test file is affected, so no function was measured.",
+      }
+    }
     const terminated = abnormalTermination(result, "crap4ts")
     if (terminated) return { outcome: "fail", rationale: terminated }
 
@@ -86,10 +105,14 @@ export const crap: CheckDefinitionConfig = {
       }
     }
 
-    const functions = (value as CrapReport | null)?.functions
-    if (!Array.isArray(functions)) {
+    const reported = (value as CrapReport | null)?.functions
+    if (!Array.isArray(reported)) {
       return { outcome: "fail", rationale: "CRAP: crap4ts produced invalid JSON report data." }
     }
+    const functions =
+      narrowed === undefined
+        ? reported
+        : reported.filter((fn) => new Set(narrowed.sources).has(repoRelative(fn.file)))
 
     const unreadable = functions.filter(
       (fn) => !Number.isFinite(fn.crap) || !Number.isFinite(fn.complexity),
@@ -114,7 +137,7 @@ export const crap: CheckDefinitionConfig = {
     if (crapOffenders.length === 0 && complexityOffenders.length === 0) {
       return {
         outcome: "pass",
-        rationale: `CRAP: no function above CRAP ${String(CRAP_THRESHOLD)} or complexity ${String(MAX_COMPLEXITY)} (${String(functions.length)} analyzed).`,
+        rationale: `CRAP: no function above CRAP ${String(CRAP_THRESHOLD)} or complexity ${String(MAX_COMPLEXITY)} (${String(functions.length)} analyzed${narrowed === undefined ? "" : " in the affected files"}).`,
       }
     }
 

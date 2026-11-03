@@ -409,12 +409,26 @@ npx internal-package-contract --skip Coverage,Crap,Mutation   # everything but t
 npx internal-package-contract --changed           # only the checks that can be affected by what changed since the default branch
 npx internal-package-contract --json              # one machine-readable report on stdout (for editors and scripts)
 npx internal-package-contract --logs all          # keep each check's full output in reports/contract/logs/<Check>.log (all, failing (default) or off)
+npx internal-package-contract --scope affected    # every check, but Tests, Mutation and Crap only for what the changes can affect
+npx internal-package-contract --scope auto        # affected on a pull request, everything on a push or a release
 ```
 
 The mode can also be set with `IPC_LOGS` or `"internal-package-contract": { "logs": ... }` in package.json (a flag wins over the
 environment, which wins over the package). A log file is created as soon as a check's evidence is available and, when the verdict is known, the
 verdict is prepended to the top of the file, so the part that matters is the first thing you see.
 Progress is streamed as each check finishes.
+
+**Narrowing a run.** `--changed` chooses _checks_ (a documentation change cannot break the build); `--scope` narrows the
+_work inside_ the checks that scale with the code. With `--scope affected`, the contract asks `repo-contract`'s affected analysis
+which test files and which sources the changes can reach, through the import graph and down to the exported symbol, and then
+`Tests` runs only those test files, `Mutation` mutates only those sources, and `Crap` weighs only their functions. `Coverage` is
+a package-wide aggregate that a narrowed run cannot say anything about, so it reports a warning rather than a pass. Anything the
+analysis cannot reason about makes it say "everything" and the run is full: a lockfile or a tool config, a file it cannot place,
+a module that does not parse, a dynamic `import()` it cannot read, git failing. `--scope auto` lets the environment decide:
+a pull request narrows, a push to the default branch and a release do not, and `CI_FULL=1` forces everything. A bare run covers
+everything, exactly as before. The scope of the run is printed first and written to `reports/contract/scope.json`;
+`--base <ref>` chooses what it is compared with (the upstream branch, then `origin/main`, by default). The pre-commit hook
+runs `--scope affected`; the Contract workflow runs `--scope auto`. Mutation is never reused from an earlier run for a different scope.
 
 The logs are written by two hooks that ship with `repo-contract` and are re-exported here, so a package that runs
 the contract itself does not install `repo-contract` just to get them:

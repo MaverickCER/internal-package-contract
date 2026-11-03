@@ -123,6 +123,7 @@ import {
   validateExceptionRegistry,
 } from "./exception-record.js"
 import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
+import { narrowedScope } from "./scope.js"
 import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from "./shared.js"
 
 /** Where a consumer's mutation exception registry lives -- the standard `.repo-contract/exceptions/*.json` location every repo-contract v0.4.0+ registry shares. */
@@ -530,7 +531,16 @@ function summarizeMutationScore(
 export function mutation(): CheckDefinitionConfig {
   return {
     run: ["node", scriptPath, "--fallback-config", bundledConfig("stryker.config.mjs")],
-    policy: async ({ result }): Promise<PolicyResult> => {
+    policy: async (ctx): Promise<PolicyResult> => {
+      const { result } = ctx
+      // A narrowed run mutates only the sources a change affects; with none, there is nothing to judge.
+      const narrowed = narrowedScope(ctx)
+      if (narrowed?.mutate.length === 0) {
+        return {
+          outcome: "pass",
+          rationale: "Mutation: no source file is affected by this change, so nothing was mutated.",
+        }
+      }
       const terminated = abnormalTermination(result, "Stryker")
       if (terminated) return { outcome: "fail", rationale: terminated }
 
@@ -579,7 +589,14 @@ export function mutation(): CheckDefinitionConfig {
       // changed. It is deliberately NOT stale just because it currently
       // matches only Killed/Timeout mutants -- see this module's own doc
       // comment for why (Stryker's own non-determinism, not this check's).
-      const { stale, insufficient, suppressed } = applyExceptionRegistry(mutants, loaded.records)
+      const {
+        stale: unmatched,
+        insufficient,
+        suppressed,
+      } = applyExceptionRegistry(mutants, loaded.records)
+      // A narrowed run mutates part of the package, so a record for a mutant elsewhere matches nothing in
+      // its report without being stale; only a full run can say a record is.
+      const stale = narrowed === undefined ? unmatched : []
       if (stale.length > 0 || insufficient.length > 0) {
         return {
           outcome: "fail",

@@ -45,7 +45,9 @@
 unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 SKIP="--skip Coverage,Crap,Mutation"
 if [ "${IPC_HOOK_FULL:-}" = "1" ]; then
-  SKIP=""
+  # A commit runs everything the change can affect (see `--scope` in the README); where the analysis cannot be sure,
+  # it says so and everything runs. CI and a release still run all of it.
+  SKIP="--scope affected"
 fi
 DIR=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd)
 TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)

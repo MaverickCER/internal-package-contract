@@ -44,7 +44,7 @@ export async function loadEnvCap() {
  * @param {string} cwd - the package root.
  * @returns {string[]} one pattern per top-level entry other than `ci`.
  */
-function outsideContract(cwd) {
+export function outsideContract(cwd) {
   return readdirSync(cwd, { withFileTypes: true })
     .filter((entry) => entry.name !== "ci")
     .map((entry) => (entry.isDirectory() ? `${entry.name}/**` : entry.name))

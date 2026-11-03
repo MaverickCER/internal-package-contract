@@ -256,3 +256,147 @@ describe("runContract()", () => {
     expect(existsSync(path.join(cwd, ".stryker-tmp"))).toBe(false)
   })
 })
+
+describe("runContract(): the scope of the run", () => {
+  const config = { checks: { Lint: {}, Tests: {}, SecuritySocket: {} } }
+  const narrow = {
+    schemaVersion: 1,
+    scope: "affected",
+    reason: "asked for",
+    changedFiles: ["src/a.ts"],
+    tests: ["test/a.test.ts"],
+    sources: ["src/a.ts"],
+    mutate: ["src/a.ts"],
+  }
+
+  it("says what the run covers, and keeps that where the checks can read it, past the cleanup", async () => {
+    const run = fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" })
+    const cap = capture()
+    await runContract({
+      runRepoContract: run as never,
+      config,
+      cwd,
+      title: "T",
+      argv: ["--scope", "affected"],
+      env: {},
+      out: cap.out,
+      scope: (async () => narrow) as never,
+    })
+    expect(cap.text()).toContain(
+      "[contract] scope: affected (asked for) -- 1 changed file, 1 test file, 1 mutation target\n",
+    )
+    expect(
+      JSON.parse(readFileSync(path.join(cwd, "reports", "contract", "scope.json"), "utf8")),
+    ).toEqual(narrow)
+  })
+
+  it("decides the scope from the command line and the environment it was given", async () => {
+    const seen: unknown[] = []
+    await runContract({
+      runRepoContract: fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" }) as never,
+      config,
+      cwd,
+      title: "T",
+      argv: ["--scope", "auto"],
+      env: { GITHUB_EVENT_NAME: "push" },
+      out: capture().out,
+      scope: (async (input: unknown) => {
+        seen.push(input)
+        return {
+          schemaVersion: 1,
+          scope: "full",
+          reason: "r",
+          changedFiles: [],
+          tests: [],
+          sources: [],
+          mutate: [],
+        }
+      }) as never,
+    })
+    expect(seen).toEqual([{ argv: ["--scope", "auto"], env: { GITHUB_EVENT_NAME: "push" }, cwd }])
+  })
+
+  it("runs everything by default and says so", async () => {
+    const cap = capture()
+    await runContract({
+      runRepoContract: fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" }) as never,
+      config,
+      cwd,
+      title: "T",
+      argv: [],
+      env: {},
+      out: cap.out,
+    })
+    expect(cap.text()).toMatch(/\[contract\] scope: full \(/)
+  })
+
+  it("keeps the scope line off stdout under --json", async () => {
+    const cap = capture()
+    await runContract({
+      runRepoContract: fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" }) as never,
+      config,
+      cwd,
+      title: "T",
+      argv: ["--json"],
+      env: {},
+      out: cap.out,
+    })
+    expect(cap.text()).not.toContain("scope:")
+    expect(() => JSON.parse(cap.text())).not.toThrow()
+  })
+
+  it("stops before running anything when the scope flag is misused", async () => {
+    const run = fakeRun({ Lint: "pass", Tests: "pass", SecuritySocket: "pass" })
+    await expect(
+      runContract({
+        runRepoContract: run as never,
+        config,
+        cwd,
+        title: "T",
+        argv: ["--scope", "partial"],
+        env: {},
+        out: capture().out,
+      }),
+    ).rejects.toMatchObject({ usage: true })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it("runs the checks with the scope handed to their policies when the run is narrowed, and untouched when it is not", async () => {
+    const seen: { policy: (ctx: object) => unknown }[] = []
+    const policy = vi.fn()
+    const withPolicies = {
+      checks: { Lint: { policy }, Tests: { policy }, SecuritySocket: { policy } },
+    }
+    const run = vi.fn(
+      async (given: { checks: Record<string, { policy: (ctx: object) => unknown }> }) => {
+        seen.push(given.checks["Lint"] as never)
+        return { evidence: evidence(["Lint", "Tests"]), verdict: { passed: true, checks: {} } }
+      },
+    )
+    await runContract({
+      runRepoContract: run as never,
+      config: withPolicies,
+      cwd,
+      title: "T",
+      argv: [],
+      env: {},
+      out: capture().out,
+      scope: (async () => narrow) as never,
+    })
+    await (seen[0] as { policy: (ctx: object) => unknown }).policy({ result: 1 })
+    expect(policy).toHaveBeenCalledWith({ result: 1, scope: narrow })
+
+    seen.length = 0
+    policy.mockClear()
+    await runContract({
+      runRepoContract: run as never,
+      config: withPolicies,
+      cwd,
+      title: "T",
+      argv: [],
+      env: {},
+      out: capture().out,
+    })
+    expect(seen[0]).toBe(withPolicies.checks.Lint)
+  })
+})
