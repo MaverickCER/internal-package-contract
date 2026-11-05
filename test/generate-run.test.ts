@@ -55,6 +55,7 @@ describe("generate", () => {
       "ADOPTION.md",
       "VERSIONING.md",
       "CONTRIBUTING.md",
+      "specs/generated-artifacts.md",
     ])
   })
   it("does nothing, and says so, when no document has a region", async () => {
@@ -105,6 +106,80 @@ describe("generate", () => {
     expect(await run(["--check"], dir, ok.io)).toBe(0)
     expect(ok.out.join("")).toBe("[generate] every generated region is current.\n")
   })
+  it("fills each region from its own generator, so one document can carry all three", async () => {
+    write("package.json", JSON.stringify({ ...manifest, dependencies: { a: "^1.0.0" } }))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        ...surface,
+        dependencies: { a: "Parses things." },
+        standards: [
+          {
+            document: "Findings",
+            standard: "OASIS SARIF 2.1.0",
+            producedBy: "`buildSarifLog`",
+            checkedAgainst: "The OASIS schema",
+            test: "test/sarif.test.ts",
+            limits: "None known.",
+          },
+        ],
+      }),
+    )
+    write("test/sarif.test.ts", "")
+    write(
+      "specs/generated-artifacts.md",
+      "# Artifacts\n\n<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n\n<!-- ipc:begin dependencies -->\n<!-- ipc:end dependencies -->\n\n<!-- ipc:begin entry-points -->\n<!-- ipc:end entry-points -->\n",
+    )
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(0)
+    const text = read("specs/generated-artifacts.md")
+    expect(text).toContain(
+      "| Findings | OASIS SARIF 2.1.0 | `buildSarifLog` | The OASIS schema | `test/sarif.test.ts` | None known. |",
+    )
+    expect(text).toContain(
+      "Installing `@o/demo` installs 1 direct dependency, and whatever it depends on.",
+    )
+    expect(text).toContain("| `@o/demo/build` | `src/build/` | Node-only")
+    const check = io()
+    expect(await run(["--check"], dir, check.io)).toBe(0)
+  })
+
+  it("names the regions that need docs/surface.json when it is missing, in alphabetical order", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "README.md",
+      "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n<!-- ipc:begin dependencies -->\n<!-- ipc:end dependencies -->\n",
+    )
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toBe(
+      '[generate] nothing was written:\n- docs/surface.json not found; it holds what only a person can say for the "dependencies", "standards" regions.\n',
+    )
+  })
+
+  it("fails, naming the test, when a standards row cites a test that does not exist", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test: "test/none.test.ts",
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain('cites test "test/none.test.ts", which does not exist.')
+  })
+
   it("rejects an unknown argument", async () => {
     const h = io()
     expect(await run(["--nope"], dir, h.io)).toBe(2)
@@ -164,7 +239,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toBe(
-      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: entry-points.\n- AGENTS.md: region "other" has no generator. Available: entry-points.\n',
+      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: dependencies, entry-points, standards.\n- AGENTS.md: region "other" has no generator. Available: dependencies, entry-points, standards.\n',
     )
   })
   it("writes nothing, naming file and line, when a marker is malformed", async () => {
@@ -182,7 +257,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain(
-      '- AGENTS.md: region "mystery" has no generator. Available: entry-points.',
+      '- AGENTS.md: region "mystery" has no generator. Available: dependencies, entry-points, standards.',
     )
   })
   it("says what is missing or wrong with the sources", async () => {
@@ -191,7 +266,7 @@ describe("generate", () => {
     let h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain(
-      'docs/surface.json not found; it describes each entry point for the "entry-points" region.',
+      'docs/surface.json not found; it holds what only a person can say for the "entry-points" region.',
     )
     write("docs/surface.json", "{ nope")
     h = io()

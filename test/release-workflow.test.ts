@@ -117,6 +117,27 @@ describe("release workflows", () => {
     )
   })
 
+  it("names the repository for every gh release call in a job that has no checkout", () => {
+    // `gh release` finds its repository from the git remote of the working directory. A job without
+    // actions/checkout has none, so the call fails with "not a git repository" unless GH_REPO (or
+    // --repo) names it. This failed silently, behind continue-on-error, for every consumer release
+    // from 0.13.3 until it was caught.
+    for (const { name, text } of workflows) {
+      const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
+      for (const job of jobs.filter(
+        (j) => /\bgh release\b/.test(j) && !j.includes("actions/checkout"),
+      )) {
+        const steps = job.split(/\n {6}- /).filter((step) => /\bgh release\b/.test(step))
+        for (const step of steps) {
+          expect(
+            /GH_REPO:\s*\$\{\{\s*github\.repository\s*\}\}/.test(step) || /--repo\b/.test(step),
+            `${name}: a gh release step in a job without a checkout must set GH_REPO or pass --repo`,
+          ).toBe(true)
+        }
+      }
+    }
+  })
+
   it("ask the registry afterwards for the published version and its provenance", () => {
     const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
     expect(text).toContain("name: ${{ steps.info.outputs.name }}")

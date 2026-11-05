@@ -12,7 +12,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { format, resolveConfig } from "prettier"
 import { DOCUMENTS } from "./documents.mjs"
+import { dependencyRegion } from "./dependencies.mjs"
 import { entryPointRows, toTable } from "./entry-points.mjs"
+import { standardsRegion } from "./standards.mjs"
 import { findRegions, replaceRegions } from "./regions.mjs"
 
 export { DOCUMENTS }
@@ -20,10 +22,27 @@ const SURFACE = "docs/surface.json"
 const USAGE = "Usage: internal-package-contract generate [--check]\n"
 
 /**
- * @param {string} cwd
- * @returns {{ pkg: { name: string, exports?: Record<string, unknown> } | undefined, surface: unknown, problems: string[] }}
+ * The generator for each region name. Every one reads `package.json` and `docs/surface.json`; what only a person
+ * can say lives once in the latter, and everything derivable comes from the package itself.
+ * @type {Record<string, (sources: { pkg: any, surface: unknown }, exists: (file: string) => boolean) => { problems: string[], markdown: string }>}
  */
-function readSources(cwd) {
+// Listed alphabetically: the order is the one an unknown-region problem names them in.
+const GENERATORS = {
+  dependencies: ({ pkg, surface }) => dependencyRegion(pkg, surface),
+  "entry-points": ({ pkg, surface }) => {
+    const { problems, rows } = entryPointRows(pkg, surface)
+    // With problems nothing is written, so a table built from a half-valid source is never used.
+    return { problems, markdown: toTable(rows) }
+  },
+  standards: ({ surface }, exists) => standardsRegion(surface, exists),
+}
+
+/**
+ * @param {string} cwd - the package root.
+ * @param {string[]} needs - the region names being generated, for the message when the sources are missing.
+ * @returns {{ pkg: any, surface: unknown, problems: string[] }} the parsed sources, and what is wrong with them.
+ */
+function readSources(cwd, needs) {
   /** @type {string[]} */
   const problems = []
   let pkg
@@ -34,8 +53,9 @@ function readSources(cwd) {
   }
   let surface
   if (!existsSync(path.join(cwd, SURFACE))) {
+    const names = needs.map((name) => `"${name}"`).join(", ")
     problems.push(
-      `${SURFACE} not found; it describes each entry point for the "entry-points" region.`,
+      `${SURFACE} not found; it holds what only a person can say for the ${names} region${needs.length === 1 ? "" : "s"}.`,
     )
   } else {
     try {
@@ -78,25 +98,28 @@ export async function run(argv, cwd, io, hooks = {}) {
   for (const { file, problems: found } of scanned) {
     for (const { line, message } of found) problems.push(`${file}:${String(line)}: ${message}`)
   }
-  const sources = readSources(cwd)
-  const needsEntryPoints = scanned.some((document) =>
-    document.regions.some((region) => region.name === "entry-points"),
-  )
-  // Stryker disable next-line StringLiteral: equivalent -- the table is only read when no problem was found, and by then it has been built from the sources.
-  let table = ""
-  if (needsEntryPoints) {
-    problems.push(...sources.problems)
-    if (sources.pkg !== undefined && sources.surface !== undefined) {
-      const { problems: sourceProblems, rows } = entryPointRows(sources.pkg, sources.surface)
-      problems.push(...sourceProblems)
-      // With problems nothing is written, so a table built from a half-valid source is never used.
-      table = toTable(rows)
-    }
-  }
+  const names = [...new Set(scanned.flatMap((document) => document.regions.map((r) => r.name)))]
+  const known = names.filter((name) => name in GENERATORS).sort()
   for (const { file, regions } of scanned) {
     for (const region of regions) {
-      if (region.name !== "entry-points") {
-        problems.push(`${file}: region "${region.name}" has no generator. Available: entry-points.`)
+      if (!(region.name in GENERATORS)) {
+        problems.push(
+          `${file}: region "${region.name}" has no generator. Available: ${Object.keys(GENERATORS).join(", ")}.`,
+        )
+      }
+    }
+  }
+  /** @type {Record<string, string>} */
+  const bodies = {}
+  if (known.length > 0) {
+    const sources = readSources(cwd, known)
+    problems.push(...sources.problems)
+    if (sources.pkg !== undefined && sources.surface !== undefined) {
+      const exists = (file) => existsSync(path.join(cwd, file))
+      for (const name of known) {
+        const { problems: found, markdown } = GENERATORS[name](sources, exists)
+        problems.push(...found)
+        bodies[name] = markdown
       }
     }
   }
@@ -122,8 +145,13 @@ export async function run(argv, cwd, io, hooks = {}) {
       )
       return 1
     }
-    const body = (await format(table, { ...options, parser: "markdown" })).trimEnd()
-    const next = replaceRegions(text, regions, () => body)
+    // Only reached with no problems, so every region here has a body.
+    /** @type {Record<string, string>} */
+    const formatted = {}
+    for (const name of new Set(regions.map((region) => region.name))) {
+      formatted[name] = (await format(bodies[name], { ...options, parser: "markdown" })).trimEnd()
+    }
+    const next = replaceRegions(text, regions, (name) => formatted[name])
     // The region is rewritten as blank line, body, blank line; compare the whole document, not the region.
     if (next !== text) stale.push({ file, next })
   }

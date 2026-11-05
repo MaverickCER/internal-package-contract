@@ -29,3 +29,9 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+
+      # The public Scorecard API keeps each check's score and a one-line reason. Uploading the SARIF puts
+      # the per-check details (which workflow, which line) in code scanning, where a reviewer can read why.
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results.sarif

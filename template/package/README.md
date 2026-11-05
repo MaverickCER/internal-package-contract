@@ -46,7 +46,7 @@ npm install {{name}}
 
 ## Security and supply chain
 
-<!-- ipc:prompt: the guarantees it provides, its trust boundaries, its dependencies, and how to report a vulnerability. See [SECURITY.md](SECURITY.md). -->
+<!-- ipc:prompt: the guarantees it provides, its trust boundaries, and how to report a vulnerability. See [SECURITY.md](SECURITY.md). Link the generated dependency list in [ADOPTION.md](ADOPTION.md) rather than restating it. -->
 
 ## Maturity, versioning and support
 

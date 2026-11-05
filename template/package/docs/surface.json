@@ -6,5 +6,6 @@
       "tier": "Stable",
       "purpose": "TODO: say what a reader gets from this entry point."
     }
-  }
+  },
+  "dependencies": {}
 }

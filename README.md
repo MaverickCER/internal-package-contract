@@ -618,11 +618,39 @@ instead of in every document that lists the entry points:
 }
 ```
 
+Two more regions read the same file:
+
+- `dependencies` states what installing the package adds, from `package.json` itself: each `dependencies` and
+  `peerDependencies` entry with its range and kind (dependency, peer, optional peer), and the reason for it from
+  `"dependencies"` in `docs/surface.json`. A dependency without a reason, or a reason for a package that is no
+  longer declared, fails generation. A package with no dependencies gets the sentence that says so, so "zero
+  dependencies" is generated, not typed.
+- `standards` lists the standard-format documents the package generates (SARIF, OSCAL, CycloneDX, ...), one row
+  per entry in `"standards"`: the document, the standard, the function that produces it, what its format is
+  checked against, the test that checks it, and its limits. Generation fails when the cited test file does not
+  exist, so a claim that a format is validated cannot outlive its test.
+
+```json
+{
+  "dependencies": { "@typescript/typescript6": "The compiler the build entry parses with." },
+  "standards": [
+    {
+      "document": "Findings",
+      "standard": "OASIS SARIF 2.1.0",
+      "producedBy": "`buildSarifLog`",
+      "checkedAgainst": "The official OASIS schema",
+      "test": "test/build/sarif.test.ts",
+      "limits": "Not wired to the CLI."
+    }
+  ]
+}
+```
+
 `generate` rewrites only what is between the markers, formats it with the package's own Prettier settings, and
 changes nothing on a second run. `generate --check` writes nothing; the `GeneratedRegions` check runs it, and
 fails on a stale region, on markers that are missing, repeated or out of order, and on a source that omits an
 exported entry point or lists one that is not exported. Only the fixed list of documents in
-`scripts/generate/documents.mjs` is read. `add export <name>` adds the new entry point to `docs/surface.json` as
+`scripts/generate/documents.mjs` is read (the contributor documents, plus `specs/generated-artifacts.md`). `add export <name>` adds the new entry point to `docs/surface.json` as
 `Experimental`, with a `TODO:` purpose.
 
 A scaffold asks for what only its author knows with a single-line comment, `<!-- ipc:prompt: ... -->` (or a
@@ -712,7 +740,11 @@ tool <name>`:
 
 Files that are the same in every package are carried as managed copies, so there is one to change and a drift
 check for the rest: `.editorconfig`, `typedoc.markdown.json`, `benchmarks/budgets.mjs` and the two benchmark
-guides, next to the code copies. `sync --add <name>` enrols one and `sync --apply --update` restores it; `init` on
+guides, next to the code copies. The official schemas a package's tests validate its standard-format output
+against are managed copies too (`schema-sarif-2.1.0`, `schema-oscal-assessment-results-1.1.2`,
+`schema-cyclonedx-1.6`, which brings the SPDX and JSF schemas it references), carried into `test/fixtures/standards/`
+with a README that records each one's release URL and SHA-256; this repository's tests fail if a byte changes.
+`sync --add <name>` enrols one and `sync --apply --update` restores it; `init` on
 an existing package enrols each one it already carries unchanged. The workflows (`release`, `scorecard`,
 `env-rotation`, `sync-internal-package-contract`) are always managed.
 
