@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -237,6 +237,46 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain("package.json is not a JSON object.")
+  })
+
+  it("rejects a standards row whose test lies outside the package, even through a symlink", async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "ipc-generate-outside-"))
+    try {
+      writeFileSync(path.join(outside, "other.test.ts"), "")
+      symlinkSync(outside, path.join(dir, "linked"), "junction")
+      write("package.json", JSON.stringify(manifest))
+      const cite = (test: string) =>
+        write(
+          "docs/surface.json",
+          JSON.stringify({
+            standards: [
+              {
+                document: "D",
+                standard: "S",
+                producedBy: "p",
+                checkedAgainst: "c",
+                test,
+                limits: "l",
+              },
+            ],
+          }),
+        )
+      write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+      for (const test of [
+        path.relative(dir, path.join(outside, "other.test.ts")),
+        path.join(outside, "other.test.ts"),
+        "linked/other.test.ts",
+      ]) {
+        cite(test)
+        const h = io()
+        expect(await run(["--check"], dir, h.io), test).toBe(1)
+        expect(h.err.join(""), test).toContain(
+          `cites test "${test}", which is not a file in this package.`,
+        )
+      }
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
   })
 
   it("rejects an unknown argument", async () => {

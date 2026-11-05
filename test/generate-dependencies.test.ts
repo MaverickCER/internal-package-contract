@@ -201,4 +201,30 @@ describe("dependencyRegion", () => {
       "Installing `p` installs no other packages. It names 2 optional peers, which you install yourself when you use the part that needs them.",
     )
   })
+
+  it("lists a package declared as both a dependency and an optional dependency once, as npm installs it", () => {
+    const region = dependencyRegion(
+      { name: "p", dependencies: { a: "^1.0.0" }, optionalDependencies: { a: "^2.0.0" } },
+      { dependencies: { a: "A." } },
+    )
+    expect(region.markdown).toBe(
+      [
+        "Installing `p` installs 1 package directly, and whatever it depends on.",
+        "",
+        "| Package | Kind | Range | Why |",
+        "| --- | --- | --- | --- |",
+        "| `a` | optional dependency | `^2.0.0` | A. |",
+      ].join("\n"),
+    )
+  })
+
+  it("counts a package once when it is both a dependency and a required peer", () => {
+    const region = dependencyRegion(
+      { name: "p", dependencies: { a: "^1.0.0" }, peerDependencies: { a: "^1.0.0", b: "^2.0.0" } },
+      { dependencies: { a: "A.", b: "B." } },
+    )
+    expect(region.markdown.split("\n")[0]).toBe(
+      "Installing `p` installs 2 packages directly (with npm 7 or later, which installs required peers), and whatever they depend on.",
+    )
+  })
 })

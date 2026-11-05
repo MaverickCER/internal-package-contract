@@ -47,8 +47,10 @@ export function dependencyRegion(pkg, surface) {
   const reasons = isRecord(given) ? given : {}
   const meta = isRecord(pkg.peerDependenciesMeta) ? pkg.peerDependenciesMeta : {}
   const isOptionalPeer = (name) => isRecord(meta[name]) && meta[name].optional === true
-  const runtime = entriesOf(pkg.dependencies)
   const optional = entriesOf(pkg.optionalDependencies)
+  // npm installs a name listed in both maps from optionalDependencies, so the plain entry is not a second package.
+  const optionalNames = new Set(optional.map(([name]) => name))
+  const runtime = entriesOf(pkg.dependencies).filter(([name]) => !optionalNames.has(name))
   const peers = entriesOf(pkg.peerDependencies)
   const requiredPeers = peers.filter(([name]) => !isOptionalPeer(name))
   const optionalPeers = peers.filter(([name]) => isOptionalPeer(name))
@@ -94,7 +96,8 @@ export function dependencyRegion(pkg, surface) {
     }
   }
 
-  const installed = runtime.length + optional.length + requiredPeers.length
+  // One name declared as a dependency and as a required peer is one installed package.
+  const installed = new Set([...runtime, ...optional, ...requiredPeers].map(([name]) => name)).size
   const viaPeers =
     requiredPeers.length === 0 ? "" : " (with npm 7 or later, which installs required peers)"
   const installs =

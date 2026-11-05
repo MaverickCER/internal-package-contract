@@ -8,7 +8,7 @@
 // A region that cannot be generated (bad markers, an unknown generator, a missing or inconsistent source) is
 // reported as `file:line: message` and nothing is written.
 
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { format, resolveConfig } from "prettier"
 import { DOCUMENTS } from "./documents.mjs"
@@ -119,8 +119,15 @@ export async function run(argv, cwd, io, hooks = {}) {
     const sources = readSources(cwd, known)
     problems.push(...sources.problems)
     if (sources.pkg !== undefined && sources.surface !== undefined) {
-      const exists = (file) =>
-        statSync(path.join(cwd, file), { throwIfNoEntry: false })?.isFile() === true
+      // A cited test must be a regular file inside this package, symlinks resolved, so a path that climbs
+      // out (`../other/x.test.ts`, an absolute path, a link to elsewhere) is never presented as its test.
+      const root = realpathSync(cwd)
+      const exists = (file) => {
+        const target = path.resolve(root, file)
+        if (!existsSync(target)) return false
+        const real = realpathSync(target)
+        return real.startsWith(root + path.sep) && statSync(real).isFile()
+      }
       for (const name of known) {
         const { problems: found, markdown } = GENERATORS[name](sources, exists)
         problems.push(...found)
