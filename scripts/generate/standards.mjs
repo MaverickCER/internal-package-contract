@@ -9,7 +9,7 @@ const FIELDS = ["document", "standard", "producedBy", "checkedAgainst", "test", 
 
 /**
  * @param {unknown} surface - the parsed `docs/surface.json`.
- * @param {(file: string) => boolean} exists - whether a path, relative to the package root, exists.
+ * @param {(file: string) => boolean} exists - whether a path, relative to the package root, is a regular file.
  * @returns {{ problems: string[], markdown: string }} the region's body, or what stops it being written.
  */
 export function standardsRegion(surface, exists) {
@@ -42,9 +42,16 @@ export function standardsRegion(surface, exists) {
       problems.push(`docs/surface.json standards entry ${label} needs ${missing.join(", ")}.`)
       return
     }
+    const multiline = FIELDS.filter((field) => /[\r\n]/.test(entry[field]))
+    if (multiline.length > 0) {
+      problems.push(
+        `docs/surface.json standards entry ${label} has a line break in ${multiline.join(", ")}; a table cell holds one line.`,
+      )
+      return
+    }
     if (!exists(entry.test)) {
       problems.push(
-        `docs/surface.json standards entry ${label} cites test "${entry.test}", which does not exist.`,
+        `docs/surface.json standards entry ${label} cites test "${entry.test}", which is not a file in this package.`,
       )
       return
     }

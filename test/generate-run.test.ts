@@ -137,7 +137,7 @@ describe("generate", () => {
       "| Findings | OASIS SARIF 2.1.0 | `buildSarifLog` | The OASIS schema | `test/sarif.test.ts` | None known. |",
     )
     expect(text).toContain(
-      "Installing `@o/demo` installs 1 direct dependency, and whatever it depends on.",
+      "Installing `@o/demo` installs 1 package directly, and whatever it depends on.",
     )
     expect(text).toContain("| `@o/demo/build` | `src/build/` | Node-only")
     const check = io()
@@ -177,7 +177,66 @@ describe("generate", () => {
     write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
     const h = io()
     expect(await run(["--check"], dir, h.io)).toBe(1)
-    expect(h.err.join("")).toContain('cites test "test/none.test.ts", which does not exist.')
+    expect(h.err.join("")).toContain(
+      'cites test "test/none.test.ts", which is not a file in this package.',
+    )
+  })
+
+  it("treats a region named after an Object property as having no generator", async () => {
+    project("<!-- ipc:begin constructor -->\n<!-- ipc:end constructor -->\n")
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain('region "constructor" has no generator.')
+  })
+
+  it("reports a package.json that is valid JSON but not an object, instead of throwing", async () => {
+    project()
+    write("package.json", "null")
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain("package.json is not a JSON object.")
+  })
+
+  it("rejects a standards row that cites a directory, not a test file", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test: "test",
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("test/a.test.ts", "")
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain('cites test "test", which is not a file in this package.')
+  })
+
+  it("says only that package.json is missing when it is", async () => {
+    write("docs/surface.json", JSON.stringify(surface))
+    write("AGENTS.md", region())
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toBe(
+      "[generate] nothing was written:\n- package.json is missing or is not valid JSON.\n",
+    )
+  })
+
+  it("rejects a package.json that is a JSON string", async () => {
+    project()
+    write("package.json", JSON.stringify("text"))
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain("package.json is not a JSON object.")
   })
 
   it("rejects an unknown argument", async () => {

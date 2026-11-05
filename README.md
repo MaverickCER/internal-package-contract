@@ -620,11 +620,12 @@ instead of in every document that lists the entry points:
 
 Two more regions read the same file:
 
-- `dependencies` states what installing the package adds, from `package.json` itself: each `dependencies` and
-  `peerDependencies` entry with its range and kind (dependency, peer, optional peer), and the reason for it from
-  `"dependencies"` in `docs/surface.json`. A dependency without a reason, or a reason for a package that is no
-  longer declared, fails generation. A package with no dependencies gets the sentence that says so, so "zero
-  dependencies" is generated, not typed.
+- `dependencies` states what installing the package adds, from `package.json` itself: each `dependencies`,
+  `optionalDependencies` and `peerDependencies` entry with its range and kind, and the reason for it from
+  `"dependencies"` in `docs/surface.json`. Required peers count as installed, as npm 7 and later install them;
+  optional peers are left to the consumer. A dependency without a reason, a reason for a package that is no longer
+  declared, or a reason that spans lines fails generation. A package with no dependencies gets the sentence that
+  says so, so "zero dependencies" is generated, not typed.
 - `standards` lists the standard-format documents the package generates (SARIF, OSCAL, CycloneDX, ...), one row
   per entry in `"standards"`: the document, the standard, the function that produces it, what its format is
   checked against, the test that checks it, and its limits. Generation fails when the cited test file does not

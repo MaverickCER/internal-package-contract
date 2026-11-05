@@ -10,8 +10,7 @@ describe("dependencyRegion", () => {
   it("says the package installs nothing else when it declares no dependencies of any kind", () => {
     expect(dependencyRegion({ name: "p" }, {})).toEqual({
       problems: [],
-      markdown:
-        "Installing `p` installs no other packages: `package.json` declares no dependencies.",
+      markdown: "Installing `p` installs no other packages.",
     })
   })
 
@@ -23,7 +22,7 @@ describe("dependencyRegion", () => {
     expect(region.problems).toEqual([])
     expect(region.markdown).toBe(
       [
-        "Installing `@o/p` installs 1 direct dependency, and whatever it depends on.",
+        "Installing `@o/p` installs 1 package directly, and whatever it depends on.",
         "",
         "| Package | Kind | Range | Why |",
         "| --- | --- | --- | --- |",
@@ -32,7 +31,7 @@ describe("dependencyRegion", () => {
     )
   })
 
-  it("lists peers separately and marks the optional ones, which installing never adds", () => {
+  it("counts required peers as installed, as npm 7 and later install them, and leaves optional ones to you", () => {
     const region = dependencyRegion(
       {
         name: "p",
@@ -44,7 +43,7 @@ describe("dependencyRegion", () => {
     expect(region.problems).toEqual([])
     expect(region.markdown).toBe(
       [
-        "Installing `p` installs no other packages: `package.json` declares no dependencies. It names 2 peer dependencies, which you install yourself when you use the part that needs them.",
+        "Installing `p` installs 1 package directly (with npm 7 or later, which installs required peers), and whatever it depends on. It names 1 optional peer, which you install yourself when you use the part that needs it.",
         "",
         "| Package | Kind | Range | Why |",
         "| --- | --- | --- | --- |",
@@ -60,7 +59,7 @@ describe("dependencyRegion", () => {
       { dependencies: { a: "A.", b: "B." } },
     )
     expect(region.markdown.split("\n")[0]).toBe(
-      "Installing `p` installs 1 direct dependency, and whatever it depends on. It names 1 peer dependency, which you install yourself when you use the part that needs it.",
+      "Installing `p` installs 2 packages directly (with npm 7 or later, which installs required peers), and whatever they depend on.",
     )
   })
 
@@ -70,7 +69,7 @@ describe("dependencyRegion", () => {
       { dependencies: { a: "A.", b: "B." } },
     )
     expect(region.markdown.split("\n")[0]).toBe(
-      "Installing `p` installs 2 direct dependencies, and whatever they depend on.",
+      "Installing `p` installs 2 packages directly, and whatever they depend on.",
     )
     expect(region.markdown.split("\n").slice(4)).toEqual([
       "| `a` | dependency | `2` | A. |",
@@ -128,8 +127,7 @@ describe("dependencyRegion", () => {
       ),
     ).toEqual({
       problems: [],
-      markdown:
-        "Installing `p` installs no other packages: `package.json` declares no dependencies.",
+      markdown: "Installing `p` installs no other packages.",
     })
     expect(
       dependencyRegion({ name: "p", dependencies: { a: 1, b: "2" } }, { dependencies: { b: "B." } })
@@ -157,5 +155,50 @@ describe("dependencyRegion", () => {
       'docs/surface.json "dependencies" must be an object from package name to the reason it is there.',
       'docs/surface.json has no "dependencies" reason for "a", which package.json lists in dependencies.',
     ])
+  })
+
+  it("lists optional dependencies, which npm installs by default, and asks for their reasons too", () => {
+    const region = dependencyRegion(
+      { name: "p", optionalDependencies: { fsevents: "^2.3.0" } },
+      { dependencies: { fsevents: "Faster file watching on macOS." } },
+    )
+    expect(region).toEqual({
+      problems: [],
+      markdown: [
+        "Installing `p` installs 1 package directly, and whatever it depends on.",
+        "",
+        "| Package | Kind | Range | Why |",
+        "| --- | --- | --- | --- |",
+        "| `fsevents` | optional dependency | `^2.3.0` | Faster file watching on macOS. |",
+      ].join("\n"),
+    })
+    expect(dependencyRegion({ name: "p", optionalDependencies: { a: "1" } }, {}).problems).toEqual([
+      'docs/surface.json has no "dependencies" reason for "a", which package.json lists in optionalDependencies.',
+    ])
+  })
+
+  it("rejects a reason that spans lines, since a table cell holds one line", () => {
+    expect(
+      dependencyRegion(
+        { name: "p", dependencies: { a: "1" } },
+        { dependencies: { a: "One.\nTwo." } },
+      ).problems,
+    ).toEqual([
+      'docs/surface.json "dependencies" reason for "a" spans more than one line; a table cell holds one line.',
+    ])
+  })
+
+  it("counts several optional peers in the plural", () => {
+    const region = dependencyRegion(
+      {
+        name: "p",
+        peerDependencies: { a: "1", b: "2" },
+        peerDependenciesMeta: { a: { optional: true }, b: { optional: true } },
+      },
+      { dependencies: { a: "A.", b: "B." } },
+    )
+    expect(region.markdown.split("\n")[0]).toBe(
+      "Installing `p` installs no other packages. It names 2 optional peers, which you install yourself when you use the part that needs them.",
+    )
   })
 })

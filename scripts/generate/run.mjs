@@ -8,7 +8,7 @@
 // A region that cannot be generated (bad markers, an unknown generator, a missing or inconsistent source) is
 // reported as `file:line: message` and nothing is written.
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { format, resolveConfig } from "prettier"
 import { DOCUMENTS } from "./documents.mjs"
@@ -50,6 +50,10 @@ function readSources(cwd, needs) {
     pkg = JSON.parse(readFileSync(path.join(cwd, "package.json")).toString())
   } catch {
     problems.push("package.json is missing or is not valid JSON.")
+  }
+  if (pkg !== undefined && (typeof pkg !== "object" || pkg === null || Array.isArray(pkg))) {
+    problems.push("package.json is not a JSON object.")
+    pkg = undefined
   }
   let surface
   if (!existsSync(path.join(cwd, SURFACE))) {
@@ -99,10 +103,10 @@ export async function run(argv, cwd, io, hooks = {}) {
     for (const { line, message } of found) problems.push(`${file}:${String(line)}: ${message}`)
   }
   const names = [...new Set(scanned.flatMap((document) => document.regions.map((r) => r.name)))]
-  const known = names.filter((name) => name in GENERATORS).sort()
+  const known = names.filter((name) => Object.hasOwn(GENERATORS, name)).sort()
   for (const { file, regions } of scanned) {
     for (const region of regions) {
-      if (!(region.name in GENERATORS)) {
+      if (!Object.hasOwn(GENERATORS, region.name)) {
         problems.push(
           `${file}: region "${region.name}" has no generator. Available: ${Object.keys(GENERATORS).join(", ")}.`,
         )
@@ -115,7 +119,8 @@ export async function run(argv, cwd, io, hooks = {}) {
     const sources = readSources(cwd, known)
     problems.push(...sources.problems)
     if (sources.pkg !== undefined && sources.surface !== undefined) {
-      const exists = (file) => existsSync(path.join(cwd, file))
+      const exists = (file) =>
+        statSync(path.join(cwd, file), { throwIfNoEntry: false })?.isFile() === true
       for (const name of known) {
         const { problems: found, markdown } = GENERATORS[name](sources, exists)
         problems.push(...found)

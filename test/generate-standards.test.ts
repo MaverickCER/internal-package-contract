@@ -39,7 +39,7 @@ describe("standardsRegion", () => {
     expect(
       standardsRegion({ standards: [{ ...entry, test: "test/gone.test.ts" }] }, exists).problems,
     ).toEqual([
-      'docs/surface.json standards entry "Findings" cites test "test/gone.test.ts", which does not exist.',
+      'docs/surface.json standards entry "Findings" cites test "test/gone.test.ts", which is not a file in this package.',
     ])
   })
 
@@ -93,5 +93,22 @@ describe("standardsRegion", () => {
     expect(standardsRegion({ standards: [{ ...entry, document: "  " }] }, exists).problems).toEqual(
       ["docs/surface.json standards entry 1 needs document."],
     )
+  })
+
+  it("rejects a field that spans lines, since a table cell holds one line", () => {
+    expect(
+      standardsRegion({ standards: [{ ...entry, limits: "One.\r\nTwo." }] }, exists).problems,
+    ).toEqual([
+      'docs/surface.json standards entry "Findings" has a line break in limits; a table cell holds one line.',
+    ])
+  })
+
+  it("names every field that spans lines", () => {
+    expect(
+      standardsRegion({ standards: [{ ...entry, standard: "A\nB", limits: "C\nD" }] }, exists)
+        .problems,
+    ).toEqual([
+      'docs/surface.json standards entry "Findings" has a line break in standard, limits; a table cell holds one line.',
+    ])
   })
 })
