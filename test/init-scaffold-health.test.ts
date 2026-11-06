@@ -84,7 +84,8 @@ describe("a freshly scaffolded package", () => {
     })
     expect(again.status, `${again.stdout}${again.stderr}`).toBe(0)
     expect(snapshot()).toEqual(before)
-  })
+    // Running init again takes about 12 s on its own; under the full suite's parallel load it needs more than the default 20 s.
+  }, 120_000)
 
   it("carries the repository rules for an agent", () => {
     const agents = readFileSync(path.join(dir, "AGENTS.md"), "utf8")
