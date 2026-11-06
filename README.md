@@ -818,6 +818,19 @@ when it stalled is reported as a timeout, a different one each run and none of t
 that mutant is run again alone (at most five are); one that is caught the second time is recorded as caught, with the reason
 in the evidence, and one that times out again stays a failure.
 
+When the whole run does not fit in one job (GitHub stops a job after six hours), split it. `IPC_MUTATION_SHARD=i/n` makes
+a run mutate slice `i` of `n`: the files the Stryker config's `mutate` patterns match, cut heaviest-first by size so the
+slices take about as long, the same way every time. Each slice is judged by the same rule as a full run and its log says
+which slice it was, but a record in `.repo-contract/exceptions/mutation.json` for a mutant in another slice is not called
+stale, since only the merged report can say so. A run asks for more slices than there are files, or for an unreadable
+selector, and fails. Run the slices as a matrix, upload each slice's `reports/mutation/mutation.json`, and put them back
+together with `node node_modules/internal-package-contract/scripts/run-merge-mutation-reports.mjs --total <n> --out
+reports/mutation/mutation.json 1=<report> 2=<report> ...`: it writes the report an unsharded run would have, or nothing
+and a failure when a slice is missing, repeated, unreadable, or mutated a file another slice also did.
+Then a full contract run with `IPC_MUTATION_REPORT=<merged report>` judges that report instead of mutating again: it is the
+evidence the `Mutation` check reads, judged by the same rule, stale exceptions included, because the merged report is
+every file. It refuses a file that is not a mutation report with at least one file in it.
+
 ## Evolving the standard
 
 Per ADR 0010: a review finding becomes a new check here only when it exposes a

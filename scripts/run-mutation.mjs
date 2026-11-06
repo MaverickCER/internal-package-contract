@@ -18,13 +18,21 @@
 // Usage: node run-mutation.mjs --fallback-config <abs path>
 
 import { sync as spawnSync } from "cross-spawn"
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, rmSync, statSync } from "node:fs"
 import path from "node:path"
 
 import { confirmEvidence, strykerRerun } from "./mutation/confirm-timeouts.mjs"
 import { readScope } from "./affected-scope.mjs"
 import { MEMO_DIRECTORY, inputsHash, recall, remember } from "./mutation/memo.mjs"
+import { adoptReport, reportToAdopt } from "./mutation/adopt.mjs"
 import { narrowMutation } from "./mutation/narrow.mjs"
+import {
+  expandMutate,
+  loadStrykerConfig,
+  mutateGlobsOf,
+  shardMutation,
+  shardSpecOf,
+} from "./mutation/shard.mjs"
 import { ensureStrykerVitest5Compat } from "./stryker-vitest5-compat.mjs"
 
 for (let dir = import.meta.dirname; ;) {
@@ -56,13 +64,42 @@ const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd
 // conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in for
 // a run that would not have said the same, and CI, starting cold, would then fail what a local gate passed.
 // A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
-const narrowed = narrowMutation(readScope(process.cwd()))
+const scope = readScope(process.cwd())
+let narrowed = narrowMutation(scope)
+// `IPC_MUTATION_SHARD=i/n` mutates one slice, so that the slices can run as parallel jobs and finish where one job
+// would not; a narrowed run is cut into slices of the sources it narrowed to. See scripts/mutation/shard.mjs.
+const shard = shardSpecOf(process.env)
+if (shard !== undefined && !narrowed.skip) {
+  const files =
+    scope?.scope === "affected"
+      ? [...(scope.mutate ?? [])]
+      : expandMutate(
+          process.cwd(),
+          mutateGlobsOf(await loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)),
+        )
+  narrowed = shardMutation({
+    spec: shard,
+    files,
+    sizeOf: (file) => statSync(path.join(process.cwd(), file)).size,
+  })
+}
 const args = ["run", "--reporters", "json,clear-text", "--force", ...narrowed.args]
 if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
 
 const inputs = inputsHash(process.cwd(), process.version, narrowed.key)
 
-if (narrowed.skip) {
+// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run) instead of mutating.
+const adopted = reportToAdopt(process.env, process.cwd())
+
+if (adopted !== undefined) {
+  const result = adoptReport(process.cwd(), adopted)
+  process.stderr.write(
+    result.ok
+      ? `[mutation] judging the report in ${adopted}; no mutant was run here.\n`
+      : `[mutation] ${result.error}\n`,
+  )
+  process.exitCode = result.ok ? 0 : 1
+} else if (narrowed.skip) {
   process.stderr.write("[mutation] skipped: no source file is affected by this change.\n")
 } else if (recall(process.cwd(), inputs, process.env)) {
   process.stderr.write(
