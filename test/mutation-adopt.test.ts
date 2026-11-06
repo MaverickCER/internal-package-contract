@@ -22,13 +22,15 @@ const evidence = (): string => path.join(root, "reports", "mutation", "mutation.
 
 describe("reportToAdopt", () => {
   it("is the file the variable names, resolved against the package", () => {
-    expect(reportToAdopt({ IPC_MUTATION_REPORT: "merged/mutation.json" }, "/pkg")).toBe(
-      path.join("/pkg", "merged/mutation.json"),
+    const pkg = path.resolve("pkg")
+    expect(reportToAdopt({ IPC_MUTATION_REPORT: "merged/mutation.json" }, pkg)).toBe(
+      path.join(pkg, "merged", "mutation.json"),
     )
   })
 
   it("keeps an absolute path as it is", () => {
-    expect(reportToAdopt({ IPC_MUTATION_REPORT: "/x/m.json" }, "/pkg")).toBe("/x/m.json")
+    const absolute = path.resolve("x", "m.json")
+    expect(reportToAdopt({ IPC_MUTATION_REPORT: absolute }, path.resolve("pkg"))).toBe(absolute)
   })
 
   it("is undefined when the variable is unset, empty or blank", () => {
@@ -64,7 +66,7 @@ describe("adoptReport", () => {
     const file = source("{ not json")
     const result = adoptReport(root, file)
     expect(result).toMatchObject({ ok: false })
-    expect(JSON.stringify(result)).toContain(file)
+    expect((result as { error: string }).error).toContain(file)
     expect((result as { error: string }).error).toMatch(
       /^.+ cannot be read as a mutation report \(.+\)\.$/,
     )
