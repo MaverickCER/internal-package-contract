@@ -11,8 +11,42 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { parseShardSpec, planShards } from "repo-contract/affected"
 
-/** What Stryker mutates when its config does not say. */
-const DEFAULT_MUTATE = ["src/**/*.ts"]
+/** The extensions Stryker mutates by default. */
+const DEFAULT_EXTENSIONS = "+(cjs|mjs|js|ts|mts|cts|jsx|tsx|html|vue|svelte)"
+
+/** What Stryker mutates when its config does not say: its own default `mutate`, test files and `__tests__` left out. */
+const DEFAULT_MUTATE = [
+  `{src,lib}/**/!(*.+(s|S)pec|*.+(t|T)est).${DEFAULT_EXTENSIONS}`,
+  `!{src,lib}/**/__tests__/**/*.${DEFAULT_EXTENSIONS}`,
+]
+
+/** A line range after a file in a `mutate` pattern: `:1-10`, `:1:5-10:20`. */
+const RANGE = /^(.*?)(:\d+(?::\d+)?-\d+(?::\d+)?)$/
+
+/**
+ * @param {string} entry - a `mutate` entry: a file or pattern, with a line range after it or without.
+ * @returns {{ file: string, range: string }} the file part and the range, which is empty when the entry has none.
+ */
+function splitRange(entry) {
+  const match = RANGE.exec(entry)
+  return match === null ? { file: entry, range: "" } : { file: match[1], range: match[2] }
+}
+
+/**
+ * @param {string} target - a target from `expandMutate`.
+ * @returns {string} the file it is in (the first, when it lists several ranges of one file).
+ */
+export function fileOfTarget(target) {
+  return splitRange(target.split(",")[0]).file
+}
+
+/**
+ * @param {readonly string[]} targets - targets from `expandMutate`.
+ * @returns {string[]} the files they are in, sorted, each once.
+ */
+export function filesOfTargets(targets) {
+  return [...new Set(targets.map(fileOfTarget))].sort()
+}
 
 /**
  * @param {Record<string, string | undefined>} env - the environment of the run.
@@ -50,30 +84,44 @@ export function mutateGlobsOf(config) {
 }
 
 /**
- * Lists the files Stryker would mutate: each pattern adds the files it matches, a `!` pattern removes what it matches
- * from what the patterns before it added.
+ * Lists what Stryker would mutate: each pattern adds the files it matches, a `!` pattern removes what it matches
+ * from what the patterns before it added. A pattern may carry a line range (`src/a.ts:1-10`); a file is then mutated
+ * only there, unless another pattern names it whole.
  * @param {string} cwd - the package.
  * @param {readonly string[]} patterns - Stryker `mutate` patterns.
- * @returns {string[]} the files, relative to the package, sorted.
+ * @returns {string[]} one target per file, sorted by file: the file, or the file's ranges joined by commas.
  */
 export function expandMutate(cwd, patterns) {
-  const files = new Set()
+  /** @type {Map<string, string[] | null>} a file's ranges, or `null` when the whole file is mutated. */
+  const ranges = new Map()
   for (const pattern of patterns) {
     if (pattern.startsWith("!")) {
       const negated = pattern.slice(1)
-      for (const file of files) if (path.matchesGlob(file, negated)) files.delete(file)
+      for (const file of ranges.keys()) if (path.matchesGlob(file, negated)) ranges.delete(file)
     } else {
-      for (const file of globSync(pattern, { cwd })) {
-        if (statSync(path.join(cwd, file)).isFile()) files.add(file.split(path.sep).join("/"))
+      const { file: glob, range } = splitRange(pattern)
+      for (const match of globSync(glob, { cwd })) {
+        if (!statSync(path.join(cwd, match)).isFile()) continue
+        const file = match.split(path.sep).join("/")
+        const held = ranges.get(file)
+        if (range === "") ranges.set(file, null)
+        else if (held === undefined) ranges.set(file, [range])
+        else if (held !== null) held.push(range)
       }
     }
   }
-  return [...files].sort()
+  return [...ranges.keys()].sort().map(
+    (file) =>
+      ranges
+        .get(file)
+        ?.map((range) => `${file}${range}`)
+        .join(",") ?? file,
+  )
 }
 
 /**
- * @param {{ spec: string, files: readonly string[], sizeOf: (file: string) => number }} run - the selector, the files
- *   a full run would mutate, and how big each is.
+ * @param {{ spec: string, files: readonly string[], sizeOf: (target: string) => number }} run - the selector, the targets
+ *   a full run would mutate (see `expandMutate`), and how big each is.
  * @returns {{ skip: false, args: string[], key: string }} the Stryker arguments that restrict the run to its slice, and a
  *   key naming the restriction, which the reuse of an earlier run must take into account.
  * @throws {Error} when the selector is not `i/n`, or the package cannot be cut into `n` slices that each have a file.

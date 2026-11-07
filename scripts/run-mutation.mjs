@@ -28,6 +28,8 @@ import { adoptReport, reportToAdopt } from "./mutation/adopt.mjs"
 import { narrowMutation } from "./mutation/narrow.mjs"
 import {
   expandMutate,
+  fileOfTarget,
+  filesOfTargets,
   loadStrykerConfig,
   mutateGlobsOf,
   shardMutation,
@@ -66,21 +68,26 @@ const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd
 // A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
 const scope = readScope(process.cwd())
 let narrowed = narrowMutation(scope)
+// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run) instead of mutating,
+// and takes precedence over `IPC_MUTATION_SHARD`: a job that judges a report mutates nothing, whatever else it inherits.
+const adopted = reportToAdopt(process.env, process.cwd())
+// What a full run mutates, as targets (see scripts/mutation/shard.mjs): the sources a change affects when the run is
+// narrowed, else what the Stryker config selects.
+const targets = async () =>
+  scope?.scope === "affected"
+    ? [...(scope.mutate ?? [])]
+    : expandMutate(
+        process.cwd(),
+        mutateGlobsOf(await loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)),
+      )
 // `IPC_MUTATION_SHARD=i/n` mutates one slice, so that the slices can run as parallel jobs and finish where one job
-// would not; a narrowed run is cut into slices of the sources it narrowed to. See scripts/mutation/shard.mjs.
-const shard = shardSpecOf(process.env)
+// would not; a narrowed run is cut into slices of the sources it narrowed to.
+const shard = adopted === undefined ? shardSpecOf(process.env) : undefined
 if (shard !== undefined && !narrowed.skip) {
-  const files =
-    scope?.scope === "affected"
-      ? [...(scope.mutate ?? [])]
-      : expandMutate(
-          process.cwd(),
-          mutateGlobsOf(await loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)),
-        )
   narrowed = shardMutation({
     spec: shard,
-    files,
-    sizeOf: (file) => statSync(path.join(process.cwd(), file)).size,
+    files: await targets(),
+    sizeOf: (target) => statSync(path.join(process.cwd(), fileOfTarget(target))).size,
   })
 }
 const args = ["run", "--reporters", "json,clear-text", "--force", ...narrowed.args]
@@ -88,11 +95,17 @@ if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
 
 const inputs = inputsHash(process.cwd(), process.version, narrowed.key)
 
-// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run) instead of mutating.
-const adopted = reportToAdopt(process.env, process.cwd())
-
 if (adopted !== undefined) {
-  const result = adoptReport(process.cwd(), adopted)
+  // A report cannot be judged against a change that affects no source: there is nothing it could be evidence of.
+  if (narrowed.skip)
+    rmSync(path.join(process.cwd(), MEMO_DIRECTORY, "mutation.json"), { force: true })
+  const result = narrowed.skip
+    ? {
+        ok: false,
+        error:
+          "IPC_MUTATION_REPORT: no source file is affected by this change, so there is no report to judge.",
+      }
+    : adoptReport(process.cwd(), adopted, filesOfTargets(await targets()))
   process.stderr.write(
     result.ok
       ? `[mutation] judging the report in ${adopted}; no mutant was run here.\n`

@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   expandMutate,
+  fileOfTarget,
+  filesOfTargets,
   loadStrykerConfig,
   mutateGlobsOf,
   shardMutation,
@@ -53,9 +55,54 @@ describe("mutateGlobsOf", () => {
     ])
   })
 
-  it("falls back to every file under src when the config names none", () => {
-    expect(mutateGlobsOf({})).toEqual(["src/**/*.ts"])
-    expect(mutateGlobsOf(undefined)).toEqual(["src/**/*.ts"])
+  it("falls back to what Stryker mutates by default when the config names none", () => {
+    expect(mutateGlobsOf({})).toEqual(mutateGlobsOf(undefined))
+    expect(mutateGlobsOf({}).length).toBe(2)
+  })
+
+  describe("expanded in a package, the default", () => {
+    it("takes source files in src and lib of every extension Stryker mutates, and no test file or notes", () => {
+      for (const file of [
+        "src/a.ts",
+        "src/b.mjs",
+        "src/x/c.tsx",
+        "lib/d.js",
+        "src/e.vue",
+        "src/f.cjs",
+        "src/g.mts",
+        "src/h.cts",
+        "src/i.jsx",
+        "src/j.html",
+        "src/k.svelte",
+      ]) {
+        put(file, 1)
+      }
+      for (const file of [
+        "src/a.spec.ts",
+        "src/b.test.js",
+        "src/A.Spec.ts",
+        "src/B.Test.ts",
+        "src/__tests__/m.ts",
+        "src/note.md",
+        "test/t.ts",
+        "other/o.ts",
+      ]) {
+        put(file, 1)
+      }
+      expect(expandMutate(root, mutateGlobsOf(undefined))).toEqual([
+        "lib/d.js",
+        "src/a.ts",
+        "src/b.mjs",
+        "src/e.vue",
+        "src/f.cjs",
+        "src/g.mts",
+        "src/h.cts",
+        "src/i.jsx",
+        "src/j.html",
+        "src/k.svelte",
+        "src/x/c.tsx",
+      ])
+    })
   })
 })
 
@@ -98,10 +145,52 @@ describe("expandMutate", () => {
     expect(expandMutate(root, ["src/**/*.ts"])).toEqual([])
   })
 
+  it("keeps a line range with its file, and lists a file with several ranges once", () => {
+    put("src/a.ts", 1)
+    put("src/b.ts", 1)
+    expect(expandMutate(root, ["src/a.ts:1-10", "src/a.ts:20-30", "src/b.ts:2:5-4:9"])).toEqual([
+      "src/a.ts:1-10,src/a.ts:20-30",
+      "src/b.ts:2:5-4:9",
+    ])
+  })
+
+  it("mutates the whole of a file that one pattern names with a range and another without", () => {
+    put("src/a.ts", 1)
+    expect(expandMutate(root, ["src/a.ts:1-10", "src/a.ts"])).toEqual(["src/a.ts"])
+    expect(expandMutate(root, ["src/a.ts", "src/a.ts:1-10"])).toEqual(["src/a.ts"])
+  })
+
+  it("takes a ranged pattern's file from a glob, and lets a negation remove it", () => {
+    put("src/a.ts", 1)
+    put("src/b.ts", 1)
+    expect(expandMutate(root, ["src/*.ts:1-5", "!src/b.ts"])).toEqual(["src/a.ts:1-5"])
+  })
+
   it("does not list directories", () => {
     mkdirSync(path.join(root, "src", "dir.ts"), { recursive: true })
     put("src/a.ts", 1)
     expect(expandMutate(root, ["src/**"])).toEqual(["src/a.ts"])
+  })
+})
+
+describe("fileOfTarget and filesOfTargets", () => {
+  it("name the file of a target, with or without ranges", () => {
+    expect(fileOfTarget("src/a.ts")).toBe("src/a.ts")
+    expect(fileOfTarget("src/a.ts:1-10")).toBe("src/a.ts")
+    expect(fileOfTarget("src/a.ts:1-10,src/a.ts:20:1-30:4")).toBe("src/a.ts")
+  })
+
+  it("do not take a colon followed by something other than a range for one", () => {
+    expect(fileOfTarget("src/a:1.ts")).toBe("src/a:1.ts")
+    expect(fileOfTarget("src/a:x-y.ts")).toBe("src/a:x-y.ts")
+    expect(fileOfTarget("src/a:1-.ts")).toBe("src/a:1-.ts")
+  })
+
+  it("list each file once, sorted", () => {
+    expect(filesOfTargets(["src/b.ts", "src/a.ts:1-2,src/a.ts:5-6", "src/b.ts"])).toEqual([
+      "src/a.ts",
+      "src/b.ts",
+    ])
   })
 })
 
@@ -170,6 +259,16 @@ describe("shardMutation", () => {
       shardMutation({ spec: `${String(index)}/4`, files, sizeOf }),
     )
     expect(parts.map((part) => part.args[1]?.split(",").length)).toEqual([1, 1, 1, 1])
+  })
+
+  it("keeps a target's ranges in the shard that mutates it", () => {
+    const ranged = ["src/a.ts:1-10,src/a.ts:20-30", "src/b.ts"]
+    const part = shardMutation({ spec: "1/2", files: ranged, sizeOf: (target) => target.length })
+    const other = shardMutation({ spec: "2/2", files: ranged, sizeOf: (target) => target.length })
+    expect([part.args[1], other.args[1]].sort()).toEqual([
+      "src/a.ts:1-10,src/a.ts:20-30",
+      "src/b.ts",
+    ])
   })
 
   it("refuses a package with nothing to mutate", () => {

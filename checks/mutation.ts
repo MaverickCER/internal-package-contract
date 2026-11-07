@@ -123,6 +123,7 @@ import {
   validateExceptionRegistry,
 } from "./exception-record.js"
 import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
+import { reportToAdopt } from "../scripts/mutation/adopt.mjs"
 import { shardSpecOf } from "../scripts/mutation/shard.mjs"
 import { narrowedScope } from "./scope.js"
 import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from "./shared.js"
@@ -537,6 +538,14 @@ export function mutation(): CheckDefinitionConfig {
       // A narrowed run mutates only the sources a change affects; with none, there is nothing to judge.
       const narrowed = narrowedScope(ctx)
       if (narrowed?.mutate.length === 0) {
+        // A report supplied for a change that affects nothing cannot be judged against it, and must not pass as if it were.
+        if (reportToAdopt(process.env, process.cwd()) !== undefined) {
+          return {
+            outcome: "fail",
+            rationale:
+              "Mutation: IPC_MUTATION_REPORT names a report, but no source file is affected by this change, so there is nothing to judge it against.",
+          }
+        }
         return {
           outcome: "pass",
           rationale: "Mutation: no source file is affected by this change, so nothing was mutated.",

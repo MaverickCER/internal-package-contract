@@ -5,6 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { mergeMutationReports } from "repo-contract/affected"
+import { reportShapeError } from "./report-shape.mjs"
 
 /**
  * @param {readonly string[]} args - the command line: `--total <n> --out <file> <shard>=<report>...`.
@@ -60,6 +61,15 @@ export function run(args, cwd, io) {
     } catch (error) {
       io.err(
         `merge-mutation-reports: ${file} cannot be read as a mutation report (${error.message}).\n`,
+      )
+      return 1
+    }
+  }
+  for (const { shard, report } of reports) {
+    const shape = reportShapeError(report)
+    if (shape !== undefined) {
+      io.err(
+        `merge-mutation-reports: the report of shard ${String(shard)} is not a mutation report: ${shape}\n`,
       )
       return 1
     }

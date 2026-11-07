@@ -829,7 +829,13 @@ reports/mutation/mutation.json 1=<report> 2=<report> ...`: it writes the report 
 and a failure when a slice is missing, repeated, unreadable, or mutated a file another slice also did.
 Then a full contract run with `IPC_MUTATION_REPORT=<merged report>` judges that report instead of mutating again: it is the
 evidence the `Mutation` check reads, judged by the same rule, stale exceptions included, because the merged report is
-every file. It refuses a file that is not a mutation report with at least one file in it.
+every file. It adopts a report only if it is evidence about the checkout it is judged in: every mutant has a status Stryker
+reports, it covers exactly the files a full run of this checkout mutates, and each file in it is the text that is on disk,
+so slices made from another revision or another plan cannot be put together into a report that only looks complete. Whatever
+it refuses, the evidence a previous run left is removed first, so a refused report is never judged as if it had been
+adopted, and a change that affects no source has no report to judge. A run that names a report mutates nothing, whatever
+`IPC_MUTATION_SHARD` it also has. A `mutate` pattern's defaults are Stryker's own (`src` and `lib`, test files left out),
+and a line range after a file (`src/a.ts:1-10`) stays with its file in the slice that mutates it.
 
 ## Evolving the standard
 

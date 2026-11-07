@@ -120,6 +120,8 @@ describe("run", () => {
     expect(run(["--total", "2", "--out", target, `1=${a}`, `2=${b}`], root, io())).toBe(0)
     const merged = JSON.parse(readFileSync(target, "utf8")) as { files: Record<string, unknown> }
     expect(Object.keys(merged.files).sort()).toEqual(["src/a.ts", "src/b.ts"])
+    expect(merged.files["src/a.ts"]).toEqual(shardReport("src/a.ts").files["src/a.ts"])
+    expect(merged.files["src/b.ts"]).toEqual(shardReport("src/b.ts", "Survived").files["src/b.ts"])
     expect(out.join("")).toContain("2 shard")
     expect(err).toEqual([])
   })
@@ -164,6 +166,22 @@ describe("run", () => {
       run(["--total", "2", "--out", path.join(root, "m.json"), `1=${a}`, `2=${b}`], root, io()),
     ).toBe(1)
     expect(err.join("")).toContain("src/a.ts")
+  })
+
+  it("fails on a shard whose file entry has no mutants, or whose mutant has no status", () => {
+    const bad = write("bad.json", { files: { "src/a.ts": { mutants: null } } })
+    expect(run(["--total", "1", "--out", path.join(root, "m.json"), `1=${bad}`], root, io())).toBe(
+      1,
+    )
+    expect(err.join("")).toContain("shard 1")
+    expect(err.join("")).toContain("src/a.ts has no `mutants` array")
+    err.length = 0
+    const noStatus = write("nostatus.json", { files: { "src/a.ts": { mutants: [{}] } } })
+    expect(
+      run(["--total", "1", "--out", path.join(root, "m.json"), `1=${noStatus}`], root, io()),
+    ).toBe(1)
+    expect(err.join("")).toContain("status is undefined")
+    expect(() => readFileSync(path.join(root, "m.json"))).toThrow()
   })
 
   it("explains a bad command line and exits with 2", () => {
