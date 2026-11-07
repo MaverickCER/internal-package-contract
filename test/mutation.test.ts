@@ -1463,3 +1463,174 @@ describe("mutation() -- a narrowed run", () => {
     expect(result.rationale).toContain("missing: justification")
   })
 })
+
+describe("mutation() -- one shard of a sharded run", () => {
+  const killedA = makeReport("a.ts", "const x = 1", [
+    {
+      status: "Killed",
+      mutatorName: "NumberLiteral",
+      replacement: "0",
+      start: { line: 1, column: 11 },
+      end: { line: 1, column: 12 },
+    },
+  ])
+  const elsewhere = {
+    file: "b.ts",
+    mutator: "BooleanLiteral",
+    original: "false",
+    replacement: "true",
+  }
+  const recordElsewhere = (): void =>
+    writeRegistry([
+      {
+        id: deriveMutationId(elsewhere),
+        version: 1,
+        justification: "real, in another shard",
+        ...elsewhere,
+      },
+    ])
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("names the shard it judged, so a log cannot be mistaken for the whole package", async () => {
+    vi.stubEnv("IPC_MUTATION_SHARD", "2/5")
+    writeReport(killedA)
+    writeRegistry([])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toMatch(/^Mutation \(shard 2\/5\): score 100\.00%/)
+  })
+
+  it("does not call a record for a mutant in another shard stale, since only the merged run can say so", async () => {
+    vi.stubEnv("IPC_MUTATION_SHARD", "1/2")
+    writeReport(killedA)
+    recordElsewhere()
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("pass")
+  })
+
+  it("judges a survivor in its own shard exactly as a full run does", async () => {
+    vi.stubEnv("IPC_MUTATION_SHARD", "1/2")
+    writeReport(
+      makeReport("a.ts", "const x = 1", [
+        {
+          status: "Survived",
+          mutatorName: "NumberLiteral",
+          replacement: "0",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 12 },
+        },
+      ]),
+    )
+    writeRegistry([])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toMatch(/^Mutation \(shard 1\/2\): score/)
+    expect(result.rationale).toContain("1 survived")
+  })
+
+  it("is a full run again when the variable is empty", async () => {
+    vi.stubEnv("IPC_MUTATION_SHARD", "")
+    writeReport(killedA)
+    recordElsewhere()
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("no longer matches any mutant in the report")
+  })
+})
+
+describe("mutation() -- a report adopted from a sharded run (IPC_MUTATION_REPORT)", () => {
+  const survivor = makeReport("a.ts", "const x = 1", [
+    {
+      status: "Survived",
+      mutatorName: "NumberLiteral",
+      replacement: "0",
+      start: { line: 1, column: 11 },
+      end: { line: 1, column: 12 },
+    },
+  ])
+  const elsewhere = {
+    file: "b.ts",
+    mutator: "BooleanLiteral",
+    original: "false",
+    replacement: "true",
+  }
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("fails on an unsuppressed survivor in the adopted report, exactly as a full run does", async () => {
+    vi.stubEnv("IPC_MUTATION_REPORT", "merged/mutation.json")
+    writeReport(survivor)
+    writeRegistry([])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toMatch(/^Mutation: score/)
+    expect(result.rationale).toContain("1 survived")
+  })
+
+  it("calls a record that matches nothing in the merged report stale, since the merged report is the whole run", async () => {
+    vi.stubEnv("IPC_MUTATION_REPORT", "merged/mutation.json")
+    writeReport(
+      makeReport("a.ts", "const x = 1", [
+        {
+          status: "Killed",
+          mutatorName: "NumberLiteral",
+          replacement: "0",
+          start: { line: 1, column: 11 },
+          end: { line: 1, column: 12 },
+        },
+      ]),
+    )
+    writeRegistry([
+      {
+        id: deriveMutationId(elsewhere),
+        version: 1,
+        justification: "no longer exists",
+        ...elsewhere,
+      },
+    ])
+    const result = await mutation().policy(makeContext(makeResult()))
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("no longer matches any mutant in the report")
+  })
+
+  it("does not pass a change that affects no source just because a report was named", async () => {
+    vi.stubEnv("IPC_MUTATION_REPORT", "merged/mutation.json")
+    const result = await mutation().policy({
+      ...makeContext(makeResult()),
+      scope: {
+        schemaVersion: 1 as const,
+        scope: "affected" as const,
+        reason: "r",
+        changedFiles: [],
+        tests: [],
+        sources: [],
+        mutate: [],
+      },
+    } as never)
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale:
+        "Mutation: IPC_MUTATION_REPORT names a report, but no source file is affected by this change, so there is nothing to judge it against.",
+    })
+  })
+
+  it("still passes a change that affects no source when no report is named", async () => {
+    vi.stubEnv("IPC_MUTATION_REPORT", "")
+    const result = await mutation().policy({
+      ...makeContext(makeResult()),
+      scope: {
+        schemaVersion: 1 as const,
+        scope: "affected" as const,
+        reason: "r",
+        changedFiles: [],
+        tests: [],
+        sources: [],
+        mutate: [],
+      },
+    } as never)
+    expect(result.outcome).toBe("pass")
+  })
+})
