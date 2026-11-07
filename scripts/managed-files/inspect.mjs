@@ -142,6 +142,48 @@ export const COPIES = Object.freeze([
     from: "runtime/no-node-fs.ts",
     to: "src/_ipc/no-node-fs.ts",
     requires: ["glob"],
+  }, // The official schemas a package's tests validate its standard-format output against: one canonical,
+  // hash-pinned copy here (template/standards/README.md), carried byte for byte into each package that enrols it.
+  {
+    name: "standards-readme",
+    from: "template/standards/README.md",
+    to: "test/fixtures/standards/README.md",
+    kind: "file",
+  },
+  {
+    name: "schema-sarif-2.1.0",
+    from: "template/standards/sarif-schema-2.1.0.json",
+    to: "test/fixtures/standards/sarif-schema-2.1.0.json",
+    kind: "file",
+    requires: ["standards-readme"],
+  },
+  {
+    name: "schema-oscal-assessment-results-1.1.2",
+    from: "template/standards/oscal_assessment-results_schema-1.1.2.json",
+    to: "test/fixtures/standards/oscal_assessment-results_schema-1.1.2.json",
+    kind: "file",
+    requires: ["standards-readme"],
+  },
+  {
+    name: "schema-cyclonedx-1.6",
+    from: "template/standards/bom-1.6.schema.json",
+    to: "test/fixtures/standards/bom-1.6.schema.json",
+    kind: "file",
+    requires: ["schema-cyclonedx-spdx", "schema-cyclonedx-jsf-0.82", "standards-readme"],
+  },
+  {
+    name: "schema-cyclonedx-spdx",
+    from: "template/standards/spdx.schema.json",
+    to: "test/fixtures/standards/spdx.schema.json",
+    kind: "file",
+    requires: ["standards-readme"],
+  },
+  {
+    name: "schema-cyclonedx-jsf-0.82",
+    from: "template/standards/jsf-0.82.schema.json",
+    to: "test/fixtures/standards/jsf-0.82.schema.json",
+    kind: "file",
+    requires: ["standards-readme"],
   },
 ])
 

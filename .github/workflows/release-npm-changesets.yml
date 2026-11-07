@@ -311,6 +311,10 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job has no checkout, so `gh release` cannot infer the repository from a git remote
+          # ("not a git repository"); GH_REPO names it. Without it every release from 0.13.3 on skipped
+          # its GitHub Release, hidden by continue-on-error.
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -eu

@@ -6,4 +6,5 @@ export const DOCUMENTS = [
   "ADOPTION.md",
   "VERSIONING.md",
   "CONTRIBUTING.md",
+  "specs/generated-artifacts.md",
 ]
