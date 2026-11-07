@@ -18,13 +18,23 @@
 // Usage: node run-mutation.mjs --fallback-config <abs path>
 
 import { sync as spawnSync } from "cross-spawn"
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, rmSync, statSync } from "node:fs"
 import path from "node:path"
 
 import { confirmEvidence, strykerRerun } from "./mutation/confirm-timeouts.mjs"
 import { readScope } from "./affected-scope.mjs"
 import { MEMO_DIRECTORY, inputsHash, recall, remember } from "./mutation/memo.mjs"
+import { adoptReport, reportToAdopt } from "./mutation/adopt.mjs"
 import { narrowMutation } from "./mutation/narrow.mjs"
+import {
+  expandMutate,
+  fileOfTarget,
+  filesOfTargets,
+  loadStrykerConfig,
+  mutateGlobsOf,
+  shardMutation,
+  shardSpecOf,
+} from "./mutation/shard.mjs"
 import { ensureStrykerVitest5Compat } from "./stryker-vitest5-compat.mjs"
 
 for (let dir = import.meta.dirname; ;) {
@@ -56,13 +66,53 @@ const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd
 // conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in for
 // a run that would not have said the same, and CI, starting cold, would then fail what a local gate passed.
 // A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
-const narrowed = narrowMutation(readScope(process.cwd()))
+const scope = readScope(process.cwd())
+let narrowed = narrowMutation(scope)
+// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run) instead of mutating,
+// and takes precedence over `IPC_MUTATION_SHARD`: a job that judges a report mutates nothing, whatever else it inherits.
+const adopted = reportToAdopt(process.env, process.cwd())
+// What a full run mutates, as targets (see scripts/mutation/shard.mjs): the sources a change affects when the run is
+// narrowed, else what the Stryker config selects.
+const targets = async () =>
+  scope?.scope === "affected"
+    ? [...(scope.mutate ?? [])]
+    : expandMutate(
+        process.cwd(),
+        mutateGlobsOf(await loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)),
+      )
+// `IPC_MUTATION_SHARD=i/n` mutates one slice, so that the slices can run as parallel jobs and finish where one job
+// would not; a narrowed run is cut into slices of the sources it narrowed to.
+const shard = adopted === undefined ? shardSpecOf(process.env) : undefined
+if (shard !== undefined && !narrowed.skip) {
+  narrowed = shardMutation({
+    spec: shard,
+    files: await targets(),
+    sizeOf: (target) => statSync(path.join(process.cwd(), fileOfTarget(target))).size,
+  })
+}
 const args = ["run", "--reporters", "json,clear-text", "--force", ...narrowed.args]
 if (!ownConfig && fallbackConfig) args.push(fallbackConfig)
 
 const inputs = inputsHash(process.cwd(), process.version, narrowed.key)
 
-if (narrowed.skip) {
+if (adopted !== undefined) {
+  // A report cannot be judged against a change that affects no source: there is nothing it could be evidence of.
+  if (narrowed.skip)
+    rmSync(path.join(process.cwd(), MEMO_DIRECTORY, "mutation.json"), { force: true })
+  const result = narrowed.skip
+    ? {
+        ok: false,
+        error:
+          "IPC_MUTATION_REPORT: no source file is affected by this change, so there is no report to judge.",
+      }
+    : adoptReport(process.cwd(), adopted, filesOfTargets(await targets()))
+  process.stderr.write(
+    result.ok
+      ? `[mutation] judging the report in ${adopted}; no mutant was run here.\n`
+      : `[mutation] ${result.error}\n`,
+  )
+  process.exitCode = result.ok ? 0 : 1
+} else if (narrowed.skip) {
   process.stderr.write("[mutation] skipped: no source file is affected by this change.\n")
 } else if (recall(process.cwd(), inputs, process.env)) {
   process.stderr.write(

@@ -123,6 +123,8 @@ import {
   validateExceptionRegistry,
 } from "./exception-record.js"
 import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
+import { reportToAdopt } from "../scripts/mutation/adopt.mjs"
+import { shardSpecOf } from "../scripts/mutation/shard.mjs"
 import { narrowedScope } from "./scope.js"
 import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from "./shared.js"
 
@@ -536,11 +538,20 @@ export function mutation(): CheckDefinitionConfig {
       // A narrowed run mutates only the sources a change affects; with none, there is nothing to judge.
       const narrowed = narrowedScope(ctx)
       if (narrowed?.mutate.length === 0) {
+        // A report supplied for a change that affects nothing cannot be judged against it, and must not pass as if it were.
+        if (reportToAdopt(process.env, process.cwd()) !== undefined) {
+          return {
+            outcome: "fail",
+            rationale:
+              "Mutation: IPC_MUTATION_REPORT names a report, but no source file is affected by this change, so there is nothing to judge it against.",
+          }
+        }
         return {
           outcome: "pass",
           rationale: "Mutation: no source file is affected by this change, so nothing was mutated.",
         }
       }
+      const shard = shardSpecOf(process.env)
       const terminated = abnormalTermination(result, "Stryker")
       if (terminated) return { outcome: "fail", rationale: terminated }
 
@@ -594,9 +605,9 @@ export function mutation(): CheckDefinitionConfig {
         insufficient,
         suppressed,
       } = applyExceptionRegistry(mutants, loaded.records)
-      // A narrowed run mutates part of the package, so a record for a mutant elsewhere matches nothing in
-      // its report without being stale; only a full run can say a record is.
-      const stale = narrowed === undefined ? unmatched : []
+      // A narrowed run, or one shard of a sharded one, mutates part of the package, so a record for a mutant
+      // elsewhere matches nothing in its report without being stale; only a full run can say a record is.
+      const stale = narrowed === undefined && shard === undefined ? unmatched : []
       if (stale.length > 0 || insufficient.length > 0) {
         return {
           outcome: "fail",
@@ -608,7 +619,13 @@ export function mutation(): CheckDefinitionConfig {
         }
       }
 
-      return summarizeMutationScore(mutants, suppressed)
+      const judged = summarizeMutationScore(mutants, suppressed)
+      return shard === undefined
+        ? judged
+        : {
+            ...judged,
+            rationale: `Mutation (shard ${shard}):${judged.rationale.slice("Mutation:".length)}`,
+          }
     },
   }
 }
