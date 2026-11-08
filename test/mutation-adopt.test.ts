@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { adoptReport, reportToAdopt } from "../scripts/mutation/adopt.mjs"
 
 let root: string
@@ -19,6 +19,11 @@ const source = (content: string): string => {
   return file
 }
 const evidence = (): string => path.join(root, "reports", "mutation", "mutation.json")
+
+/** A source with a mutant in it: Stryker's instrumenter finds one, so a report that lacks it is incomplete. */
+const MUTABLE = "export const sum = (a: number, b: number): number => a + b\n"
+/** A source with no mutant in it: a run over it writes no report entry. */
+const MUTANT_FREE = "export type Id = string\n"
 
 describe("reportToAdopt", () => {
   it("is the file the variable names, resolved against the package", () => {
@@ -46,25 +51,31 @@ const sourced = (file: string, text: string, status = "Killed") => {
   writeFileSync(path.join(root, file), text)
   return { [file]: { language: "typescript", source: text, mutants: [{ id: "1", status }] } }
 }
+/** Puts a source file in the package that a run writes no report entry for. */
+const unreported = (file: string, text: string) => {
+  mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+  writeFileSync(path.join(root, file), text)
+}
 const reportOf = (...entries: Record<string, unknown>[]): string =>
   JSON.stringify({ schemaVersion: "2", files: Object.assign({}, ...entries) })
 
 describe("adoptReport", () => {
-  it("puts a mutation report where the Mutation check reads it", () => {
+  it("puts a mutation report where the Mutation check reads it", async () => {
     const text = reportOf(sourced("src/a.ts", "const a = 1\n"))
-    expect(adoptReport(root, source(text), ["src/a.ts"])).toEqual({ ok: true })
+    expect(await adoptReport(root, source(text), ["src/a.ts"])).toEqual({ ok: true })
     expect(readFileSync(evidence(), "utf8")).toBe(text)
   })
 
-  it("replaces a report that was already there", () => {
+  it("replaces a report that was already there", async () => {
     mkdirSync(path.dirname(evidence()), { recursive: true })
     writeFileSync(evidence(), "{}")
     const text = reportOf(sourced("src/b.ts", "b"))
-    expect(adoptReport(root, source(text), ["src/b.ts"])).toEqual({ ok: true })
+    expect(await adoptReport(root, source(text), ["src/b.ts"])).toEqual({ ok: true })
     expect(readFileSync(evidence(), "utf8")).toBe(text)
   })
 
-  it("removes the evidence a previous run left, whatever it then refuses, so a failure is never judged as a success", () => {
+  it("removes the evidence a previous run left, whatever it then refuses, so a failure is never judged as a success", async () => {
+    unreported("src/a.ts", MUTABLE)
     const refusals: [string, string[]][] = [
       [path.join(root, "nope.json"), ["src/a.ts"]],
       [source("{ not json"), ["src/a.ts"]],
@@ -74,62 +85,62 @@ describe("adoptReport", () => {
     for (const [report, files] of refusals) {
       mkdirSync(path.dirname(evidence()), { recursive: true })
       writeFileSync(evidence(), "stale")
-      expect(adoptReport(root, report, files)).toMatchObject({ ok: false })
+      expect(await adoptReport(root, report, files)).toMatchObject({ ok: false })
       expect(() => readFileSync(evidence())).toThrow()
     }
   })
 
-  it("refuses a file that is not there", () => {
-    const result = adoptReport(root, path.join(root, "nope.json"), ["src/a.ts"])
+  it("refuses a file that is not there", async () => {
+    const result = await adoptReport(root, path.join(root, "nope.json"), ["src/a.ts"])
     expect(result).toMatchObject({ ok: false })
     expect((result as { error: string }).error).toContain("nope.json")
   })
 
-  it("refuses a file that is not JSON", () => {
+  it("refuses a file that is not JSON", async () => {
     const file = source("{ not json")
-    const result = adoptReport(root, file, ["src/a.ts"])
+    const result = await adoptReport(root, file, ["src/a.ts"])
     expect((result as { error: string }).error).toContain(file)
     expect((result as { error: string }).error).toMatch(
       /^.+ cannot be read as a mutation report \(.+\)\.$/,
     )
   })
 
-  it("refuses JSON that is not a mutation report, saying what is missing", () => {
+  it("refuses JSON that is not a mutation report, saying what is missing", async () => {
     for (const content of ["[]", "null", "3", '{"files":[]}', '{"files":null}', "{}"]) {
       const file = source(content)
-      expect(adoptReport(root, file, ["src/a.ts"])).toEqual({
+      expect(await adoptReport(root, file, ["src/a.ts"])).toEqual({
         ok: false,
         error: `${file} is not a mutation report: it has no \`files\` object.`,
       })
     }
   })
 
-  it("refuses a report with no file in it, since that judges nothing", () => {
+  it("refuses a report with no file in it, since that judges nothing", async () => {
     const file = source('{"files":{}}')
-    expect(adoptReport(root, file, ["src/a.ts"])).toEqual({
+    expect(await adoptReport(root, file, ["src/a.ts"])).toEqual({
       ok: false,
       error: `${file} is not a mutation report: it has no file in it.`,
     })
   })
 
-  it("refuses a file entry without mutants and a mutant without a Stryker status", () => {
+  it("refuses a file entry without mutants and a mutant without a Stryker status", async () => {
     const noMutants = source(
       JSON.stringify({ files: { "src/a.ts": { mutants: null, source: "a" } } }),
     )
-    expect(adoptReport(root, noMutants, ["src/a.ts"])).toMatchObject({
+    expect(await adoptReport(root, noMutants, ["src/a.ts"])).toMatchObject({
       ok: false,
       error: expect.stringContaining("src/a.ts has no `mutants` array"),
     })
     const noStatus = source(
       JSON.stringify({ files: { "src/a.ts": { mutants: [{}], source: "a" } } }),
     )
-    expect(adoptReport(root, noStatus, ["src/a.ts"])).toMatchObject({
+    expect(await adoptReport(root, noStatus, ["src/a.ts"])).toMatchObject({
       ok: false,
       error: expect.stringContaining("status is undefined"),
     })
   })
 
-  it("accepts every status Stryker reports, Ignored included", () => {
+  it("accepts every status Stryker reports, Ignored included", async () => {
     const statuses = [
       "Killed",
       "Survived",
@@ -144,75 +155,138 @@ describe("adoptReport", () => {
       sourced(`src/f${String(index)}.ts`, "x", status),
     )
     const files = statuses.map((_, index) => `src/f${String(index)}.ts`)
-    expect(adoptReport(root, source(reportOf(...entries)), files)).toEqual({ ok: true })
+    expect(await adoptReport(root, source(reportOf(...entries)), files)).toEqual({ ok: true })
   })
 
-  it("refuses a report that lacks a file this run mutates, which would otherwise go unjudged", () => {
+  it("refuses a report that lacks a file this run mutates, which would otherwise go unjudged", async () => {
     const file = source(reportOf(sourced("src/a.ts", "a")))
-    writeFileSync(path.join(root, "src", "b.ts"), "b")
-    expect(adoptReport(root, file, ["src/a.ts", "src/b.ts"])).toEqual({
+    unreported("src/b.ts", MUTABLE)
+    expect(await adoptReport(root, file, ["src/a.ts", "src/b.ts"])).toEqual({
       ok: false,
       error: `${file} was not made from this checkout's plan: it lacks src/b.ts.`,
     })
   })
 
-  it("refuses a report with a file this run does not mutate", () => {
+  it("accepts a report that lacks a file Stryker places no mutant in, since a run writes no entry for it", async () => {
+    const text = reportOf(sourced("src/a.ts", "a"))
+    unreported("src/types.ts", MUTANT_FREE)
+    unreported("src/index.ts", 'export { a } from "./a.js"\n')
+    expect(
+      await adoptReport(root, source(text), ["src/a.ts", "src/index.ts", "src/types.ts"]),
+    ).toEqual({
+      ok: true,
+    })
+    expect(readFileSync(evidence(), "utf8")).toBe(text)
+  })
+
+  it("asks only about the files the report lacks, and refuses exactly those with mutants", async () => {
+    const file = source(reportOf(sourced("src/a.ts", "a")))
+    unreported("src/types.ts", MUTANT_FREE)
+    unreported("src/b.ts", MUTABLE)
+    const mutantFree = vi.fn(async (absent: readonly string[]) =>
+      absent.filter((name) => name === "src/types.ts"),
+    )
+    expect(
+      await adoptReport(root, file, ["src/b.ts", "src/a.ts", "src/types.ts"], mutantFree),
+    ).toEqual({
+      ok: false,
+      error: `${file} was not made from this checkout's plan: it lacks src/b.ts.`,
+    })
+    expect(mutantFree).toHaveBeenCalledTimes(1)
+    expect(mutantFree).toHaveBeenCalledWith(["src/b.ts", "src/types.ts"])
+  })
+
+  it("does not ask when the report lacks nothing", async () => {
+    const mutantFree = vi.fn(async () => [])
+    expect(
+      await adoptReport(root, source(reportOf(sourced("src/a.ts", "a"))), ["src/a.ts"], mutantFree),
+    ).toEqual({ ok: true })
+    expect(mutantFree).not.toHaveBeenCalled()
+  })
+
+  it("refuses, naming the files and the reason, when it cannot be told whether a lacking file has mutants", async () => {
+    const file = source(reportOf(sourced("src/a.ts", "a")))
+    const result = await adoptReport(root, file, ["src/a.ts", "src/b.ts", "src/c.ts"], async () => {
+      throw new Error("no parser for c")
+    })
+    expect(result).toEqual({
+      ok: false,
+      error: `${file} lacks src/b.ts, src/c.ts, and whether Stryker would mutate them could not be told: no parser for c`,
+    })
+    expect(() => readFileSync(evidence())).toThrow()
+  })
+
+  it("refuses a lacking file that is not on disk, since nothing can be said about it", async () => {
+    const file = source(reportOf(sourced("src/a.ts", "a")))
+    const result = (await adoptReport(root, file, ["src/a.ts", "src/gone.ts"])) as {
+      ok: boolean
+      error: string
+    }
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("gone.ts")
+    expect(result.error).toContain("could not be told")
+  })
+
+  it("refuses a report with a file this run does not mutate", async () => {
     const file = source(reportOf(sourced("src/a.ts", "a"), sourced("src/old.ts", "o")))
-    expect(adoptReport(root, file, ["src/a.ts"])).toEqual({
+    expect(await adoptReport(root, file, ["src/a.ts"])).toEqual({
       ok: false,
       error: `${file} was not made from this checkout's plan: it has src/old.ts, which this run does not mutate.`,
     })
   })
 
-  it("lists every file it lacks and every file it has too many of, sorted, however they were given", () => {
+  it("lists every file it lacks and every file it has too many of, sorted, however they were given", async () => {
     const file = source(reportOf(sourced("src/z.ts", "z"), sourced("src/y.ts", "y")))
-    const result = adoptReport(root, file, ["src/d.ts", "src/c.ts"]) as { error: string }
+    unreported("src/c.ts", MUTABLE)
+    unreported("src/d.ts", MUTABLE)
+    const result = (await adoptReport(root, file, ["src/d.ts", "src/c.ts"])) as { error: string }
     expect(result.error).toContain(
       "it lacks src/c.ts, src/d.ts; it has src/y.ts, src/z.ts, which this run does not mutate",
     )
   })
 
-  it("lists every file whose text differs, sorted", () => {
+  it("lists every file whose text differs, sorted", async () => {
     const file = source(reportOf(sourced("src/b.ts", "b"), sourced("src/a.ts", "a")))
     writeFileSync(path.join(root, "src", "a.ts"), "A")
     writeFileSync(path.join(root, "src", "b.ts"), "B")
-    const result = adoptReport(root, file, ["src/b.ts", "src/a.ts"]) as { error: string }
+    const result = (await adoptReport(root, file, ["src/b.ts", "src/a.ts"])) as { error: string }
     expect(result.error).toContain(": src/a.ts, src/b.ts differ from the text that was mutated.")
   })
 
-  it("says both when it lacks a file and has another", () => {
+  it("says both when it lacks a file and has another", async () => {
     const file = source(reportOf(sourced("src/old.ts", "o")))
-    const result = adoptReport(root, file, ["src/a.ts"]) as { error: string }
+    unreported("src/a.ts", MUTABLE)
+    const result = (await adoptReport(root, file, ["src/a.ts"])) as { error: string }
     expect(result.error).toContain(
       "it lacks src/a.ts; it has src/old.ts, which this run does not mutate",
     )
   })
 
-  it("refuses a report whose source text is not what is on disk, because it was made from another revision", () => {
+  it("refuses a report whose source text is not what is on disk, because it was made from another revision", async () => {
     const file = source(reportOf(sourced("src/a.ts", "const a = 1")))
     writeFileSync(path.join(root, "src", "a.ts"), "const a = 2")
-    expect(adoptReport(root, file, ["src/a.ts"])).toEqual({
+    expect(await adoptReport(root, file, ["src/a.ts"])).toEqual({
       ok: false,
       error: `${file} was not made from this checkout: src/a.ts differ from the text that was mutated.`,
     })
   })
 
-  it("refuses a report whose file has no source text", () => {
+  it("refuses a report whose file has no source text", async () => {
     sourced("src/a.ts", "a")
     const file = source(JSON.stringify({ files: { "src/a.ts": { mutants: [] } } }))
-    expect(adoptReport(root, file, ["src/a.ts"])).toMatchObject({ ok: false })
+    expect(await adoptReport(root, file, ["src/a.ts"])).toMatchObject({ ok: false })
   })
 
-  it("refuses a report of a file that is no longer on disk", () => {
+  it("refuses a report of a file that is no longer on disk", async () => {
     const file = source(reportOf(sourced("src/a.ts", "a")))
     rmSync(path.join(root, "src", "a.ts"))
-    expect(adoptReport(root, file, ["src/a.ts"])).toMatchObject({ ok: false })
+    expect(await adoptReport(root, file, ["src/a.ts"])).toMatchObject({ ok: false })
   })
 
-  it("does not mind a checkout's line endings", () => {
+  it("does not mind a checkout's line endings", async () => {
     const file = source(reportOf(sourced("src/a.ts", "one\ntwo\n")))
     writeFileSync(path.join(root, "src", "a.ts"), "one\r\ntwo\r\n")
-    expect(adoptReport(root, file, ["src/a.ts"])).toEqual({ ok: true })
+    expect(await adoptReport(root, file, ["src/a.ts"])).toEqual({ ok: true })
   })
 })
 
@@ -232,6 +306,24 @@ describe("run-mutation.mjs with IPC_MUTATION_REPORT", () => {
     expect(result.status).toBe(0)
     expect(result.stderr).toContain(`judging the report in ${file}`)
     expect(readFileSync(evidence(), "utf8")).toBe(text)
+  })
+
+  it("judges a report that lacks the plan's mutant-free files, as a run over them writes none", () => {
+    const text = reportOf(sourced("src/a.ts", "const a = 1\n"))
+    unreported("src/types.ts", MUTANT_FREE)
+    const result = runIn(source(text))
+    expect(result.stderr).not.toContain("lacks")
+    expect(result.status).toBe(0)
+    expect(readFileSync(evidence(), "utf8")).toBe(text)
+  })
+
+  it("fails on a report that lacks a file of the plan with mutants in it", () => {
+    const text = reportOf(sourced("src/a.ts", "const a = 1\n"))
+    unreported("src/b.ts", MUTABLE)
+    const result = runIn(source(text))
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("it lacks src/b.ts")
+    expect(() => readFileSync(evidence())).toThrow()
   })
 
   it("prefers the report to a shard selector it also inherits, which a single file could not be cut into", () => {

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -55,6 +55,7 @@ describe("generate", () => {
       "ADOPTION.md",
       "VERSIONING.md",
       "CONTRIBUTING.md",
+      "specs/generated-artifacts.md",
     ])
   })
   it("does nothing, and says so, when no document has a region", async () => {
@@ -105,6 +106,204 @@ describe("generate", () => {
     expect(await run(["--check"], dir, ok.io)).toBe(0)
     expect(ok.out.join("")).toBe("[generate] every generated region is current.\n")
   })
+  it("fills each region from its own generator, so one document can carry all three", async () => {
+    write("package.json", JSON.stringify({ ...manifest, dependencies: { a: "^1.0.0" } }))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        ...surface,
+        dependencies: { a: "Parses things." },
+        standards: [
+          {
+            document: "Findings",
+            standard: "OASIS SARIF 2.1.0",
+            producedBy: "`buildSarifLog`",
+            checkedAgainst: "The OASIS schema",
+            test: "test/sarif.test.ts",
+            limits: "None known.",
+          },
+        ],
+      }),
+    )
+    write("test/sarif.test.ts", "")
+    write(
+      "specs/generated-artifacts.md",
+      "# Artifacts\n\n<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n\n<!-- ipc:begin dependencies -->\n<!-- ipc:end dependencies -->\n\n<!-- ipc:begin entry-points -->\n<!-- ipc:end entry-points -->\n",
+    )
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(0)
+    const text = read("specs/generated-artifacts.md")
+    expect(text).toContain(
+      "| Findings | OASIS SARIF 2.1.0 | `buildSarifLog` | The OASIS schema | `test/sarif.test.ts` | None known. |",
+    )
+    expect(text).toContain(
+      "Installing `@o/demo` installs 1 package directly, and whatever it depends on.",
+    )
+    expect(text).toContain("| `@o/demo/build` | `src/build/` | Node-only")
+    const check = io()
+    expect(await run(["--check"], dir, check.io)).toBe(0)
+  })
+
+  it("names the regions that need docs/surface.json when it is missing, in alphabetical order", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "README.md",
+      "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n<!-- ipc:begin dependencies -->\n<!-- ipc:end dependencies -->\n",
+    )
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toBe(
+      '[generate] nothing was written:\n- docs/surface.json not found; it holds what only a person can say for the "dependencies", "standards" regions.\n',
+    )
+  })
+
+  it("fails, naming the test, when a standards row cites a test that does not exist", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test: "test/none.test.ts",
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain(
+      'cites test "test/none.test.ts", which is not a file in this package.',
+    )
+  })
+
+  it("treats a region named after an Object property as having no generator", async () => {
+    project("<!-- ipc:begin constructor -->\n<!-- ipc:end constructor -->\n")
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain('region "constructor" has no generator.')
+  })
+
+  it("reports a package.json that is valid JSON but not an object, instead of throwing", async () => {
+    project()
+    write("package.json", "null")
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain("package.json is not a JSON object.")
+  })
+
+  it("rejects a standards row that cites a directory, not a test file", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test: "test",
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("test/a.test.ts", "")
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain('cites test "test", which is not a file in this package.')
+  })
+
+  it("says only that package.json is missing when it is", async () => {
+    write("docs/surface.json", JSON.stringify(surface))
+    write("AGENTS.md", region())
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toBe(
+      "[generate] nothing was written:\n- package.json is missing or is not valid JSON.\n",
+    )
+  })
+
+  it("rejects a package.json that is a JSON string", async () => {
+    project()
+    write("package.json", JSON.stringify("text"))
+    const h = io()
+    expect(await run([], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain("package.json is not a JSON object.")
+  })
+
+  it("rejects a standards row whose test lies outside the package, even through a symlink", async () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "ipc-generate-outside-"))
+    try {
+      writeFileSync(path.join(outside, "other.test.ts"), "")
+      symlinkSync(outside, path.join(dir, "linked"), "junction")
+      write("package.json", JSON.stringify(manifest))
+      const cite = (test: string) =>
+        write(
+          "docs/surface.json",
+          JSON.stringify({
+            standards: [
+              {
+                document: "D",
+                standard: "S",
+                producedBy: "p",
+                checkedAgainst: "c",
+                test,
+                limits: "l",
+              },
+            ],
+          }),
+        )
+      write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+      for (const test of [
+        path.relative(dir, path.join(outside, "other.test.ts")),
+        path.join(outside, "other.test.ts"),
+        "linked/other.test.ts",
+      ]) {
+        cite(test)
+        const h = io()
+        expect(await run(["--check"], dir, h.io), test).toBe(1)
+        expect(h.err.join(""), test).toContain(
+          `cites test "${test}", which is not a file in this package.`,
+        )
+      }
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects an absolute path to a test, even one inside the package", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write("test/inside.test.ts", "")
+    const test = path.join(dir, "test", "inside.test.ts")
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test,
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain(`cites test "${test}", which is not a file in this package.`)
+  })
+
   it("rejects an unknown argument", async () => {
     const h = io()
     expect(await run(["--nope"], dir, h.io)).toBe(2)
@@ -164,7 +363,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toBe(
-      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: entry-points.\n- AGENTS.md: region "other" has no generator. Available: entry-points.\n',
+      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: dependencies, entry-points, standards.\n- AGENTS.md: region "other" has no generator. Available: dependencies, entry-points, standards.\n',
     )
   })
   it("writes nothing, naming file and line, when a marker is malformed", async () => {
@@ -182,7 +381,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain(
-      '- AGENTS.md: region "mystery" has no generator. Available: entry-points.',
+      '- AGENTS.md: region "mystery" has no generator. Available: dependencies, entry-points, standards.',
     )
   })
   it("says what is missing or wrong with the sources", async () => {
@@ -191,7 +390,7 @@ describe("generate", () => {
     let h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain(
-      'docs/surface.json not found; it describes each entry point for the "entry-points" region.',
+      'docs/surface.json not found; it holds what only a person can say for the "entry-points" region.',
     )
     write("docs/surface.json", "{ nope")
     h = io()

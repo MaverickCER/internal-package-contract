@@ -580,6 +580,11 @@ describe("managed copies of shared code", () => {
     const doc = (name: string, file: string) => [name, `template/package/${file}`, file]
     const file = (name: string, from: string, to: string) => [name, `template/${from}`, to]
     const code = (name: string) => [name, `runtime/${name}.ts`, `src/_ipc/${name}.ts`]
+    const schema = (name: string, file: string) => [
+      name,
+      `template/standards/${file}`,
+      `test/fixtures/standards/${file}`,
+    ]
     expect(COPIES.map(({ name, from, to }) => [name, from, to])).toEqual([
       code("generated-banner"),
       code("display-path"),
@@ -605,6 +610,12 @@ describe("managed copies of shared code", () => {
       ),
       file("typedoc-markdown", "package/typedoc.markdown.json", "typedoc.markdown.json"),
       code("no-node-fs"),
+      schema("standards-readme", "README.md"),
+      schema("schema-sarif-2.1.0", "sarif-schema-2.1.0.json"),
+      schema("schema-oscal-assessment-results-1.1.2", "oscal_assessment-results_schema-1.1.2.json"),
+      schema("schema-cyclonedx-1.6", "bom-1.6.schema.json"),
+      schema("schema-cyclonedx-spdx", "spdx.schema.json"),
+      schema("schema-cyclonedx-jsf-0.82", "jsf-0.82.schema.json"),
     ])
     expect(COPIES.filter((c) => c.kind === "doc").map((c) => c.name)).toEqual([
       "code-of-conduct",
@@ -723,7 +734,7 @@ describe("managed copies of shared code", () => {
     const unknown = sync("--add", "nope")
     expect(unknown.code).toBe(2)
     expect(unknown.err).toBe(
-      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs, standards-readme, schema-sarif-2.1.0, schema-oscal-assessment-results-1.1.2, schema-cyclonedx-1.6, schema-cyclonedx-spdx, schema-cyclonedx-jsf-0.82.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
     )
     expect(sync("--add").err).toContain("unknown managed copy: (none given).")
   })

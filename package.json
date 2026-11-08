@@ -94,7 +94,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "contract": "node scripts/run-contract.mjs",
-    "version": "changeset version",
+    "version": "changeset version && npm install --package-lock-only --ignore-scripts",
     "benchmark": "node scripts/benchmark/run-suite.mjs benchmarks/performance-checks/suite.mjs && node scripts/benchmark/run-suite.mjs benchmarks/performance-evidence/suite.mjs && node scripts/benchmark/run-suite.mjs benchmarks/performance-env/suite.mjs && prettier --write \"benchmarks/*/BENCHMARKS.md\" \"benchmarks/*/results.json\"",
     "benchmark:check": "node scripts/benchmark/run-suite.mjs benchmarks/performance-checks/suite.mjs --check && node scripts/benchmark/run-suite.mjs benchmarks/performance-evidence/suite.mjs --check && node scripts/benchmark/run-suite.mjs benchmarks/performance-env/suite.mjs --check",
     "docs:env": "node bin/contract.mjs env"
@@ -114,6 +114,7 @@
     "@socketsecurity/cli": "^1.1.169",
     "@stryker-mutator/api": "^10.0.0",
     "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/instrumenter": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^24.19.1",

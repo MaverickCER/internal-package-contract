@@ -2,13 +2,17 @@
 // ./merge.mjs. `IPC_MUTATION_REPORT=<file>` names the merged report; the run puts it where Stryker would have written
 // its own and the `Mutation` check judges it by the same rule, stale exceptions included, without mutating again.
 //
-// A report is adopted only if it is evidence about THIS checkout: it covers exactly the files a full run would mutate,
-// and each file in it is the text that is on disk. Slices made from another revision or another plan cannot be
-// combined into a report that looks complete but judged different code. Whatever is wrong, the evidence a previous run
-// left is removed first, so a failed adoption can never be judged as if it had succeeded.
+// A report is adopted only if it is evidence about THIS checkout: it covers the files a full run would mutate, and each
+// file in it is the text that is on disk. Stryker writes no entry for a file it places no mutant in (a module of
+// re-exports, a module of types), so a file the plan has and the report lacks is accepted exactly when Stryker's
+// instrumenter finds no mutant in the text on disk (see ./mutant-free.mjs); a lacking file with mutants would go
+// unjudged, and refuses the report. Slices made from another revision or another plan cannot be combined into a report
+// that looks complete but judged different code. Whatever is wrong, the evidence a previous run left is removed first,
+// so a failed adoption can never be judged as if it had succeeded.
 
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import path from "node:path"
+import { mutantFreeFiles } from "./mutant-free.mjs"
 import { reportShapeError } from "./report-shape.mjs"
 
 /** Where the `Mutation` check reads its evidence, relative to the package. */
@@ -34,9 +38,16 @@ const normalised = (text) => text.replace(/\r\n/g, "\n")
  * @param {string} cwd - the package.
  * @param {string} source - the report to adopt.
  * @param {readonly string[]} files - the files a full run of this checkout mutates, relative to the package.
- * @returns {{ ok: true } | { ok: false, error: string }} whether it is now the evidence, or why it cannot be.
+ * @param {(files: readonly string[]) => Promise<string[]>} [mutantFree] - which of some files Stryker would place no
+ *   mutant in; by default Stryker's instrumenter is asked (see ./mutant-free.mjs).
+ * @returns {Promise<{ ok: true } | { ok: false, error: string }>} whether it is now the evidence, or why it cannot be.
  */
-export function adoptReport(cwd, source, files) {
+export async function adoptReport(
+  cwd,
+  source,
+  files,
+  mutantFree = (absent) => mutantFreeFiles(cwd, absent),
+) {
   const target = path.join(cwd, EVIDENCE)
   rmSync(target, { force: true })
   let report
@@ -51,7 +62,19 @@ export function adoptReport(cwd, source, files) {
   }
   const reported = Object.keys(report.files).sort()
   const expected = [...files].sort()
-  const missing = expected.filter((file) => !(file in report.files))
+  const absent = expected.filter((file) => !(file in report.files))
+  let missing = absent
+  if (absent.length > 0) {
+    try {
+      const free = new Set(await mutantFree(absent))
+      missing = absent.filter((file) => !free.has(file))
+    } catch (error) {
+      return {
+        ok: false,
+        error: `${source} lacks ${absent.join(", ")}, and whether Stryker would mutate them could not be told: ${error.message}`,
+      }
+    }
+  }
   const extra = reported.filter((file) => !expected.includes(file))
   if (missing.length > 0 || extra.length > 0) {
     const parts = [

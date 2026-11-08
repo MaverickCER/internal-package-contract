@@ -17,6 +17,51 @@ data. They are what you ship. `repo-contract` and `internal-package-contract` ar
 `repo-contract` is the mechanism (a check graph that produces evidence and a verdict), and
 `internal-package-contract` is the policy (the standard those checks encode). It is not published to npm.
 
+## Evidence a reviewer can check
+
+Each package keeps one source of truth, and every document it generates is a projection of that one file, so
+two of its documents cannot disagree with each other. The documents use formats a reviewer's own tools already
+read (SARIF, OSCAL, CycloneDX, PROV, OpenTelemetry), and each states which facts were declared by a person and
+which were found in the code. None of them establishes compliance with a standard, and none is offered as legal
+evidence. What they give a security, privacy or audit reviewer is a document in the expected format whose every
+line traces back to a file they can inspect, plus a way to check that the document is the one CI produced.
+
+| Package         | Source of truth                                                                                                                                                                                                               | The standard-format documents it generates                                                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env-cap`       | The Evidence Model (`--evidence`, with a `.fingerprint` sidecar)                                                                                                                                                              | The generated `standards` table in [`specs/generated-artifacts.md`](https://github.com/MaverickCER/env-cap/blob/main/specs/generated-artifacts.md), one row per document with the test that checks its format |
+| `data-cap`      | The Evidence Model, including the data-flow evidence                                                                                                                                                                          | The generated `standards` table in [`specs/generated-artifacts.md`](https://github.com/MaverickCER/data-cap/blob/main/specs/generated-artifacts.md)                                                           |
+| `repo-contract` | The `Evidence` and `Verdict` documents of a run (`schemas/*.schema.json`)                                                                                                                                                     | None in a standard format; its own repository commits CycloneDX 1.6 SBOMs (checked by `cyclonedx-npm --validate`) and an OpenSSF Scorecard document that leads with the published result                      |
+| This repository | The repository itself as GitHub serves it: workflows, branch protection, reviews, releases, dependencies (Scorecard reads these). Each package's `coverage.json`, `mutation.json` and `size.json` feed only its README badges | The OpenSSF Scorecard result, through `ossf/scorecard-action` with `publish_results: true` (required by `ScorecardWorkflow`), produced by OpenSSF's own binary                                                |
+
+Both tables are written by `internal-package-contract generate` from `docs/surface.json`, and the official schemas
+the tests validate against are the hash-pinned managed copies in `template/standards/`, so every package states and
+checks its formats the same way. What a package installs is generated the same way, in its `dependencies` region.
+
+Two limits a reviewer should know. First, a generated document is unsigned: anyone can edit the file and, for the
+`repo-contract` manifest, recompute its digest. Second, the commit and time a document records are supplied by
+the caller, never read ambiently. Attesting the document in CI closes the first: it signs the file's digest with
+the workflow's identity and records the commit that run built from. It does not check the commit or time written
+inside the document, so a reviewer should compare those fields with the commit the attestation names. The CI
+step:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+steps:
+  - run: npx data-cap --evidence docs/data.evidence.json
+  - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+    with:
+      subject-path: docs/data.evidence.json
+```
+
+A reviewer then checks that a copy they were given is byte for byte what that repository's CI produced, and reads the commit it was built from in the output:
+
+```sh
+gh attestation verify data.evidence.json --repo MaverickCER/data-cap
+```
+
 ## Glossary
 
 | Word          | Means, and where                                                                                                                                                                             |

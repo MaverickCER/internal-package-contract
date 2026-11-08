@@ -73,13 +73,11 @@ let narrowed = narrowMutation(scope)
 const adopted = reportToAdopt(process.env, process.cwd())
 // What a full run mutates, as targets (see scripts/mutation/shard.mjs): the sources a change affects when the run is
 // narrowed, else what the Stryker config selects.
+const strykerConfig = () => loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)
 const targets = async () =>
   scope?.scope === "affected"
     ? [...(scope.mutate ?? [])]
-    : expandMutate(
-        process.cwd(),
-        mutateGlobsOf(await loadStrykerConfig(process.cwd(), CONFIG_CANDIDATES, fallbackConfig)),
-      )
+    : expandMutate(process.cwd(), mutateGlobsOf(await strykerConfig()))
 // `IPC_MUTATION_SHARD=i/n` mutates one slice, so that the slices can run as parallel jobs and finish where one job
 // would not; a narrowed run is cut into slices of the sources it narrowed to.
 const shard = adopted === undefined ? shardSpecOf(process.env) : undefined
@@ -105,7 +103,7 @@ if (adopted !== undefined) {
         error:
           "IPC_MUTATION_REPORT: no source file is affected by this change, so there is no report to judge.",
       }
-    : adoptReport(process.cwd(), adopted, filesOfTargets(await targets()))
+    : await adoptReport(process.cwd(), adopted, filesOfTargets(await targets()))
   process.stderr.write(
     result.ok
       ? `[mutation] judging the report in ${adopted}; no mutant was run here.\n`

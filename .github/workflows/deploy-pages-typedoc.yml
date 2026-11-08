@@ -34,7 +34,7 @@ on:
         description: >-
           Name of an artifact, uploaded earlier in the SAME calling workflow run,
           to download straight into docs/ before deploying (e.g. repo-contract's
-          pre-generated badge JSON and OpenSSF Scorecard/ISO 12207 evidence docs).
+          pre-generated badge JSON and OpenSSF Scorecard evidence document).
           Leave empty when badges-script alone covers everything.
         required: false
         type: string
