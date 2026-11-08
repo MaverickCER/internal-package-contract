@@ -279,6 +279,31 @@ describe("generate", () => {
     }
   })
 
+  it("rejects an absolute path to a test, even one inside the package", async () => {
+    write("package.json", JSON.stringify(manifest))
+    write("test/inside.test.ts", "")
+    const test = path.join(dir, "test", "inside.test.ts")
+    write(
+      "docs/surface.json",
+      JSON.stringify({
+        standards: [
+          {
+            document: "D",
+            standard: "S",
+            producedBy: "p",
+            checkedAgainst: "c",
+            test,
+            limits: "l",
+          },
+        ],
+      }),
+    )
+    write("README.md", "<!-- ipc:begin standards -->\n<!-- ipc:end standards -->\n")
+    const h = io()
+    expect(await run(["--check"], dir, h.io)).toBe(1)
+    expect(h.err.join("")).toContain(`cites test "${test}", which is not a file in this package.`)
+  })
+
   it("rejects an unknown argument", async () => {
     const h = io()
     expect(await run(["--nope"], dir, h.io)).toBe(2)

@@ -866,7 +866,10 @@ every file. It adopts a report only if it is evidence about the checkout it is j
 reports, it covers exactly the files a full run of this checkout mutates, and each file in it is the text that is on disk,
 so slices made from another revision or another plan cannot be put together into a report that only looks complete. Whatever
 it refuses, the evidence a previous run left is removed first, so a refused report is never judged as if it had been
-adopted, and a change that affects no source has no report to judge. A run that names a report mutates nothing, whatever
+adopted, and a change that affects no source has no report to judge. Stryker writes no entry for a file it places no
+mutant in (a module of re-exports, a module of types), so a file the plan has and the report lacks is accepted exactly
+when Stryker's instrumenter finds no mutant in the text on disk (a mutant a run only ignores still counts, since the
+report lists it); a lacking file with mutants, or one that cannot be read or parsed, refuses the report. A run that names a report mutates nothing, whatever
 `IPC_MUTATION_SHARD` it also has. A `mutate` pattern's defaults are Stryker's own (`src` and `lib`, test files left out),
 and a line range after a file (`src/a.ts:1-10`) stays with its file in the slice that mutates it.
 

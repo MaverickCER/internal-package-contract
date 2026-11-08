@@ -6,4 +6,5 @@ export function adoptReport(
   cwd: string,
   source: string,
   files: readonly string[],
-): { ok: true } | { ok: false; error: string }
+  mutantFree?: (files: readonly string[]) => Promise<string[]>,
+): Promise<{ ok: true } | { ok: false; error: string }>

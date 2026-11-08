@@ -53,7 +53,7 @@
     "docs:api:report": "typedoc --options typedoc.markdown.json",
     "docs:env": "internal-package-contract env",
     "contract": "internal-package-contract",
-    "version": "changeset version && npm run build",
+    "version": "changeset version && npm install --package-lock-only --ignore-scripts && npm run build",
     "release": "changeset publish",
     "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
     "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check",

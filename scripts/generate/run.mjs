@@ -123,6 +123,7 @@ export async function run(argv, cwd, io, hooks = {}) {
       // out (`../other/x.test.ts`, an absolute path, a link to elsewhere) is never presented as its test.
       const root = realpathSync(cwd)
       const exists = (file) => {
+        if (path.isAbsolute(file)) return false
         const target = path.resolve(root, file)
         if (!existsSync(target)) return false
         const real = realpathSync(target)
