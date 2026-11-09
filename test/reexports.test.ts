@@ -22,6 +22,7 @@ const ENTRIES: readonly (readonly [string, string])[] = [
   ["data-cap/build", "data-cap/build"],
   ["data-cap/node", "data-cap/node"],
   ["data-cap/evidence", "data-cap/evidence"],
+  ["data-cap/observe", "data-cap/observe"],
 ]
 const FILES: Record<string, () => Promise<Record<string, unknown>>> = {
   "env-cap": () => import("../reexports/env-cap/index.js"),
@@ -37,6 +38,7 @@ const FILES: Record<string, () => Promise<Record<string, unknown>>> = {
   "data-cap/build": () => import("../reexports/data-cap/build.js"),
   "data-cap/node": () => import("../reexports/data-cap/node.js"),
   "data-cap/evidence": () => import("../reexports/data-cap/evidence.js"),
+  "data-cap/observe": () => import("../reexports/data-cap/observe.js"),
 }
 
 describe("env-cap and data-cap, handed on by this package", () => {
