@@ -1,5 +1,11 @@
 # internal-package-contract
 
+## 0.16.0
+
+### Minor Changes
+
+- dc9720c: Bump `data-cap` to 0.9.0 and hand on its new `data-cap/observe` entry as `internal-package-contract/data-cap/observe`.
+
 ## 0.15.1
 
 ### Patch Changes
