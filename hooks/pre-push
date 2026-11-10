@@ -37,7 +37,8 @@
 # inside `git rev-parse --show-toplevel`'s own physical toplevel rules that
 # out: a symlinked-in copy resolves to wherever the real checkout lives, which
 # is never inside the *pushing* repo's own working tree.
-# A push skips the slow analyses (CI runs them); the pre-commit hook sets IPC_HOOK_FULL=1 and skips nothing.
+# A push skips the slow analyses (CI runs them); the pre-commit hook sets IPC_HOOK_FULL=1 and instead
+# narrows to the checks the change can reach (`--scope affected`), slow analyses included.
 #
 # Git exports the repository's own location (GIT_INDEX_FILE, GIT_DIR, ...) to a hook. The contract's tests build
 # throwaway repositories with `git`, and those commands would act on THIS repository's index instead of their own

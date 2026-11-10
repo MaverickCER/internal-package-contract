@@ -106,6 +106,7 @@ describe("branch-protection", () => {
           hasPullRequest: false,
           hasRequiredStatusChecks: true,
           requiredChecks: ["contract"],
+          strictStatusChecks: true,
           requiresThreadResolution: true,
         }),
       ),
@@ -130,6 +131,7 @@ describe("branch-protection", () => {
           hasPullRequest: true,
           hasRequiredStatusChecks: true,
           requiredChecks: ["contract"],
+          strictStatusChecks: true,
           requiresThreadResolution: true,
         }),
       ),
@@ -137,7 +139,7 @@ describe("branch-protection", () => {
     expect(result).toEqual({
       outcome: "pass",
       rationale:
-        'Branch protection: MaverickCER/internal-package-contract\'s default branch (main) blocks deletion, force-pushes, and merging without a PR, and requires the "contract" check and resolved review threads.',
+        'Branch protection: MaverickCER/internal-package-contract\'s default branch (main) blocks deletion, force-pushes, and merging without a PR, and requires the "contract" check (strict) and resolved review threads.',
     })
   })
 
@@ -151,6 +153,7 @@ describe("branch-protection", () => {
     hasPullRequest: true,
     hasRequiredStatusChecks: true,
     requiredChecks: ["contract"],
+    strictStatusChecks: true,
     requiresThreadResolution: true,
   }
 
@@ -170,6 +173,28 @@ describe("branch-protection", () => {
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain('the "contract" check among its required status checks')
+  })
+
+  it("fails when the required checks are not strict (a stale branch could merge with checks that ran on something else)", async () => {
+    const result = await branchProtection.policy(
+      makeContext(makeJsonResult({ ...protectedStatus, strictStatusChecks: false })),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain(
+      "strict status checks (a branch up to date with its base before it merges)",
+    )
+    expect(result.rationale).not.toContain("among its required status checks")
+  })
+
+  it("names both the missing contract check and the missing strictness when both are absent", async () => {
+    const result = await branchProtection.policy(
+      makeContext(
+        makeJsonResult({ ...protectedStatus, requiredChecks: ["lint"], strictStatusChecks: false }),
+      ),
+    )
+    expect(result.rationale).toContain(
+      'the "contract" check among its required status checks and strict status checks',
+    )
   })
 
   it("fails when review threads need not be resolved", async () => {

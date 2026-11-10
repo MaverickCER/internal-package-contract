@@ -155,8 +155,8 @@ export function standardChecks() {
     SecurityDevDeps: securityDevDeps(),
     SecuritySecrets: securitySecrets(),
     SecuritySocket: securitySocket(),
-    // Local only (a no-op in CI): rejects open GitHub code-scanning alerts, waiving only the ones in
-    // development-only code via a git-ignored registry.
+    // Rejects the open GitHub code-scanning alerts of this ref (`gh` locally, GH_TOKEN in CI), waiving
+    // only the ones in development-only code via the committed registry.
     CodeScanning: codeScanning(),
     // Every suppression comment is read back as evidence, and must give its reason (or have a record).
     Suppressions: suppressions(),

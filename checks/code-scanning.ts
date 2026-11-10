@@ -71,6 +71,7 @@ import {
   validateExceptionRegistry,
   validateSecurityExceptionFields,
 } from "./exception-record.js"
+import { degraded } from "./environment-exceptions.js"
 import type {
   ExceptionMethod,
   ExceptionRegistrySchema,
@@ -334,7 +335,15 @@ export function codeScanning(): CheckDefinitionConfig {
       }
       const skipped = report.data?.skipped
       if (skipped !== undefined) {
-        return { outcome: "pass", rationale: `Code scanning review skipped: ${skipped}.` }
+        // The alerts were not read, so nothing was reviewed: a degradation, not a pass. Locally a warning;
+        // in CI (--strict) a failure unless environment.json records why this repository has no code
+        // scanning (`not-enabled`) or no GitHub remote (`no-remote`).
+        const code = /not enabled/.test(skipped) ? "not-enabled" : "no-remote"
+        return degraded({
+          check: "CodeScanning",
+          code,
+          rationale: `Code scanning review skipped: ${skipped}.`,
+        })
       }
 
       const alerts = report.data?.alerts ?? []

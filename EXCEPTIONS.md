@@ -55,15 +55,19 @@ gets round to it", fix the thing; `scheduled-remediation` is for a fix that is p
 All live under `.repo-contract/exceptions/` and are committed. The header comment of each check
 documents its record shape with a complete example.
 
-| File                 | Check            | Id                                        | Covers                                         |
-| -------------------- | ---------------- | ----------------------------------------- | ---------------------------------------------- |
-| `socket.json`        | `SecuritySocket` | `socket:<package>@<version>:<alert type>` | an alert on the package's own Socket page      |
-| `security-deps.json` | `SecurityDeps`   | `security-deps:<package>@<range>`         | an `npm audit` advisory                        |
-| `dist-urls.json`     | `DistNoUrls`     | `dist-url:<url>`                          | a URL in a shipped file                        |
-| `code-scanning.json` | `CodeScanning`   | `code-scanning:<rule>@<path>`             | a code-scanning alert in development-only code |
-| `coderabbit.json`    | `CodeRabbit`     | `coderabbit:<file>:<severity>:<hash>`     | a CodeRabbit finding                           |
-| `mutation.json`      | `Mutation`       | `mutation:<file>:<mutator>:<hash>`        | one mutant, matched by its source text         |
-| `environment.json`   | any              | `environment:<Check>:<code>`              | a check that could not run (below)             |
+| File                        | Check                 | Id                                        | Covers                                                |
+| --------------------------- | --------------------- | ----------------------------------------- | ----------------------------------------------------- |
+| `socket.json`               | `SecuritySocket`      | `socket:<package>@<version>:<alert type>` | an alert on the package's own Socket page             |
+| `security-deps.json`        | `SecurityDeps`        | `security-deps:<package>@<range>`         | an `npm audit` advisory                               |
+| `dist-urls.json`            | `DistNoUrls`          | `dist-url:<url>`                          | a URL in a shipped file                               |
+| `code-scanning.json`        | `CodeScanning`        | `code-scanning:<rule>@<path>`             | a code-scanning alert in development-only code        |
+| `coderabbit.json`           | `CodeRabbit`          | `coderabbit:<file>:<severity>:<hash>`     | a CodeRabbit finding                                  |
+| `mutation.json`             | `Mutation`            | `mutation:<file>:<mutator>:<hash>`        | one mutant, matched by its source text                |
+| `environment.json`          | any                   | `environment:<Check>:<code>`              | a check that could not run (below)                    |
+| `benchmark-complexity.json` | `BenchmarkComplexity` | `benchmark-complexity:<group>:<function>` | a measured growth class worse than the documented one |
+| `managed-files.json`        | `ManagedFiles`        | `managed-file:<path>`                     | a managed consumer file that deliberately differs     |
+| `suppressions.json`         | `Suppressions`        | `suppression:<file>:<rule>`               | a blanket suppression comment with a reason           |
+| `skipped-tests.json`        | `Tests`               | `skipped-test:<file>`                     | a test file that skips in the contract job            |
 
 Staleness is checked both ways: a finding with no complete record fails, and a record whose finding is
 gone fails as stale -- delete it. The registry therefore always describes the code as it is. (The one
@@ -74,7 +78,8 @@ record there is not an error.)
 
 Some results are not findings at all: the check never got to look. Chrome is missing so the
 accessibility scan cannot start; the origin is not on GitHub so branch protection cannot be read; a link
-host throttles the link checker. These never pass silently. The check records the degradation (it
+host throttles the link checker. These never pass silently, with one documented exception: `SecuritySocket` passes
+for a private package (nothing is published to score). The check records the degradation (it
 appears in `reports/contract/report.json` and in the step summary with its own class) and:
 
 - **locally** it is a `warn`, so a laptop without Chrome can still run the rest;
@@ -83,8 +88,10 @@ appears in `reports/contract/report.json` and in the step summary with its own c
 
 The codes are `Accessibility:no-chrome`, `Accessibility:no-site`, `BranchProtection:gh-unavailable`,
 `Commits:no-base`, `Commits:pre-adoption`, `CodeRabbit:not-applicable` (CI), `CodeRabbit:unavailable` (no
-CLI), and `DocsLinks:<url>` for each external link that could not be reached. The warn names the exact id
-to add.
+CLI), `PackedConsumer:install` (the packed tarball could not be installed into a scratch project),
+`SecuritySocket:no-key` (no Socket API token; `init` writes this record with a 90-day expiry),
+`CodeScanning:not-enabled` and `CodeScanning:no-remote` (the alerts could not be read), and `DocsLinks:<url>` for
+each external link that could not be reached. The warn names the exact id to add.
 
 ## Who approves, and how
 

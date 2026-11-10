@@ -7,7 +7,7 @@
 // that branch could otherwise run code with the caller's permissions (and, for the release workflow,
 // publish the caller). The pin carries the release it corresponds to in a trailing comment:
 //
-//   uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@<sha> # v0.8.1
+//   uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@<sha> # v0.16.0
 //
 // `dependency-pin-sync.yml` runs this right after it moves the devDependency, so the workflow code a
 // repository runs never drifts from the version of the package it installs.

@@ -3,6 +3,7 @@ import {
   REQUIRED_RULE_TYPES,
   REQUIRED_STATUS_CHECK_CONTEXT,
   mergeRequiredRules,
+  REQUIRED_STATUS_CHECKS,
 } from "../scripts/github-repo.mjs"
 
 const fullRules = mergeRequiredRules([]).rules
@@ -19,7 +20,7 @@ describe("mergeRequiredRules()", () => {
     expect(rules.find((r) => r.type === "required_status_checks")?.parameters).toEqual({
       strict_required_status_checks_policy: true,
       do_not_enforce_on_create: false,
-      required_status_checks: [{ context: REQUIRED_STATUS_CHECK_CONTEXT }],
+      required_status_checks: REQUIRED_STATUS_CHECKS,
     })
   })
 
@@ -45,33 +46,35 @@ describe("mergeRequiredRules()", () => {
         parameters: { required_status_checks: [{ context: "lint" }] },
       },
     ])
-    expect(changes).toContain(`require the ${REQUIRED_STATUS_CHECK_CONTEXT} check (strict)`)
+    expect(changes).toContain("require the contract and required checks (strict)")
     expect(rules[0]?.parameters).toEqual({
       strict_required_status_checks_policy: true,
-      required_status_checks: [{ context: "lint" }, { context: REQUIRED_STATUS_CHECK_CONTEXT }],
+      required_status_checks: [{ context: "lint" }, ...REQUIRED_STATUS_CHECKS],
     })
   })
 
-  it("only flips strictness when the contract context is already required", () => {
+  it("only flips strictness when both contexts are already required, whatever app they name", () => {
     const { rules } = mergeRequiredRules([
       {
         type: "required_status_checks",
         parameters: {
           strict_required_status_checks_policy: false,
-          required_status_checks: [{ context: REQUIRED_STATUS_CHECK_CONTEXT }],
+          required_status_checks: [
+            { context: REQUIRED_STATUS_CHECK_CONTEXT },
+            { context: "required" },
+          ],
         },
       },
     ])
     expect(rules[0]?.parameters?.["required_status_checks"]).toEqual([
       { context: REQUIRED_STATUS_CHECK_CONTEXT },
+      { context: "required" },
     ])
     expect(rules[0]?.parameters?.["strict_required_status_checks_policy"]).toBe(true)
   })
 
   it("tolerates a required_status_checks rule with no parameters at all", () => {
     const { rules } = mergeRequiredRules([{ type: "required_status_checks" }])
-    expect(rules[0]?.parameters?.["required_status_checks"]).toEqual([
-      { context: REQUIRED_STATUS_CHECK_CONTEXT },
-    ])
+    expect(rules[0]?.parameters?.["required_status_checks"]).toEqual(REQUIRED_STATUS_CHECKS)
   })
 })

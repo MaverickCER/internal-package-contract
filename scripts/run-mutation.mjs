@@ -3,9 +3,10 @@
 // Mutation testing is part of the standard contract and runs on every
 // `npm run contract` -- it is NOT opt-in, and a package cannot satisfy the contract by leaving
 // out a `stryker.config.*`. It is expensive (minutes to tens of minutes on a large `src/`), so the
-// fast hook subsets (pre-commit, pre-push) skip it by name; a consumer that wants a fast local
-// loop runs an explicit subset (`internal-package-contract --skip Mutation`). The full contract --
-// CI and a bare `npm run contract` -- always includes it.
+// pre-push hook skips it by name and the pre-commit hook runs it only when the change reaches mutated
+// source (`--scope affected`); a consumer that wants a fast local loop runs an explicit subset
+// (`internal-package-contract --skip Mutation`). A full contract -- a push to main, a release, or a
+// bare `npm run contract` -- always includes it.
 //
 // Uses the consumer's own `stryker.config.*` when present; otherwise the bundled baseline passed as
 // `--fallback-config`. On a package with nothing to mutate yet, Stryker's own dry run fails

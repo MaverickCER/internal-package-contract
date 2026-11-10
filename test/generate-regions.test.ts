@@ -56,6 +56,35 @@ describe("findRegions", () => {
       { line: 4, message: 'end marker for "a" has no begin marker.' },
     ])
   })
+  it("leaves markers inside a fenced code block alone: they are an example, not a region", () => {
+    const fenced =
+      "intro\n\n```md\n<!-- ipc:begin entry-points -->\n<!-- ipc:end entry-points -->\n```\n\n" +
+      "~~~\n<!-- ipc:begin a -->\n~~~\n\n<!-- ipc:begin b -->\nx\n<!-- ipc:end b -->\n"
+    const { regions, problems } = findRegions(fenced)
+    expect(problems).toEqual([])
+    expect(regions.map((r) => r.name)).toEqual(["b"])
+    // The region's span is measured through the fenced lines too.
+    expect(fenced.slice(regions[0]!.start, regions[0]!.end)).toBe("x\n")
+    // A fence may be indented, and a fence of the other character does not close the block.
+    expect(findRegions("  ```\n<!-- ipc:begin a -->\n  ```\n")).toEqual({
+      regions: [],
+      problems: [],
+    })
+    expect(findRegions("```\n~~~\n<!-- ipc:begin a -->\n```\n")).toEqual({
+      regions: [],
+      problems: [],
+    })
+    // An unclosed fence hides everything after it, as it does for the Markdown renderer.
+    expect(findRegions("````\n<!-- ipc:begin a -->\n```\n<!-- ipc:end a -->\n")).toEqual({
+      regions: [],
+      problems: [],
+    })
+    // A longer fence of the same character closes the block; a shorter one does not.
+    const closedByLonger = findRegions(
+      "```\n``\n<!-- ipc:begin a -->\n````\n<!-- ipc:begin c -->\nx\n<!-- ipc:end c -->\n",
+    )
+    expect(closedByLonger.regions.map((r) => r.name)).toEqual(["c"])
+  })
   it("ignores text that only looks like a marker", () => {
     const { regions, problems } = findRegions(
       "<!-- ipc:begin A -->\n  <!-- ipc:begin a -->\n<!-- ipc:begin a --> x\nipc:begin a\n",

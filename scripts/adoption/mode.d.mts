@@ -21,6 +21,10 @@ export function advisoryFailures(
   results: Record<string, { outcome: string }>,
   adoption: Adoption,
 ): string[]
+export function unpromotedChecks(
+  results: Record<string, { outcome: string }>,
+  adoption: Adoption,
+): string[]
 export function promote(
   argv: readonly string[],
   cwd: string,

@@ -8,8 +8,10 @@
 // dependency to justify adding one.
 //
 // Reports `deletion`, `non_fast_forward`, `pull_request` (and whether it requires review threads
-// to be resolved) and `required_status_checks` (and which contexts it requires) -- the last is the
-// rule that stops a red CI run from being merged and, through the release pipeline, published.
+// to be resolved) and `required_status_checks` (which contexts it requires, and whether it is strict:
+// a branch must be up to date with its base before it merges, so the checks ran on what is merged) --
+// the last is the rule that stops a red CI run from being merged and, through the release pipeline,
+// published.
 //
 // Read-only: never creates or modifies a ruleset. `bin/scaffold.mjs`'s own `init`
 // command does that, sharing this script's owner/repo resolution
@@ -82,6 +84,7 @@ function main() {
   const ruleTypes = new Set()
   const requiredChecks = new Set()
   let requiresThreadResolution = false
+  let strictStatusChecks = false
   for (const id of activeBranchRulesetIds) {
     const detail = gh(["api", `repos/${owner}/${repo}/rulesets/${String(id)}`])
     if (detail.status !== 0) continue
@@ -97,6 +100,8 @@ function main() {
       }
       if (rule.type === "required_status_checks") {
         for (const c of rule.parameters?.required_status_checks ?? []) requiredChecks.add(c.context)
+        if (rule.parameters?.strict_required_status_checks_policy === true)
+          strictStatusChecks = true
       }
     }
   }
@@ -111,6 +116,7 @@ function main() {
     hasPullRequest: ruleTypes.has("pull_request"),
     hasRequiredStatusChecks: ruleTypes.has("required_status_checks"),
     requiredChecks: [...requiredChecks],
+    strictStatusChecks,
     requiresThreadResolution,
   })
 }

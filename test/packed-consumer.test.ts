@@ -346,6 +346,8 @@ describe("check-packed-consumer (script, against a real pack and install)", () =
     const { report } = run()
     expect(report["state"]).toBe("install-failed")
     expect(typeof report["message"]).toBe("string")
+    // The release build job runs this with --strict: a tarball nobody can install must not be published.
+    expect(run("--strict").status).toBe(1)
   })
 })
 

@@ -151,6 +151,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The contract-run attestation below reads this repository's workflow runs and their jobs.
+      actions: read
     outputs:
       should-publish: ${{ steps.info.outputs.should-publish }}
       name: ${{ steps.info.outputs.name }}
@@ -202,6 +204,38 @@ jobs:
           else
             npm run build --if-present
           fi
+
+      # The contract is the gate, and it ran on the pull request: the repository's ruleset requires the
+      # `contract` job before a merge and keeps the branch up to date, so the merged tree is the tree
+      # that passed. This job does not run the contract again (minutes to hours, and a sharded
+      # mutation run cannot run in one job); it proves that a workflow run on a commit with exactly
+      # this tree -- the release commit itself, one of its parents, or the pull request it merged --
+      # finished its `contract` job with success. A commit that reached the default branch past the
+      # ruleset (an administrator's bypass) without that evidence is not published.
+      - name: Require a passing contract run on this tree
+        if: steps.info.outputs.should-publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          repo="$GITHUB_REPOSITORY"
+          tree=$(gh api "repos/$repo/commits/$GITHUB_SHA" --jq '.commit.tree.sha')
+          candidates="$GITHUB_SHA $(gh api "repos/$repo/commits/$GITHUB_SHA" --jq '.parents[].sha' | tr '\n' ' ')"
+          pr=$(gh api "repos/$repo/commits/$GITHUB_SHA/pulls" --jq '.[0].head.sha // empty' 2>/dev/null || true)
+          candidates="$candidates $pr"
+          for sha in $candidates; do
+            [ -n "$sha" ] || continue
+            [ "$(gh api "repos/$repo/commits/$sha" --jq '.commit.tree.sha')" = "$tree" ] || continue
+            for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&per_page=50" --jq '.workflow_runs[].id'); do
+              if gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" \
+                   --jq '.jobs[] | select(.name == "contract" and .conclusion == "success") | .id' | grep -q .; then
+                echo "contract passed in run $run on $sha (same tree as $GITHUB_SHA)"
+                exit 0
+              fi
+            done
+          done
+          echo "::error title=No passing contract run::No workflow run on a commit with this tree finished its \`contract\` job with success. The release commit never passed its own contract; merge it through a pull request whose contract check is green."
+          exit 1
 
       # A released package must not ship a document that still asks its author a question. The same check
       # only warns during development; `IPC_RELEASE=1` is what turns it into a failure.

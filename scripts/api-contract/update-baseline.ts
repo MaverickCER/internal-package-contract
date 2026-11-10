@@ -26,7 +26,9 @@
 //
 // The command's own overall exit code is non-zero iff any target's outcome is `refused`/`failed`.
 
+import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 import {
@@ -38,7 +40,7 @@ import {
 } from "./baseline-store.js"
 import { getApiExtractorVersion, runApiExtractorForTarget } from "./extractor-adapter.js"
 import { compareVersions, parseVersion } from "./semver.js"
-import { readTargets } from "./targets.js"
+import { type ApiContractTarget, readTargets } from "./targets.js"
 import { runSurfaceUpdate } from "../surface-contract/run.js"
 
 export interface TargetUpdateOutcome {
@@ -140,13 +142,24 @@ async function updateOneTarget(
 }
 
 /**
+ * A package with no `typedoc.json` documents no TypeScript entry point, so it has no API baseline to update,
+ * only its CLI, schema and action surface (this repository is one). With a `typedoc.json`, its entry points are
+ * the targets, and a `typedoc.json` that cannot be read is the error `readTargets` reports.
+ * @param root - Absolute path to the consumer's project root.
+ * @returns The API-contract targets to update, possibly none.
+ */
+async function apiTargets(root: string): Promise<readonly ApiContractTarget[]> {
+  return existsSync(path.join(root, "typedoc.json")) ? readTargets(root) : []
+}
+
+/**
  * Factored out of the bottom-of-file CLI invocation so a test can exercise the real guardrail
  * logic in-process against a scratch fixture repository.
  * @param root - Absolute path to the consumer's project root whose baselines are being updated.
  * @returns Every target's outcome -- see the file header for the full matrix.
  */
 export async function runUpdateBaseline(root: string): Promise<readonly TargetUpdateOutcome[]> {
-  const [packageJson, targets] = await Promise.all([readPackageJson(root), readTargets(root)])
+  const [packageJson, targets] = await Promise.all([readPackageJson(root), apiTargets(root)])
 
   const outcomes: TargetUpdateOutcome[] = []
   for (const target of targets) {

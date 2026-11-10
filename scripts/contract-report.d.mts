@@ -39,6 +39,7 @@ export function buildReport(input: {
   strict: boolean
   generatedAt: string
   advisory?: readonly string[]
+  unpromoted?: readonly string[]
 }): ContractReport
 export function renderMarkdown(report: ContractReport, options?: { title?: string }): string
 export function writeReportFiles(

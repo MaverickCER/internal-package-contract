@@ -1,6 +1,6 @@
 /**
- * Keeps the few files this package owns in a consumer from quietly drifting: the release workflow, the
- * pin-sync workflow and the Changesets config. A consumer copy that no longer means what the standard's
+ * Keeps the few files this package owns in a consumer from quietly drifting: the release, pin-sync,
+ * env-rotation and Scorecard workflows and the Changesets config. A consumer copy that no longer means what the standard's
  * does (a missing file, a changed trigger, another permission) is a release or an update that stops
  * behaving like the standard. Wording, comments and the pinned commit are ignored, and every other
  * scaffolded file belongs to the consumer and is never judged (see scripts/managed-files/inspect.mjs).

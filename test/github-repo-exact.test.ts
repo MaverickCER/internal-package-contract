@@ -121,7 +121,10 @@ describe("mergeRequiredRules() exactly", () => {
         parameters: {
           strict_required_status_checks_policy: true,
           do_not_enforce_on_create: false,
-          required_status_checks: [{ context: "contract" }],
+          required_status_checks: [
+            { context: "contract", integration_id: 15368 },
+            { context: "required", integration_id: 15368 },
+          ],
         },
       },
     ])
@@ -189,21 +192,21 @@ describe("mergeRequiredRules() exactly", () => {
     expect(rules[1]).toEqual({ type: "non_fast_forward" })
   })
 
-  it("makes a status-check rule strict and adds the contract context, keeping what was there", () => {
+  it("makes a status-check rule strict and adds the missing contexts, keeping what was there", () => {
     const strictMissing = mergeRequiredRules([
       {
         type: "required_status_checks",
         parameters: {
           strict_required_status_checks_policy: false,
-          required_status_checks: [{ context: "contract" }],
+          required_status_checks: [{ context: "contract" }, { context: "required" }],
         },
       },
     ])
     expect(strictMissing.rules[0]?.parameters).toEqual({
       strict_required_status_checks_policy: true,
-      required_status_checks: [{ context: "contract" }],
+      required_status_checks: [{ context: "contract" }, { context: "required" }],
     })
-    expect(strictMissing.changes[0]).toBe("require the contract check (strict)")
+    expect(strictMissing.changes[0]).toBe("require the contract and required checks (strict)")
 
     const contextMissing = mergeRequiredRules([
       {
@@ -218,14 +221,21 @@ describe("mergeRequiredRules() exactly", () => {
     expect(contextMissing.rules[0]?.parameters).toEqual({
       strict_required_status_checks_policy: true,
       do_not_enforce_on_create: true,
-      required_status_checks: [{ context: "lint" }, { context: "contract" }],
+      required_status_checks: [
+        { context: "lint" },
+        { context: "contract", integration_id: 15368 },
+        { context: "required", integration_id: 15368 },
+      ],
     })
   })
 
   it("copes with a status-check rule that has no parameters, or no list, or entries that are not objects", () => {
     expect(mergeRequiredRules([{ type: "required_status_checks" }]).rules[0]?.parameters).toEqual({
       strict_required_status_checks_policy: true,
-      required_status_checks: [{ context: "contract" }],
+      required_status_checks: [
+        { context: "contract", integration_id: 15368 },
+        { context: "required", integration_id: 15368 },
+      ],
     })
     expect(
       mergeRequiredRules([
@@ -237,18 +247,29 @@ describe("mergeRequiredRules() exactly", () => {
           },
         },
       ]).rules[0]?.parameters,
-    ).toMatchObject({ required_status_checks: [{ context: "contract" }] })
+    ).toMatchObject({
+      required_status_checks: [
+        { context: "contract", integration_id: 15368 },
+        { context: "required", integration_id: 15368 },
+      ],
+    })
     expect(
       mergeRequiredRules([
         {
           type: "required_status_checks",
           parameters: {
             strict_required_status_checks_policy: true,
-            required_status_checks: [null, undefined, "x", { context: "contract" }],
+            required_status_checks: [
+              null,
+              undefined,
+              "x",
+              { context: "contract" },
+              { context: "required" },
+            ],
           },
         },
       ]).changes,
-    ).not.toContain("require the contract check (strict)")
+    ).not.toContain("require the contract and required checks (strict)")
     expect(
       mergeRequiredRules([
         {
@@ -260,7 +281,12 @@ describe("mergeRequiredRules() exactly", () => {
         },
       ]).rules[0]?.parameters,
     ).toMatchObject({
-      required_status_checks: [null, { context: "other" }, { context: "contract" }],
+      required_status_checks: [
+        null,
+        { context: "other" },
+        { context: "contract", integration_id: 15368 },
+        { context: "required", integration_id: 15368 },
+      ],
     })
   })
 
@@ -269,7 +295,11 @@ describe("mergeRequiredRules() exactly", () => {
       type: "required_status_checks",
       parameters: {
         strict_required_status_checks_policy: true,
-        required_status_checks: [{ context: "contract" }, { context: "lint" }],
+        required_status_checks: [
+          { context: "contract" },
+          { context: "required" },
+          { context: "lint" },
+        ],
       },
     }
     const merged = mergeRequiredRules([rule])

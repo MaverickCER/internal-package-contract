@@ -15,7 +15,7 @@ import {
   REPO_CONTRACT_LOG_DIRECTORY as LOG_DIRECTORY,
   repoContractLogs,
 } from "repo-contract/helpers"
-import { advisoryFailures, readAdoption } from "./adoption/mode.mjs"
+import { advisoryFailures, readAdoption, unpromotedChecks } from "./adoption/mode.mjs"
 import { prepare as prepareRun } from "./contract-prepare.mjs"
 import { planPhases } from "./contract-phases.mjs"
 import { collectInventory, renderInventory } from "./exceptions-inventory.mjs"
@@ -211,9 +211,10 @@ export async function runContract({
   const report = buildReport({
     results,
     advisory,
+    unpromoted: unpromotedChecks(results, adoption),
     evidenceChecks: evidence.checks,
     skipped: skippedDeferred ? [deferred] : [],
-    strict: strict && adoption.state !== "active",
+    strict,
     generatedAt: new Date().toISOString(),
   })
   const labelOf = (check) =>

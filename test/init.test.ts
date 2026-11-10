@@ -330,6 +330,21 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     expect(workflow).toContain(`node-version: ${String(floor)}.x`)
   })
 
+  it("scaffolds a `required` job that stands for every other job, so a skipped or cancelled one cannot pass", () => {
+    init()
+    const workflow = readFileSync(path.join(cwd, ".github/workflows/contract.yml"), "utf8")
+    const required = workflow.slice(workflow.indexOf("\n  required:\n"))
+    expect(required).toContain("if: always()")
+    expect(required).toContain("needs: [node-floor, typescript-7]")
+    expect(required).toContain("n.result !== 'success'")
+    // Every other job id in the file, except contract, is in that needs list.
+    const jobsSection = workflow.slice(workflow.indexOf("\njobs:\n"))
+    const jobs = [...jobsSection.matchAll(/^ {2}([a-z0-9-]+):$/gm)].map((m) => m[1])
+    for (const job of jobs.filter((j) => j !== "contract" && j !== "required")) {
+      expect(required).toContain(job)
+    }
+  })
+
   it("exits 1 with the problem and usage for a bad name or unknown argument", () => {
     const badName = init("--name", "Bad Name")
     expect(badName.status).toBe(1)

@@ -239,12 +239,27 @@ describe("codeScanning() -- policy: could not read", () => {
 })
 
 describe("codeScanning() -- policy: reviewing alerts", () => {
-  it("passes a skipped review, saying why", async () => {
-    const result = await policy(makeJsonResult({ ok: true, data: { skipped: "not in CI" } }))
-    expect(result).toEqual({
-      outcome: "pass",
-      rationale: "Code scanning review skipped: not in CI.",
-    })
+  it("degrades a skipped review instead of passing it: nothing was reviewed", async () => {
+    const result = await policy(
+      makeJsonResult({
+        ok: true,
+        data: { skipped: "code scanning is not enabled for this repository" },
+      }),
+    )
+    expect(result.outcome).toBe("warn")
+    expect(result.rationale).toContain("Not evaluated (no exception recorded")
+    expect(result.rationale).toContain("environment:CodeScanning:not-enabled")
+    expect(result.rationale).toContain(
+      "Code scanning review skipped: code scanning is not enabled for this repository.",
+    )
+  })
+
+  it("uses the no-remote code when the repository has no GitHub remote", async () => {
+    const result = await policy(
+      makeJsonResult({ ok: true, data: { skipped: "no GitHub remote found for pkg" } }),
+    )
+    expect(result.outcome).toBe("warn")
+    expect(result.rationale).toContain("environment:CodeScanning:no-remote")
   })
 
   it("passes with no alerts and leaves an empty registry", async () => {

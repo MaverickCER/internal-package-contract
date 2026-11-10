@@ -29,6 +29,8 @@ interface BranchProtectionStatus {
   readonly hasPullRequest: boolean
   readonly hasRequiredStatusChecks: boolean
   readonly requiredChecks: readonly string[]
+  /** Whether a branch must be up to date with its base before it merges, so the checks ran on what is merged. */
+  readonly strictStatusChecks: boolean
   readonly requiresThreadResolution: boolean
 }
 
@@ -65,8 +67,13 @@ export function createBranchProtection(
       if (!status.hasNonFastForward) missing.push("force-push protection")
       if (!status.hasRequiredStatusChecks) {
         missing.push("a required-status-checks rule")
-      } else if (!status.requiredChecks.includes(requiredCheck)) {
-        missing.push(`the "${requiredCheck}" check among its required status checks`)
+      } else {
+        if (!status.requiredChecks.includes(requiredCheck)) {
+          missing.push(`the "${requiredCheck}" check among its required status checks`)
+        }
+        if (!status.strictStatusChecks) {
+          missing.push("strict status checks (a branch up to date with its base before it merges)")
+        }
       }
       if (!status.requiresThreadResolution) missing.push("required review-thread resolution")
 
@@ -79,7 +86,7 @@ export function createBranchProtection(
 
       return {
         outcome: "pass",
-        rationale: `Branch protection: ${status.owner}/${status.repo}'s default branch (${status.defaultBranch}) blocks deletion, force-pushes, and merging without a PR, and requires the "${requiredCheck}" check and resolved review threads.`,
+        rationale: `Branch protection: ${status.owner}/${status.repo}'s default branch (${status.defaultBranch}) blocks deletion, force-pushes, and merging without a PR, and requires the "${requiredCheck}" check (strict) and resolved review threads.`,
       }
     },
   }

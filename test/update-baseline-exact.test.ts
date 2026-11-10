@@ -121,6 +121,31 @@ describe("runUpdateBaseline()", { timeout: 180_000 }, () => {
     ).toEqual({ "./schema": { type: "object" } })
   })
 
+  it("updates only the surface of a package with no typedoc.json: nothing documented means no API target", async () => {
+    const repo = makeRepo("1.0.0")
+    rmSync(path.join(repo.root, "typedoc.json"))
+    repo.write(
+      "package.json",
+      JSON.stringify({
+        name: "fx",
+        version: "1.0.0",
+        type: "module",
+        exports: { "./schema": "./s.json" },
+      }),
+    )
+    repo.write("s.json", '{"type":"object"}')
+    const outcomes = await runUpdateBaseline(repo.root)
+    expect(outcomes.map((o) => [o.target, o.status])).toEqual([["surface", "updated"]])
+    // And with no surface either, there is nothing to report and nothing to fail on.
+    repo.setVersion("1.0.0")
+    rmSync(path.join(repo.root, ".repo-contract"), { recursive: true, force: true })
+    const out: string[] = []
+    expect(await main(repo.root, { stdout: (t) => out.push(t), stderr: (t) => out.push(t) })).toBe(
+      0,
+    )
+    expect(out).toEqual([])
+  })
+
   it("does nothing when the baseline already matches at the same version", async () => {
     const repo = await committed("1.0.0")
     expect(await runUpdateBaseline(repo.root)).toEqual([

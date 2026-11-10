@@ -87,6 +87,31 @@ describe("a freshly scaffolded package", () => {
     // Running init again takes about 12 s on its own; under the full suite's parallel load it needs more than the default 20 s.
   }, 120_000)
 
+  it("starts green in CI without a Socket token: a dated environment record that forces the decision later", () => {
+    const registry = JSON.parse(
+      readFileSync(path.join(dir, ".repo-contract", "exceptions", "environment.json"), "utf8"),
+    ) as { exceptions: Record<string, string>[] }
+    const record = registry.exceptions.find((r) => r["id"] === "environment:SecuritySocket:no-key")
+    expect(record).toBeDefined()
+    expect(record?.["check"]).toBe("SecuritySocket")
+    expect(record?.["code"]).toBe("no-key")
+    // Every version-2 field is written, so the record is complete on day one, and it expires.
+    for (const key of [
+      "ruleBroken",
+      "attempted",
+      "constraint",
+      "whyPreferable",
+      "residualRisk",
+      "revisitWhen",
+    ]) {
+      expect(record?.[key]?.length ?? 0).toBeGreaterThan(0)
+    }
+    const expires = new Date(record?.["expires"] ?? "")
+    const days = (expires.getTime() - Date.now()) / 86_400_000
+    expect(days).toBeGreaterThan(85)
+    expect(days).toBeLessThan(91)
+  })
+
   it("carries the repository rules for an agent", () => {
     const agents = readFileSync(path.join(dir, "AGENTS.md"), "utf8")
     expect(agents).toContain("`health-demo`")

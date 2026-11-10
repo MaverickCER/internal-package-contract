@@ -17,8 +17,10 @@
  *
  * Part of the standard contract -- runs on every full `npm run contract`, not
  * opt-in, and a package cannot satisfy the contract by omitting a `stryker.config.*`:
- * without one the bundled baseline runs. The fast hook subsets (pre-commit, pre-push) omit
- * it by name; a fast local loop is an explicit `--checks ...` or `--skip Mutation` subset.
+ * without one the bundled baseline runs. The pre-push hook omits it by name; the pre-commit hook
+ * runs it when the change reaches mutated source (`--scope affected`); CI runs `--scope auto`, which
+ * is everything on a push to main or a release. A fast local loop is an explicit `--checks ...` or
+ * `--skip Mutation` subset.
  *
  * Uses the consumer's own `stryker.config.*` when present, otherwise the bundled
  * baseline (`config/stryker.config.mjs`, Vitest runner, `mutate: src/**`). Runs

@@ -200,6 +200,53 @@ if (!existsSync(nvmrcDest) || force) {
   skipped.push(".nvmrc (exists)")
 }
 
+// .repo-contract/exceptions/environment.json -- a new package has no Socket API token yet, and in CI the
+// contract runs --strict, where a check that could not run fails unless this registry says why. This
+// record keeps day one green and expires in 90 days, so the token decision is forced, not forgotten.
+// A package that already has the registry keeps it as it is.
+const environmentRegistry = path.join(cwd, ".repo-contract", "exceptions", "environment.json")
+if (!existsSync(environmentRegistry) || force) {
+  const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  mkdirSync(path.dirname(environmentRegistry), { recursive: true })
+  writeFileSync(
+    environmentRegistry,
+    `${JSON.stringify(
+      {
+        exceptions: [
+          {
+            id: "environment:SecuritySocket:no-key",
+            version: 2,
+            justification:
+              "This package was just scaffolded and has no Socket.dev API token yet, so the SecuritySocket scan cannot run in CI. The rest of the contract runs; the supply-chain score is unchecked until a token exists.",
+            check: "SecuritySocket",
+            code: "no-key",
+            ruleBroken:
+              "A check that could not run fails the CI gate unless a record says why that is acceptable.",
+            attempted:
+              "Nothing yet: the repository secret SOCKET_SECURITY_API_KEY has not been created.",
+            constraint:
+              "A Socket.dev token belongs to a person or an organization and cannot be scaffolded.",
+            whyPreferable:
+              "A red first CI run teaches an adopter the exception schema before it teaches them the package; a dated record teaches the decision instead.",
+            residualRisk:
+              "Alerts on this package's dependencies are not scored until a token exists; npm audit (SecurityDeps) still runs.",
+            revisitWhen:
+              "A SOCKET_SECURITY_API_KEY repository secret exists (then delete this record), or this record expires.",
+            expires,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  done.push(
+    ".repo-contract/exceptions/environment.json (SecuritySocket:no-key, expires " + expires + ")",
+  )
+} else {
+  skipped.push(".repo-contract/exceptions/environment.json (exists)")
+}
+
 // package.json -- ensure the `contract` script.
 const pkgPath = path.join(cwd, "package.json")
 try {
