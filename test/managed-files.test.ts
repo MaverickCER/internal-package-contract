@@ -593,6 +593,9 @@ describe("managed copies of shared code", () => {
       code("compiler-api"),
       code("build-fs"),
       code("resolve-tsconfig-paths"),
+      ["ci-jobs", "runtime/ci-jobs.ts", "test/_ipc/ci-jobs.ts"],
+      ["ci-jobs-test", "template/test/ci-jobs.test.ts", "test/ci-jobs.test.ts"],
+      ["vm-bundle", "runtime/vm-bundle.ts", "test/_ipc/vm-bundle.ts"],
       doc("code-of-conduct", "CODE_OF_CONDUCT.md"),
       doc("support", "SUPPORT.md"),
       doc("releasing", "RELEASING.md"),
@@ -734,7 +737,7 @@ describe("managed copies of shared code", () => {
     const unknown = sync("--add", "nope")
     expect(unknown.code).toBe(2)
     expect(unknown.err).toBe(
-      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs, standards-readme, schema-sarif-2.1.0, schema-oscal-assessment-results-1.1.2, schema-cyclonedx-1.6, schema-cyclonedx-spdx, schema-cyclonedx-jsf-0.82.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, ci-jobs, ci-jobs-test, vm-bundle, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs, standards-readme, schema-sarif-2.1.0, schema-oscal-assessment-results-1.1.2, schema-cyclonedx-1.6, schema-cyclonedx-spdx, schema-cyclonedx-jsf-0.82.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
     )
     expect(sync("--add").err).toContain("unknown managed copy: (none given).")
   })

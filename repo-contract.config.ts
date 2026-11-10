@@ -22,6 +22,27 @@
  * `Tests` for the real evidence dependency (they read artifacts `Tests`
  * produces), the same as `contract.ts`.
  *
+ * What this file declares beyond the shared checks: `SurfaceContract` (this package's CLI help, exit codes,
+ * schemas and `action.yml` against the baseline of the last release), `CodeScanning` (the open CodeQL alerts of
+ * this ref; default setup is enabled on the repository), `EnvContract` (`ci/env.schema.ts`) and `GitHooks` (a
+ * clone that runs the hooks; not judged in CI).
+ *
+ * What it leaves out of `standardChecks()`, and why (every omission, so nothing is missing by accident):
+ * - `Build`, `Packaging`, `TypeResolution`, `NoMinify`, `DistNoUrls`, `Size`, `PackedConsumer`: this package
+ *   has no `dist/`, no build, and is never packed for npm (consumers install it from git).
+ * - `ApiContract`, `ApiDocs`, `ApiDocsReport`, `Schema`, `ReadmeExample`: no TypeScript library surface to
+ *   extract, document, or run an example against; the CLI surface is what `SurfaceContract` guards.
+ * - `ReadmeStructure`, `LandingPage`, `Accessibility`, `ScorecardWorkflow`, `EngineMatrix`: for published
+ *   packages; this one is private (`"private": true`), so each would pass vacuously.
+ * - `PinConsistency`, `ManagedFiles`: judge a consumer's pin of this package and the files it manages there;
+ *   this repository is the source of both, not a consumer, so each would pass vacuously.
+ * - `BenchmarkCoverage`, `BenchmarkComplexity`, `BenchmarkGuides`: the benchmark suites are run by
+ *   `npm run benchmark` and not committed here (README, "Benchmarks").
+ * - `AdoptionMode`, `PromptBlocks`, `GeneratedRegions`: this package is not adopting its own standard, has no
+ *   scaffold prompts and marks no generated region in its documents (the README shows the marker syntax inside
+ *   a fenced example, which is not a region); each would pass vacuously.
+ * - `CodeRabbit`: the review bot is configured per consumer repository, not here.
+ *
  * This repository has no `src/` -- its real code lives in `checks/`, `scripts/` and `bin/` (the scope
  * in `scope.mjs`, mirrored by `vitest.config.ts`'s coverage scope and `stryker.config.mjs`'s `mutate`).
  * `Architecture`/`Crap`/`Duplication` all hardcode a `"src"` scan-path positional in their `run` (the
@@ -52,6 +73,10 @@ import { docsFragments } from "./checks/docs-fragments.js"
 import { docsLinks } from "./checks/docs-links.js"
 import { docsMarkdown } from "./checks/docs-markdown.js"
 import { cleanCheckoutCheck } from "./checks/clean-checkout.js"
+import { codeScanning } from "./checks/code-scanning.js"
+import { envContractCheck } from "./checks/env-contract.js"
+import { gitHooksCheck } from "./checks/git-hooks.js"
+import { surfaceContract } from "./checks/surface-contract.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
 import { mutation } from "./checks/mutation.js"
@@ -133,6 +158,10 @@ export default defineRepoContract({
     Suppressions: suppressions(),
     DeadCode: deadCode(),
     Commits: commits(),
+    SurfaceContract: surfaceContract(),
+    CodeScanning: codeScanning(),
+    EnvContract: envContractCheck(),
+    GitHooks: gitHooksCheck(),
     Mutation: { ...mutation(), isolated: true },
   },
 })

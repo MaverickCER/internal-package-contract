@@ -8,8 +8,9 @@
  *
  * Kept deliberately small: the two well-known recommended sets as a flat-config
  * array a package can append its own blocks to, the Node globals so plain
- * `.js`/`.mjs` config and script files do not trip `no-undef`, and suppression hygiene
- * (every `eslint-disable` must be described, specific, paired and still needed).
+ * `.js`/`.mjs` config and script files do not trip `no-undef`, suppression hygiene
+ * (every `eslint-disable` must be described, specific, paired and still needed), and one
+ * rule of the standard's own: `src/` opens no network connection (`ipc/no-network`).
  *
  * Non-type-checked on purpose. `recommendedTypeChecked` would require every
  * consumer to wire `parserOptions.projectService` and a tsconfig, which defeats
@@ -37,6 +38,8 @@ import js from "@eslint/js"
 import eslintConfigPrettier from "eslint-config-prettier/flat"
 import globals from "globals"
 import tseslint from "typescript-eslint"
+
+import { noNetwork } from "./scripts/eslint/no-network.mjs"
 
 export default tseslint.config(
   { ignores: ["dist/", "coverage/", "node_modules/", "template/package/"] },
@@ -68,6 +71,14 @@ export default tseslint.config(
       "eslint-comments/no-aggregating-enable": "error",
       "eslint-comments/no-duplicate-disable": "error",
     },
+  },
+  // A library's source opens no network connection (see scripts/eslint/no-network.mjs for what counts and why
+  // this is a rule of its own). `src/` is the library; a package whose executable boundary lives elsewhere
+  // (`bin/`) decides for itself whether that boundary may reach the network.
+  {
+    files: ["src/**/*.{ts,mts,cts,js,mjs,cjs}"],
+    plugins: { ipc: { rules: { "no-network": noNetwork } } },
+    rules: { "ipc/no-network": "error" },
   },
   // Last: turn off every rule Prettier already owns, so `Lint` and `Format`
   // never disagree about the same line.

@@ -90,6 +90,22 @@ export const COPIES = Object.freeze([
     requires: ["build-fs", "compiler-api", "typescript"],
   },
   {
+    name: "ci-jobs",
+    from: "runtime/ci-jobs.ts",
+    to: "test/_ipc/ci-jobs.ts",
+  },
+  {
+    name: "ci-jobs-test",
+    from: "template/test/ci-jobs.test.ts",
+    to: "test/ci-jobs.test.ts",
+    requires: ["ci-jobs"],
+  },
+  {
+    name: "vm-bundle",
+    from: "runtime/vm-bundle.ts",
+    to: "test/_ipc/vm-bundle.ts",
+  },
+  {
     name: "code-of-conduct",
     from: "template/package/CODE_OF_CONDUCT.md",
     to: "CODE_OF_CONDUCT.md",

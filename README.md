@@ -293,7 +293,11 @@ module.exports = { ...base, forbidden: [...base.forbidden /* yours */] }
 Available: `./config/dependency-cruiser`, `./config/knip`, `./config/stryker`,
 `./config/commitlint`, `./config/secretlint`, `./config/markdownlint`, plus the
 `./eslint`, `./prettier`, `./tsconfig` baselines (extend, never copy). The
-`tsconfig` baseline is the strictest practical configuration.
+`tsconfig` baseline is the strictest practical configuration. The `eslint` baseline carries one rule of its own,
+`ipc/no-network`: nothing under `src/` imports a network module (`http`, `https`, `http2`, `net`, `tls`, `dns`,
+`dgram`, `undici`, `ws`) or uses a network global (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`,
+`navigator`); type-only imports are allowed, and a package's executable boundary outside `src/` is its own
+decision.
 
 The thresholds `COVERAGE_THRESHOLDS`, `CRAP_THRESHOLD` / `MAX_COMPLEXITY` live
 in [`checks/`](checks/) — raise them there when the whole fleet is ready,
@@ -749,6 +753,11 @@ guides, next to the code copies. The official schemas a package's tests validate
 against are managed copies too (`schema-sarif-2.1.0`, `schema-oscal-assessment-results-1.1.2`,
 `schema-cyclonedx-1.6`, which brings the SPDX and JSF schemas it references), carried into `test/fixtures/standards/`
 with a README that records each one's release URL and SHA-256; this repository's tests fail if a byte changes.
+Two test-support copies carry a gate into each package's own test suite: `ci-jobs-test` (with `ci-jobs`) fails
+when a job of `.github/workflows/ci.yml` is not waited for by the `required` job, so a job cannot become
+advisory by omission (`package.json` `"internal-package-contract": { "ciJobs": { "exempt": [...] } }` names the
+jobs that are not gates), and `vm-bundle` runs a browser bundle in a `vm` context with no Node globals, so a
+"runs in the browser" sentence is proven by running, not by grep.
 `sync --add <name>` enrols one and `sync --apply --update` restores it; `init` on
 an existing package enrols each one it already carries unchanged. The workflows (`release`, `scorecard`,
 `env-rotation`, `sync-internal-package-contract`) and `.changeset/config.json` are always managed.

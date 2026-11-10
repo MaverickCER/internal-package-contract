@@ -8,10 +8,11 @@
 //
 // `generate` rewrites what is between the markers and nothing else, so the prose around a region is never
 // touched. Markers that are missing, repeated, nested or out of order are reported with their line, never
-// guessed at.
+// guessed at. A marker inside a fenced code block is an example of the syntax, not a region, and is left alone.
 
 const BEGIN = /^<!-- ipc:begin ([a-z][a-z0-9-]*) -->$/
 const END = /^<!-- ipc:end ([a-z][a-z0-9-]*) -->$/
+const FENCE = /^(`{3,}|~{3,})/
 
 /**
  * @typedef {object} Region
@@ -32,8 +33,23 @@ export function findRegions(text) {
   const names = new Set()
   let open
   let offset = 0
+  /** @type {string | undefined} the fence that opened the code block the scan is inside, if any. */
+  let fence
   for (const [index, line] of text.split("\n").entries()) {
     const number = index + 1
+    const fenceMatch = FENCE.exec(line.trimStart())
+    if (fenceMatch !== null) {
+      // A block closes on a fence of the same character at least as long as the one that opened it.
+      if (fence === undefined) fence = fenceMatch[1]
+      else if (fenceMatch[1][0] === fence[0] && fenceMatch[1].length >= fence.length)
+        fence = undefined
+      offset += line.length + 1
+      continue
+    }
+    if (fence !== undefined) {
+      offset += line.length + 1
+      continue
+    }
     const begin = BEGIN.exec(line.trimEnd())
     const end = END.exec(line.trimEnd())
     if (begin !== null) {
