@@ -69,6 +69,9 @@ export function mergeEvidence(documents) {
  * @param {readonly string[]} input.skipped - checks that were deliberately not run.
  * @param {boolean} input.strict - whether an unexcepted "not evaluated" result fails the run.
  * @param {string} input.generatedAt
+ * @param {readonly string[]} [input.advisory] - failing checks that do not decide the exit code (adoption mode).
+ * @param {readonly string[]} [input.unpromoted] - checks that cannot decide the exit code at all while the
+ * package is adopting; strict still applies to every other check. Absent when the package is not adopting.
  */
 export function buildReport({
   results,
@@ -77,6 +80,7 @@ export function buildReport({
   strict,
   generatedAt,
   advisory = [],
+  unpromoted,
 }) {
   const checks = [
     ...Object.entries(results).map(([id, result]) => ({
@@ -98,8 +102,13 @@ export function buildReport({
   const counts = { pass: 0, warn: 0, "not-evaluated": 0, unexcepted: 0, fail: 0, skipped: 0 }
   for (const check of checks) counts[check.class] += 1
   // A failure of an advisory check (one a package that is adopting has not promoted) is reported but does not
-  // decide the exit code.
-  const failed = counts.fail > advisory.length || (strict && counts.unexcepted > 0)
+  // decide the exit code. Strict mode is not suspended by adoption: a promoted check that could not run and has
+  // no exception fails the run, as it will once the package is no longer adopting.
+  const unexceptedEnforced = checks.filter(
+    (check) =>
+      check.class === "unexcepted" && !(unpromoted !== undefined && unpromoted.includes(check.id)),
+  ).length
+  const failed = counts.fail > advisory.length || (strict && unexceptedEnforced > 0)
   return {
     version: 1,
     generatedAt,

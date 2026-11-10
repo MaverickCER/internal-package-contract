@@ -21,14 +21,11 @@ updates:
       - dependencies
     ignore:
       - dependency-name: "internal-package-contract"
-      # TypeScript 7 removes the compiler API (createSourceFile, createProgram, the checker) that tools such as
-      # typescript-eslint, TypeDoc and API Extractor are built on; stay on 5.x/6.x until they support it.
+      # TypeScript 7 has no compiler API. The packages' build entries use the consumer's TypeScript when it is 5 or 6
+      # and a bundled TypeScript 6 otherwise, and the tooling this standard runs (typescript-eslint, TypeDoc, API
+      # Extractor) is built on that API, so the development toolchain stays on 6; 7 is type-checked in CI.
       - dependency-name: "typescript"
         versions: [">= 7.0.0"]
-      # changesets/action v1 (used by the release workflow) targets Changesets CLI v2; CLI v3 needs the
-      # action's v2. Move both together, then remove this rule.
-      - dependency-name: "@changesets/cli"
-        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development
@@ -47,8 +44,8 @@ updates:
       - dependencies
       - github-actions
     ignore:
-      # The commits Dependabot offers for changesets/action after v1 belong to the action's v2, which refuses
-      # Changesets CLI v2 ("designed to work with Changesets CLI v3"). Move the action and the CLI together.
+      # The release workflows pin changesets/action v1, which runs this standard's Changesets CLI 3 (see the 0.14.0
+      # changelog). The action's v2 is a deliberate migration, not a Dependabot bump: move it by hand and test a release.
       - dependency-name: "changesets/action"
     groups:
       github-actions:

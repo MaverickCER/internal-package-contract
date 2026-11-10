@@ -61,7 +61,7 @@
     "prepublishOnly": "npm run verify"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.1",
+    "@changesets/cli": "^3.0.3",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "eslint": "^10.9.0",
@@ -71,7 +71,7 @@
     "tsup": "^8.0.0",
     "typedoc": "^0.28.20",
     "typedoc-plugin-markdown": "4.13.1",
-    "typescript": "^5.0.0",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^5.0.3"
   },

@@ -127,6 +127,15 @@ describe("buildReport(): advisory failures", () => {
     expect(build({ results: failing, advisory: ["A"] }).passed).toBe(false)
     expect(build({ results: failing, advisory: ["A", "B"] }).passed).toBe(true)
   })
+  it("under strict, an unexcepted result fails the run unless its check is unpromoted", () => {
+    const unexcepted = {
+      Chrome: { outcome: "warn", rationale: "Not evaluated (no exception recorded; add x): y" },
+    }
+    expect(build({ results: unexcepted, strict: true }).passed).toBe(false)
+    expect(build({ results: unexcepted, strict: true, unpromoted: ["Chrome"] }).passed).toBe(true)
+    expect(build({ results: unexcepted, strict: true, unpromoted: ["Other"] }).passed).toBe(false)
+    expect(build({ results: unexcepted, strict: false, unpromoted: [] }).passed).toBe(true)
+  })
   it("leaves the report as it was when nothing is advisory", () => {
     expect(build()).not.toHaveProperty("advisory")
     expect(build({ advisory: [] })).not.toHaveProperty("advisory")

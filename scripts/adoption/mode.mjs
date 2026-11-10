@@ -97,13 +97,23 @@ export function writeAdoption(cwd, adoption) {
  * @returns {string[]} the ids of failing checks the package has not promoted; empty unless adoption mode is active.
  */
 export function advisoryFailures(results, adoption) {
+  const unpromoted = new Set(unpromotedChecks(results, adoption))
+  return Object.entries(results)
+    .filter(([id, result]) => result.outcome === "fail" && unpromoted.has(id))
+    .map(([id]) => id)
+}
+
+/**
+ * The checks that cannot decide the exit code while the package is adopting: every check it has not promoted,
+ * `AdoptionMode` itself excepted. Empty when the package is not adopting, so every check decides.
+ * @param {Record<string, { outcome: string }>} results
+ * @param {Adoption} adoption
+ * @returns {string[]}
+ */
+export function unpromotedChecks(results, adoption) {
   if (adoption.state !== "active") return []
   const enforced = new Set(adoption.enforce)
-  return Object.entries(results)
-    .filter(
-      ([id, result]) => result.outcome === "fail" && !enforced.has(id) && id !== "AdoptionMode",
-    )
-    .map(([id]) => id)
+  return Object.keys(results).filter((id) => !enforced.has(id) && id !== "AdoptionMode")
 }
 
 /**

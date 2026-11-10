@@ -2,8 +2,9 @@
 
 ## Before you start
 
-- `npm ci`, then `npm run contract` -- this is the same check that runs in CI and pre-push; if it
-  passes locally, CI should pass too.
+- `npm ci`, then `npm run contract` -- the full gate CI runs on a push to main; if it passes locally,
+  CI should pass too. Pre-push runs it without Coverage, Crap and Mutation; a pull request runs the
+  subset the change can reach (`--scope auto`).
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (enforced by
   commitlint on `commit-msg`); `git commit` picks up `.gitmessage` as a template once
   `internal-package-contract init` has run.

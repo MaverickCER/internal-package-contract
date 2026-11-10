@@ -1,8 +1,10 @@
 # internal-package-contract caller workflow. Runs the full contract on every
 # push and PR. Replace nothing -- the standard lives in the shared package.
 #
-# The job id is `contract`: it is the status check the default branch's ruleset requires before a
-# merge (`internal-package-contract init` configures that), so renaming it unprotects the branch.
+# Two job ids are status checks the default branch's ruleset requires before a merge
+# (`internal-package-contract init` configures that), so renaming either unprotects the branch:
+# `contract`, the standard itself, and `required`, which fails unless every other job in this file
+# finished with success -- a job that is skipped or cancelled would otherwise count as passing.
 name: Contract
 
 on:
@@ -32,9 +34,10 @@ jobs:
         with:
           node-version: 24.x
       - run: npm ci
-      # SecuritySocket scores the package on Socket.dev and FAILS without a token. Create one at
-      # socket.dev (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings >
-      # Secrets and variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
+      # SecuritySocket scores the package on Socket.dev. Without a token it warns that the scan did not
+      # run; a rejected token, a network error or a rate limit fails. Create a token at socket.dev
+      # (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings > Secrets and
+      # variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
       #
       # In CI the contract runs `--strict`: a check that could not run here and has no recorded
       # exception (.repo-contract/exceptions/environment.json) fails the job instead of passing yellow.
@@ -91,3 +94,24 @@ jobs:
           node-version: 24.x
       - run: npm ci
       - run: npx --yes -p typescript@7 tsc --noEmit -p tsconfig.json
+
+  # The one status check that stands for every job above except `contract`. GitHub treats a skipped or
+  # cancelled required job as passing and cannot name a matrix job as one context, so this job runs
+  # `if: always()` and fails unless each job it needs finished `success`. Add every new job to `needs`.
+  required:
+    needs: [node-floor, typescript-7]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Every gate job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: >-
+          node -e "const needs = JSON.parse(process.env.NEEDS);
+          const bad = Object.entries(needs).filter(([, n]) => n.result !== 'success');
+          if (bad.length > 0) {
+            console.error('::error::not green: ' + bad.map(([id, n]) => id + '=' + n.result).join(', '));
+            process.exit(1);
+          }"

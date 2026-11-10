@@ -49,8 +49,8 @@ commit a consumer pins can publish that consumer. So:
 
 Self-hosted, via `npm run contract` (`scripts/run-contract.mjs` against `repo-contract.config.ts`,
 this repository's own self-hosting contract): dependency vulnerability scanning (`SecurityDeps`), secret
-scanning (`SecuritySecrets`), supply-chain review (`SecuritySocket`), code scanning (`CodeScanning`) and
-branch protection on `main`. Every consumer gets the same checks through `contract.ts` by adopting it --
+scanning (`SecuritySecrets`), supply-chain review (`SecuritySocket`) and branch protection on `main`;
+GitHub's default CodeQL setup scans the repository separately. Every consumer gets the same checks through `contract.ts` by adopting it --
 see the README.
 
 ### Known limits of those checks (intentional, documented)

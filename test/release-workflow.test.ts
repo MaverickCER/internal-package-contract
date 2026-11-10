@@ -138,6 +138,28 @@ describe("release workflows", () => {
     }
   })
 
+  it("publishes only a tree that a passing contract run has seen, without running the contract again", () => {
+    // The contract ran on the pull request (the ruleset requires it, kept up to date with the base
+    // branch), so the merged tree is the tree that passed. The build job proves that instead of
+    // repeating a run that takes minutes to hours and, when mutation is sharded, cannot fit one job.
+    const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
+    const start = text.indexOf("- name: Require a passing contract run on this tree")
+    expect(start).toBeGreaterThan(text.indexOf("- name: Verify\n"))
+    expect(start).toBeLessThan(text.indexOf("- name: Check that no prompt is left unanswered"))
+    const step = text.slice(start, text.indexOf("- name: Check that no prompt is left unanswered"))
+    // Same tree, not same commit: the release commit's own CI is still running when this job starts.
+    expect(step).toContain(".commit.tree.sha")
+    expect(step).toContain('select(.name == "contract" and .conclusion == "success")')
+    expect(step).toContain("exit 1")
+    expect(step).not.toMatch(/npm run contract/)
+    // Reading workflow runs needs actions: read on the build job, and nothing more.
+    const jobs = text.split(/\n {2}(?=[a-z-]+:\n {4}(?:needs|runs-on|if):)/)
+    const build =
+      jobs.find((job) => job.includes("Require a passing contract run on this tree")) ?? ""
+    expect(build).toContain("actions: read")
+    expect(build).not.toContain("id-token: write")
+  })
+
   it("ask the registry afterwards for the published version and its provenance", () => {
     const text = workflows.find((w) => w.name === "release-npm-changesets.yml")?.text ?? ""
     expect(text).toContain("name: ${{ steps.info.outputs.name }}")

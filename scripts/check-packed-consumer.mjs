@@ -32,7 +32,10 @@ const work = mkdtempSync(path.join(tmpdir(), "ipc-packed-consumer-"))
 function finish(report) {
   rmSync(work, { recursive: true, force: true })
   process.stdout.write(JSON.stringify({ ok: true, ...report }))
-  process.exitCode = strict && report.state === "problem" ? 1 : 0
+  // Under --strict (the release build job) a tarball that cannot even be installed is as much a
+  // failure as one whose entry points break; only `exempt` and `none` and a clean `ok` exit 0.
+  process.exitCode =
+    strict && (report.state === "problem" || report.state === "install-failed") ? 1 : 0
 }
 
 function run(command, args, options = {}) {

@@ -38,7 +38,9 @@ jobs:
         with:
           node-version: 24.x
 
-      - run: npm ci
+      # The same rule this standard imposes on every consumer's release: nothing from node_modules runs
+      # while the job holds a write token. `npm run version` below runs only this repository's own scripts.
+      - run: npm ci --ignore-scripts
 
       - name: Version Packages PR
         id: changesets

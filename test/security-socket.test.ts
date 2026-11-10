@@ -367,7 +367,7 @@ describe("securitySocket()", () => {
     }
   })
 
-  it("never reconciles the registry when Socket could not run (a warning locally, a failure in CI, never a pass)", async () => {
+  it("never reconciles the registry when Socket could not run (a warning without a key, a failure when Socket refused, never a pass)", async () => {
     writeRegistry([completeRecord()])
     vi.stubEnv("CI", "")
     vi.stubEnv("GITHUB_ACTIONS", "")
@@ -837,23 +837,33 @@ describe("interpretSocketRun()", () => {
     })
   })
 
-  it("warns, naming the steps, when no API key is available on a developer machine", () => {
+  it("degrades, naming the steps, when no API key is available on a developer machine", () => {
     const authFailure = scriptOutput({ ok: false, message: "Auth Error" })
     const result = interpretSocketRun(authFailure, LOCAL_ENV)
-    expect(result.kind).toBe("warn")
     expect(result).toEqual({
-      kind: "warn",
+      kind: "degraded",
+      code: "no-key",
       rationale: expect.stringContaining(
         "the Socket scan did not run, so its alerts were not checked",
       ),
     })
-    expect(result.kind === "warn" && result.rationale).toContain("socket login")
+    expect(result.kind === "degraded" && result.rationale).toContain("socket login")
   })
 
-  it("warns, as it does locally, when no API key is available in CI: the key is optional", () => {
+  it("degrades the same way in CI: the key is optional, and --strict decides what a missing one means", () => {
     const authFailure = scriptOutput({ ok: false, message: "Auth Error" })
-    expect(interpretSocketRun(authFailure, CI_ENV).kind).toBe("warn")
-    expect(interpretSocketRun(authFailure, LOCAL_ENV).kind).toBe("warn")
+    expect(interpretSocketRun(authFailure, CI_ENV).kind).toBe("degraded")
+    expect(interpretSocketRun(authFailure, LOCAL_ENV).kind).toBe("degraded")
+  })
+
+  it("the policy turns a missing key into a warn that names environment:SecuritySocket:no-key", async () => {
+    const result = await securitySocket().policy(
+      makeContext(scriptOutput({ ok: false, message: "Auth Error" })),
+    )
+    expect(result.outcome).toBe("warn")
+    expect(result.rationale).toContain("Not evaluated (no exception recorded")
+    expect(result.rationale).toContain("environment:SecuritySocket:no-key")
+    expect(result.rationale).toContain("the Socket scan did not run")
   })
 
   it("fails, not warns, when a key exists but Socket rejects it", () => {
@@ -891,7 +901,9 @@ describe("interpretSocketRun()", () => {
   it("gives local, cause-specific steps for each problem", () => {
     const fail = (body: unknown, env = LOCAL_ENV) => {
       const outcome = interpretSocketRun(scriptOutput(body), env)
-      return outcome.kind === "fail" || outcome.kind === "warn" ? outcome.rationale : ""
+      return outcome.kind === "fail" || outcome.kind === "warn" || outcome.kind === "degraded"
+        ? outcome.rationale
+        : ""
     }
     expect(fail({ ok: false, message: "Auth Error" })).toContain("you are not signed in to Socket")
     expect(fail({ ok: false, message: "Auth Error" })).toContain("1. Sign in: `socket login`")
@@ -902,8 +914,8 @@ describe("interpretSocketRun()", () => {
 
   it("gives CI-specific steps (secret setup) instead of local sign-in when running in CI", () => {
     const outcome = interpretSocketRun(scriptOutput({ ok: false, message: "Auth Error" }), CI_ENV)
-    const rationale = outcome.kind === "warn" ? outcome.rationale : ""
-    expect(outcome.kind).toBe("warn")
+    const rationale = outcome.kind === "degraded" ? outcome.rationale : ""
+    expect(outcome.kind).toBe("degraded")
     expect(rationale).toContain("the Socket scan did not run, so its alerts were not checked.")
     expect(rationale).toContain("no Socket API token is available to this CI run")
     expect(rationale).toContain("SOCKET_SECURITY_API_KEY")

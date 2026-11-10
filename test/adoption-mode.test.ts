@@ -11,6 +11,7 @@ import {
   newAdoption,
   promote,
   readAdoption,
+  unpromotedChecks,
   writeAdoption,
 } from "../scripts/adoption/mode.mjs"
 import { runContract } from "../scripts/contract-run.mjs"
@@ -297,12 +298,23 @@ describe("runContract in adoption mode", () => {
     )
     expect(process.exitCode).toBe(0)
   })
+  it("unpromotedChecks() names every check the package has not promoted, and none when it is not adopting", () => {
+    const results = {
+      Lint: { outcome: "fail" },
+      Docs: { outcome: "pass" },
+      AdoptionMode: { outcome: "warn" },
+    }
+    const active = { state: "active", enforce: ["Docs"] } as never
+    expect(unpromotedChecks(results, active)).toEqual(["Lint"])
+    expect(unpromotedChecks(results, { state: "absent", enforce: [] } as never)).toEqual([])
+    expect(unpromotedChecks(results, { state: "expired", enforce: [] } as never)).toEqual([])
+  })
   it("lists every advisory failure, separated by commas", async () => {
     write(valid({ enforce: [] }))
     const result = await go({ Lint: "fail", Docs: "fail" })
     expect(result.text).toContain("are advisory and do not fail the run (Lint, Docs). Fix one,")
   })
-  it("does not hold the package to the strict gate while it is adopting, and does once it is not", async () => {
+  it("holds a promoted check to the strict gate while adopting, and an unpromoted one only once it is not", async () => {
     const unexcepted = {
       outcome: "warn",
       rationale: "Not evaluated (no exception recorded; add x): y",
@@ -327,6 +339,9 @@ describe("runContract in adoption mode", () => {
     }
     write(valid({ enforce: [] }))
     expect((await strict()).passed).toBe(true)
+    // Promoted: it could not run and nothing records why, so strict fails the run even while adopting.
+    write(valid({ enforce: ["Chrome"] }))
+    expect((await strict()).passed).toBe(false)
     rmSync(path.join(dir, ADOPTION_FILE))
     expect((await strict()).passed).toBe(false)
     process.exitCode = 0

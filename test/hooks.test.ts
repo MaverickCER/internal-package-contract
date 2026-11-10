@@ -6,16 +6,18 @@ const hooks = path.resolve(import.meta.dirname, "../hooks")
 const read = (name: string): string => readFileSync(path.join(hooks, name), "utf8")
 
 describe("bundled git hooks", () => {
-  it("runs the entire contract before a commit, skipping nothing", () => {
+  it("runs the contract the change can reach before a commit, slow analyses included", () => {
     const hook = read("pre-commit")
     expect(hook).toMatch(/IPC_HOOK_FULL=1 exec "\$DIR\/pre-push"/)
     expect(hook).not.toMatch(/--skip|--checks/)
+    expect(hook).toContain("--scope affected")
   })
-  it("lets the shared runner omit the skip list only when asked for the full contract", () => {
+  it("lets the shared runner replace the skip list with the affected scope only when asked for the full contract", () => {
     const push = read("pre-push")
     expect(push).toContain('[ "${IPC_HOOK_FULL:-}" = "1" ]')
     expect(push.match(/--skip Coverage,Crap,Mutation/g)).toHaveLength(1)
     expect(push).toContain('SKIP="--skip Coverage,Crap,Mutation"')
+    expect(push).toContain('SKIP="--scope affected"')
   })
   it("skip only the slow analyses, which CI runs", () => {
     expect(read("pre-push")).toContain('SKIP="--skip Coverage,Crap,Mutation"')

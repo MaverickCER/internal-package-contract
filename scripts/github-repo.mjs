@@ -38,6 +38,15 @@ export function rulesetCoversBranch(ruleset, branch) {
 
 /** The status-check context every consumer's default branch must require before a merge. */
 export const REQUIRED_STATUS_CHECK_CONTEXT = "contract"
+/** The second required context: the aggregator job that stands for every other job in the workflow. */
+export const REQUIRED_AGGREGATE_CONTEXT = "required"
+/** GitHub Actions' app id: pinning it means a check of the same name from another app cannot satisfy the rule. */
+export const GITHUB_ACTIONS_APP_ID = 15368
+/** Every status check the default branch requires, each pinned to GitHub Actions. */
+export const REQUIRED_STATUS_CHECKS = [
+  { context: REQUIRED_STATUS_CHECK_CONTEXT, integration_id: GITHUB_ACTIONS_APP_ID },
+  { context: REQUIRED_AGGREGATE_CONTEXT, integration_id: GITHUB_ACTIONS_APP_ID },
+]
 
 /**
  * @typedef {{ type: string, parameters?: Record<string, unknown> }} RulesetRule
@@ -63,7 +72,7 @@ function defaultRuleFor(type) {
       parameters: {
         strict_required_status_checks_policy: true,
         do_not_enforce_on_create: false,
-        required_status_checks: [{ context: REQUIRED_STATUS_CHECK_CONTEXT }],
+        required_status_checks: REQUIRED_STATUS_CHECKS,
       },
     }
   }
@@ -104,17 +113,19 @@ export function mergeRequiredRules(existing) {
       const checks = Array.isArray(params.required_status_checks)
         ? params.required_status_checks
         : []
-      const hasContext = checks.some((c) => c?.context === REQUIRED_STATUS_CHECK_CONTEXT)
-      if (params.strict_required_status_checks_policy !== true || !hasContext) {
-        changes.push(`require the ${REQUIRED_STATUS_CHECK_CONTEXT} check (strict)`)
+      const missing = REQUIRED_STATUS_CHECKS.filter(
+        (required) => !checks.some((c) => c?.context === required.context),
+      )
+      if (params.strict_required_status_checks_policy !== true || missing.length > 0) {
+        changes.push(
+          `require the ${REQUIRED_STATUS_CHECKS.map((c) => c.context).join(" and ")} checks (strict)`,
+        )
         return {
           ...rule,
           parameters: {
             ...params,
             strict_required_status_checks_policy: true,
-            required_status_checks: hasContext
-              ? checks
-              : [...checks, { context: REQUIRED_STATUS_CHECK_CONTEXT }],
+            required_status_checks: [...checks, ...missing],
           },
         }
       }

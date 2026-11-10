@@ -17,13 +17,14 @@
  * - **Every other alert** (`supplyChainRisk` included, at any severity) is waivable only via a
  *   finding-specific record in `.repo-contract/exceptions/socket.json` (the shared exception-policy
  *   primitive from `repo-contract/helpers`) with **every field fully written** -- `justification`,
- *   `alternatives`, `remediation`, `method` and `exceptionType` -- and the only accepted
- *   `exceptionType` is `"required-for-package-to-exist"`: the flagged dependency or behavior must
- *   be the reason the package exists at all, and `justification` must say why.
+ *   `alternatives`, `remediation`, `method` and `exceptionType` -- where `exceptionType` says what is
+ *   actually true: `validated-false-positive`, `tooling-limitation`, `accepted-risk` or
+ *   `required-for-package-to-exist` (the flagged dependency or behavior is the reason the package
+ *   exists at all, and `justification` must say why).
  * - **The scan can never be skipped silently.** CLI not installed, token rejected, network down and
- *   rate limiting all FAIL, as does having no API key in CI. On a developer machine with no API key
- *   the check WARNS: the scan did not run and its alerts were not checked, with the steps to fix it
- *   (see `./socket-guidance.ts`). The steps differ between CI and a developer machine.
+ *   rate limiting all FAIL. With no API key, locally or in CI, the check WARNS: the scan did not run
+ *   and its alerts were not checked, with the steps to fix it (see `./socket-guidance.ts`). The
+ *   steps differ between CI and a developer machine.
  *
  * Example record (id is `socket:<package>@<version>:<alert name>`; alerts on the scored package
  * itself use the version `self`, so their records survive releases):
@@ -80,6 +81,7 @@ import type {
   ExceptionType,
   PersistedExceptionRegistry,
 } from "./exception-record.js"
+import { degraded } from "./environment-exceptions.js"
 import { abnormalTermination, packageRoot } from "./shared.js"
 import { socketGuidance } from "./socket-guidance.js"
 import type { SocketProblem } from "./socket-guidance.js"
@@ -392,6 +394,8 @@ const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]
 /** The outcome of running and interpreting the score script itself, before any registry work. */
 type SocketRunOutcome =
   | { readonly kind: "fail" | "pass" | "warn"; readonly rationale: string }
+  /** The scan could not run for a reason the environment explains (no API key): a degradation, recorded or not. */
+  | { readonly kind: "degraded"; readonly code: string; readonly rationale: string }
   | {
       readonly kind: "ok"
       readonly alerts: readonly NormalizedSocketAlert[]
@@ -414,8 +418,9 @@ function parseEnvelope(stdout: string): unknown {
 }
 
 /**
- * Interprets the score script's single JSON envelope -- every recognized "Socket could not run"
- * state fails with environment-specific steps (see `./socket-guidance.ts`); only a genuine,
+ * Interprets the score script's single JSON envelope -- a missing API key warns, every other
+ * recognized "Socket could not run" state fails, each with environment-specific steps (see
+ * `./socket-guidance.ts`); only a genuine,
  * well-formed alert list (or a package with nothing published to score) gets past this point.
  * @param result - the script's raw evidence.
  * @param env - the environment to inspect for CI (`process.env` in production).
@@ -445,10 +450,14 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
   if (!parsed["ok"]) {
     const problem = classifyProblem(result.stderr, parsed)
     if (problem === "not-authenticated") {
-      // No API key, here or in CI: say so, with the steps to get one, and let the rest of the contract run.
-      // The key is optional, so its absence is a warning; a key that is present and refused still fails.
+      // No API key, here or in CI: the scan did not run, so this is a degradation, not a finding. Locally
+      // it is a warning with the steps to get a key; in CI (--strict) it fails unless
+      // `.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key` -- `init`
+      // writes that record with a 90-day expiry, so a new package is green on day one and decides later.
+      // A key that is present and refused still fails outright.
       return {
-        kind: "warn",
+        kind: "degraded",
+        code: "no-key",
         rationale: `the Socket scan did not run, so its alerts were not checked.\n${socketGuidance(problem, env)}`,
       }
     }
@@ -573,6 +582,9 @@ export function securitySocket(): CheckDefinitionConfig {
     run: ["node", SCRIPT_PATH],
     policy: async ({ result }): Promise<PolicyResult> => {
       const run = interpretSocketRun(result, process.env)
+      if (run.kind === "degraded") {
+        return degraded({ check: "SecuritySocket", code: run.code, rationale: run.rationale })
+      }
       if (run.kind !== "ok") return { outcome: run.kind, rationale: run.rationale }
 
       const registryPath = path.join(process.cwd(), REGISTRY_RELATIVE_PATH)
