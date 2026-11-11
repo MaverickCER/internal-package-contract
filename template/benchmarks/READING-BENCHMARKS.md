@@ -172,7 +172,12 @@ not the speed of the machine: the measured class against the documented big-O (a
 fails, unless `.repo-contract/exceptions/benchmark-complexity.json` records a person's acceptance of it).
 The third is a ratio: the package's overhead _relative to its own baseline_, measured in the same run,
 growing past an allowance (50% for millisecond-scale work, 70% for microsecond-scale work, which is
-noisier) against both the last run on main and the last release. A function whose big-O could not be
+noisier). The baseline and the package are sampled interleaved, so the overhead is a per-pair
+difference with a 95% confidence interval; a growth that sits inside the intervals of the two runs
+compared is reported as a note, never a failure. What the gate judges is main measured on the same
+runner in the same job; the committed results of main and of the last release are judged only when
+they came from the same CPU model, since for fast work the ratio also depends on how much of a bare
+baseline is process start-up. A function whose big-O could not be
 determined (too few sizes, or no difference between them) is a **warning**: nothing is known to be wrong, but
 nothing is checked. Raw time against another run is shown, never judged.
 

@@ -137,6 +137,40 @@ export function computeDurationStats(
 export function percentile(sorted: readonly number[], p: number): number
 export function timed(ms: number): object
 export function snapshotMemory(): { rssBytes: number; heapUsedBytes: number }
+export interface PairedStats {
+  pairs: number
+  medianMs: number
+  meanMs: number
+  stdDevMs: number
+  ci95Ms: number | null
+}
+export function computePairedStats(differences: readonly number[]): PairedStats
+export interface PairedSide {
+  run: () => unknown
+  prepare?: () => unknown
+  release?: () => unknown
+  instruments?: {
+    now: () => number
+    cpuUsage: (previous?: { user: number; system: number }) => { user: number; system: number }
+    heapUsed: () => number
+    gc: (() => void) | undefined
+  }
+}
+export function samplePaired(
+  sides: { a: PairedSide; b: PairedSide },
+  options?: {
+    warmupIterations?: number
+    targetDurationMs?: number
+    minIterations?: number
+    maxIterations?: number
+    instruments?: PairedSide["instruments"]
+  },
+): Promise<{
+  a: { wallMs: number[]; cpuMs: number[]; heapDeltaBytes: number[] }
+  b: { wallMs: number[]; cpuMs: number[]; heapDeltaBytes: number[] }
+  differenceMs: number[]
+  configuration: Record<string, unknown>
+}>
 export function sample(
   iteration: () => unknown,
   options?: {

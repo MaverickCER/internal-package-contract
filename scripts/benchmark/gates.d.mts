@@ -34,7 +34,7 @@ export function complexityGainFindings(input: {
 }): Finding[]
 export function overheadFindings(
   current: object | undefined,
-  references: { name: string; results: object | null | undefined }[],
+  references: { name: string; results: object | null | undefined; sameMachine?: boolean }[],
   gates: Gates,
 ): Finding[]
 export function environmentNotes(
@@ -44,6 +44,7 @@ export function environmentNotes(
 export function evaluateGates(input: {
   previous?: object | null
   release?: object | null
+  sameMachineMain?: object | null
   current?: object
   gates?: object
   exceptions?: { suite: string; records: readonly Record<string, unknown>[]; now: Date }

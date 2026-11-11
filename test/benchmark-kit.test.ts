@@ -1375,8 +1375,9 @@ describe("per-function ladders and sampling", () => {
       },
       root: process.cwd(),
     })
+    // The two sides are sampled as interleaved pairs, so a side's override sets the pair count for both.
     expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.iterations).toBe(2)
-    expect(results.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(4)
+    expect(results.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(2)
   })
   it("falls back to the nearest measured size for the typical workload when there is no end-to-end data", () => {
     const suite = defineSuite(

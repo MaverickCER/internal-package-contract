@@ -521,10 +521,11 @@ describe("runSuite() which groups it measures", () => {
       root: process.cwd(),
       onProgress: (m: string) => messages.push(m),
     })
+    // The pair is measured tier by tier, interleaved, so both sides are announced at each size.
     expect(messages).toEqual([
       "end-to-end:baseline n=20",
-      "end-to-end:baseline n=40",
       "end-to-end:with-package n=20",
+      "end-to-end:baseline n=40",
       "end-to-end:with-package n=40",
       "fn:sum n=20",
       "fn:sum n=40",
@@ -601,7 +602,58 @@ describe("runSuite() the end-to-end overhead", () => {
       withPackageMs: 25,
       overheadMs: 15,
       overheadPercent: 150,
+      pairs: 1,
+      overheadCi95Ms: null,
+      overheadCi95Percent: null,
     })
+    // The with-package tier carries the paired statistics the overhead was taken from.
+    expect(results.results["end-to-end:with-package"].tiers.n20.paired).toEqual({
+      pairs: 1,
+      medianMs: 15,
+      meanMs: 15,
+      stdDevMs: 0,
+      ci95Ms: null,
+    })
+    expect(results.results["end-to-end:baseline"].tiers.n20.paired).toBeUndefined()
+    expect(results.results["end-to-end:with-package"].tiers.n20.configuration.interleaved).toBe(
+      "abba",
+    )
+  })
+
+  it("puts a 95% interval on the overhead once there are enough pairs, in ms and in points of the baseline", async () => {
+    // Four pairs whose differences are 15, 15, 15, 15: a zero-width interval; the analysis row says so.
+    const results = await runSuite(
+      suiteOf({
+        tiers: [20],
+        endToEnd: {
+          purpose: "x",
+          baseline: { run: () => 1, sampling: { ...SAMPLING(10, { maxIterations: 4 }) } },
+          withPackage: {
+            run: () => 2,
+            sampling: { ...SAMPLING(25, { minIterations: 4, maxIterations: 4 }) },
+          },
+        },
+      }),
+      { only: ["end-to-end"], sampling: {}, root: process.cwd() },
+    )
+    expect(results.analysis.endToEnd[0]).toMatchObject({
+      pairs: 4,
+      overheadMs: 15,
+      overheadCi95Ms: 0,
+      overheadCi95Percent: 0,
+    })
+    expect(results.analysis.cost.typical.overheadCi95Percent).toBe(0)
+  })
+
+  it("takes a tier list from the options, ahead of quick and the suite's own", async () => {
+    const results = await runSuite(suiteOf({ tiers: [20, 40] }), {
+      only: ["end-to-end"],
+      tiers: [40],
+      sampling: SAMPLING(10),
+      root: process.cwd(),
+    })
+    expect(Object.keys(results.results["end-to-end:baseline"].tiers)).toEqual(["n40"])
+    expect(results.metadata.tiers).toEqual([40])
   })
 
   it("leaves out sizes where the package adds nothing, but still lists the group", async () => {
@@ -984,6 +1036,9 @@ describe("analyze() end to end", () => {
       withPackageMs: 25,
       overheadMs: 15,
       overheadPercent: 150,
+      overheadCi95Ms: null,
+      overheadCi95Percent: null,
+      pairs: null,
       overheadCpuMs: 3,
       overheadHeapBytes: 300,
       cost: estimateCost({ wallMs: 15, cpuMs: 3, heapBytes: 300 }, rates),

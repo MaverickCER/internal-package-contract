@@ -23,13 +23,14 @@
 //       // with the others held at their base values (`held`). Its growth class is that variable's alone.
 //       tiers: { "n<size>": { id, status: "completed"|"failed", inputs: { <variable>: size }, held?: { <other variable>: value },
 //                              durationMs: { minMs, medianMs, p95Ms, maxMs, stdDevMs, iterations, warmupIterations },
-//                              cpuMs: <same stats>, heapDeltaBytes, opsPerSecond, configuration }
+//                              cpuMs: <same stats>, heapDeltaBytes, opsPerSecond, configuration,
+//                              paired?: { pairs, medianMs, meanMs, stdDevMs, ci95Ms } }   // on the with-package tiers: the interleaved per-pair difference (the overhead) and its 95% interval
 //                         | { id, status: "failed", inputs, error: { name, message } } }
 //     }
 //   },
 //   analysis: {
 //     complexity: { "<group>": { class, exponent, rSquared, reason?, variable, discarded?, size?, unmeasured?, minRSquared?, notation, points, expected?, expectedNotation?, agreement? } },
-//     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCpuMs, overheadHeapBytes, cost } ],
+//     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCi95Ms, overheadCi95Percent, pairs, overheadCpuMs, overheadHeapBytes, cost } ],
 //     contribution: [ { id, group, description, rows: [ { n, calls, estimatedMs, exclusiveMs, shareOfTotal } ] } ],
 //     cost: { typicalN, typical, largest },
 //     coverage: { benchmarks: [ { id, covers: { "<function>": { "<parameter or key>": "<accounting>" } } } ], notBenchmarked: { "<function>": "<why>" } }

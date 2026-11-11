@@ -85,8 +85,20 @@ export function resolveGates(overrides) {
 function typicalOverhead(results) {
   const typical = results?.analysis?.cost?.typical
   if (!typical || typeof typical.baselineMs !== "number") return undefined
-  return { n: typical.n, baselineMs: typical.baselineMs, overheadPercent: typical.overheadPercent }
+  return {
+    n: typical.n,
+    baselineMs: typical.baselineMs,
+    overheadPercent: typical.overheadPercent,
+    // The half-width of the overhead's 95% interval, in percentage points; absent before paired sampling.
+    ci95Percent:
+      typeof typical.overheadCi95Percent === "number" ? typical.overheadCi95Percent : null,
+    cpuModel: results?.metadata?.environment?.cpuModel,
+  }
 }
+
+const points = (value) => `${value.toFixed(1)} points`
+const interval = (figure) =>
+  figure.ci95Percent === null ? "no interval" : `±${points(figure.ci95Percent)}`
 
 /**
  * @param {object | undefined} current - this run's results.json.
@@ -157,18 +169,41 @@ export function overheadFindings(current, references, gates) {
   const allowed =
     now.baselineMs < limits.microscaleBelowMs ? limits.microsecondScale : limits.millisecondScale
   const findings = []
-  for (const { name, results } of references) {
+  for (const { name, results, sameMachine = false } of references) {
     const then = typicalOverhead(results)
     if (!then || !(then.overheadPercent > 0)) continue
     if (then.baselineMs < gates.noiseFloorBaselineMs) continue
-    const increase = (now.overheadPercent / then.overheadPercent - 1) * 100
-    if (increase > allowed) {
+    if (typeof now.overheadPercent !== "number") continue
+    // The ratio is a property of one run, but for work this fast it is also a property of the
+    // machine (how much of the baseline is process start-up versus the package's own work), so two
+    // CPU models are compared only when both were measured on this runner.
+    if (!sameMachine && now.cpuModel && then.cpuModel && now.cpuModel !== then.cpuModel) {
       findings.push({
-        level: "fail",
-        kind: "normalized-overhead",
-        message: `Overhead relative to the baseline grew from ${then.overheadPercent.toFixed(1)}% (${name}) to ${now.overheadPercent.toFixed(1)}% -- up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast. Both figures are same-run ratios, so this is not a slower machine.`,
+        level: "note",
+        kind: "normalized-overhead-unjudged",
+        message: `Overhead relative to the baseline is ${now.overheadPercent.toFixed(1)}% here and was ${then.overheadPercent.toFixed(1)}% (${name}), but that run was on ${then.cpuModel} and this one on ${now.cpuModel}: the ratio is not judged across machines.`,
       })
+      continue
     }
+    const increase = (now.overheadPercent / then.overheadPercent - 1) * 100
+    if (increase <= allowed) continue
+    const grew = `Overhead relative to the baseline grew from ${then.overheadPercent.toFixed(1)}% (${name}) to ${now.overheadPercent.toFixed(1)}%`
+    const delta = now.overheadPercent - then.overheadPercent
+    const width = (now.ci95Percent ?? 0) + (then.ci95Percent ?? 0)
+    const intervals = `the measurements' 95% intervals (${interval(now)} here, ${interval(then)} then)`
+    if (delta <= width) {
+      findings.push({
+        level: "note",
+        kind: "normalized-overhead-within-interval",
+        message: `${grew} -- up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, but the change (${points(delta)}) is inside ${intervals}: not a regression this run can see.`,
+      })
+      continue
+    }
+    findings.push({
+      level: "fail",
+      kind: "normalized-overhead",
+      message: `${grew} -- up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, and the change (${points(delta)}) is outside ${intervals}${sameMachine ? "; both were measured on this runner in this job" : ""}.`,
+    })
   }
   return findings
 }
@@ -208,7 +243,14 @@ export function environmentNotes(previous, current) {
  * @param {{ previous?: object | null, release?: object | null, current?: object, gates?: object, exceptions?: { suite: string, records: readonly Record<string, unknown>[], now: Date } }} input
  * @returns {Finding[]}
  */
-export function evaluateGates({ previous, release, current, gates: overrides, exceptions }) {
+export function evaluateGates({
+  previous,
+  release,
+  sameMachineMain,
+  current,
+  gates: overrides,
+  exceptions,
+}) {
   const gates = resolveGates(overrides)
   return [
     ...(gates.complexity ? complexityFindings(current) : []),
@@ -218,6 +260,9 @@ export function evaluateGates({ previous, release, current, gates: overrides, ex
       [
         { name: "last run on main", results: previous },
         { name: "last release", results: release },
+        ...(sameMachineMain
+          ? [{ name: "main measured on this runner", results: sameMachineMain, sameMachine: true }]
+          : []),
       ],
       gates,
     ),

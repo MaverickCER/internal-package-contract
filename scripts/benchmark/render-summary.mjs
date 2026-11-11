@@ -10,7 +10,8 @@
 // What may FAIL a run is deliberately narrow (see gates.mjs): only properties of one run, or ratios
 // between quantities measured in the same run -- a function whose measured growth class differs from
 // its documented one, and the package's overhead as a percentage of the bare baseline growing past a
-// threshold against the last run on main and the last release. A function whose big-O cannot be
+// threshold against main measured on this runner (and the committed results of main and the last
+// release when they came from the same CPU model), beyond the runs' confidence intervals. A function whose big-O cannot be
 // determined is a warning. Raw millisecond deltas between two runs on different machines are not
 // shown. With `--gate` the script exits 1 when a gate fails;
 // without it, it exits 0 and only renders.
@@ -26,7 +27,7 @@
 //   node render-summary.mjs \
 //     --budgets <path/to/budgets.mjs> \
 //     --marker '<!-- my-benchmark-summary -->' \
-//     --example 'Runtime (`benchmark/performance-runtime`)|<prev-results.json>|<cur-results.json>|<history.json>|<release-results.json>' \
+//     --example 'Runtime (`benchmark/performance-runtime`)|<prev-results.json>|<cur-results.json>|<history.json>|<release-results.json>|<main-on-this-runner-results.json>' \
 //     [--example 'Build-time (...)|...|...|...|...' ...] [--gate]
 //
 // Each --example's fields are pipe-separated: label, previous results.json
@@ -72,10 +73,10 @@ export function parseArgs(argv) {
 }
 
 function parseExample(spec) {
-  const [label, prevPath, curPath, historyPath, releasePath] = spec.split("|")
+  const [label, prevPath, curPath, historyPath, releasePath, sameMachinePath] = spec.split("|")
   if (!label || !curPath) {
     throw new Error(
-      `--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath]" (prev/history/release may be empty); got: ${spec}`,
+      `--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath[|mainOnThisRunnerResultsPath]]" (prev/history/release/main-on-this-runner may be empty); got: ${spec}`,
     )
   }
   return {
@@ -84,6 +85,7 @@ function parseExample(spec) {
     curPath,
     historyPath: historyPath || undefined,
     releasePath: releasePath || undefined,
+    sameMachinePath: sameMachinePath || undefined,
   }
 }
 
@@ -165,10 +167,12 @@ export async function summarize({
   const records = tryReadJson(exceptionsPath)?.exceptions ?? []
 
   const perExample = examples.map((spec) => {
-    const { label, prevPath, curPath, historyPath, releasePath } = parseExample(spec)
+    const { label, prevPath, curPath, historyPath, releasePath, sameMachinePath } =
+      parseExample(spec)
     const previous = tryReadJson(prevPath)
     const current = tryReadJson(curPath)
     const release = tryReadJson(releasePath)
+    const sameMachineMain = tryReadJson(sameMachinePath)
     return {
       shifts: complexityShifts(label, current ?? {}, historyPath),
       section: renderExample(label, previous, current),
@@ -176,6 +180,7 @@ export async function summarize({
       findings: evaluateGates({
         previous,
         release,
+        sameMachineMain,
         current,
         gates,
         exceptions: { suite: path.basename(path.dirname(curPath)), records, now },
@@ -220,7 +225,7 @@ export async function summarize({
         ? `## ⚠️ Gates passed, ${String(warnings.length)} warning${warnings.length === 1 ? "" : "s"}`
         : "## ✅ Gates passed",
     "",
-    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold against the last run on main and the last release, and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.",
+    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold -- beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model -- and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.",
     "",
     ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
     ...warnings.map((finding) => `- ⚠️ **${finding.label}** — ${finding.message}`),

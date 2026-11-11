@@ -362,7 +362,7 @@ describe("summarize -- exact output", () => {
 
   it("rejects an example missing its label or its current results", async () => {
     await expect(summarize({ marker: "m", examples: ["|a|b|c"] })).rejects.toThrow(
-      '--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath]"',
+      '--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath[|mainOnThisRunnerResultsPath]]"',
     )
     await expect(summarize({ marker: "m", examples: ["label|a||c"] })).rejects.toThrow(
       "--example must be",

@@ -8,7 +8,15 @@ export {
   parseGroup,
 } from "./define.mjs"
 export { QUICK_TIERS, STANDARD_TIERS, tierName, validateTiers } from "./tiers.mjs"
-export { computeDurationStats, percentile, sample, snapshotMemory, timed } from "./measure.mjs"
+export {
+  computeDurationStats,
+  computePairedStats,
+  percentile,
+  sample,
+  samplePaired,
+  snapshotMemory,
+  timed,
+} from "./measure.mjs"
 export { DEFAULT_RATES, estimateCost, formatUsd } from "./cost-model.mjs"
 export { RESULTS_SCHEMA_VERSION, agreement, analyze, runSuite } from "./run.mjs"
 export { formatBytes, formatMs, renderReport } from "./report.mjs"

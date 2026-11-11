@@ -516,8 +516,13 @@ ratios between quantities measured in the same run, which survive a change of ma
    fitted on the largest sizes, with an R² floor, so a fixed per-call cost does not read as
    sub-linear growth);
 2. the package's **overhead relative to its own bare baseline** growing past an allowance (50% for
-   millisecond-scale work, 70% for microsecond-scale work) against the last run on `main` _and_ the last
-   release. A package tunes these with a `GATES` export in its `benchmarks/budgets.mjs`.
+   millisecond-scale work, 70% for microsecond-scale work). The baseline and the package are sampled
+   interleaved (A B, B A, ...), so the overhead is a per-pair difference with a 95% confidence
+   interval, and a growth inside the intervals of the two runs compared is a note, not a failure.
+   The reference that is judged is `main` measured on the same runner in the same job (the typical
+   size only); the committed results of the last run on `main` and of the last release are judged
+   only when they were measured on the same CPU model, and reported otherwise. A package tunes the
+   allowance with a `GATES` export in its `benchmarks/budgets.mjs`.
 
 A function whose big-O **cannot be determined** (too few usable sizes, no difference between them, or timings that follow no one growth rate) is a
 warning, and the warning says which and why in the pull-request comment and in the `BenchmarkComplexity` check, never a failure: nothing is known to

@@ -118,7 +118,7 @@ describe("overheadFindings()", () => {
     expect(finding?.message).toContain(
       "grew from 100.0% (last run on main) to 160.0% -- up 60%, over the 50% allowed",
     )
-    expect(finding?.message).toContain("not a slower machine")
+    expect(finding?.message).toContain("outside the measurements' 95% intervals")
   })
 
   it("allows microsecond-scale work 70%, because it swings 30-40% with no change at all", () => {
