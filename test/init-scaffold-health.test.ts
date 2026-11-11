@@ -47,7 +47,9 @@ beforeAll(() => {
   // A throwaway repository for the test, so its own hooks (the full contract) are not what is under test.
   git("add", "-A")
   git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "chore: scaffold")
-}, 180_000)
+  // `init` installs the scaffold's dependencies. That took 133 s on one Windows runner and 187 s on
+  // another, slower one (2026-11-10), so the limit leaves room for a runner three times slower.
+}, 600_000)
 
 /** Runs git in the scaffolded package, as a throwaway committer. */
 function git(...args: string[]): void {
