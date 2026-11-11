@@ -227,12 +227,12 @@ describe("measure", () => {
       warmupIterations: 0,
       minIterations: 1,
       maxIterations: 1000,
-      targetDurationMs: 30,
+      targetDurationMs: 300,
       minSampleMs: 0,
     })
     // More than `minIterations` (1) proves sampling continued towards the target; the exact count
-    // depends on the platform's timer granularity (about 15 ms on Windows, so as few as two samples
-    // reach a 30 ms target), so it is not pinned any tighter.
+    // depends on the platform's timer granularity and on load (a 2 ms timer can take tens of
+    // milliseconds beside a full gate), so the target is generous and the count is not pinned tighter.
     expect(result.wallMs.length).toBeGreaterThan(1)
     expect(result.wallMs.length).toBeLessThan(1000)
   })
