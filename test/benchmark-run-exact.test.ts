@@ -7,8 +7,10 @@ import {
   QUICK_TIERS,
   agreement,
   analyze,
+  computePairedStats,
   estimateCost,
   runSuite,
+  timed,
 } from "../scripts/benchmark/kit/index.mjs"
 import { generatedBy } from "../scripts/benchmark/kit/run.mjs"
 
@@ -556,6 +558,253 @@ describe("runSuite() which groups it measures", () => {
     expect(full.results["fn:sum"].tiers.n20.configuration).toMatchObject({
       targetDurationMs: 300,
       maxIterations: 60,
+    })
+  })
+})
+
+describe("runSuite() the end-to-end pair's sides", () => {
+  const pairSuite = (baseline: Loose, withPackage: Loose, tiers: number[] = [20]) =>
+    suiteOf({
+      tiers,
+      endToEnd: { purpose: "x", baseline, withPackage },
+    })
+
+  it("builds a fresh side's state before every sample and tears it down after, warmups included", async () => {
+    const events: string[] = []
+    const results = await runSuite(
+      pairSuite(
+        {
+          fresh: true,
+          setup: (n: number) => {
+            events.push(`setup ${String(n)}`)
+            return { n }
+          },
+          run: (ctx: { n: number }) => ctx.n,
+          teardown: () => events.push("teardown"),
+          sampling: { ...SAMPLING(10) },
+        },
+        // The pair's counts come from the with-package side (its sampling is applied last).
+        {
+          run: () => 2,
+          sampling: {
+            ...SAMPLING(25, { warmupIterations: 1, minIterations: 2, maxIterations: 2 }),
+          },
+        },
+      ),
+      { only: ["end-to-end"], sampling: {}, root: process.cwd() },
+    )
+    // One warmup pair plus two counted pairs: three samples of the fresh side, each built and torn down.
+    expect(events).toEqual(["setup 20", "teardown", "setup 20", "teardown", "setup 20", "teardown"])
+    expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.iterations).toBe(2)
+  })
+
+  it("builds a non-fresh side once per tier and tears it down after the tier, whatever truthy value `fresh` has", async () => {
+    const events: string[] = []
+    await runSuite(
+      pairSuite(
+        { run: () => 1, sampling: { ...SAMPLING(10) } },
+        {
+          // Only `true` means fresh: any other value is the ordinary once-per-tier life cycle.
+          fresh: 1,
+          setup: () => events.push("setup"),
+          run: () => 2,
+          teardown: () => events.push("teardown"),
+          sampling: {
+            ...SAMPLING(25, { warmupIterations: 1, minIterations: 2, maxIterations: 2 }),
+          },
+        },
+        [20, 40],
+      ),
+      { only: ["end-to-end"], sampling: {}, root: process.cwd() },
+    )
+    expect(events).toEqual(["setup", "teardown", "setup", "teardown"])
+  })
+
+  it("records both sides of a tier as failed, with the error's name and message, when one side's setup throws", async () => {
+    const results = await runSuite(
+      pairSuite(
+        { run: () => 1, sampling: { ...SAMPLING(10) } },
+        {
+          setup: (n: number) => {
+            if (n === 40) throw new RangeError("no state at 40")
+            return undefined
+          },
+          run: () => 2,
+          sampling: { ...SAMPLING(25) },
+        },
+        [20, 40],
+      ),
+      { only: ["end-to-end"], sampling: {}, root: process.cwd() },
+    )
+    expect(results.results["end-to-end:baseline"].tiers.n20.status).toBe("completed")
+    expect(results.results["end-to-end:baseline"].tiers.n40).toEqual({
+      id: "end-to-end:baseline@n40",
+      status: "failed",
+      inputs: { item: 40 },
+      error: { name: "RangeError", message: "no state at 40" },
+    })
+    expect(results.results["end-to-end:with-package"].tiers.n40).toEqual({
+      id: "end-to-end:with-package@n40",
+      status: "failed",
+      inputs: { item: 40 },
+      error: { name: "RangeError", message: "no state at 40" },
+    })
+    // A thrown non-error is recorded by its text, under the generic name.
+    const thrown = await runSuite(
+      pairSuite(
+        { run: () => 1, sampling: { ...SAMPLING(10) } },
+        {
+          setup: () => {
+            throw "plain string"
+          },
+          run: () => 2,
+          sampling: { ...SAMPLING(25) },
+        },
+      ),
+      { only: ["end-to-end"], sampling: {}, root: process.cwd() },
+    )
+    expect(thrown.results["end-to-end:with-package"].tiers.n20.error).toEqual({
+      name: "Error",
+      message: "plain string",
+    })
+  })
+
+  it("lets the with-package side's sampling override the baseline's, and both override the run's", async () => {
+    const results = await runSuite(
+      pairSuite(
+        { run: () => 1, sampling: { ...SAMPLING(10, { minIterations: 2, maxIterations: 2 }) } },
+        { run: () => 2, sampling: { ...SAMPLING(25, { minIterations: 3, maxIterations: 3 }) } },
+      ),
+      {
+        only: ["end-to-end"],
+        sampling: { minIterations: 7, maxIterations: 7 },
+        root: process.cwd(),
+      },
+    )
+    expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.iterations).toBe(3)
+    expect(results.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(3)
+  })
+})
+
+describe("runSuite() the end-to-end pair's tiers", () => {
+  const pair = (baseline: Loose, withPackage: Loose, tiers: number[], sampling: Loose = {}) =>
+    runSuite(suiteOf({ tiers, endToEnd: { purpose: "x", baseline, withPackage } }), {
+      only: ["end-to-end"],
+      sampling,
+      root: process.cwd(),
+    })
+
+  it("takes at least ten pairs at the suite's typical size and the asked minimum elsewhere", async () => {
+    const results = await pair(
+      { run: () => 1, sampling: { instruments: instruments(10) } },
+      { run: () => 2, sampling: { instruments: instruments(25) } },
+      [20, 40],
+      {
+        warmupIterations: 0,
+        minIterations: 1,
+        maxIterations: 60,
+        targetDurationMs: 0,
+        minSampleMs: 0,
+      },
+    )
+    expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.iterations).toBe(10)
+    expect(results.results["end-to-end:baseline"].tiers.n40.durationMs.iterations).toBe(1)
+    // An asked minimum above ten is kept.
+    const more = await pair(
+      { run: () => 1, sampling: { instruments: instruments(10) } },
+      { run: () => 2, sampling: { instruments: instruments(25) } },
+      [20],
+      {
+        warmupIterations: 0,
+        minIterations: 12,
+        maxIterations: 60,
+        targetDurationMs: 0,
+        minSampleMs: 0,
+      },
+    )
+    expect(more.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(12)
+  })
+
+  it("names each tier entry by its group and size, records the inputs, and derives ops per second", async () => {
+    const results = await pair(
+      { run: () => 1, sampling: { ...SAMPLING(10) } },
+      { run: () => 2, sampling: { ...SAMPLING(25) } },
+      [20],
+    )
+    const baseline = results.results["end-to-end:baseline"].tiers.n20
+    const withPackage = results.results["end-to-end:with-package"].tiers.n20
+    expect(baseline).toMatchObject({ id: "end-to-end:baseline@n20", inputs: { item: 20 } })
+    expect(withPackage).toMatchObject({ id: "end-to-end:with-package@n20", inputs: { item: 20 } })
+    expect(baseline.opsPerSecond).toBe(100)
+    expect(withPackage.opsPerSecond).toBe(40)
+    // A side too fast to time has no throughput, not an infinite one.
+    const instant = await pair(
+      { run: () => 1, sampling: { ...SAMPLING(0) } },
+      { run: () => 2, sampling: { ...SAMPLING(0) } },
+      [20],
+    )
+    expect(instant.results["end-to-end:baseline"].tiers.n20.opsPerSecond).toBeNull()
+  })
+
+  it("times a fresh side by what its run reports, and needs no teardown", async () => {
+    const results = await pair(
+      { fresh: true, setup: () => ({}), run: () => timed(7), sampling: { ...SAMPLING(10) } },
+      { run: () => 2, sampling: { ...SAMPLING(25) } },
+      [20],
+    )
+    expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.medianMs).toBe(7)
+    expect(results.results["end-to-end:with-package"].tiers.n20.paired.medianMs).toBe(18)
+  })
+
+  it("records a thrown null as a plain error", async () => {
+    const results = await pair(
+      { run: () => 1, sampling: { ...SAMPLING(10) } },
+      {
+        setup: () => {
+          throw null
+        },
+        run: () => 2,
+        sampling: { ...SAMPLING(25) },
+      },
+      [20],
+    )
+    expect(results.results["end-to-end:with-package"].tiers.n20.error).toEqual({
+      name: "Error",
+      message: "null",
+    })
+  })
+
+  it("gives the overhead interval in points of the baseline, and none when the baseline is zero", async () => {
+    const differences = [10, 14, 18, 22]
+    const sequence = [...differences]
+    const results = await pair(
+      { run: () => 1, sampling: { ...SAMPLING(10) } },
+      {
+        run: () => timed(10 + (sequence.shift() ?? 0)),
+        sampling: { ...SAMPLING(10, { minIterations: 4, maxIterations: 4 }) },
+      },
+      [20],
+    )
+    const stats = computePairedStats(differences)
+    expect(results.analysis.endToEnd[0]).toMatchObject({
+      overheadMs: stats.medianMs,
+      overheadCi95Ms: stats.ci95Ms,
+      overheadCi95Percent: ((stats.ci95Ms ?? 0) / 10) * 100,
+      pairs: 4,
+    })
+    const zero = [...differences]
+    const noBaseline = await pair(
+      { run: () => 1, sampling: { ...SAMPLING(0) } },
+      {
+        run: () => timed(zero.shift() ?? 0),
+        sampling: { ...SAMPLING(0, { minIterations: 4, maxIterations: 4 }) },
+      },
+      [20],
+    )
+    expect(noBaseline.analysis.endToEnd[0]).toMatchObject({
+      overheadCi95Ms: stats.ci95Ms,
+      overheadCi95Percent: null,
+      overheadPercent: null,
     })
   })
 })

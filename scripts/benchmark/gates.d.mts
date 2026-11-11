@@ -44,7 +44,7 @@ export function environmentNotes(
 export function evaluateGates(input: {
   previous?: object | null
   release?: object | null
-  sameMachineMain?: object | null
+  sameMachineMain?: object | null | undefined
   current?: object
   gates?: object
   exceptions?: { suite: string; records: readonly Record<string, unknown>[]; now: Date }

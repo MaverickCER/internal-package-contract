@@ -92,6 +92,7 @@ function typicalOverhead(results) {
     // The half-width of the overhead's 95% interval, in percentage points; absent before paired sampling.
     ci95Percent:
       typeof typical.overheadCi95Percent === "number" ? typical.overheadCi95Percent : null,
+    // Stryker disable next-line OptionalChaining: equivalent -- `results` is an object here, the guard above returned on anything else.
     cpuModel: results?.metadata?.environment?.cpuModel,
   }
 }
@@ -171,7 +172,18 @@ export function overheadFindings(current, references, gates) {
   const findings = []
   for (const { name, results, sameMachine = false } of references) {
     const then = typicalOverhead(results)
-    if (!then || !(then.overheadPercent > 0)) continue
+    if (!then || !(then.overheadPercent > 0)) {
+      // The same-runner reference is the one the gate judges: its absence is worth a line, so a
+      // maintainer knows the ratio was compared only with committed results, if with anything.
+      if (sameMachine) {
+        findings.push({
+          level: "note",
+          kind: "normalized-overhead-unjudged",
+          message: `main could not be measured on this runner for this suite (${name}), so the overhead ratio is judged only against committed results from this CPU model.`,
+        })
+      }
+      continue
+    }
     if (then.baselineMs < gates.noiseFloorBaselineMs) continue
     if (typeof now.overheadPercent !== "number") continue
     // The ratio is a property of one run, but for work this fast it is also a property of the
@@ -252,20 +264,21 @@ export function evaluateGates({
   exceptions,
 }) {
   const gates = resolveGates(overrides)
+  const references = [
+    { name: "last run on main", results: previous },
+    { name: "last release", results: release },
+  ]
+  if (sameMachineMain) {
+    references.push({
+      name: "main measured on this runner",
+      results: sameMachineMain,
+      sameMachine: true,
+    })
+  }
   return [
     ...(gates.complexity ? complexityFindings(current) : []),
     ...undeterminedFindings(current),
-    ...overheadFindings(
-      current,
-      [
-        { name: "last run on main", results: previous },
-        { name: "last release", results: release },
-        ...(sameMachineMain
-          ? [{ name: "main measured on this runner", results: sameMachineMain, sameMachine: true }]
-          : []),
-      ],
-      gates,
-    ),
+    ...overheadFindings(current, references, gates),
     ...(exceptions === undefined
       ? []
       : complexityGainFindings({ ...exceptions, release, current })),

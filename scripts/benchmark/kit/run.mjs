@@ -171,9 +171,9 @@ async function measureEndToEndPair({ tiers, unit, suite, sampling, onProgress })
   }
 }
 
-/** @param {Record<string, number> | undefined} held @returns {{ held?: Record<string, number> }} the field, only when another variable was held. */
+/** @param {Record<string, number>} held @returns {{ held?: Record<string, number> }} the field, only when another variable was held. */
 function heldField(held) {
-  return held !== undefined && Object.keys(held).length > 0 ? { held } : {}
+  return Object.keys(held).length > 0 ? { held } : {}
 }
 
 /**
@@ -194,10 +194,9 @@ export function valuesAt({ suiteUnit, variable, primaryValue, benchmark }, n) {
  * @param {object | undefined} context - see {@link valuesAt}; `undefined` for a group with one variable.
  * @param {string} variable - the variable being swept.
  * @param {number} n
- * @returns {Record<string, number> | undefined} the values of every other variable at this size.
+ * @returns {Record<string, number>} the values of every other variable at this size.
  */
 function heldAt(context, variable, n) {
-  if (context === undefined) return undefined
   return Object.fromEntries(
     Object.entries(valuesAt(context, n)).filter(([name]) => name !== variable),
   )
@@ -225,13 +224,10 @@ async function measureGroup({
         group,
         setup: benchmark.setup
           ? (size) =>
-              benchmark.setup(
-                size,
-                variant?.options,
-                context === undefined
-                  ? undefined
-                  : { variable: unit, values: valuesAt(context, size) },
-              )
+              benchmark.setup(size, variant?.options, {
+                variable: unit,
+                values: valuesAt(context, size),
+              })
           : undefined,
         run: (ctx) => benchmark.run(ctx),
         teardown: benchmark.teardown,

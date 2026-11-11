@@ -588,3 +588,64 @@ describe("samplePaired()", () => {
     expect(raw.configuration["gcEnabled"]).toBe(true)
   })
 })
+
+describe("samplePaired() details the gate relies on", () => {
+  const side = (step: number, log: string[], name: string) => ({
+    run: () => {
+      log.push(name)
+      return name
+    },
+    instruments: instruments(step),
+  })
+
+  it("takes as many warmup pairs as asked, defaulting to one, and keeps the last result reachable", async () => {
+    const log: string[] = []
+    await samplePaired(
+      { a: side(1, log, "a"), b: side(1, log, "b") },
+      { warmupIterations: 2, minIterations: 1, maxIterations: 1, instruments: instruments(1) },
+    )
+    expect(log).toEqual(["a", "b", "a", "b", "a", "b"])
+    const defaulted: string[] = []
+    await samplePaired(
+      { a: side(1, defaulted, "a"), b: side(1, defaulted, "b") },
+      { minIterations: 1, maxIterations: 1, instruments: instruments(1) },
+    )
+    expect(defaulted).toEqual(["a", "b", "a", "b"])
+    expect((globalThis as Record<string, unknown>)["__benchmarkSink"]).toBe("b")
+  })
+
+  it("records each side's heap delta and tolerates a side that returns null", async () => {
+    const raw = await samplePaired(
+      {
+        a: { run: () => null, instruments: instruments(2) },
+        b: { run: () => null, instruments: instruments(3) },
+      },
+      { warmupIterations: 0, minIterations: 2, maxIterations: 2, instruments: instruments(1) },
+    )
+    // The test instruments' heap gauge alternates 1000 and 1512 per reading: a delta of 512 per sample.
+    expect(raw.a.heapDeltaBytes).toEqual([512, 512])
+    expect(raw.b.heapDeltaBytes).toEqual([512, 512])
+    expect(raw.a.wallMs).toEqual([2, 2])
+    expect(raw.b.wallMs).toEqual([3, 3])
+    expect(raw.differenceMs).toEqual([1, 1])
+  })
+
+  it("spends the budget as elapsed time from the first pair, not as the clock's absolute reading", async () => {
+    // The shared clock reads 100, 200, 300, ... : the budget (250 ms) is met after the fourth pair's
+    // check reads 400 (elapsed 300), not when the clock itself first passes 250.
+    const raw = await samplePaired(
+      {
+        a: { run: () => 1, instruments: instruments(1) },
+        b: { run: () => 2, instruments: instruments(1) },
+      },
+      {
+        warmupIterations: 0,
+        minIterations: 2,
+        maxIterations: 50,
+        targetDurationMs: 250,
+        instruments: instruments(100),
+      },
+    )
+    expect(raw.differenceMs).toHaveLength(4)
+  })
+})

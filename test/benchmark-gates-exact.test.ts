@@ -181,6 +181,27 @@ describe("gates -- normalized overhead", () => {
     ])
   })
 
+  it("is silent when the current run has no overhead figure at all", () => {
+    expect(
+      over({ analysis: { cost: { typical: { n: 640, baselineMs: 10 } } } }, run(100, 10)),
+    ).toEqual([])
+  })
+
+  it("treats a change exactly as wide as the intervals as inside them", () => {
+    expect(
+      over(
+        run(30, 10, {}, { overheadCi95Percent: 10 }),
+        run(10, 10, {}, { overheadCi95Percent: 10 }),
+      )[0]?.level,
+    ).toBe("note")
+    expect(
+      over(
+        run(31, 10, {}, { overheadCi95Percent: 10 }),
+        run(10, 10, {}, { overheadCi95Percent: 10 }),
+      )[0]?.level,
+    ).toBe("fail")
+  })
+
   it("notes, and does not fail, a growth that sits inside the two runs' 95% intervals", () => {
     // 1.1% -> 9.9% is +800%, but with ±6 and ±4 points of interval the 8.8-point change is noise.
     expect(
@@ -324,6 +345,18 @@ describe("gates -- evaluateGates", () => {
     ])
     expect(withMain[3]?.message).toContain("(main measured on this runner)")
     expect(withMain[3]?.message).toContain("both were measured on this runner in this job")
+  })
+
+  it("notes a same-runner reference that yielded no figure, and says nothing of the kind without one", () => {
+    const current = run(400, 10)
+    const withEmptyMain = evaluateGates({ current, sameMachineMain: {} })
+    expect(withEmptyMain.map((f) => f.kind)).toEqual(["normalized-overhead-unjudged"])
+    expect(withEmptyMain[0]?.level).toBe("note")
+    expect(withEmptyMain[0]?.message).toBe(
+      "main could not be measured on this runner for this suite (main measured on this runner), so the overhead ratio is judged only against committed results from this CPU model.",
+    )
+    expect(evaluateGates({ current })).toEqual([])
+    expect(evaluateGates({ current, sameMachineMain: undefined })).toEqual([])
   })
 
   it("leaves complexity out when the gate is switched off", () => {
