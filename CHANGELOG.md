@@ -1,5 +1,17 @@
 # internal-package-contract
 
+## 0.18.0
+
+### Minor Changes
+
+- 19a861f: The benchmark overhead gate judges accurate figures. The end-to-end baseline and with-package operations are sampled interleaved (A B, B A, ...; at least ten pairs at the suite's typical size), so the package's overhead is the per-pair difference, recorded with its median, mean, standard deviation and 95% confidence interval (`paired` on the with-package tiers; `overheadCi95Ms`, `overheadCi95Percent` and `pairs` on the analysis rows). `samplePaired` and `computePairedStats` are exported from the kit.
+
+  The gate (`scripts/benchmark/gates.mjs`) fails only when the overhead ratio grew past the allowance _and_ the change is outside the two runs' intervals; a growth inside them is a note. A reference measured on another CPU model is reported, not judged: for fast work the ratio also depends on how much of a bare baseline is process start-up. The reusable `benchmark-pr` workflow therefore measures `main` on the same runner in the same job (`run-suite.mjs --typical-only`, from main's suite file with this checkout's runner) and passes it as a sixth `--example` field, which `render-summary` judges as the same-machine reference.
+
+### Patch Changes
+
+- 19a861f: The documents say what the checks do, and no more. The README now opens with a table of where each gate runs and what it cannot see, and every promise in README, EXCEPTIONS, TOOLKIT, SECURITY and CONTRIBUTING names its check, test or workflow. Claims that had no gate are narrowed or stated as limits: the `required` job blocks a merge only once a repository's ruleset names it (`init --github` writes it; the current consumers have not added it yet); a fix in a reusable workflow reaches a consumer when it re-pins the SHA, never on its own; the release `build` job runs the package's `verify` script, so only the `publish` job runs no repository code; the 0.17.0 release path has not yet produced a real release; the paired benchmark overhead gate ships in the next release and reaches a consumer when it re-pins; the `Commits` check rejects a `Co-Authored-By` trailer. The consumer templates get the same treatment: `contract.yml`, `release.yml` and the pin-sync workflow comments describe the ruleset and the `PIN_SYNC_TOKEN` as they are, SUPPORT directs readers to Issues (the scaffold does not enable Discussions), RELEASING names the contract-run requirement in the build job, and the benchmark guides drop vague wording.
+
 ## 0.17.0
 
 ### Minor Changes
