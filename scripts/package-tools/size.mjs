@@ -1,10 +1,10 @@
-// Guards a package's core promise that its consumer-facing entry points stay small. The budgets are the
-// package's own, in `ci/size-budgets.mjs` (a module so each raise can say why): it exports a default list of
-// `{ label, file, maxGzipBytes }`. Build tooling is budgeted generously (999 KB means "do not silently
-// balloon") and kept out of the runtime bundles by the tree-shaking tests instead.
+// Guards a package's promise that its consumer-facing entry points stay small. The budgets are the package's
+// own, in `ci/size-budgets.mjs` (a module, so each raise can say why); it exports a default list of
+// `{ label, file, maxGzipBytes }`. Each file is gzipped and compared with its budget. A missing file means the
+// package is not built, and fails too. The `Size` check runs the package's `size` script (checks/standard.ts).
 //
 //   size                    check every entry point against its budget
-//   size --json <file>      also write the measured sizes, which the badge generator reads
+//   size --json <file>      also write the measured sizes, which `badges` reads
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

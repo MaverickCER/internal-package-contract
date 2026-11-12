@@ -8,7 +8,8 @@
 //
 // `generate` rewrites what is between the markers and nothing else, so the prose around a region is never
 // touched. Markers that are missing, repeated, nested or out of order are reported with their line, never
-// guessed at. A marker inside a fenced code block is an example of the syntax, not a region, and is left alone.
+// guessed at, and `GeneratedRegions` fails on them. A marker inside a fenced code block is an example of the
+// syntax, not a region, and is left alone.
 
 const BEGIN = /^<!-- ipc:begin ([a-z][a-z0-9-]*) -->$/
 const END = /^<!-- ipc:end ([a-z][a-z0-9-]*) -->$/

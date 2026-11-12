@@ -1,4 +1,7 @@
-// What a checkout holds that is not ignored: the set of files a copy, a hash or a comparison of it has to consider.
+// What a checkout holds that is not ignored: the files a copy, a hash or a comparison of it has to
+// consider. Git answers when the directory is a repository; otherwise everything but node_modules and
+// .git is walked. The mutation memo and `verify-consumers` both read checkouts through this, so they agree
+// on what a checkout is.
 
 import { spawnSync } from "node:child_process"
 import { readdirSync } from "node:fs"

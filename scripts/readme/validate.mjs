@@ -1,7 +1,15 @@
-// The README layout every published package shares. A README exists to help a developer decide whether to
-// install and adopt the package, so it answers the same questions in the same order everywhere and sends
-// everything else to the guides. This module is the mechanical half of that bar: which sections, in what
-// order, with which badges, within what length. Whether the prose is true and persuasive stays a review.
+// The README layout every published package shares, which `ReadmeStructure` enforces. A README exists to help a
+// developer decide whether to install and adopt the package. So it answers the same questions in the same order
+// everywhere and sends everything else to the guides. This module is the mechanical half of that bar:
+//
+//   - one `#` title, and the `REQUIRED_SECTIONS` as `##` headings in that order, with no other `##` heading;
+//   - a `### See it run` under "What it does";
+//   - the `REQUIRED_BADGES` above the first section;
+//   - Evaluate, Integrate and Verify as their own steps under "Next steps";
+//   - no more than `MAX_LINES` lines.
+//
+// Headings inside code fences are ignored. Whether the prose is true and persuasive stays a review. A private
+// package is exempt (scripts/check-readme.mjs).
 
 /** The `##` sections, in the order a reader's questions arrive. */
 export const REQUIRED_SECTIONS = [

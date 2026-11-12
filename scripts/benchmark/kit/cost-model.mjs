@@ -1,13 +1,13 @@
-// Turns measured time and memory into an ESTIMATED price, because the question a platform engineer or
-// CTO actually asks is "what does this cost me", not "how many microseconds".
+// Turns measured time and memory into an estimated price. The question a reader asks of a benchmark is what
+// it costs, not how many microseconds it takes.
 //
-// Two deliberately different pricing shapes bracket the answer:
-//   low  -- CPU-priced compute (a container / VM billed per vCPU-hour): you pay for CPU seconds.
-//   high -- duration-and-memory-priced compute (functions-as-a-service billed per GB-second): you pay
-//           for wall seconds multiplied by the memory the platform reserves (never less than its minimum).
-// The rates below are published list prices rounded for the model; they are ASSUMPTIONS, change with
-// time and region, and are overridable through `benchmark.config.json` -> `costRates`. Every dollar
-// figure in a report is labelled an estimate for exactly that reason.
+// Two pricing shapes bracket the answer:
+//   low  -- CPU-priced compute (a container or VM billed per vCPU-hour): CPU seconds are what is paid for.
+//   high -- duration-and-memory-priced compute (functions billed per GB-second): wall seconds multiplied by
+//           the memory the platform reserves, never less than its minimum.
+// The default rates are published list prices rounded for the model. They are assumptions, change with time
+// and region, and are overridable through `benchmark.config.json` -> `costRates`. Every dollar figure in a
+// report is labelled an estimate for that reason.
 
 /** Default, overridable rates (USD). */
 export const DEFAULT_RATES = Object.freeze({

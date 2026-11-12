@@ -1,5 +1,6 @@
 // Build and release helpers that every package used to carry its own copy of. A package runs one from
-// package.json as `internal-package-contract tool <name>`, from its own root.
+// package.json as `internal-package-contract tool <name>`, from its own root. A name that is not a tool prints
+// the list with what each does.
 
 import { run as ambient } from "./ambient.mjs"
 import { run as apiReport } from "./api-report.mjs"

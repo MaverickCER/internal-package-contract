@@ -1,10 +1,12 @@
-# internal-package-contract caller workflow. Runs the full contract on every
-# push and PR. Replace nothing -- the standard lives in the shared package.
+# internal-package-contract caller workflow. Runs the contract on every push to main and on every
+# pull request. Replace nothing: the standard lives in the shared package.
 #
-# Two job ids are status checks the default branch's ruleset requires before a merge
-# (`internal-package-contract init` configures that), so renaming either unprotects the branch:
+# Two job ids are meant to be the status checks the default branch's ruleset requires before a merge:
 # `contract`, the standard itself, and `required`, which fails unless every other job in this file
-# finished with success -- a job that is skipped or cancelled would otherwise count as passing.
+# except `contract` finished with success (a skipped or cancelled job would otherwise count as passing). `init --github`
+# writes both into the ruleset it creates. A repository that predates that must add `required` to its
+# ruleset itself; until it does, only `contract` blocks a merge and the other jobs are advisory.
+# Renaming either job id unprotects the branch.
 name: Contract
 
 on:
@@ -35,7 +37,7 @@ jobs:
           node-version: 24.x
       - run: npm ci
       # SecuritySocket scores the package on Socket.dev. Without a token it warns that the scan did not
-      # run; a rejected token, a network error or a rate limit fails. Create a token at socket.dev
+      # run; a rejected token, a network error, a rate limit or a missing `socket` CLI fails. Create a token at socket.dev
       # (Settings > API Tokens, `packages:list`), then add it under GitHub: Settings > Secrets and
       # variables > Actions as SOCKET_SECURITY_API_KEY. Locally, run `socket login`.
       #
@@ -97,7 +99,9 @@ jobs:
 
   # The one status check that stands for every job above except `contract`. GitHub treats a skipped or
   # cancelled required job as passing and cannot name a matrix job as one context, so this job runs
-  # `if: always()` and fails unless each job it needs finished `success`. Add every new job to `needs`.
+  # `if: always()` and fails unless each job it needs finished `success`. Add every new job to `needs`;
+  # the `ci-jobs-test` managed copy fails a package whose ci.yml has a job this list omits. It blocks a
+  # merge only once the ruleset names `required` (see the top of this file).
   required:
     needs: [node-floor, typescript-7]
     if: always()

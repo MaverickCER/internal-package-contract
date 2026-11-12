@@ -1,9 +1,9 @@
 /**
  * Loads the TypeScript compiler a package's build-time scanner parses with, and says which one it chose.
- * Written once for every package that scans TypeScript: the choice is by capability, never by version, and
- * the rules about when "not installed" is absence and when it is a broken install are subtle enough that two
- * hand-kept copies are a liability. This file is the canonical source; a package carries a managed copy
- * (see `sync`).
+ * Written once for every package that scans TypeScript. The choice is by capability, never by version. The rules
+ * for when "not installed" is absence and when it is a broken install are subtle enough that hand-kept copies
+ * are a liability. This file is the canonical source; a package carries a managed copy
+ * (`src/_ipc/typescript.ts`, see `sync`).
  */
 import { createRequire } from "node:module"
 import type TS from "typescript"

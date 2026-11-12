@@ -1,5 +1,9 @@
-// Judges a package's benchmarks against its public functions: every function with more than one thing that can
-// change its cost is benchmarked, and every parameter (or key) of it is accounted for. Pure.
+// The findings `BenchmarkCoverage` fails on, from a package's public functions and what its benchmarks cover.
+//
+// Only a function with more than one input is judged, and only when `notBenchmarked` does not name it. It is
+// `unbenchmarked` when no benchmark covers it. It is `unaccounted` when one of its inputs appears in no
+// covering benchmark. A benchmark that covers a function or input the package does not have is `stale`. So is
+// a `notBenchmarked` entry naming a function the package does not have. Pure.
 
 /**
  * @typedef {object} CoverageRecord

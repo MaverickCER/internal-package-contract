@@ -1,5 +1,9 @@
-// Entry point for the `ManagedFiles` check (see checks/managed-files.ts). Prints one JSON envelope; never
-// exits non-zero for a finding (policy decides).
+// Entry point for the `ManagedFiles` check (see checks/managed-files.ts). Compares every file this package
+// owns in a consumer, and every managed copy the consumer enrolled, with the template here
+// (scripts/managed-files/inspect.mjs), and prints one JSON envelope listing only the files that are missing
+// or drifted. The pins are left blank because a consumer's own workflow carries the pin that is compared.
+// A private package is `exempt` before anything is compared. The policy decides the verdict.
+
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"

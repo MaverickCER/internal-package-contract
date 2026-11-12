@@ -1,7 +1,7 @@
-// The one standard size ladder every benchmark in this organization is measured on. Ten points that
-// double (the last step aside from rounding) so that a log-log fit has enough spread to tell O(1),
-// O(log n), O(n), O(n log n) and O(n^2) apart -- three points (the old baseline/stress/extreme) could
-// not. Names are `n<size>` so a tier is self-describing in any table or history file.
+// The one standard size ladder every benchmark is measured on. The sizes double (the last step aside from
+// rounding), so a log-log fit has enough spread to tell the classes apart. `validateTiers` refuses a ladder
+// with fewer than four sizes, or one that is not strictly ascending positive integers. Names are `n<size>`, so
+// a tier is self-describing in any table or history file. `QUICK_TIERS` is the short prefix `--quick` runs use.
 
 /** The primary sizes. `n` is whatever one suite declares as its workload unit (a record, a variable, a file...). */
 export const STANDARD_TIERS = Object.freeze([20, 40, 80, 160, 320, 640, 1280, 2560, 5120, 10240])

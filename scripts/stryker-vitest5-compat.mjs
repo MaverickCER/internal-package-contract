@@ -1,19 +1,18 @@
-// Makes `@stryker-mutator/vitest-runner` work with Vitest 5, until upstream ships the fix.
+// Makes `@stryker-mutator/vitest-runner` work with Vitest 5 until a runner release carries the upstream fix.
 //
-// Vitest 5 changed `testNamePattern` to match the suite chain and the test name joined by ` > `
-// (https://vitest.dev/guide/migration/). The runner builds that pattern from test names it joins with a
-// single space, so on Vitest 5 the pattern matches nothing: every mutant with per-test coverage runs zero
-// tests and is reported as Survived, and the mutation score collapses (measured here: 0 of 489 killed
-// on Vitest 5 against 489 of 489 on Vitest 4, same file, same tests). Tracked upstream as
-// stryker-mutator/stryker-js#6210, with fixes in #6214 and #6220 that are not released yet.
+// Vitest 5 matches `testNamePattern` against the suite chain and the test name joined by ` > `
+// (https://vitest.dev/guide/migration/). The runner joins them with a single space, so on Vitest 5 the pattern
+// matches nothing: every mutant with per-test coverage runs zero tests and survives, and the `Mutation` check fails
+// with a report in which nothing is killed. Tracked upstream as stryker-mutator/stryker-js#6210.
 //
-// The fix is one expression in the two files the runner uses to build and to record test names:
+// The fix is one expression in the two runner files that build and record test names:
 //
 //   nameParts.join(' ').trim()   ->   nameParts.join(' > ').trim()
 //
-// This module applies exactly that, only when Vitest 5 or later is installed, only when both files carry
-// the old expression, and never twice. Once a runner release ships the upstream fix (it injects
-// `testNameSeparator` instead), the step recognises that and does nothing.
+// It is applied by run-mutation.mjs before Stryker starts, only when Vitest 5 or later and the runner are both
+// installed, only when both files carry the old expression, and never twice. A runner that already injects
+// `testNameSeparator` has the upstream fix and is left alone. A runner this script does not recognise is left alone
+// and reported, so a run with zero kills has a named cause.
 
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"

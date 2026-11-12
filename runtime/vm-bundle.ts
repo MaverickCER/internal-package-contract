@@ -2,14 +2,14 @@
  * Runs a browser bundle where nothing from Node exists, and hands back what it exported.
  *
  * A package that says an entry point runs in a browser or an edge runtime proves it by bundling the entry for
- * the browser and running the result here: a `vm` context that has JavaScript's own intrinsics and the host
- * globals a browser offers, and no `process`, `Buffer`, `require` or `node:` anything. A bundle that reaches
- * for one of those throws a `ReferenceError` on the spot, which is the failure the test wants to see, instead
- * of a grep over the bundle text that a renamed identifier could slip past.
+ * the browser and running the result here. The `vm` context has JavaScript's own intrinsics and the host globals
+ * a browser offers ({@link HOST_GLOBALS}), and no `process`, `Buffer`, `require` or `node:` anything. A bundle
+ * that reaches for one throws a `ReferenceError` on the spot. That is the failure the test wants, rather than a
+ * grep over the bundle text that a renamed identifier slips past.
  *
  * The bundle is an IIFE that assigns its exports to one global (`esbuild --format=iife --global-name=<name>`),
  * because a module cannot be instantiated in a `vm` context without a flag Node still marks experimental.
- * Carried into packages as a managed copy (`test/_ipc/vm-bundle.ts`).
+ * A package carries this as a managed copy (`test/_ipc/vm-bundle.ts`, see `sync`).
  */
 import { createContext, runInContext } from "node:vm"
 

@@ -1,7 +1,17 @@
 /**
- * A package's `engines.node` is a promise, so CI has to run on the version it names. This fails when a
- * published package declares no minimum Node.js, declares one that cannot be read, or declares one that no
- * workflow tests (see scripts/engines/validate.mjs). A private package makes no promise and is exempt.
+ * `EngineMatrix`: a workflow tests the minimum Node.js that `engines.node` promises.
+ *
+ * Reads: package.json and every `.github/workflows/*.yml`, through `scripts/check-engines.mjs` and
+ * `scripts/engines/validate.mjs`.
+ *
+ * Fails when a published package declares no `engines.node`. Fails when it declares a range no
+ * minimum can be read from. Fails when no workflow runs on the declared minimum. Never warns.
+ * Passes for a private package, which makes no promise.
+ *
+ * Exceptions: none. Add the minimum to a test job's `node-version`.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * this package is private.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

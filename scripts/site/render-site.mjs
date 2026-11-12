@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// `internal-package-contract site`: generates a package's landing page, its one-page brief and the shared
-// stylesheet and script from `docs/site.json`, so every MaverickCER site has the same structure and a fix
-// to it lands once. `--check` writes nothing and fails when the committed files differ from what the
-// content produces.
+// `internal-package-contract site`: generates a package's landing page, one-page brief, stylesheet and script
+// from `docs/site.json`. Every site then has the same structure, and a fix lands once.
 //
 //   internal-package-contract site [--content docs/site.json] [--out docs] [--check]
+//
+// The content is validated first (validate.mjs); content that does not meet the bar exits 1 and writes
+// nothing. Output is formatted with the package's own Prettier settings, so `Format` keeps passing. `--check`
+// writes nothing and exits 1 naming the stale files. The `LandingPage` check runs `--check` and fails on
+// either kind of problem. A package with no `docs/site.json` passes there but is an error here.
 
 import { existsSync, readFileSync } from "node:fs"
 import fs from "node:fs/promises"

@@ -1,6 +1,7 @@
 // `internal-package-contract install-hooks`: points git at the bundled hooks. `init` does this once, and a
-// clone made later runs this command once; the `GitHooks` check warns until it has been. Nothing runs it as
-// an install script. It never fails, so it is safe to put in a setup script.
+// clone made later runs this command once; the `GitHooks` check warns until it has been. Nothing runs it as an
+// install script. It never fails, so it is safe in a setup script. The path is written relative to the
+// repository root when the package is installed, so the setting survives a moved checkout.
 
 /**
  * @param {{ installed: boolean, packageHooks: string, prefix?: string }} input

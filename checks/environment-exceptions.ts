@@ -1,28 +1,30 @@
 /**
- * The exception registry for "this check could not run here" -- the question every non-normal
- * outcome has to answer ("a link that linkinator could not reach because of rate limiting",
- * "CodeRabbit has no CLI in CI", "no Chrome to run pa11y"): is it acceptable, and who said so?
+ * The registry for "this check could not run here", and the `degraded` helper behind it. A check
+ * calls `degraded` when it never got to look at its subject: no Chrome, no `gh`, no Socket key, an
+ * unreachable link host.
  *
- * A check that cannot evaluate its subject no longer degrades to a bare `warn`. It calls
- * {@link degraded}, which always records the degradation in the verdict and then:
+ * Reads: `.repo-contract/exceptions/environment.json`, once per degraded verdict.
  *
- * - **accepted** -- a complete record `environment:<Check>:<code>` exists in
- *   `.repo-contract/exceptions/environment.json`: `warn`, class `not-evaluated`.
- * - **unexcepted** -- no complete record covers it: `warn` with a rationale that names the id to
- *   add, class `unexcepted`. A local run stays usable, while the CI gate (`--strict`, the default
- *   under `CI`) fails the run until someone writes down why it is acceptable.
+ * `degraded` always returns a `warn`, led by a marker the run loop and the report read. With a
+ * complete, unexpired record `environment:<Check>:<code>` the result's class is `not-evaluated`.
+ * Without one the class is `unexcepted` and the rationale names the id to add. Under `--strict`,
+ * the CI default, an unexcepted result fails the run (`scripts/contract-run.mjs`). A registry that
+ * cannot be loaded is a `fail`. When one run degraded for several codes, every code needs a record.
  *
- * Example record (the structured fields are the same ones every other registry requires):
+ * A record needs `check` and `code` fields, a non-blank `justification`, the version 2 fields, and
+ * an `expires` that has not passed. The codes each check can report are listed in EXCEPTIONS.md.
+ *
+ * Example record:
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
- *       "id": "environment:CodeRabbit:ci",
+ *       "id": "environment:CodeRabbit:not-applicable",
  *       "version": 2,
  *       "justification": "CodeRabbit reviews pull requests as a GitHub App; its CLI is not installed in CI.",
  *       "check": "CodeRabbit",
- *       "code": "ci",
+ *       "code": "not-applicable",
  *       "ruleBroken": "CodeRabbit findings must be addressed or recorded before merge.",
  *       "attempted": "Installing the CLI in the workflow needs a CodeRabbit API key we do not issue to CI.",
  *       "constraint": "The CLI reviews uncommitted edits locally; in CI the review is the GitHub App's.",

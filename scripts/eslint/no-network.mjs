@@ -1,25 +1,25 @@
-// The one ESLint rule the baseline (`eslint.config.mjs`) carries itself: a library's source opens no network
-// connection. Every capability a package needs is supplied by its caller, never taken from the environment, and
-// the network is the capability a reviewer most wants to see absent: `SECURITY.md` of each consumer says its entry
-// points make no network request, and this rule is the gate that sentence stands on, next to the tarball scan.
+// The one ESLint rule the baseline (`eslint.config.mjs`) carries itself: a library's source opens no
+// network connection. Every capability a package needs is supplied by its caller, never taken from the
+// environment, and the network is the capability a reviewer most wants to see absent. This rule is the
+// gate that promise stands on, next to the tarball scan. A hit fails the `Lint` check.
 //
-// A rule of its own rather than a `no-restricted-imports` entry, because flat config keeps one options object per
-// rule per file: a consumer's own `no-restricted-imports` block for `node:fs` (env-cap, data-cap) would silently
-// replace the baseline's entry, and the ban would be gone with no error anywhere. A rule under its own name
-// cannot be displaced that way; a consumer can only turn it off, which is visible.
+// A rule of its own rather than a `no-restricted-imports` entry, because flat config keeps one options
+// object per rule per file: a consumer's own `no-restricted-imports` block would replace the baseline's
+// entry, and the ban would be gone with no error anywhere. A rule under its own name cannot be displaced
+// that way; a consumer can only turn it off, which is visible.
 //
 // What it reports, in a file it applies to:
-// - importing, re-exporting, `require()`-ing or `import()`-ing a module whose purpose is a connection: Node's
-//   `http`, `https`, `http2`, `net`, `tls`, `dns` and `dgram` (with or without `node:`, any subpath), `undici`
-//   and `ws`. A type-only import or export brings no capability and is allowed.
-// - a reference to a network global -- `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator` --
-//   directly or through `globalThis`, `window`, `self` or `global`. A local binding of the same name is not
+// - importing, re-exporting, `require()`-ing or `import()`-ing a module whose purpose is a connection:
+//   Node's `http`, `https`, `http2`, `net`, `tls`, `dns` and `dgram` (with or without `node:`, any
+//   subpath), `undici` and `ws`. A type-only import or export brings no capability and is allowed.
+// - a reference to a network global (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator`),
+//   bare or through `globalThis`, `window`, `self` or `global`. A local binding of the same name is not
 //   the global and is not reported.
 //
-// Where it applies is the baseline's decision (`src/**`), so a package's executable boundary (`bin/`, a CLI) is
-// outside it unless the package adds that path. A feature test such as `typeof fetch === "function"` is a
-// reference too; a package that needs one says why in an `eslint-disable` comment, which `Suppressions` then
-// keeps visible.
+// Where it applies is the baseline's decision (`src/**`), so a package's executable boundary (`bin/`, a
+// CLI) is outside it unless the package adds that path. A feature test such as `typeof fetch ===
+// "function"` is a reference too; a package that needs one says why in an `eslint-disable` comment,
+// which `Suppressions` then keeps visible.
 
 /** Modules whose purpose is a network connection, by the name a specifier starts with. */
 export const NETWORK_MODULES = Object.freeze([

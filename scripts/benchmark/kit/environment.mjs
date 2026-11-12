@@ -1,5 +1,6 @@
 // Environment, git and package-size metadata for a results file. Best-effort: anything that cannot be
-// determined on this platform is `null`, never a thrown error.
+// determined on this platform is `null`, never a thrown error. The CPU model and Node version recorded here
+// are what gates.mjs reads to decide whether two runs are comparable.
 
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"

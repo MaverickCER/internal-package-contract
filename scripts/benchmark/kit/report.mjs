@@ -1,7 +1,8 @@
-// Renders results.json as the human report (BENCHMARKS.md). It leans toward COSTS on purpose: the
-// first thing a platform engineer or CTO sees is what adopting the package adds to a request, a
-// monthly bill and a cold start -- the benefits live in the rest of the repository. Every number is a
-// single run's measurement on one machine; the report says so, and links the reading guide.
+// Renders results.json as the human report (BENCHMARKS.md). It leads with costs on purpose: what adopting the
+// package adds to one operation, to a bill and to a cold start. The benefits live elsewhere in the repository.
+// Every number is one run's measurement on one machine. The report says so, warns against comparing it with
+// another machine's, and links READING-BENCHMARKS.md where `docsPath` says it is. Dollar figures are labelled
+// order-of-magnitude estimates.
 
 import { publicMessage } from "../public-message.mjs"
 import { explainUndetermined } from "../explain-undetermined.mjs"

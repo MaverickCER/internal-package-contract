@@ -1,6 +1,7 @@
-// Renders a package's landing page and one-page brief from its content (docs/site.json). Pure: content in,
-// HTML out. The markup uses the class names in assets/styles.css, and every package gets the same
-// structure, so a fix to the page or its accessibility lands once.
+// Renders a package's landing page and one-page brief from its validated content (docs/site.json). Pure:
+// content in, HTML out. The markup uses the class names in assets/styles.css. Every package gets the same
+// structure, so a fix to the page or its accessibility lands once. Text is escaped; a link whose URL is neither
+// https nor a relative path stays literal text. A pre-1.0 package shows its `maturity` note on both pages.
 
 /** @param {unknown} value @returns {string} text safe for HTML content or a double-quoted attribute. */
 function esc(value) {

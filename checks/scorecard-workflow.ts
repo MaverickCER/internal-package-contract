@@ -1,7 +1,17 @@
 /**
- * A public package publishes its OpenSSF Scorecard result, which its README badge reads live. This check
- * fails when no workflow runs `ossf/scorecard-action`, or when the one that does cannot publish (see
- * scripts/scorecard/validate.mjs). A private package publishes nothing and is exempt.
+ * `ScorecardWorkflow`: a workflow publishes the package's OpenSSF Scorecard result, which the
+ * README badge reads live.
+ *
+ * Reads: package.json and every `.github/workflows/*.yml`, through
+ * `scripts/check-scorecard-workflow.mjs` and `scripts/scorecard/validate.mjs`.
+ *
+ * Fails when no workflow runs `ossf/scorecard-action`. Fails when the one that does cannot publish
+ * its result. Never warns. Passes for a private package, which publishes nothing.
+ *
+ * Exceptions: none. `internal-package-contract init` scaffolds the workflow; `sync` restores it.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * this package is private.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

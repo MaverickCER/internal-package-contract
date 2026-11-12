@@ -1,43 +1,23 @@
-// Entry point for the `Accessibility` check (see contract.ts). Runs pa11y
-// (WCAG2AA, its default standard) against a consumer's own built docs
-// site and prints a `{ ok, value | error }` result to stdout, matching the
-// file-based-tool-output pattern the docs/markdownlint checks already use.
-// pa11y drives a real headless Chrome page -- an actual accessibility tree,
-// not static markup analysis -- so contrast, focus order, and ARIA issues
-// are caught the same way a real browser would surface them.
+// Entry point for the `Accessibility` check (see checks/accessibility.ts). Runs pa11y over the built docs
+// site in the working directory and prints one JSON envelope: `{ ok: true, value, pagesScanned, ... }`
+// or `{ ok: false, error }`. The policy decides the verdict; a finding never makes this exit non-zero.
 //
-// A near-direct port of repo-contract's own scripts/check-accessibility.mjs
-// (see specs/decisions/0008-self-hosting-tool-and-dependency-choices.md
-// there for why pa11y was chosen), generalized to run against WHICHEVER
-// package installs this: every page path below is resolved against
-// process.cwd() (the consumer's own repo root -- every check here runs with
-// that cwd, same as docs-links.ts/docs-markdown.ts), not against this
-// script's own on-disk location the way repo-contract's self-hosted
-// original resolves against __dirname.
+// What is read: the pages scripts/accessibility-pages.mjs resolves under docs/, each loaded over a
+// file:// URL in a headless Chrome. Two runners judge each page, axe-core and HTML_CodeSniffer, because
+// each finds problems the other does not. The pages are committed HTML, so nothing is built first.
 //
-// `pa11y`/`puppeteer` are real, hard `dependencies` of this package (never
-// something a consumer -- env-cap, data-cap, ... -- has to separately
-// install), but the real `puppeteer` package carries its own
-// Chromium-download `postinstall` script, which this organization's public
-// packages must ship with zero install scripts of any kind (a Socket.dev
-// "Install scripts" finding directly hurts a package's own supply-chain
-// score). package.json's own `overrides` field aliases `puppeteer` to
-// `puppeteer-core` wherever pa11y itself resolves it -- pa11y's `require
-// ("puppeteer")` transparently gets puppeteer-core's identical launch API,
-// with no bundled browser and, critically, no install script at all.
-// `findChromeExecutable` below supplies the browser puppeteer-core no
-// longer downloads: a system Chrome/Chromium, auto-detected the same way a
-// developer's own machine or a CI runner already has one (GitHub Actions'
-// own `ubuntu-latest` images ship Google Chrome preinstalled).
+// Where Chrome comes from: package.json `overrides` aliases pa11y's `puppeteer` to `puppeteer-core`, so
+// no browser is downloaded and no install script runs (a supply-chain scanner flags install scripts).
+// A browser must already be on the machine: `PUPPETEER_EXECUTABLE_PATH` or `CHROME_PATH` when set, else
+// the usual install locations for the platform, else a PATH lookup of the common binary names. None
+// found is `{ ok: false }` with the error the policy records as the `Accessibility:no-chrome`
+// degradation. Chrome runs with its sandbox off because a CI runner restricts the kernel feature the
+// sandbox needs; every page it loads is the package's own committed HTML.
 //
-// Tests each page directly via a file:// URL -- none has a build step
-// beyond what already produced it, so nothing needs to run first here.
-//
-// Which pages are scanned is decided by accessibility-pages.mjs: every top-level docs page and every
-// section's landing page (the site, the API reference, the benchmark history), plus one representative
-// page per kind of generated API page. Two runners check each: HTML_CodeSniffer and axe-core, which
-// disagree about real problems (axe finds contrast and keyboard-focus failures HTML_CodeSniffer
-// misses, and measured 0-213 violations per page where HTML_CodeSniffer reported none).
+// Counted in the envelope and never failed on: axe results axe itself marks as needing manual review,
+// the nested-interactive result axe raises on TypeDoc's generated navigation tree, and HTML_CodeSniffer's
+// duplicate-id report on an id named like an `Object.prototype` member. `pagesScanned` lets the policy
+// tell a clean scan from a site that was not there to scan.
 
 import pa11y from "pa11y"
 import { sync as spawnSync } from "cross-spawn"

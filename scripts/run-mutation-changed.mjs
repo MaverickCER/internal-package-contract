@@ -1,5 +1,6 @@
-// Entry point for `internal-package-contract mutation`: runs Stryker on what a change touched (see mutation/changed.mjs).
-// Uses the package's own `stryker.config.*` when it has one, else the bundled baseline, as the `Mutation` check does.
+// Entry point for `internal-package-contract mutation` (scripts/mutation/changed.mjs). It uses the package's own
+// `stryker.config.*` when it has one, else the bundled baseline, as the `Mutation` check does, and runs Stryker
+// from the nearest `node_modules/.bin`.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync } from "node:fs"

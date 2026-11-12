@@ -1,8 +1,18 @@
 /**
- * The environment variables and secrets a package depends on, documented in `ci/env.schema.ts` (with env-cap, which
- * this package carries). Nothing here is required: a package with no contract passes, and everything else is a
- * warning at most -- a missing owner or expiry, a credential that is expiring or has expired, generated files that are
- * out of date. The contract is only read, never executed, and no manifest is generated, so nothing ships.
+ * `EnvContract`: the environment variables and secrets the package depends on are documented and
+ * current.
+ *
+ * Reads: `ci/env.schema.ts` and the files `internal-package-contract env` generates from it,
+ * through `scripts/check-env-contract.mjs` and `scripts/env/run.mjs`. The schema is read, never
+ * executed.
+ *
+ * Never fails. Warns on a missing owner or expiry, and on a credential that is expiring or expired.
+ * Warns on a generated file that is stale, and on a schema that cannot be read. Passes with no
+ * `ci/env.schema.ts`: none is required.
+ *
+ * Exceptions: none needed; nothing here fails the run.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

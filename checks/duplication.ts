@@ -1,15 +1,18 @@
 /**
- * Copy-paste detection via jscpd. A recreation of the `duplication` preset with
- * one difference: it fails on a *percentage* budget ({@link DUPLICATION_MAX_PERCENTAGE}),
- * not on `> 0` clones.
+ * `Duplication`: copied code stays within a share of `src/`, as jscpd measures it.
  *
- * Zero duplication is neither realistic nor always desirable (a small, fully
- * tested, dependency-free helper is sometimes cheaper duplicated than shared
- * across a bundling boundary). jscpd is itself threshold-based; this check
- * matches that, and matches every other budgeted check in the contract
- * (`Coverage`, `Crap`, `Mutation`). Deliberate duplication a package has decided
- * to keep is marked in place with `jscpd:ignore-start` / `jscpd:ignore-end` (or
- * a `.jscpd.json`), which jscpd honours and this check inherits.
+ * Reads: `src/`, which IPC's own self-contract retargets at `checks/`, `scripts/` and `bin/`,
+ * through jscpd. Its JSON report lands in `reports/jscpd/jscpd-report.json`.
+ *
+ * Fails when the duplicated percentage exceeds {@link DUPLICATION_MAX_PERCENTAGE} (0.75). Fails
+ * when jscpd wrote no report or no total. Never warns. A pass still lists every block found. The
+ * budget is a share, not zero: a small, tested helper is sometimes cheaper copied than shared
+ * across a bundling boundary.
+ *
+ * Exceptions: none in a registry. A deliberate copy is wrapped in `// jscpd:ignore-start` and `//
+ * jscpd:ignore-end`, which jscpd honours and `Suppressions` reads back.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

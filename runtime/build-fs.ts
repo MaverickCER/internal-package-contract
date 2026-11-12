@@ -1,21 +1,16 @@
 /**
- * The filesystem capability a package's `./build` entry requires from its caller.
+ * The filesystem a package's `./build` entry is handed by its caller.
  *
- * `./build` is a **library surface**: it must not acquire filesystem access
- * implicitly (no `node:fs` import outside the package's CLI). Every public options object carries a required
- * `fs` field of this type, and the caller supplies a concrete adapter: the CLI builds one over
- * `node:fs/promises`; a test builds either that same adapter or an in-memory fake.
+ * `./build` is a library surface, so it never imports `node:fs` itself (the `no-node-fs` rule enforces that).
+ * Every public options object carries a required `fs` of this type. The CLI builds one over `node:fs/promises`;
+ * a test hands in the same adapter or an in-memory fake. Real filesystem work still happens; the capability is
+ * handed in rather than acquired.
  *
- * "Ambient-fs-free" means specifically: `./build` never reaches for
- * `node:fs` itself. It still performs real filesystem operations -- the
- * capability is always handed in.
+ * The signatures mirror `node:fs/promises`, so a thin adapter is a drop-in value. The entry and stat types are
+ * structural ({@link BuildDirent}, {@link BuildStats}) rather than Node's own, so the boundary does not leak
+ * Node's types. Only the operations the build code calls are declared.
  *
- * The shape is modeled on `node:fs/promises`'s own signatures so a thin
- * adapter is a drop-in value, but uses minimal structural types
- * ({@link BuildDirent}/{@link BuildStats}) rather than Node's `Dirent`/
- * `Stats` -- the capability boundary shouldn't leak Node's type surface just
- * because the concrete adapter happens to be Node-backed. Only the
- * operations the build code actually calls are here.
+ * This file is the canonical source; a package carries a managed copy (`src/_ipc/build-fs.ts`, see `sync`).
  */
 export interface BuildFileSystem {
   /** Read a UTF-8 text file. Rejects if the path doesn't exist or isn't readable. */

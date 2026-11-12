@@ -1,41 +1,19 @@
-// Entry point for the `DocsFragments` check (see checks/docs-fragments.ts).
+// Entry point for the `DocsFragments` check (see checks/docs-fragments.ts). Checks that every local
+// `#fragment` link in the hand-written Markdown names a heading that exists, and prints one JSON envelope:
+// `{ ok: true, broken }` or `{ ok: false, error }`. The policy decides the verdict.
 //
-// Closes a real, confirmed gap between the two existing docs checks:
-//   - markdownlint's MD051 rule (`DocsMarkdown`) validates a bare `#fragment`
-//     link against the current file's own real headings, but does NOT
-//     resolve a `filename.md#fragment` link even when `filename.md` is the
-//     current file itself -- confirmed directly: env-cap's and data-cap's
-//     READMEs both shipped a `[badge](README.md#installation)`/
-//     `(#installation)` link to a heading that never existed, and only the
-//     bare form was ever caught.
-//   - linkinator (`DocsLinks`) does not meaningfully validate fragments at
-//     all -- confirmed directly (a `--recurse --markdown` crawl over a test
-//     file with both a valid and a deliberately-broken `#fragment` link
-//     reported neither as a distinct entry, only the base file).
+// Why a check of its own: markdownlint's MD051 (`DocsMarkdown`) resolves a bare `#fragment` against the
+// current file but not a `file.md#fragment` link, and linkinator (`DocsLinks`) does not judge fragments.
+// Both forms are covered here, same-file and cross-file.
 //
-// This script covers both blind spots for every *local* `.md` link,
-// self-referencing or cross-file: it parses every scanned file's own real
-// headings into GitHub-flavored-markdown slugs (via `github-slugger`, the
-// same library markdownlint's own MD051 rule is built on, so results match
-// GitHub's actual anchor behavior including per-file duplicate-heading
-// suffixing), then resolves and checks every `#fragment` link's target file
-// and fragment against that file's real slug set.
+// What is read: `*.md` at the root and `docs/**/*.md`, the same files `DocsMarkdown` reads, minus
+// `docs/api-report/**`, which is generated and has its own freshness check. Fenced code blocks are blanked
+// before headings or links are read, so an example never counts as either. A heading becomes the slug
+// GitHub gives it, through `github-slugger`, duplicate suffixes included; an explicit `<a id>` or `<a name>`
+// counts as a heading too.
 //
-// Scope matches `DocsMarkdown`'s own default glob (`*.md docs/**/*.md`) --
-// this check is deliberately the fragment-resolution complement to that
-// check, not a broader documentation crawl. `docs/api-report/**` is
-// excluded: generated API markdown, already covered by its own
-// `docs:api:report:check` freshness gate, and not hand-authored prose worth
-// this check's false-positive risk.
-//
-// Known, deliberate limitations (documented rather than silently wrong):
-//   - only inline `[text](target)` links are parsed, not reference-style
-//     `[text][ref]` / `[ref]: target` definitions (none exist in this
-//     organization's docs today -- confirmed by direct search across every
-//     consumer repo before this check was written).
-//   - a target file that does not exist on disk is skipped, not reported --
-//     that is `DocsLinks`' job (linkinator does correctly catch a missing
-//     *file*, just not a missing *fragment*).
+// Known limits: only inline `[text](target)` links are parsed, not reference-style links. A target file
+// that does not exist is skipped, not reported: a missing file is `DocsLinks`' finding.
 
 import { readFile, glob } from "node:fs/promises"
 import { existsSync } from "node:fs"

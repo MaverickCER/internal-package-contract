@@ -1,39 +1,20 @@
 #!/usr/bin/env node
-// The runnable entry point this standard ships:
+// The executable this standard ships: `internal-package-contract`.
 //
-//   internal-package-contract                 run the whole contract
-//   internal-package-contract --checks a,b    run only checks a, b (and their deps)
-//   internal-package-contract --skip a,b      run every check except a, b
-//   internal-package-contract --strict        also fail on a "not evaluated" result no exception covers
-//                                             (the default under CI; --no-strict turns it off)
-//   internal-package-contract init            one command: bring this package under the standard, or `init --name <pkg>` to start one
-//   internal-package-contract env             document the variables and secrets the package needs (ci/env.schema.ts)
-//   internal-package-contract skill           write the package's agent skill (a short manual an AI loads) from docs/skill.json
-//   internal-package-contract mutation        mutation-test what a change touched, as a fast loop
-//   internal-package-contract report          what this change does to the package, as Markdown for a pull request
-//   internal-package-contract verify-consumers <checkout>...   would this version of the standard make a dependent package worse?
-//   internal-package-contract tool <name>    a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation
-//   internal-package-contract doctor          what is set up, what to run next, what only a person can do
-//   internal-package-contract exceptions     list every exception registry: counts by type, legacy, expired
-//   internal-package-contract sync-benchmark-guides   copy the canonical benchmark guides into benchmarks/
-//   internal-package-contract update-baseline regenerate every ApiContract target's baseline
-//   internal-package-contract add export <name>   wire a new subpath export into every place that lists one
-//   internal-package-contract sync            report (or with --apply, restore) the files this package owns
-//   internal-package-contract site            generate the landing page and one-page brief from docs/site.json
-//   internal-package-contract generate       write the generated regions of the documents (--check to verify)
-//   internal-package-contract new adr "<title>"   start a decision record with the next number and its prompts
-//   internal-package-contract promote <Check>  enforce a check that adoption mode reports as a warning (--all ends it)
-//   internal-package-contract upgrade <tag>   move to a release and bring everything it owns up to date
-//   internal-package-contract install-hooks   point git at the bundled hooks (once per clone)
+// With no command it runs the consumer's contract. The checks come from `contract.ts`, resolved next to this
+// file, so the definition is always the installed package's. The working directory is never overridden, so
+// every check reads the consumer's repository. The package owns the contract; the consumer owns the context.
 //
-// A consuming package's package.json only needs
-// `{ "scripts": { "contract": "internal-package-contract" } }`.
+// A command word dispatches to its script under `scripts/`. `scripts/contract-help.mjs` holds the one table of
+// commands and options; `--help` prints it, and `SurfaceContract` baselines it. A word that is neither an option
+// nor a command is refused, because a typo would otherwise start a run that can take hours.
 //
-// The one load-bearing detail: contract.ts is resolved relative to THIS file (so
-// the definition always comes from the installed package), but runRepoContract is
-// called with NO cwd override, so every check defaults to process.cwd() -- the
-// consumer's repository. The package owns the contract; the consumer owns the
-// execution context.
+// A consumer's package.json needs only `{ "scripts": { "contract": "internal-package-contract" } }`.
+//
+// The run flags are `--checks a,b` / `--skip a,b`, `--scope affected|full|auto` with `--base <ref>`, `--changed`,
+// `--strict` / `--no-strict`, `--json` and `--logs <mode>`. `scripts/contract-run.mjs` and the modules it imports
+// read them. The executors the checks spawn live in this package's own node_modules/.bin when it is a `file:`
+// dependency, so every node_modules/.bin above this file is put on PATH first.
 
 import { existsSync } from "node:fs"
 import path from "node:path"

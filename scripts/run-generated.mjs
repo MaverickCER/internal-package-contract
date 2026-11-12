@@ -1,12 +1,12 @@
-// Runs a consumer npm script that regenerates committed output (schemas, API
-// reports, ...) and reports which of the watched paths it actually changed --
-// by content hash, taken before and after, so it works regardless of git state
-// (env-cap / data-cap currently have git repos with no commits, where
-// `git status` calls everything "untracked").
+// Runs a consumer npm script that regenerates committed output (schemas, API reports, ...) and reports which
+// of the watched paths it changed. The paths are hashed by content before and after, so the answer does
+// not depend on git state. The `mustNotChange` form of checks/npm-script.ts runs through this; its policy
+// fails when the script exits non-zero or when anything changed.
 //
-// Usage: node run-generated.mjs <npm-script> <watch-path> [<watch-path> ...]
-// Prints one JSON line: { "ran": bool, "exitCode": n, "changed": [paths] }
-// Always exits 0 -- the check's policy decides the verdict.
+//   node run-generated.mjs <npm-script> <watch-path> [<watch-path> ...]
+//
+// Prints one JSON line, `{ "ran": bool, "exitCode": n, "changed": [paths] }`, after the script's own
+// output, which is inherited. Always exits 0; the policy decides the verdict.
 
 import { sync as spawnSync } from "cross-spawn"
 import { createHash } from "node:crypto"

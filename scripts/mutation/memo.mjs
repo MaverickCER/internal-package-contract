@@ -1,14 +1,13 @@
 // Reuses a mutation run when nothing that could change its result has changed.
 //
-// A mutation run is a function of the code, the tests, the configuration and the tools that run them. When a
-// pass was recorded for exactly the same inputs, running it again can only say the same thing an hour later. This
-// records the evidence of a run against a hash of every input, and hands that evidence back, unchanged, when the
-// hash is the same. It never decides anything: the check still reads the evidence and applies its own policy, so a
-// reused run is judged exactly like a fresh one.
+// A mutation run is a function of the code, the tests, the configuration and the tools that run them. This keeps
+// the evidence of a run under a hash of every file git does not ignore, the Node.js version and what the run was
+// restricted to, and puts it back when the hash is the same. Only a run that exited 0 with every mutant caught or
+// left out is kept: a survivor or a timeout may be a loaded machine's result, and replaying it would pin that. It
+// decides nothing; the check reads the evidence and applies its own policy, so a reused run is judged like a fresh one.
 //
-// What it does not see: files git ignores that are not derived from the ones it does, and the installed packages
-// beyond what the lockfile pins. Neither is ordinary for a package that builds from tracked sources, and CI, which
-// starts from a clean checkout, never reuses anything.
+// Nothing is reused under `CI` or with `IPC_MUTATION_MEMO=0`. What it cannot see: ignored files not derived from
+// tracked ones, and installed packages beyond what the lockfile pins.
 
 import { createHash } from "node:crypto"
 import {

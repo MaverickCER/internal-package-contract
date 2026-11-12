@@ -1,5 +1,11 @@
-// Evidence gatherer for the `GitHygiene` check. Prints one JSON object; the
-// check's policy interprets it. Always exits 0.
+// Evidence gatherer for the `GitHygiene` check (see checks/git-hygiene.ts). Prints one JSON object and
+// always exits 0; the policy decides the verdict.
+//
+// What is read, from the working directory: whether it is a git repository, every tracked path, tracked
+// text files holding a merge-conflict marker (through `git grep`, which skips binary files), the imports of
+// tracked source that resolve only to a file git does not track (scripts/git-hygiene/imports.mjs), the
+// text of .gitignore, whether .gitattributes, .editorconfig and .nvmrc exist, and which of `private`,
+// `files`, `license`, `repository`, `engines.node`, `type` and `packageManager` package.json carries.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync, statSync } from "node:fs"

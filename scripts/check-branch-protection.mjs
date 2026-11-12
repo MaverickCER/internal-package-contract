@@ -1,27 +1,23 @@
-// Entry point for the `BranchProtection` check (see contract.ts). Verifies the
-// consumer's own default branch is protected against deletion and against
-// merging without a pull request, via a GitHub ruleset. Shells out to the
-// `gh` CLI -- reusing whatever auth the developer/CI already has (`gh auth
-// login` locally, or the ambient GH_TOKEN/GITHUB_TOKEN in Actions) -- rather
-// than a raw GitHub API client; `gh` is already the fleet's standard for
-// anything GitHub-API-shaped, and this package has no other network
-// dependency to justify adding one.
+// Entry point for the `BranchProtection` check (see checks/branch-protection.ts). Reads the GitHub
+// rulesets of the repository `origin` points at and prints one JSON envelope describing what they enforce on
+// the default branch. The policy decides the verdict; this reports and never judges.
 //
-// Reports `deletion`, `non_fast_forward`, `pull_request` (and whether it requires review threads
-// to be resolved) and `required_status_checks` (which contexts it requires, and whether it is strict:
-// a branch must be up to date with its base before it merges, so the checks ran on what is merged) --
-// the last is the rule that stops a red CI run from being merged and, through the release pipeline,
-// published.
+// What is read, through the `gh` CLI: the default branch, every active branch ruleset, and the rules of
+// each ruleset whose conditions cover that branch (scripts/github-repo.mjs decides which do). `gh` is used
+// so the check borrows the login a person or CI already has: `gh auth login` locally, GH_TOKEN or
+// GITHUB_TOKEN in Actions.
 //
-// Read-only: never creates or modifies a ruleset. `bin/scaffold.mjs`'s own `init`
-// command does that, sharing this script's owner/repo resolution
-// (scripts/github-repo.mjs).
+// What is reported: whether `deletion`, `non_fast_forward`, `pull_request` and `required_status_checks`
+// rules exist, the status-check contexts required, whether that rule is strict (the branch must be up to
+// date with its base before it merges), and whether review threads must be resolved. The policy asks for
+// the `contract` context among the required checks and does not ask for the aggregate `required` one.
 //
-// `gh` missing, unauthenticated, or the origin remote not being a recognizable
-// GitHub URL are all reported as `{ ok: false, error }` -- distinguishable
-// from "genuinely unprotected" (`{ ok: true, hasDeletion: false, ... }`) so
-// the check's own policy can warn instead of fail when it simply couldn't
-// check.
+// Read-only: nothing here creates or changes a ruleset; `internal-package-contract init --github` does
+// that with the same owner/repo resolution. `gh` missing or not logged in, an `origin` that is not a
+// GitHub URL, or an API call that fails is `{ ok: false, error }`, which the policy records as the
+// `BranchProtection:gh-unavailable` degradation: a warning locally, a failure under `--strict` in CI
+// unless `.repo-contract/exceptions/environment.json` accepts it. A ruleset whose detail cannot be read
+// is skipped, so the envelope then reads as unprotected rather than as a degradation.
 
 import { sync as spawnSync } from "cross-spawn"
 import { resolveOwnerRepo, rulesetCoversBranch } from "./github-repo.mjs"

@@ -1,14 +1,16 @@
 /**
- * Reads a GitHub Actions workflow and says which of its jobs the `required` aggregator does not wait for.
+ * Reads a GitHub Actions workflow and names the jobs the `required` aggregator does not wait for.
  *
- * The ruleset requires two contexts, `contract` and `required`; `required` is the one job that waits for every
- * other gate job (`needs`) and fails unless each finished with success. A job added to the workflow without
- * being added to `required.needs` is advisory from that day on, and nothing says so. This is the test that says
- * so, carried into every package as a managed copy (`test/_ipc/ci-jobs.ts`, with `test/ci-jobs.test.ts`).
+ * The ruleset `init` applies requires two contexts, `contract` and `required` (scripts/github-repo.mjs).
+ * `required` is the one job that `needs` every other gate job and fails unless each succeeded. A job added to
+ * the workflow but not to `required.needs` is advisory from that day on, and nothing says so. This is what says
+ * so. A package carries it as a managed copy (`test/_ipc/ci-jobs.ts`) with the test that runs it
+ * (`test/ci-jobs.test.ts`).
  *
- * Not a YAML parser. It recognises the layout every workflow in the fleet uses -- job ids as two-space-indented
- * keys under a top-level `jobs:`, `needs:` written inline (`[a, b]`) or as a block list, `continue-on-error:
- * true` as a job's own key -- and reports a workflow it cannot read that way as a problem, never as green.
+ * It is not a YAML parser. It reads the layout every scaffolded workflow uses: job ids as two-space-indented keys
+ * under a top-level `jobs:`, `needs:` inline (`[a, b]`) or as a block list, and `continue-on-error: true` as a
+ * job's own key. A workflow it cannot read that way is reported as a problem, never as green. The package.json
+ * section `"internal-package-contract": { "ciJobs": { ... } }` overrides the aggregator, exempt and advisory lists.
  */
 
 export interface CiJob {

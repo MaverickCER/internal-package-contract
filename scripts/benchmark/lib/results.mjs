@@ -1,17 +1,13 @@
-// Shared helpers for reading a consumer's own `results.json` (the shape
-// env-cap's and data-cap's `benchmark-fixtures/measure.mjs`-driven
-// run-benchmark.mjs scripts already produce) and normalizing it into the
-// same compact `{ [group]: { [tier]: { medianMs, inputs? } } }` shape used
-// by a committed history entry's own `measurements` field -- so
-// classify-complexity.mjs, append-history.mjs, render-summary.mjs, and
-// render-page.mjs can all reason about "current run" and "history entry"
-// data uniformly, through one function, instead of four slightly different
-// re-implementations of "how do I find a benchmark's medianMs."
+// One way to read a results.json, shared by every script that judges or renders one.
 //
-// Deliberately dependency-free (no consumer-repo assumptions beyond the
-// `results.json`/history-entry shapes themselves) and framework-free (plain
-// functions, no CLI of its own) -- imported by the scripts that do have a
-// CLI.
+// `resultsToMeasurements` turns a results.json into `{ [group]: { [tier]: { medianMs, inputs?, ... } } }`.
+// That is the shape a history entry's `measurements` already has, so a run and an entry compare the same way.
+// Only `status: "completed"` tiers with a median are kept; a failed tier contributes nothing. The median is
+// read from `totalMs` first, then `durationMs`. `inputs` is carried through only when the entry has one, so
+// "none recorded" stays distinct from an empty object. The spread figures (`stdDevMs`, `p95Ms`, `iterations`)
+// come along when finite, so a reader can tell a change from the run's own noise.
+//
+// Plain functions, no CLI, and no assumption about the package beyond the file shapes.
 
 import { readFileSync } from "node:fs"
 

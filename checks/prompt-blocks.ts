@@ -1,9 +1,18 @@
 /**
- * Finds the questions a scaffold left for its author (`<!-- ipc:prompt: ... -->`) that nobody has answered.
- * While a package is being developed they are a warning, because an unanswered question is normal on day one.
- * When a release is being verified (`IPC_RELEASE=1`, set by the release workflow's own step) they fail, because
- * a released package must not ship a document that still asks what it is for. It checks that a prompt is
- * gone, never whether the answer is any good.
+ * `PromptBlocks`: no document still carries a question the scaffold left for its author.
+ *
+ * Reads: every `<!-- ipc:prompt: ... -->` in the package's documents and decision records, and
+ * every `TODO:` value in `docs/surface.json`. Through `scripts/check-prompt-blocks.mjs` and
+ * `scripts/prompts/scan.mjs`. Also `IPC_RELEASE` from the environment.
+ *
+ * Warns on an unanswered prompt during development: a question is normal on day one. Fails on one
+ * when `IPC_RELEASE=1`, which the shared release workflow sets before it runs `--checks
+ * PromptBlocks`. Judges that a prompt is gone, never whether the answer is good.
+ *
+ * Exceptions: none. Replace the whole comment with the answer.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. The shared release workflow runs it
+ * again. IPC's own self-contract leaves it out: this package has no scaffold prompts.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

@@ -1,5 +1,8 @@
 # Keeps this repo's internal-package-contract pin current. PULLS: a daily check (or a manual run)
-# re-resolves the pin with this repo's own GITHUB_TOKEN, so no cross-repository token exists to expire.
+# re-resolves the pin from this repository, so no token that reads another repository is needed. The
+# pull request it opens re-pins the workflow SHAs too, and GitHub does not let GITHUB_TOKEN push a
+# change to .github/workflows/*, so that push needs the optional PIN_SYNC_TOKEN secret below (a
+# fine-grained token with Contents, Pull requests and Workflows write); it expires like any token.
 name: Sync internal-package-contract version
 
 on:

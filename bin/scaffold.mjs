@@ -1,6 +1,15 @@
-// `internal-package-contract init` -- scaffold the repo-maintenance files and
-// git wiring a package needs to adopt the standard. Non-destructive: existing
-// files are left alone unless `--force` is passed.
+// The file-writing half of `internal-package-contract init`. It is not a command of its own: `scripts/init/run.mjs`
+// (a new package) and `scripts/init/existing.mjs` (an existing one) run it. A new package runs it twice, because
+// the workflows that pin a commit can only be written once the lockfile names one.
+//
+// It writes the hygiene files, the contract, release, Scorecard and pin-sync workflows, the benchmark guides, an
+// `.nvmrc`, the `contract` script and, with `--name`, every file of `template/package`. A file that exists is
+// left alone unless `--force` is passed. It then points git at the bundled hooks and, unless `--no-github` is
+// passed, applies branch protection through `gh`. A missing or signed-out `gh` is reported, never a failure.
+//
+// It also writes `.repo-contract/exceptions/environment.json` with one dated record,
+// `environment:SecuritySocket:no-key`. A new package has no Socket token, and the CI run is `--strict`, so that
+// record is what keeps the first run green while the token decision is still open. An existing registry is kept.
 
 import { sync as spawnSync } from "cross-spawn"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"

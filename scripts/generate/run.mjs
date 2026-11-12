@@ -1,12 +1,15 @@
 // `internal-package-contract generate [--check]`: rewrites the generated regions in a package's documents.
 //
 //   internal-package-contract generate           rewrite every generated region that is stale
-//   internal-package-contract generate --check   write nothing; fail and name what is stale
+//   internal-package-contract generate --check   write nothing; exit 1 and name what is stale
 //
-// Only the documents listed here are read, only text between a region's markers is replaced, and the result is
-// formatted with the package's own Prettier settings, so a rerun changes nothing and `format:check` still passes.
-// A region that cannot be generated (bad markers, an unknown generator, a missing or inconsistent source) is
-// reported as `file:line: message` and nothing is written.
+// Only the documents in documents.mjs are read, and only the text between a region's markers is replaced. The
+// result is formatted with the package's own Prettier settings, so a rerun changes nothing and `Format` still
+// passes. The regions are `dependencies`, `entry-points` and `standards`; every one reads `package.json` and
+// `docs/surface.json`. A region that cannot be generated is reported as `file:line: message`, nothing is
+// written, and the exit code is 1. That covers bad markers, an unknown name, a missing or inconsistent source,
+// and a cited test outside the package. An unknown argument exits 2. With no region anywhere the command does
+// nothing and exits 0; the `GeneratedRegions` check, which runs `--check`, then passes as "absent".
 
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"

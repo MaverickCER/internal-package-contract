@@ -1,15 +1,18 @@
 /**
- * Module-boundary / dependency-graph governance via dependency-cruiser. A generic
- * recreation of repo-contract's own `architecture` check.
+ * `Architecture`: the module dependency graph obeys dependency-cruiser's rules.
  *
- * Uses the consumer's own `.dependency-cruiser.{js,cjs,mjs,json}` if present,
- * otherwise the bundled baseline (`config/dependency-cruiser.cjs`) -- so the
- * check enforces real rules out of the box, and a consumer only writes a config
- * to add package-specific boundaries.
+ * Reads: `src/`, which IPC's own self-contract retargets at `checks/`, `scripts/` and `bin/`. The
+ * config is the package's own `.dependency-cruiser.{js,cjs,mjs,json,jsonc}` when one exists, else
+ * the bundled `config/dependency-cruiser.cjs`. It is chosen when the contract is assembled, not per
+ * run.
  *
- * error-severity violations block; warn/info are reported but do not block --
- * matching repo-contract's own architecture policy and dependency-cruiser's own
- * severity model.
+ * Fails on any violation whose rule severity is `error`. Fails when dependency-cruiser printed no
+ * JSON; an absent `src/` looks like this. Warns on `warn` and `info` violations when there is no
+ * error.
+ *
+ * Exceptions: none in a registry. A rule is relaxed in the package's own dependency-cruiser config.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput, resolveConfig } from "./shared.js"

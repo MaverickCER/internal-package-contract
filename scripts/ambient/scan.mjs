@@ -1,12 +1,15 @@
 // What a published package may acquire on its own. A library that takes its filesystem, its way to start a
-// process and its environment from the caller (so a consumer can see, and replace, what it touches) must not
-// import them itself, and a tool like socket.dev flags every package that does. A package says which of these
-// it must never reach, and which entry points (its `bin`, an export such as `./node`) are the exception, and
-// this reads the tarball npm would publish to check that, since the tarball is what a consumer receives and a
-// source-level lint rule cannot see what a bundler pulled in.
+// process and its environment from the caller lets a consumer see, and replace, what it touches; a
+// supply-chain scanner such as socket.dev flags every package that reaches them itself. A package says
+// which of these it must never reach, and which entry points (its `bin`, an export such as `./node`) are
+// the exception, in package.json under "internal-package-contract"."ambientCapabilities". Nothing written
+// means DEFAULT_CONFIG: everything forbidden, except that a `bin` may touch files. This reads the tarball
+// npm would publish, because the tarball is what a consumer receives and a source-level lint rule cannot
+// see what a bundler pulled in.
 //
-// Textual defense in depth, not a proof: it catches a literal reintroduction (a stray `require("child_process")`,
-// a `process.env` reference, a forbidden dependency) and cannot prove the absence of every possible evasion.
+// Textual defense in depth, not a proof: it finds a literal reintroduction (a stray
+// `require("child_process")`, a `process.env` reference, a forbidden dependency) and cannot show that no
+// evasion exists. Bundled dependencies and files larger than LARGEST_SOURCE are not read.
 
 /** What each capability looks like in shipped code. */
 export const CAPABILITIES = Object.freeze({

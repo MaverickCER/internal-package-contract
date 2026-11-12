@@ -1,16 +1,16 @@
-// Entry point for the `DocsLinks` check (see checks/docs-links.ts). Runs two
-// independent linkinator crawls -- the README's Markdown link graph, and a
-// second, HTML-mode crawl over the consumer's own docs/ site -- and prints
-// their combined `links` array as one JSON object to stdout.
+// Entry point for the `DocsLinks` check (see checks/docs-links.ts). Runs two separate linkinator crawls and
+// prints their combined `links` as one JSON envelope: `{ ok: true, value: { links } }`, or `{ ok: false,
+// error }` with a non-zero exit when linkinator could not run or printed no JSON. The policy decides the
+// verdict.
 //
-// The second crawl closes a real, confirmed gap: the Markdown-only crawl
-// never covers docs/index.html's own HTML link graph at all (a broken link
-// added directly to the site's markup previously went uncaught). Modeled on
-// repo-contract's own scripts/check-docs.mjs, which runs the same two crawls
-// for the identical reason.
+// The first crawl starts at README.md in Markdown mode and follows its relative links. The second starts
+// at docs/ in HTML mode and descends into the site, including docs/api/** once generated, because the
+// Markdown crawl never reaches a link written in the site's own markup. Each crawl runs only when its
+// start file exists. The flags both crawls share are in scripts/docs-links-args.mjs.
 //
-// Every path here is resolved relative to process.cwd() -- the consumer's
-// own repo root, same as every other check in this package.
+// Every path is resolved against the working directory, the consumer's repository. The PATH shim at the
+// top lets `linkinator` resolve when this package is installed as a symlink and not hoisted; the contract
+// runner adds the same directories, and the shim repeats it so the script also runs on its own.
 
 import { linkinatorArgs } from "./docs-links-args.mjs"
 import { sync as spawnSync } from "cross-spawn"

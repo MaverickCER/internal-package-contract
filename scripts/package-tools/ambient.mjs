@@ -1,5 +1,6 @@
 // Says what the package that would be published reaches that it must be handed (see scripts/ambient/scan.mjs),
-// for a build step or a CI job that wants this one answer without running the contract.
+// for a build step or a CI job that wants this one answer without running the contract. The
+// `AmbientCapabilities` check asks the same question inside the contract (checks/ambient-capabilities.ts).
 //
 //   ambient [--tarball <file.tgz>]
 

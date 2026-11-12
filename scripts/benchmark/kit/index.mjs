@@ -1,4 +1,6 @@
 // Public entry of the shared benchmark kit: `import { defineSuite, ... } from "internal-package-contract/benchmark"`.
+// Everything a suite file or a package's own benchmark script needs is re-exported here, so no file under
+// kit/ is imported by path.
 export {
   COMPLEXITY_NOTATION,
   SuiteDefinitionError,

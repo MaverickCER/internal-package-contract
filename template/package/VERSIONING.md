@@ -1,7 +1,7 @@
 # Versioning
 
 `{{name}}` follows [Semantic Versioning](https://semver.org). Versions are produced by
-[Changesets](https://github.com/changesets/changesets), never by hand.
+[Changesets](https://github.com/changesets/changesets). No check detects a hand-edited version, so do not make one.
 
 - **Patch** -- bug fixes and internal changes that do not alter the public API.
 - **Minor** -- backwards-compatible additions. While the version is `0.x`, a breaking change is

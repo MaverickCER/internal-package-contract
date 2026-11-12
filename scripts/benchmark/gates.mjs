@@ -1,34 +1,26 @@
-// What a benchmark run is allowed to fail a pull request for -- and, as importantly, what it is not.
+// What a benchmark run may fail a pull request for, and what it may not.
 //
-// Comparing wall-clock milliseconds measured on one runner with milliseconds measured on another, at
-// another time (which is what "this PR against main's committed results" is), is not a defensible
-// gate at any threshold: the same code swings 10-40% between runs, more for microsecond-scale work, and
-// the two runs may not even be the same CPU or Node version. Raw cross-run deltas therefore stay
-// highlights in the PR comment. What can gate is a property of ONE run, or a ratio between two quantities
-// measured in the same run -- both depend far less on the machine than a raw time does:
+// A raw millisecond delta between two runs on different runners is never a gate. Only a property of one run,
+// or a ratio of two quantities measured in the same run, is judged.
 //
-//   1. complexity     a function whose measured growth class is two or more classes away from the one
-//                     documented for it (`agreement: "differs"`). The documented big-O is the
-//                     expectation; the class is fitted from this run alone.
-//   2. normalized overhead   the package's added time as a percentage of the bare baseline
-//                     (`overheadPercent`, both sides measured in the same run), compared with the same
-//                     figure from a reference run. A faster or slower machine moves numerator and
-//                     denominator together, so the ratio holds. The reference is both the previous run
-//                     on main and the results at the last release, so a series of small regressions
-//                     cannot ratchet the previous run upward unnoticed.
+//   1. complexity          `fail`: a function whose measured class is two or more classes from its documented
+//                          one (`agreement: "differs"`, kit/run.mjs). Off when a package's `GATES` sets
+//                          `complexity: false`.
+//   2. normalized overhead `fail`: the package's added time as a percentage of the bare baseline grew past the
+//                          allowed increase against a reference (the last run on main, the last release, or
+//                          main measured on this runner). The allowance is looser for sub-millisecond work.
+//                          A baseline under the noise floor is not judged. A reference from another CPU model
+//                          is not judged either, unless it was measured on this runner. A change inside the
+//                          two runs' 95% intervals is a `note`, not a failure.
+//   3. undetermined        `warn`: a group whose class could not be fitted. Nothing is known to be wrong or
+//                          right, so it never fails.
+//   4. complexity gain     `fail`: a group whose class got worse than at the last release with no complete
+//                          record in `.repo-contract/exceptions/benchmark-complexity.json`
+//                          (complexity-gain.mjs); an accepted gain is a `note`.
+//   5. environment         `note`: the two runs differ in Node major or CPU model, so raw deltas mean little.
 //
-//   3. undetermined   a group whose growth class could not be measured at all (too few usable sizes, or no
-//                     variation in size). Nothing is known to be wrong, but nothing is known to be right,
-//                     so it is a warning, never a failure.
-//
-//   4. complexity gain   a group whose fitted growth class got worse than at the last release. Getting worse
-//                     at big-O is a decision, so it fails until a human records that they accepted it
-//                     (see complexity-gain.mjs); an improvement never fails.
-//
-// The thresholds are deliberately loose, because they have to clear run-to-run noise with margin:
-// microsecond-scale work (a baseline under 1 ms) swings 30-40% with no change at all, so it is allowed
-// to grow by 70% before a human is stopped; millisecond-scale work, which is steadier, by 50%. Either
-// still catches the 2x-and-worse changes that mean an algorithmic or implementation mistake.
+// A package overrides any threshold with a `GATES` export in its budgets file. render-summary.mjs renders
+// these levels. Only its `--gate` flag turns a `fail` into a non-zero exit.
 
 import { explainUndetermined } from "./explain-undetermined.mjs"
 import {

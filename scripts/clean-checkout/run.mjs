@@ -1,6 +1,10 @@
-// The package as a clean checkout has it: only what git tracks, with this installation's dependencies, type-checked.
-// Every other check reads the working tree, so a file that is ignored, or was never added, is there for all of them
-// and missing for CI and for every consumer. This is the one check that reads only the index.
+// The package as a clean checkout has it: only what git tracks, with this installation's dependencies,
+// type-checked. Every other check reads the working tree, so a file that is ignored, or was never added,
+// is there for all of them and missing for CI and for every consumer. This is the one check that reads
+// only the index: tracked files are copied to a temporary folder, `node_modules` is linked in, and the
+// package's own `typecheck` script (else `check`) runs there. Not a repository, or neither script, is
+// `skipped` with the reason, which the `CleanCheckout` policy passes with. A failure keeps only the tail
+// of the output, OUTPUT_TAIL characters.
 
 import { sync as spawnSync } from "cross-spawn"
 import { spawnSync as gitSync } from "node:child_process"

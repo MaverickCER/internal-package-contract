@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Dispatched from `internal-package-contract update-baseline` (see bin/contract.mjs). Regenerates
-// every ApiContract target's `.repo-contract/api-contract/<target>/baseline.*` in the consumer's
-// working tree (process.cwd()) for a human -- or CI, on the Changesets "Version Packages" PR
-// branch -- to review and commit. See scripts/api-contract/update-baseline.ts's own module comment
-// for the full outcome matrix.
+// Entry for `internal-package-contract update-baseline` (dispatched by bin/contract.mjs). It runs
+// `scripts/api-contract/update-baseline.ts` against the working directory. That rewrites every ApiContract
+// target's `.repo-contract/api-contract/<target>/baseline.*` and the SurfaceContract baseline in the same run.
+// The files are left for a person, or the CI job on the Changesets "Version Packages" branch, to review and
+// commit. Each target's outcome is printed; `refused` and `failed` go to stderr and set exit code 1. That file's
+// header has the outcome matrix.
 
 import path from "node:path"
 import { fileURLToPath } from "node:url"

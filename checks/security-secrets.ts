@@ -1,11 +1,19 @@
 /**
- * Secret-leak scanning via secretlint (the `securitySecrets` preset).
+ * `SecuritySecrets`: no secret is committed, as secretlint finds them.
  *
- * secretlint ships no rules and no ignore defaults, so this always passes the
- * bundled `config/secretlintignore` (node_modules, dist, lockfiles, ...) and,
- * when the consumer has no `.secretlintrc.*`, the bundled
- * `config/secretlint.config.json` (`@secretlint/secretlint-rule-preset-recommend`,
- * which ships with this package).
+ * Reads: the files git tracks or would track, listed by `scripts/run-secretlint.mjs`. Listing them
+ * keeps secretlint from expanding its recursive glob over generated trees first. Also the bundled
+ * `config/secretlintignore`. The rules are the package's own `.secretlintrc.*` or
+ * `secretlint.config.*` when one exists, else the bundled `config/secretlint.config.json`
+ * (`@secretlint/secretlint-rule-preset-recommend`). Outside a git repository, or with too many
+ * files for one command line, the glob is passed through unchanged.
+ *
+ * Fails and warns exactly as repo-contract's `securitySecrets` preset does on secretlint's report.
+ * This file only chooses the files and the config.
+ *
+ * Exceptions: none in a registry. A `secretlint-disable` comment is read back by `Suppressions`.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig } from "repo-contract"
 import { securitySecrets as securitySecretsPreset } from "repo-contract/presets"

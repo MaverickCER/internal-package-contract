@@ -1,25 +1,18 @@
-// Runs @arethetypeswrong/cli with its stdout redirected to a real file rather
-// than a pipe.
+// Runs @arethetypeswrong/cli for the `TypeResolution` check (see checks/arethetypeswrong.ts) with its
+// stdout redirected to reports/arethetypeswrong.json instead of a pipe. The policy reads that file; this
+// script only produces the evidence and passes attw's exit code through.
 //
-// attw's own `--format json` output balloons past ~64KB once a package has more
-// than a couple of entrypoints, and attw has a real, reproducible bug (confirmed
-// independently, via plain shell piping) where it truncates its own stdout once
-// that happens, because it is writing to a pipe rather than a TTY or a regular
-// file. repo-contract captures every check's stdout through a pipe, so the
-// `arethetypeswrong` preset's own `run` hits the truncation and the JSON fails
-// to parse. A regular-file write does not hit the same OS pipe-buffer limit, so
-// redirecting here sidesteps the bug entirely -- the same workaround
-// repo-contract itself uses for its own contract (scripts/run-attw-to-file.mjs).
+// Why a file: attw's `--format json` output can be truncated when attw writes to a pipe, and the contract
+// runner captures every check's stdout through a pipe, so the preset's own `run` could not parse the
+// report. Writing to a regular file does not hit that limit.
 //
-// Packs the tarball with `npm pack --ignore-scripts` and hands attw the .tgz,
-// rather than attw's own `--pack .` mode: `--pack .` runs a plain `npm pack`
-// internally with no `--ignore-scripts`, which triggers the consumer's `prepare`
-// lifecycle (typically `npm run build`, often starting by deleting `dist/`) mid
-// run -- racing every other package check that reads `dist/` concurrently
-// (`Packaging`/publint chief among them).
+// Why `npm pack --ignore-scripts` instead of attw's own `--pack .`: attw packs without `--ignore-scripts`,
+// which runs the consumer's `prepare` lifecycle (often a build that first deletes `dist/`) while every
+// other check that reads `dist/` is running.
 //
-// The consumer's `contract.ts` policy reads reports/arethetypeswrong.json and
-// interprets it. This script only produces the evidence.
+// `--exclude=<name,...>` names the entry points attw skips; by default `schema`, whose subpaths are JSON
+// assets that attw's legacy `node10` resolver flags although they are not code. The PATH shim at the top
+// lets `attw` resolve when this package is installed as a symlink and not hoisted.
 
 import { sync as spawnSync } from "cross-spawn"
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, rmSync } from "node:fs"

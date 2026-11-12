@@ -1,9 +1,11 @@
 // `internal-package-contract doctor`: what is set up in this package, and what is left to do.
 //
 // Read-only. It looks at the files and git settings that adopting this standard puts in place, runs the cheap
-// checks that say whether they are current (managed files, generated regions, the landing page, prompts), and
-// lists the steps only a person can take, with the exact values to enter. It says what to run next for each
-// thing that is missing. It never changes anything and never calls the network.
+// checks that say whether they are current (managed files, generated regions, the landing page, the environment
+// document, prompts, adoption mode), and lists the steps only a person can take, with the values to enter. Each
+// thing that is missing names the command that fixes it. It also flags two setups that make the hooks or the
+// checks misbehave: a symlinked install of the standard, and a linked git worktree. It changes nothing and never
+// calls the network. The exit code is 1 while anything is left to run; the manual steps never change it.
 
 import { existsSync, lstatSync, readFileSync } from "node:fs"
 import path from "node:path"

@@ -1,7 +1,8 @@
 // The "dependencies" region: what installing a package adds, read from `package.json` itself, with the reason
 // for each dependency kept once in `docs/surface.json`. A document can then no longer call a package
-// dependency-free, or say it "bundles" something it installs, while `package.json` says otherwise; and a
-// dependency added without a stated reason fails generation instead of shipping unexplained.
+// dependency-free, or say it "bundles" something it installs, while `package.json` says otherwise. A dependency
+// with no stated reason stops generation, so `GeneratedRegions` fails instead of a document shipping
+// unexplained. So does a reason for a package that is not declared.
 //
 // What counts as installed follows npm 7 and later: `dependencies`, `optionalDependencies` (installed by default,
 // a failure tolerated) and required `peerDependencies`. Only optional peers are left to the consumer.

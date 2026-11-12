@@ -1,109 +1,62 @@
 /**
- * Mutation testing via Stryker. A generic recreation of repo-contract's own
- * `mutation` check: run Stryker, then require zero `Survived`, zero
- * `NoCoverage`, and zero `Timeout` mutants -- repo-contract's own real,
- * zero-tolerance policy (`checks/mutation.ts`), not a score threshold. A
- * `Timeout` is a hard failure, the same tier as `Survived`, never counted as
- * detected: a mutation that removes a loop/recursion bound can only ever
- * manifest as a hang, and "the test suite eventually times out" is not
- * evidence the mutation was caught. `RuntimeError`/`CompileError` count as
- * detected (a genuine crash is still a real, observed failure signal, just
- * not literally "Killed" by an assertion). The reported score
- * (`detected / (detected + survived + noCoverage + timeout)`) is informational
- * telemetry only -- it no longer gates pass/fail.
+ * `Mutation`: every Stryker mutant is detected. None survives, none is uncovered, none times out.
  *
- * `isolated: true` (set in contract.ts) is pure scheduling -- Stryker spawns its
- * own worker pool.
+ * Reads: the package's own `stryker.config.*` when one exists, else the bundled
+ * `config/stryker.config.mjs` (Vitest runner, `mutate: src/**`). Also the scope document of the
+ * run, and `IPC_MUTATION_REPORT`, `IPC_MUTATION_SHARD` and `IPC_MUTATION_MEMO`. Then
+ * `reports/mutation/mutation.json`, which `scripts/run-mutation.mjs` leaves after running Stryker
+ * with every mutant forced. Then `.repo-contract/exceptions/mutation.json`.
  *
- * Part of the standard contract -- runs on every full `npm run contract`, not
- * opt-in, and a package cannot satisfy the contract by omitting a `stryker.config.*`:
- * without one the bundled baseline runs. The pre-push hook omits it by name; the pre-commit hook
- * runs it when the change reaches mutated source (`--scope affected`); CI runs `--scope auto`, which
- * is everything on a push to main or a release. A fast local loop is an explicit `--checks ...` or
- * `--skip Mutation` subset.
+ * Fails on any `Survived`, `NoCoverage` or `Timeout` mutant no record covers. Each is listed with
+ * file, line, mutator and a before/after snippet; the list is capped. A `Timeout` is never counted
+ * as detected: a mutant that removes a loop bound can only hang. `Killed`, `RuntimeError` and
+ * `CompileError` count as detected. The score is reported but never gates. Fails when Stryker wrote
+ * no report, or one with no mutants. Fails when the registry cannot be loaded, or a record is
+ * incomplete. On a full run only, fails when a record matches nothing in the report (stale). With
+ * `IPC_MUTATION_REPORT` set, that report is judged instead of mutating; it fails when the change
+ * affects no source. Never warns.
  *
- * Uses the consumer's own `stryker.config.*` when present, otherwise the bundled
- * baseline (`config/stryker.config.mjs`, Vitest runner, `mutate: src/**`). Runs
- * via {@link file://../scripts/run-mutation.mjs}, which always cleans
- * `.stryker-tmp`. `@stryker-mutator/core` + `@stryker-mutator/vitest-runner`
- * ship with this package.
+ * Exceptions: id `mutation:<file>:<mutator>:<hash of original and replacement>`, with `file`,
+ * `mutator`, `original` and `replacement` fields and the version 2 fields. A record matches by
+ * source text, never by line, so it goes stale the moment the code around it changes. It can cover
+ * `Survived` and `NoCoverage` only, never `Timeout`. No stub is ever written. A record exists
+ * because a person applied the mutation by hand and saw the suite fail. Stryker's per-test coverage
+ * can still misreport that mutant as surviving.
  *
- * ## Known false positives -- `repo-contract/helpers`' exception-policy primitive
+ * Runs in the consumer `contract` job and in IPC's own self-contract. The pre-commit hook runs it
+ * under `--scope affected`. There it mutates only the changed non-test modules the affected
+ * analysis accepts, inside `src/` or not. It passes without running when there are none. The
+ * pre-push hook skips it by name. It is `isolated` and declared last: Stryker brings its own worker
+ * pool.
  *
- * Stryker's `coverageAnalysis: "perTest"` mode can misreport a mutant as
- * `Survived`/`NoCoverage` even though an existing test genuinely kills it --
- * confirmed by hand-applying the exact mutation to source and re-running the
- * suite (first observed in `@maverickcer/env-cap`'s `resolve-package-schema.ts`
- * `!cached` memoization guard, 2026-09-06: a dedicated "memoizes" test fails
- * when that mutation is applied by hand, yet Stryker's own report lists that
- * same test as covering the mutant and still calls it `Survived`). This is a
- * Stryker measurement defect, not a coverage gap -- no amount of new tests
- * fixes it, because the test that would kill it already exists.
+ * Limits: Stryker's per-test verdicts are not deterministic, so the same mutant can flip between
+ * runs. A narrowed or sharded run cannot say a record is stale. A mutant that flickers to `Timeout`
+ * needs a source fix, not a record: a `// Stryker disable` with its reason, or a fail-fast guard.
  *
- * A consumer documents a specific instance as a record in
- * `.repo-contract/exceptions/mutation.json` (repo-contract v0.4.0's exception
- * registry convention -- see repo-contract's own
- * specs/decisions/0013-reusable-exception-policy-helper.md):
+ * Example record:
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
  *       "id": "mutation:src/build/resolution/resolve-package-schema.ts:ConditionalExpression:2f8a1c9e4b7d",
- *       "version": 1,
- *       "justification": "Hand-applying this exact mutation fails the \"memoizes\" test (test/build/resolution/resolve-package-schema.test.ts); Stryker's own perTest coverage attribution still reports it Survived. Verified 2026-09-06.",
+ *       "version": 2,
+ *       "justification": "Hand-applying this exact mutation fails the \"memoizes\" test; Stryker's per-test coverage still reports it Survived.",
  *       "file": "src/build/resolution/resolve-package-schema.ts",
  *       "mutator": "ConditionalExpression",
  *       "original": "!cached",
- *       "replacement": "true"
+ *       "replacement": "true",
+ *       "ruleBroken": "Every mutant is detected by the suite.",
+ *       "attempted": "A second test for the memoization; Stryker reported the same mutant surviving.",
+ *       "constraint": "Stryker's per-test coverage attribution misses the test that kills it.",
+ *       "whyPreferable": "The test exists and fails under the mutation; the record names it.",
+ *       "residualRisk": "None: the behaviour is covered, only the report is wrong.",
+ *       "revisitWhen": "Stryker is upgraded, or the guarded line changes.",
+ *       "expires": ""
  *     }
  *   ]
  * }
  * ```
- *
- * `checks/exception-record.ts` owns the shared `id`/`version`/`justification`
- * core and registry-shape validation (the layer repo-contract's own ADR 0013
- * deliberately leaves unpublished); `resolveExceptionPolicy`/
- * `evaluateExceptionRecord` (`repo-contract/helpers`) decide whether a matched
- * record's `justification` satisfies policy (non-empty, via a single
- * `{ mode: "exception", requirements: ["justification", ...EXCEPTION_V2_FIELD_KEYS] }` policy -- there is
- * no severity tier here the way security findings have one).
- *
- * **Matching and staleness are check-owned, and deliberately do NOT use
- * `repo-contract/helpers`'s `reconcileExceptions`/`writeExceptionRegistry`.**
- * `reconcileExceptions` assumes a run's raw findings are a reasonably stable,
- * deterministic set -- true for dead code, security advisories, disable
- * comments, false for Stryker's own perTest verdicts (confirmed 2026-09-06/07:
- * the exact same mutant flips between `Survived` and `Killed` across
- * successive runs of byte-identical code, and which mutants misreport shifts
- * run to run, sometimes surfacing in files that never showed a false positive
- * before). Feeding "this run's live Survived/NoCoverage mutants" into
- * `reconcileExceptions` as `findings` would scaffold a blank stub for every
- * new flake and mark a good, hand-verified record stale the moment its flake
- * doesn't reproduce -- moving the exact non-determinism this mechanism exists
- * to suppress into the registry's own churn. Instead:
- * - Matching is **structural** -- `file` + `mutator` + the exact `original`/
- *   `replacement` source text Stryker's own report shows for that mutant,
- *   never line/column -- so a record stops matching, and the check fails as
- *   stale, the moment the surrounding code changes even slightly. Two mutants
- *   that happen to share identical text (e.g. the same string-literal error
- *   code returned from several branches) are deliberately covered by one
- *   record -- see this check's own test fixture for a worked example.
- * - A record is stale only when it matches **nothing at all** in the current
- *   report, regardless of status -- never merely because its matches are all
- *   currently `Killed`. A record matching a currently-non-Survived/NoCoverage
- *   mutant just suppresses nothing this run; it is not an error.
- * - No stub is ever auto-scaffolded or auto-written back to the registry: a
- *   record only exists because a human added it after hand verification (see
- *   the false-positive class above).
- * - A record can only ever suppress `Survived`/`NoCoverage` -- never
- *   `Timeout`, which repo-contract's own policy treats as unwaivable (see
- *   this module's own top doc comment). Code whose mutants flicker between
- *   `Survived` and `Timeout` across runs (observed in practice for some
- *   async-continuation code -- Stryker's own perTest non-determinism, not a
- *   real defect) needs a source-level fix (a Stryker `disable`/`restore`
- *   comment, or an independent fail-fast guard) instead of a registry entry,
- *   since a registry entry can't help on a run where it shows `Timeout`.
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

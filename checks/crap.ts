@@ -1,23 +1,21 @@
 /**
- * CRAP score (Change Risk Anti-Patterns: complexity vs. coverage) via
- * `@danibram/crap4ts`, plus an independent raw-cyclomatic-complexity ceiling.
- * A faithful recreation of repo-contract's own `crap` check, including its two
- * numbers ({@link CRAP_THRESHOLD} 30, {@link MAX_COMPLEXITY} 20 -- ESLint's own
- * default `complexity` limit).
+ * `Crap`: no function is both complex and poorly covered.
  *
- * Reads the same `coverage/coverage-final.json` the `Coverage` check just
- * produced, so it is declared with `dependsOn: ["Coverage"]` in contract.ts.
+ * Reads: `src/`, which IPC's own self-contract retargets at `checks/`, `scripts/` and `bin/`, and
+ * `coverage/coverage-final.json`, which `Tests` wrote, through `@danibram/crap4ts`. Its JSON goes
+ * to `reports/crap.json` rather than stdout: crap4ts exits before a large report drains through a
+ * pipe. `src/_ipc/**` is ignored: those managed copies are covered and mutation-tested in this
+ * repository. Declares `dependsOn: ["Coverage"]`.
  *
- * `--output` writes crap4ts's own JSON report straight to a file
- * ({@link crapReportPath}) instead of this check reading it back off the
- * process's captured stdout -- deliberate, not cosmetic: crap4ts's own CLI
- * calls `process.exit()` immediately after an un-awaited `process.stdout.write()`,
- * which can terminate the process before a large report (hundreds of
- * functions) finishes draining through the OS pipe's own backpressure,
- * silently truncating stdout -- confirmed to reproduce on an unmodified
- * checkout, independent of any consumer's own source. Writing to a real file
- * isn't subject to that same pipe-sized race, so this sidesteps the bug at
- * its call site rather than depending on an upstream fix.
+ * Fails on a function above {@link CRAP_THRESHOLD} (30) or above {@link MAX_COMPLEXITY} (20). Fails
+ * on an unreadable score, and when no report was written although `Tests` passed. Warns, not
+ * evaluated, when `Tests` failed. Under `--scope affected` only functions in the affected sources
+ * are judged. With no affected test file it passes without measuring.
+ *
+ * Exceptions: none. Split the function, or cover its branches.
+ *
+ * Runs in the consumer `contract` job and in IPC's own self-contract. The pre-commit hook runs it
+ * narrowed; the pre-push hook skips it by name.
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

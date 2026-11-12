@@ -1,14 +1,20 @@
 /**
- * Fails when a public function that takes more than one input (several parameters, or an object with several
- * keys) is not benchmarked across all of them. Each of those inputs can change what the function costs, so each
- * has to be accounted for in the benchmark that exercises it: swept, a variant, held fixed (and why) or not
- * covered (and why). A function can instead be listed under the suite's `notBenchmarked` with the reason.
+ * `BenchmarkCoverage`: every public function with several inputs is benchmarked across all of them.
  *
- * The functions come from the committed API baselines (`.repo-contract/api-contract`), and what each benchmark
- * covers from the committed results (`analysis.coverage`, derived from the suite's definition by
- * `benchmark --render`), so the check measures nothing and needs no build. A package with no API baseline has no
- * public functions to cover and passes. A suite whose committed results predate `analysis.coverage` fails: it must
- * be re-rendered.
+ * Reads: the committed API baselines under `.repo-contract/api-contract/`, which list the public
+ * functions and their signatures. Then each suite's committed `results.json`, whose
+ * `analysis.coverage` says what the benchmark swept, varied, held fixed or left out, and why. Both
+ * through `scripts/check-benchmark-coverage.mjs` and `scripts/benchmark/coverage/scan.mjs`. Nothing
+ * is measured and no build is needed.
+ *
+ * Fails on a function, or one of its inputs, that no benchmark accounts for. Fails when a suite's
+ * results predate `analysis.coverage`; `benchmark --render` rewrites them without measuring. Never
+ * warns. Passes with no API baseline: there are no public functions to cover.
+ *
+ * Exceptions: none in a registry. A function is listed under the suite's `notBenchmarked` with the
+ * reason.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

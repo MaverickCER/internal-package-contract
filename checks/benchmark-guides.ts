@@ -1,10 +1,16 @@
 /**
- * The package's copies of `WRITING-BENCHMARKS.md` and `READING-BENCHMARKS.md` must be identical to
- * the canonical ones this package ships (`template/benchmarks/`). The guides explain how benchmarks
- * are written and read and are the same for every package; four hand-kept copies drifted from the kit
- * they describe. `npx internal-package-contract sync-benchmark-guides` rewrites them.
+ * `BenchmarkGuides`: the package's `benchmarks/WRITING-BENCHMARKS.md` and `READING-BENCHMARKS.md`
+ * are identical to the canonical copies in this package's `template/benchmarks/`.
  *
- * A package with no `benchmarks/` directory has nothing to compare and passes.
+ * Reads: those two files under `benchmarks/`, through `scripts/benchmark-guides.mjs --check`.
+ *
+ * Fails when either guide is missing or differs. Never warns. Passes when there is no `benchmarks/`
+ * directory.
+ *
+ * Exceptions: none. `npx internal-package-contract sync-benchmark-guides` rewrites both; commit the
+ * result.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

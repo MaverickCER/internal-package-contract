@@ -1,12 +1,20 @@
-// Entry point for the `ApiContract` check, invoked via `checks/api-contract.ts`'s
-// `run: ["tsx", ".../check.ts", "--release-tag=public"]`. Prints ONLY the JSON evidence to stdout
-// (for `output: { format: "json" }` to parse) -- everything else, including anything API Extractor
-// itself would otherwise print, is routed to stderr.
+// The script behind the `ApiContract` check; checks/api-contract.ts runs it with `tsx` and `--release-tag=public`.
 //
-// Adapted from repo-contract's own `scripts/api-contract/check.ts`: loops over every target this
-// consumer declares (see targets.ts) instead of one hardcoded entry point, and reads the declared
-// bump from `.changeset/*.md` (changesets.ts) instead of Conventional Commit messages -- see
-// evidence-types.ts's own module comment for why.
+// It reads the consumer's `typedoc.json` entry points (one target each, see targets.ts), the built declarations
+// under `dist/.dts/` that API Extractor needs, each target's committed baseline under
+// `.repo-contract/api-contract/<target>/` as git `HEAD` has it, `package.json`, and the pending `.changeset/*.md`.
+//
+// Only the JSON evidence goes to stdout, so the check can parse it. Everything API Extractor prints is sent to
+// stderr by extractor-adapter.ts.
+//
+// A target with no baseline yet gets one written now and reports `initialBaseline`. Every other target is
+// classified: the public-API diff, the release level it requires, and whether the branch's changesets declare it.
+// A `version` literal left unchanged while its interface changed makes the target `breaking`; no record or
+// setting opts out of that rule (schema-version-consistency.ts). Below 1.0.0 a breaking change requires only
+// `minor` and a widening change only `patch` (levels.ts). Changes below the `--release-tag` floor are
+// reported for information and never change the verdict.
+//
+// This script decides nothing. The pass, warn or fail verdict is the policy's, in checks/api-contract.ts.
 
 import { readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"

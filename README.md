@@ -1,47 +1,34 @@
 # internal-package-contract
 
-The engineering standard every publishable MaverickCER package (`repo-contract`,
-`@maverickcer/env-cap`, `data-cap`) must **continuously satisfy** — and the
-configs, git wiring, and one-command setup to adopt it. A clone of repo-contract's own
-[`repo-contract.config.ts`](https://github.com/MaverickCER/repo-contract/blob/main/repo-contract.config.ts),
-adapted to govern a _consuming_ package.
+Three published packages (`repo-contract`, `@maverickcer/env-cap`, `data-cap`) must keep passing the same
+checks, and nobody wants to maintain three copies of the rules. This repository holds the rules once: the
+checks, the tool configs, the git hooks, the CI and release workflows, and `init`, the command that puts a
+package under them in a day. It is the "package" row of the layered model in
+[repo-contract ADR 0010](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0010-review-driven-contracts-and-shared-internal-system-contracts.md):
 
-It is the "package" row of the layered governance model
-([repo-contract ADR 0010](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0010-review-driven-contracts-and-shared-internal-system-contracts.md)):
-
-| Layer                           | Owns                                       | Answers                                         |
-| ------------------------------- | ------------------------------------------ | ----------------------------------------------- |
-| `repo-contract`                 | execution, evidence, policy mechanism      | _How_ is a requirement turned into a verdict?   |
-| **`internal-package-contract`** | the standard for a publishable package     | _What_ must every package continuously satisfy? |
-| `env-cap`, `data-cap`, …        | package-specific checks and implementation | _What else_ does this one package require?      |
-
-## Part of the MaverickCER toolkit
+| Layer                           | Owns                                       | Answers                                     |
+| ------------------------------- | ------------------------------------------ | ------------------------------------------- |
+| `repo-contract`                 | execution, evidence, policy mechanism      | How is a requirement turned into a verdict? |
+| **`internal-package-contract`** | the standard for a publishable package     | What must every package keep satisfying?    |
+| `env-cap`, `data-cap`, ...      | package-specific checks and implementation | What else does this one package require?    |
 
 `@maverickcer/env-cap` governs configuration and `data-cap` governs application data: siblings that apply the same capability-ownership model. `repo-contract` and `internal-package-contract` are how they are verified. See [the toolkit overview and glossary](https://github.com/MaverickCER/internal-package-contract/blob/main/TOOLKIT.md).
 
-**Not published to npm**, by choice: it is an internal standard whose checks
-change with the fleet, and a git dependency (pinned to a release tag or commit)
-is the only distribution it needs. It does depend on `repo-contract`'s
-published runtime, and `repo-contract` in turn consumes IPC's API-contract
-engine and benchmark kit as a _development_ dependency — a deliberate bootstrap
-cycle, described in [Bootstrap order](#bootstrap-order) below. Consumers depend
-on it with a `file:` / git range and get
-`repo-contract`, every executor, and every tool config transitively for
-**`npm run contract` itself** — one devDependency, no extra installs needed to
-run the contract (`bin/contract.mjs` prepends every `node_modules/.bin` it
-finds, including this package's own nested one, so `eslint`/`tsc`/`vitest`/etc.
-resolve even though a plain `file:` dependency's own dependencies are never
-`npm`-hoisted into the consumer's tree).
+## Where each gate runs
 
-That transitivity does **not** extend to the consumer's _own_ scripts or to
-TypeScript's own type resolution, both of which only ever look in the
-consumer's own `node_modules` (never a dependency's nested one): a consumer
-that runs `build`/`test` outside of `npm run contract`, or that extends the
-bundled `internal-package-contract/tsconfig` baseline (which sets
-`"types": ["node"]`), needs its own `typescript`, `@types/node`, and
-`vitest`/`@vitest/coverage-v8` devDependencies too — exactly what every
-current real consumer (env-cap, data-cap) already has. Add them alongside
-`internal-package-contract`.
+A check only matters where something fails when it is false. This table is the map; every section below
+names its row.
+
+| Gate                             | Runs                                                                    | What it decides                                                                                                                                 | Limit                                                                                                                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git hooks in a consumer          | `pre-commit`, `commit-msg`, `pre-push`, after `init` or `install-hooks` | Nothing: a local convenience. `pre-commit` runs `--scope affected`; `pre-push` skips Coverage, Crap and Mutation                                | Opt-in. `GitHooks` only warns when they are missing. `--no-verify` is not detectable; CI is the gate                                                                            |
+| The consumer's `contract` job    | `.github/workflows/contract.yml`, `npm run contract -- --scope auto`    | The merge. Each consumer's ruleset requires `contract` (strict: branch up to date) and review-thread resolution; `BranchProtection` checks it   | A pull request runs the affected scope only; the full run is the push to `main` after the merge. Admin role can bypass the ruleset by pull request                              |
+| The consumer's `required` job    | Same workflow; waits for `node-floor` and `typescript-7`                | Fails unless every job it needs finished `success`                                                                                              | `init` writes `required` into the ruleset it creates. A repository that predates it must add the context itself; the three current consumers have not yet                       |
+| The release `build` job          | `release-npm-changesets.yml`, on a push to `main`                       | Refuses to pack a tree no `contract` job passed on; runs `npm run verify`, `PromptBlocks` under `IPC_RELEASE=1`, and imports the packed tarball | No real release has run through this path since it was added in 0.17.0; consumer `main` branches still pin 0.16.0 or older. Shape-tested only (`test/release-workflow.test.ts`) |
+| The release `publish` job        | Same workflow, default branch only                                      | Publishes the exact tarball with OIDC provenance, then fails if npm does not serve the version with its attestation                             | A GitHub Release that fails to create cannot fail the run (`continue-on-error`)                                                                                                 |
+| This repository's own `contract` | `.github/workflows/ci.yml`, required by the `main` ruleset              | Whether the standard passes its own standard: 28 checks from `repo-contract.config.ts`, Mutation at zero survivors                              | 26 standard checks are not run here; the config lists each one with its reason. `typescript-7` is advisory                                                                      |
+
+Each row names the test, check or workflow that fails when it is false. Nothing outside this repository is needed to verify it.
 
 ## Adopt it
 
@@ -55,70 +42,74 @@ npx github:MaverickCER/internal-package-contract init
 npx github:MaverickCER/internal-package-contract init --name @scope/pkg --owner MyOrg
 ```
 
-`init` ends with `doctor`, a read-only report of what is set up, what to run next, and the steps only a person can
-take. Run `doctor` again whenever you want it; running `init` again is safe and finishes whatever is missing.
+`init` ends with `doctor`, a read-only report of what is set up, what to run next, and the steps only a person
+can take. Running `init` again is safe: a second run leaves the scaffold byte for byte unchanged
+(`test/init-scaffold-health.test.ts`). `init` refuses to start over uncommitted changes and never overwrites a
+file the package has, so `git restore .` undoes it. `--force` is the one way to overwrite.
 
-**In an existing package** `init` adds the pin and the `contract` script, and the scripts, tools and overrides the
-checks need; installs; scaffolds the hygiene files, the contract, release, Scorecard and pin-sync workflows, the git
-hooks and the Changesets config; writes every config, document and template the package lacks (never overwriting
-one it has); drafts `docs/surface.json`, keeping what a hand-written API table says; starts adoption mode; and
-generates the API map. **In an empty directory** `--name` scaffolds a complete package from
-[`template/package/`](template/package), installs, scaffolds again with the pin the lockfile names, generates, and
+**In an existing package** `init` adds the pin and the `contract` script, the scripts and overrides the checks
+need, the hygiene files, the contract, release, Scorecard and pin-sync workflows, the git hooks and the
+Changesets config. It writes every config, document and template the package lacks, drafts `docs/surface.json`,
+starts adoption mode and generates the API map. **In an empty directory** `--name` scaffolds a complete package
+from [`template/package/`](template/package), installs, scaffolds again with the pin the lockfile names, and
 runs `doctor`.
 
-Flags: `--dry-run` prints the plan and changes nothing. `--strict` skips adoption mode, so every check can fail the
-run from the start. `--github` also applies branch protection through the `gh` CLI; without it no repository
-setting is changed. `--docs` takes the standard's version of a shared document the package already has, instead of
-only naming it. `--tag vX.Y.Z` or `--spec <dependency spec>` chooses what to pin. `--owner` and `--description`
-fill in the package's repository and description. `--force` overwrites scaffolded files that already exist.
+Flags: `--dry-run` prints the plan and changes nothing. `--strict` skips adoption mode. `--github` applies a
+branch ruleset through the `gh` CLI; without it no repository setting changes. `--docs` takes the standard's
+version of a shared document the package already has. `--tag vX.Y.Z` or `--spec <dependency spec>` chooses what
+to pin. `--owner` and `--description` fill in the repository and description.
 
-**Adoption mode.** A package that adopts starts with every check reporting what it finds, but only the checks it has
-promoted deciding the exit code, so the first run is a list of things to fix and not a wall. `init` writes
-`.repo-contract/adoption.json` (ninety days, nothing promoted). While it is active a failing check is still a
-`FAIL`, with its whole reason (`FAIL (advisory)` on the console, `advisory` in the summary and report), and the run
-exits 0. Nothing is softened: each policy reports exactly what it will report once it is enforced.
-`internal-package-contract promote <Check>` makes a check strict: its failure fails the run from then on, and
-under `--strict` so does a "not evaluated" result of it that no exception record explains; unpromoted checks
-stay advisory either way. `promote --all` ends the mode. The `AdoptionMode` check warns with the days left and fails once the date has
-passed, so "adopting" cannot become permanent.
+**Adoption mode.** A package that adopts starts with every check reporting, but only promoted checks deciding
+the exit code. `init` writes `.repo-contract/adoption.json` (ninety days, nothing promoted). A failing check is
+still a `FAIL`, shown as `FAIL (advisory)`, and the run exits 0. `promote <Check>` makes a check strict;
+`promote --all` ends the mode. `AdoptionMode` warns with the days left and fails once the date has passed.
+Since 0.17.0 `--strict` is not suspended during adoption: an unrecorded "not evaluated" result of a promoted
+check fails under CI (`test/adoption-mode.test.ts`).
 
-`init` refuses to start over uncommitted changes, never overwrites a file the package has, and leaves everything as
-uncommitted changes to review, so `git restore .` undoes it. A shared document the package has that differs from the
-standard's is named and left alone. Three kinds of step cannot be scripted and are listed by `doctor` with the exact
-values to enter: registering npm's trusted publisher, the repository's settings and secrets, and installing the
-review apps.
+Three steps cannot be scripted and `doctor` lists them with the values to enter: npm's trusted publisher, the
+repository's settings and secrets, and the review apps.
 
-**Working on the standard itself.** To try a local checkout in a package, install it as a copy:
-`npm install --install-links --save-dev file:../internal-package-contract`. A plain `file:` dependency is a symlink,
-which makes the standard resolve its own tools from the wrong `node_modules` (a missing `typedoc`, a duplicated
-ESLint plugin) and fails in ways that look like bugs in the package. `doctor` says so when it finds one.
-Otherwise pin a release tag, `github:MaverickCER/internal-package-contract#v0.16.0`, not `#main`.
+**Working on the standard itself.** Install a local checkout as a copy:
+`npm install --install-links --save-dev file:../internal-package-contract`. A plain `file:` dependency is a
+symlink, which makes the standard resolve its tools from the wrong `node_modules`; `doctor` says so when it
+finds one. Otherwise pin a release tag, `github:MaverickCER/internal-package-contract#v0.17.0`, never `#main`.
 
-There's no programmatic import of this package -- `contract.ts` ships as raw
-TypeScript (Node refuses to type-strip `.ts` under `node_modules`, so a plain
-`import("internal-package-contract")` doesn't work), and nothing in this
-fleet needs one. The `internal-package-contract` CLI (which loads
-`contract.ts` internally via `tsx`) is the one supported way to run it; use
-`./eslint`, `./prettier`, `./tsconfig`, and `./config/*` for the individual
-tool configs.
+### What installing it gives you
 
-**Bundled git hooks** (installed by `init` or by running `internal-package-contract install-hooks` once per clone -- never by an install script; `GitHooks` warns when they are missing; a local convenience: CI runs the same contract and is the
-gate, so a hook that is skipped locally is still caught before merge):
+This package is never published to npm (`"private": true`; `test/release-versions-private-package.test.ts`).
+A consumer installs it from this repository by tag or commit and gets `repo-contract`, every executor and every
+tool config transitively for `npm run contract`: `bin/contract.mjs` prepends every `node_modules/.bin` it finds,
+including this package's nested one.
+
+That transitivity stops at the consumer's own scripts and at TypeScript's type resolution. A consumer that runs
+`build` or `test` outside the contract, or extends the bundled `tsconfig` baseline, needs its own `typescript`,
+`@types/node`, `vitest` and `@vitest/coverage-v8` devDependencies. Every current consumer has them.
+
+There is no programmatic import of this package: `contract.ts` ships as raw TypeScript, which Node refuses to
+type-strip under `node_modules`. The CLI is the supported way to run it; `./eslint`, `./prettier`, `./tsconfig`
+and `./config/*` are the tool configs.
+
+**Git hooks** are installed by `init` or by `internal-package-contract install-hooks`, once per clone. The
+scaffold has no install-time script (`test/init-scaffold-health.test.ts` checks the scaffold's `package.json`
+for `preinstall`, `install`, `postinstall`, `prepare` and `prepublish`). `GitHooks` warns when they are missing
+and never fails. CI runs the same contract under `--scope auto`, so a skipped hook changes nothing about what a pull
+request must pass; the full run is the push to `main`.
 
 | Hook         | Runs                                                                                            |
 | ------------ | ----------------------------------------------------------------------------------------------- |
 | `pre-commit` | the contract under `--scope affected`: every check the change can reach, slow analyses included |
-| `commit-msg` | Conventional Commits check on the message                                                       |
+| `commit-msg` | commitlint, with the bundled config                                                             |
 | `pre-push`   | everything except the slow analyses (`Coverage`, `Crap`, `Mutation`)                            |
 
 ## The checks
 
-[`contract.ts`](contract.ts) — the authoritative list is its `checks:` object;
-the tables below describe each one. Read-only against the consumer's source tree.
-`Build` / `Tests` write only build + coverage + report artifacts, which
-[`bin/contract.mjs`](bin/contract.mjs) cleans up. Every tool that needs a config
-uses the consumer's own if present, **otherwise a bundled default from
-[`config/`](config/)** — so the contract enforces real rules on day one.
+[`contract.ts`](contract.ts) declares the list in its `checks:` object; `test/contract.test.ts` pins the ids and
+checks that the tables below list exactly those ids. Every check is read-only against the consumer's tree except
+`Build` and `Tests`, which write build, coverage and report artifacts. Every tool uses the consumer's own config
+if present, otherwise a bundled default from [`config/`](config/), so the contract enforces real rules on day
+one. Thresholds are the fleet's, in [`checks/`](checks/): `coverage.ts` (80% for each of four measures),
+`crap.ts` (CRAP 30, complexity 20), `duplication.ts` (0.75%). Raise them there for the whole fleet, never per
+consumer; `checks/parts` lets a package replace a policy, and nothing stops it from doing so.
 
 Three declaration-order phases (repo-contract ADR 0002):
 
@@ -135,154 +126,112 @@ Three declaration-order phases (repo-contract ADR 0002):
 
 ### 2 — Build barrier
 
-`Build` — `npm run build`, `isolated`. Writers finish first; readers wait, so
-the packaging checks see a fresh `dist/`.
+`Build` — `npm run build`, `isolated`. Writers finish first; readers wait, so the packaging checks see a fresh
+`dist/`.
 
 ### 3 — Readers (concurrent)
 
-| Check                 | How                                                                                                                                                                                                                                                                      | Blocks on                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ApiContract`         | diffs every target's public API against its committed baseline (needs `dist/.dts/`)                                                                                                                                                                                      | the branch's changesets declaring a smaller bump than the diff actually requires                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `SurfaceContract`     | the `--help` and exit code of each `bin`, the JSON Schemas `exports` serve and the inputs and outputs of `action.yml`, against `.repo-contract/surface-contract/baseline.json`                                                                                           | a surface change the branch's changesets do not declare a large enough bump for, or (in CI) a surface with no committed baseline; passes when the package has none of these                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `Typecheck`           | `tsc --noEmit -p tsconfig.json`                                                                                                                                                                                                                                          | any type error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `CleanCheckout`       | the package's own type check on only what git tracks, with this installation's dependencies                                                                                                                                                                              | a file hidden by `.gitignore` or never added passes every check that reads the working tree and fails CI and every consumer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `Tests`               | `vitest run` **with** V8 coverage, once                                                                                                                                                                                                                                  | any failing / errored test                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `Architecture`        | `depcruise src` — bundled `config/dependency-cruiser.cjs`                                                                                                                                                                                                                | any error-severity violation (circular deps, etc.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `GithubActions`       | `github-actionlint` (npm wrapper for actionlint)                                                                                                                                                                                                                         | any workflow finding (no workflows → pass)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `GitHygiene`          | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`, and an import of a file git does not track (so a clean checkout lacks it)                                                                                                             | a repo-maintenance defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `GitHooks`            | `core.hooksPath` against the bundled hooks (local only)                                                                                                                                                                                                                  | never fails: warns when the hooks are not installed, with the one command that installs them; passes in CI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `LandingPage`         | `docs/site.json` against the landing-page quality bar, and the generated `docs/index.html`, `brief.html`, `styles.css`, `script.js` against what it produces                                                                                                             | invalid content, or generated files that differ from it; passes when the package has no `docs/site.json`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `AdoptionMode`        | whether `.repo-contract/adoption.json` says the package is adopting the standard                                                                                                                                                                                         | a warning while adopting (with the end date and what is enforced); a failure once the period has ended or the file is invalid; passes when the package is not adopting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `GeneratedRegions`    | the regions a document marks as generated (`<!-- ipc:begin entry-points -->`), against what `package.json` and `docs/surface.json` produce                                                                                                                               | a stale region, malformed markers, or a `docs/surface.json` that omits an exported entry point or lists one that is not exported (`internal-package-contract generate` rewrites them); passes when no document has a region                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `PromptBlocks`        | questions a scaffold left for its author (`<!-- ipc:prompt: ... -->`) in the documents and decision records                                                                                                                                                              | a warning while any is unanswered; a failure when a release is being verified (`IPC_RELEASE=1`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `EnvContract`         | `ci/env.schema.ts`, the credentials and settings the package depends on, read (never run) with env-cap, which this package carries, and `docs/ENVIRONMENT.md` generated from it                                                                                          | a warning for a credential that is expiring or has expired, or a generated file that is out of date; a package with no contract passes, and nothing in it is required                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `ReadmeStructure`     | `README.md` against the shared adoption layout: the ten sections in order, the trust badges (CI, npm, coverage, mutation, Scorecard, Socket, license), a real-output demo and Evaluate/Integrate/Verify next steps, within 220 lines                                     | a missing, extra or misordered section, a missing badge, or a README past the limit; a private package is exempt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `ScorecardWorkflow`   | `.github/workflows` for a workflow that runs `ossf/scorecard-action` pinned to a commit, with `publish_results: true`, the `id-token: write` permission and a schedule                                                                                                   | no such workflow, or one that cannot publish its result; a private package is exempt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `EngineMatrix`        | `engines.node` against the Node.js versions `.github/workflows` actually run on                                                                                                                                                                                          | a published package that declares no minimum, one the check cannot read, or one that no workflow tests; a private package is exempt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `ManagedFiles`        | the few files this package owns in a consumer (the release, pin-sync, env-rotation and Scorecard workflows and the Changesets config) against the standard's, comparing what they mean rather than their bytes (comments, blank lines and the pinned commit are ignored) | a missing or drifted managed file with no complete, unexpired record in `.repo-contract/exceptions/managed-files.json` (`internal-package-contract sync` shows the difference); a private package is exempt                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `PinConsistency`      | the `package.json` ref, the lockfile commit and every workflow's pinned SHA of this package (offline)                                                                                                                                                                    | any disagreement between them, a workflow not pinned to a full SHA, or a missing or wrong `# vX` comment; passes when the repo does not use this package                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `BranchProtection`    | `gh api` against the default branch's GitHub ruleset                                                                                                                                                                                                                     | deletion / force-push / PR-required protection, the `contract` required status check (strict), or required review-thread resolution missing (`gh` unavailable is a recorded degradation)                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `Coverage`            | reads `Tests`' summary vs. `COVERAGE_THRESHOLDS`                                                                                                                                                                                                                         | any metric below threshold                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `Crap`                | `crap4ts src` — CRAP and cyclomatic ceilings (`CRAP_THRESHOLD` / `MAX_COMPLEXITY`; `dependsOn Coverage`)                                                                                                                                                                 | any function over either ceiling                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `Size`                | `npm run size` \*                                                                                                                                                                                                                                                        | the consumer's size script failing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `NoMinify`            | static check of tsup config / scripts + inspection of `dist/` for minified code                                                                                                                                                                                          | any `minify*` option, or a minified-looking built file (Socket flags minified code; 0 minification is allowed; no allowlist)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `DistNoUrls`          | `repo-contract/presets` `distNoUrls` scanner over **every** file in `dist/` (maps, `.d.ts` too)                                                                                                                                                                          | any shipped URL without a complete record in `.repo-contract/exceptions/dist-urls.json` (stubs scaffolded; stale records fail)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `Duplication`         | `jscpd src`                                                                                                                                                                                                                                                              | duplication above the budget in `checks/duplication.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `Packaging`           | `publint`                                                                                                                                                                                                                                                                | any packaging **error** (warnings warn)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `TypeResolution`      | `attw` on the packed tarball (`./schema` excluded)                                                                                                                                                                                                                       | any packaged type-resolution problem                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `PackedConsumer`      | the packed tarball, installed into an empty project: every file `package.json` promises is in it, every export-map entry imports (and `require`s, where a `require` condition exists), JSON entries with a JSON import attribute                                         | an entry that throws or cannot be resolved, or a promised file missing from the tarball; an entry missing only a declared peer is skipped and named, an install that cannot run is not evaluated, a private package is exempt                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `Licenses`            | `licensee --production`, with the repository's `.licensee.json` as the policy (`--osi` without one)                                                                                                                                                                      | any shipped dep without an OSI license                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `DocsMarkdown`        | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                                                                                                                                                                                                                | any markdown issue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `DocsLinks`           | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/`                                                                                                                                                                                       | any broken **local** link (an unreachable external link warns until recorded; a rate-limited one, HTTP 429, passes)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `DocsFragments`       | bundled `scripts/check-docs-fragments.mjs`                                                                                                                                                                                                                               | a `filename.md#fragment` link whose fragment isn't a real heading (a gap neither `DocsMarkdown` nor `DocsLinks` covers)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `BenchmarkGuides`     | compares `benchmarks/WRITING-BENCHMARKS.md` and `READING-BENCHMARKS.md` with the canonical copies in `template/benchmarks/`                                                                                                                                              | a copy that differs or is missing (`internal-package-contract sync-benchmark-guides` fixes it)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `BenchmarkComplexity` | each suite's committed `benchmarks/<suite>/results.json` against the results committed at the last release tag: the fitted big-O class of every measured group                                                                                                           | a group whose class got worse (linear to quadratic, say) with no complete, unexpired record in `.repo-contract/exceptions/benchmark-complexity.json` accepting that group growing to that class; no benchmarks or no release tag passes                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `BenchmarkCoverage`   | the public functions in the committed API baselines (`.repo-contract/api-contract`) against what each benchmark suite says it covers (`analysis.coverage` in `benchmarks/<suite>/results.json`)                                                                          | a public function with several inputs (several parameters, or an object with several keys) that no benchmark exercises and the suite does not list under `notBenchmarked`; a parameter or key the covering benchmark does not account for; a name that is not (or no longer) a public function; a suite whose results predate `analysis.coverage`; a package with no API baseline passes                                                                                                                                                                                                                                                                        |
-| `Accessibility`       | `pa11y` (WCAG2AA) against the consumer's own built docs site                                                                                                                                                                                                             | any accessibility violation (no built site to scan → warn)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `SecurityDeps`        | `npm audit --omit=dev` (what users install)                                                                                                                                                                                                                              | any critical advisory (never waivable); any lower one without a complete exception record                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `SecurityDevDeps`     | `npm audit` over the whole tree, minus `--omit=dev` (the development and CI tooling)                                                                                                                                                                                     | a critical advisory in development tooling; lower ones warn                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `SecuritySecrets`     | `secretlint` — bundled `config/secretlint.config.json`                                                                                                                                                                                                                   | any detected secret                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `Suppressions`        | parses every source and Markdown file for suppression comments (ESLint, TypeScript, Stryker, V8/c8/Istanbul coverage, jscpd, Prettier, markdownlint, secretlint); the full list is kept in the evidence                                                                  | a suppression with no reason where it is written, a blanket one (`@ts-ignore`, `@ts-nocheck`, `eslint-disable` naming no rule), or a stale record — unless a complete record in `.repo-contract/exceptions/suppressions.json` covers it                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `SecuritySocket`      | `socket package score` (`@socketsecurity/cli`) — the package's own Socket page, whole transitive closure incl. peers                                                                                                                                                     | any `critical`/`high` alert is forbidden; every other alert, `supplyChainRisk` included, needs a complete exception record whose `exceptionType` says what is actually true (`validated-false-positive` with a mechanical re-verification, `tooling-limitation`, `accepted-risk`, or `required-for-package-to-exist`). **Warns** when no API key is available (the scan did not run, with the setup steps); in CI, where the contract runs `--strict`, that warning fails unless `environment.json` records `environment:SecuritySocket:no-key` (`init` writes one that expires after 90 days); **fails** for a rejected token, a network error or a rate limit |
-| `CodeScanning`        | open GitHub code-scanning alerts for the ref being built (your `gh` login locally; the workflow token in CI, which needs `security-events: read`)                                                                                                                        | an alert in code that builds, runs or ships must be fixed (no exception); an alert in development-only code (tests, unpublished `scripts/`, docs, `.github/`, configs) is rejected with a standing `policy-rule` record in the committed `.repo-contract/exceptions/code-scanning.json`; when the repository has no code scanning enabled or no GitHub remote, the review is a degradation (`environment:CodeScanning:not-enabled` / `no-remote`), a warning locally and a failure under `--strict` unless recorded                                                                                                                                             |
-| `DeadCode`            | `knip` — bundled `config/knip.json`                                                                                                                                                                                                                                      | any unused file/export/dep, unlisted import                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `Commits`             | `commitlint origin/main..HEAD` — bundled config                                                                                                                                                                                                                          | any non-Conventional-Commit (no base branch → warn)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `CodeRabbit`          | `coderabbit review --agent` — your uncommitted edits, or with a clean tree the committed branch diff against `origin/main` (CodeRabbit CLI, installed per machine; in CI the GitHub App reviews and review-thread resolution gates the merge)                            | never on a finding: findings, stale records and an unreadable review are advisory warnings. It fails only when its own evidence is broken: an unloadable `.repo-contract/exceptions/coderabbit.json`, evidence that fails revalidation or no longer matches its records, or a review script that crashes or prints output that is not JSON (CI / no CLI / detached `HEAD` → warn, always recorded)                                                                                                                                                                                                                                                              |
-| `Mutation`            | Stryker, zero-tolerance (`isolated`)                                                                                                                                                                                                                                     | any Survived/NoCoverage/Timeout mutant (always runs: without a `stryker.config.*` the bundled baseline does; mutants hidden by `Stryker disable` comments are counted in the rationale)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Check                 | How                                                                                                                                                                                          | Blocks on                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApiContract`         | diffs every target's public API against its committed baseline (needs `dist/.dts/`)                                                                                                          | the branch's changesets declaring a smaller bump than the diff requires. Limit: the schema-version rule (`scripts/api-contract/schema-version-consistency.ts`) treats any drift of a member named `version` as breaking, with no opt-out                                                                                                                                                                                            |
+| `SurfaceContract`     | the `--help` and exit code of each `bin`, the JSON Schemas `exports` serve and the inputs and outputs of `action.yml`, against `.repo-contract/surface-contract/baseline.json`               | a surface change the branch's changesets do not declare a large enough bump for, or (in CI) a surface with no committed baseline; passes when the package has none of these. Behaviour behind an unchanged `--help` is unseen                                                                                                                                                                                                       |
+| `Typecheck`           | `tsc --noEmit -p tsconfig.json`                                                                                                                                                              | any type error                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `CleanCheckout`       | the package's own type check on only what git tracks, with this installation's dependencies                                                                                                  | a file hidden by `.gitignore` or never added. Type check only; tests are not re-run on the clean copy                                                                                                                                                                                                                                                                                                                               |
+| `Tests`               | `vitest run` **with** V8 coverage, once                                                                                                                                                      | any failing or errored test                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `Architecture`        | `depcruise src` — bundled `config/dependency-cruiser.cjs`                                                                                                                                    | any error-severity violation (circular deps, etc.)                                                                                                                                                                                                                                                                                                                                                                                  |
+| `GithubActions`       | `github-actionlint` (npm wrapper for actionlint)                                                                                                                                             | any workflow finding (no workflows → pass). The files under `template/` are never linted as workflows                                                                                                                                                                                                                                                                                                                               |
+| `GitHygiene`          | tracked build output, conflict markers, `.gitignore` gaps, `package.json` `files`, and an import of a file git does not track                                                                | tracked build output, a conflict marker, an import of an untracked file, no `.gitignore` at all, or a non-private package with no `files` array; an incomplete `.gitignore` and missing `.gitattributes`, `.editorconfig`, `.nvmrc`, license, `engines.node` or `type` only warn                                                                                                                                                    |
+| `GitHooks`            | `core.hooksPath` against the bundled hooks (local only)                                                                                                                                      | never fails: warns when the hooks are not installed, with the command that installs them; passes in CI                                                                                                                                                                                                                                                                                                                              |
+| `LandingPage`         | `docs/site.json` against the landing-page bar, and the generated `docs/index.html`, `brief.html`, `styles.css`, `script.js` against what it produces                                         | invalid content, or generated files that differ from it; passes when the package has no `docs/site.json`                                                                                                                                                                                                                                                                                                                            |
+| `AdoptionMode`        | whether `.repo-contract/adoption.json` says the package is adopting the standard                                                                                                             | a warning while adopting (with the end date and what is enforced); a failure once the period has ended or the file is invalid; passes when the package is not adopting                                                                                                                                                                                                                                                              |
+| `GeneratedRegions`    | the regions a document marks as generated (`<!-- ipc:begin entry-points -->`), against what `package.json` and `docs/surface.json` produce                                                   | a stale region, malformed markers, or a `docs/surface.json` that omits an exported entry point or lists one that is not exported (`internal-package-contract generate` rewrites them); passes when no document has a region                                                                                                                                                                                                         |
+| `PromptBlocks`        | questions a scaffold left for its author (`<!-- ipc:prompt: ... -->`) in the documents and decision records                                                                                  | a warning while any is unanswered; a failure when a release is being verified (`IPC_RELEASE=1`, set by the release `build` job)                                                                                                                                                                                                                                                                                                     |
+| `EnvContract`         | `ci/env.schema.ts`, the credentials and settings the package depends on, read (never run) with env-cap, and `docs/ENVIRONMENT.md` generated from it                                          | a warning for a credential that is expiring or has expired, or a generated file that is out of date; never fails. A package with no contract passes                                                                                                                                                                                                                                                                                 |
+| `ReadmeStructure`     | `README.md` against the shared adoption layout in `scripts/readme/validate.mjs`: the ten sections in order, the seven trust badges, Evaluate/Integrate/Verify next steps, within 220 lines   | a missing, extra or misordered section, a missing badge, or a README past the limit; a private package is exempt                                                                                                                                                                                                                                                                                                                    |
+| `ScorecardWorkflow`   | `.github/workflows` for a workflow that runs `ossf/scorecard-action` pinned to a commit, with `publish_results: true`, `id-token: write` and a schedule                                      | no such workflow, or one that cannot publish its result; a private package is exempt                                                                                                                                                                                                                                                                                                                                                |
+| `EngineMatrix`        | `engines.node` against the `node-version` literals in `.github/workflows`                                                                                                                    | a published package that declares no minimum, one the check cannot read, or one that no workflow names. It reads the literal, not whether that job is required or green; a private package is exempt                                                                                                                                                                                                                                |
+| `ManagedFiles`        | the five files this package owns in a consumer (the release, pin-sync, env-rotation and Scorecard workflows and the Changesets config) against the installed release's templates, by meaning | a missing or drifted managed file with no complete, unexpired record in `.repo-contract/exceptions/managed-files.json` (`internal-package-contract sync` shows the difference). "Current" means equal to the installed release, not the newest; a private package is exempt                                                                                                                                                         |
+| `PinConsistency`      | the `package.json` ref, the lockfile commit and every workflow's pinned SHA of this package (offline)                                                                                        | any disagreement between them, a workflow not pinned to a full SHA, or a missing or wrong `# vX` comment. It does not check that the SHA is on this repository's default branch; passes when the repo does not use this package                                                                                                                                                                                                     |
+| `BranchProtection`    | `gh api` against the default branch's GitHub ruleset                                                                                                                                         | deletion, force-push or pull-request protection missing, the `contract` context missing or not strict, or review-thread resolution missing. It does not assert the `required` context and does not inspect bypass actors; `gh` unavailable is a recorded degradation                                                                                                                                                                |
+| `Coverage`            | reads `Tests`' summary against `COVERAGE_THRESHOLDS`                                                                                                                                         | any measure below threshold. Under `--scope affected` it warns instead of judging                                                                                                                                                                                                                                                                                                                                                   |
+| `Crap`                | `crap4ts src` — CRAP and cyclomatic ceilings (`CRAP_THRESHOLD` / `MAX_COMPLEXITY`; `dependsOn Coverage`)                                                                                     | any function over either ceiling                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `Size`                | `npm run size` \*                                                                                                                                                                            | the consumer's size script failing                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `NoMinify`            | static check of tsup config and scripts, plus inspection of `dist/` for minified code                                                                                                        | any `minify*` option, or a minified-looking built file (Socket flags minified code; no allowlist)                                                                                                                                                                                                                                                                                                                                   |
+| `DistNoUrls`          | `repo-contract/presets` `distNoUrls` scanner over **every** file in `dist/` (maps, `.d.ts` too)                                                                                              | any shipped URL without a complete record in `.repo-contract/exceptions/dist-urls.json`; stale records fail                                                                                                                                                                                                                                                                                                                         |
+| `Duplication`         | `jscpd src`                                                                                                                                                                                  | duplication above the budget in `checks/duplication.ts`                                                                                                                                                                                                                                                                                                                                                                             |
+| `Packaging`           | `publint`                                                                                                                                                                                    | any packaging **error** (warnings warn)                                                                                                                                                                                                                                                                                                                                                                                             |
+| `TypeResolution`      | `attw` on the packed tarball (`./schema` excluded)                                                                                                                                           | any packaged type-resolution problem                                                                                                                                                                                                                                                                                                                                                                                                |
+| `PackedConsumer`      | the packed tarball, installed into an empty project: every promised file is in it, every export-map entry imports (and `require`s where a `require` condition exists)                        | an entry that throws or cannot be resolved, or a promised file missing from the tarball. An entry missing only a declared peer is skipped and named; an install that cannot run is not evaluated; a private package is exempt                                                                                                                                                                                                       |
+| `Licenses`            | `licensee --production`, with the repository's `.licensee.json` as the policy (`--osi` without one)                                                                                          | any shipped dep without an OSI license                                                                                                                                                                                                                                                                                                                                                                                              |
+| `DocsMarkdown`        | `markdownlint-cli2` — bundled `config/markdownlint.jsonc`                                                                                                                                    | any markdown issue                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `DocsLinks`           | `linkinator`, recursive: Markdown crawl from `README.md` + HTML crawl over `docs/`                                                                                                           | any broken **local** link (an unreachable external link warns until recorded; a rate-limited one, HTTP 429, passes)                                                                                                                                                                                                                                                                                                                 |
+| `DocsFragments`       | bundled `scripts/check-docs-fragments.mjs`                                                                                                                                                   | a `filename.md#fragment` link whose fragment is not a real heading                                                                                                                                                                                                                                                                                                                                                                  |
+| `BenchmarkGuides`     | `benchmarks/WRITING-BENCHMARKS.md` and `READING-BENCHMARKS.md` against the copies in `template/benchmarks/`                                                                                  | a copy that differs or is missing (`internal-package-contract sync-benchmark-guides` fixes it). A guide edit here drifts every consumer until it re-pins and syncs                                                                                                                                                                                                                                                                  |
+| `BenchmarkComplexity` | each suite's committed `benchmarks/<suite>/results.json` against the results committed at the last release tag: the fitted big-O class of every measured group                               | a group whose class got worse with no complete, unexpired record in `.repo-contract/exceptions/benchmark-complexity.json`. A class that cannot be determined warns, never fails; no benchmarks or no release tag passes                                                                                                                                                                                                             |
+| `BenchmarkCoverage`   | the public functions in the committed API baselines (`.repo-contract/api-contract`) against what each suite says it covers (`analysis.coverage` in `results.json`)                           | a public function with several inputs that no benchmark exercises and the suite does not list under `notBenchmarked`; a parameter or key the covering benchmark does not account for; a name that is no longer a public function; a package with no API baseline passes                                                                                                                                                             |
+| `Accessibility`       | `pa11y` (WCAG2AA) against the consumer's own built docs site                                                                                                                                 | any accessibility violation (no built site or no Chrome → a recorded degradation)                                                                                                                                                                                                                                                                                                                                                   |
+| `SecurityDeps`        | `npm audit --omit=dev` (what users install)                                                                                                                                                  | any critical advisory (never waivable); any lower one without a complete exception record. Vacuous for a package with no runtime dependencies                                                                                                                                                                                                                                                                                       |
+| `SecurityDevDeps`     | `npm audit` over the whole tree, minus `--omit=dev`                                                                                                                                          | a critical advisory in development tooling; lower ones warn                                                                                                                                                                                                                                                                                                                                                                         |
+| `SecuritySecrets`     | `secretlint` — bundled `config/secretlint.config.json`                                                                                                                                       | any detected secret                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `Suppressions`        | parses every source and Markdown file for suppression comments (ESLint, TypeScript, Stryker, V8/c8/Istanbul, jscpd, Prettier, markdownlint, secretlint); the full list is kept as evidence   | a suppression with no reason where it is written, a blanket one (`@ts-ignore`, `@ts-nocheck`, `eslint-disable` naming no rule), or a stale record, unless `.repo-contract/exceptions/suppressions.json` covers it. A reason is required, not judged                                                                                                                                                                                 |
+| `SecuritySocket`      | `socket package score` (`@socketsecurity/cli`) on the package's own Socket page, whole transitive closure incl. peers                                                                        | any `critical` or `high` alert; every other alert needs a complete record whose `exceptionType` says what is true. **Warns** without an API key; in CI (`--strict`) that warning fails unless `environment.json` records `environment:SecuritySocket:no-key` (`init` writes one with a 90-day expiry). **Fails** on a rejected token, a network error, a rate limit or a missing `socket` CLI. Scores the version already published |
+| `CodeScanning`        | open GitHub code-scanning alerts for the ref being built (your `gh` login locally; the workflow token in CI, which needs `security-events: read`)                                            | an alert in code that builds, runs or ships must be fixed; an alert in development-only code takes a standing `policy-rule` record in `.repo-contract/exceptions/code-scanning.json`; no scanning or no remote is a degradation (`environment:CodeScanning:not-enabled` / `no-remote`). Alerts open on `main` only are invisible to a pull request                                                                                  |
+| `DeadCode`            | `knip` — bundled `config/knip.json`                                                                                                                                                          | any unused file, export or dependency, or an unlisted import                                                                                                                                                                                                                                                                                                                                                                        |
+| `Commits`             | `commitlint origin/main..HEAD` — bundled `config/commitlint.config.mjs`                                                                                                                      | any message that is not a Conventional Commit, and any `Co-Authored-By` trailer (the bundled config's `no-co-author-trailer` rule); no base branch → warn                                                                                                                                                                                                                                                                           |
+| `CodeRabbit`          | `coderabbit review --agent` on your uncommitted edits, or the committed branch diff against `origin/main` (CLI installed per machine; in CI the GitHub App reviews)                          | never on a finding: findings, stale records and an unreadable review warn. It fails only on broken evidence: an unloadable `.repo-contract/exceptions/coderabbit.json`, evidence that fails revalidation, or a review script that crashes or prints non-JSON (CI / no CLI / detached `HEAD` → warn, recorded)                                                                                                                       |
+| `Mutation`            | Stryker, zero-tolerance (`isolated`)                                                                                                                                                         | any Survived, NoCoverage or Timeout mutant. Always runs: without a `stryker.config.*` the bundled baseline does. Mutants hidden by `Stryker disable` comments are counted in the rationale, not judged; the baseline sets `ignoreStatic: true`                                                                                                                                                                                      |
 
-\* runs the consumer's own npm script; **skipped with a note** if absent.
+\* runs the consumer's own npm script; **skipped with a note** if absent. `ReadmeExample` passes when skipped,
+including when the script exists but its fixture is missing (known follow-up).
 
-**A genuinely brand-new package** (nothing but `package.json` — no `src/`,
-`tsconfig.json`, `eslint.config.*`, `build` script, or `.git` yet) will see
-more than `ApiDocs`/`Schema`/`Size` behave this way on the very first
-`npm run contract`: `Lint`, `Typecheck`, `Build`, `Architecture`, `GitHygiene`,
-and `Coverage` **fail outright**, each naming exactly what's missing (a
-`tsconfig.json`, a `src/` directory, a `git init`, …) — this is deliberate,
-not a bug: unlike the `config/`-backed checks, the `eslint`/`tsconfig`
-baselines are meant to be **extended** by the consumer's own config (see
-"Overriding a bundled config" below), never silently substituted, so `Lint`/
-`Typecheck` enforce real rules against real consumer config from day one
-instead of quietly no-op'ing; `Mutation` is the same (it always runs, and fails until there is
-something to mutate). `Accessibility` (no built docs site yet) and `BranchProtection` (no
-`.git`/GitHub remote yet) cannot run at all there, so they record a degradation instead: a warn
-locally, accepted by a record in `.repo-contract/exceptions/environment.json`, and a failure under
-the CI gate without one (see "Exceptions" below). Run `git init`
-and add a `tsconfig.json` / `eslint.config.mjs` (extending this package's
-own) and a `src/` tree to bring the rest green — Step 2 of adoption, not
-Step 1.
+**A brand-new package** (nothing but `package.json`) fails `Lint`, `Typecheck`, `Build`, `Architecture`,
+`GitHygiene` and `Coverage` on its first run, each naming what is missing. This is deliberate: the `eslint` and
+`tsconfig` baselines are meant to be extended by the consumer's own config, never substituted, so those checks
+enforce real rules from day one. `Mutation` fails until there is something to mutate. `Accessibility` and
+`BranchProtection` record a degradation instead: a warn locally, a failure under `--strict` without a record in
+`.repo-contract/exceptions/environment.json`. Run `git init`, add a `tsconfig.json` and `eslint.config.mjs` that
+extend this package's, and a `src/` tree.
 
 ### Not cloned from `repo-contract.config.ts`
 
-`security-network`, `adr-governance`, and the
-`test-unit/integration/property/e2e` split — each encodes repo-contract's own
-design rather than a general package standard. (`api-contract` used to be on
-this list; it moved here entirely once every repo in the fleet versioned via
-Changesets — see `contract.ts`'s own doc comment.)
+`security-network`, `adr-governance`, and the `test-unit/integration/property/e2e` split encode repo-contract's
+own design rather than a package standard.
+
+## Exceptions
+
+Where a package has a good reason to break a rule, the reason is a committed record in
+`.repo-contract/exceptions/` that the owning check reads back every run; never a comment or a flag.
+[EXCEPTIONS.md](EXCEPTIONS.md) documents the record, every registry, how a check that could not run is handled,
+and `internal-package-contract exceptions`, which lists what is in force.
 
 ## Contributor setup: Socket.dev
 
-`SecuritySocket` scores the package on Socket.dev and never passes silently when it cannot run: it **warns** when no API
-key is available (the scan did not run, so its alerts were not checked) and **fails** for a rejected token, a network
-error or a rate limit. In CI the contract runs `--strict`, so the warning fails there unless
-`.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key`; `init` writes that record
-with a 90-day expiry, so a new package is green on day one and decides about a token before the record lapses. Either way it prints the exact steps for where it is running -- the short version:
+`SecuritySocket` warns when no API key is available and fails on a rejected token, a network error, a rate
+limit or a missing `socket` CLI (`checks/security-socket.ts`; `test/security-socket.test.ts`). In CI the contract runs `--strict`, so the
+warning fails there unless `environment.json` records `environment:SecuritySocket:no-key`; `init` writes that
+record with a 90-day expiry, so a new package is green on day one and decides about a token before it lapses.
 
-- **On your machine:** `npm install --global @socketsecurity/cli`, then `socket login`; confirm
-  with `socket config list` that `apiToken` is set.
+- **On your machine:** `npm install --global @socketsecurity/cli`, then `socket login`; confirm with
+  `socket config list` that `apiToken` is set.
 - **In GitHub Actions:** create a Socket API token (socket.dev > Settings > API Tokens, permission
-  `packages:list`), add it as the repository (or organization) secret `SOCKET_SECURITY_API_KEY`, and
-  map it under `env:` on the step that runs the contract (the scaffolded `contract.yml` does).
+  `packages:list`), add it as the secret `SOCKET_SECURITY_API_KEY`, and map it under `env:` on the step that runs
+  the contract (the scaffolded `contract.yml` does).
 
-`SOCKET_SECURITY_API_KEY` is read only by the `socket` CLI while the contract runs; shipped code never
-reads it.
+`SOCKET_SECURITY_API_KEY` is read only by the `socket` CLI while the contract runs; shipped code never reads it.
+Each scan spends Socket API quota, so it is spent sparingly (`scripts/contract-phases.mjs`,
+`scripts/socket-score-cache.mjs`):
 
-Each scan spends Socket API quota (see your token's limits in the Socket dashboard), so it is spent sparingly:
-
-- **It runs last.** `internal-package-contract` runs every check except `SecuritySocket` first and
-  scans only if all of them passed; a change that is already failing prints
-  `[SKIPPED] SecuritySocket` and costs nothing.
-- **It is cached.** Socket scores a _published_ version, so the result depends only on
-  `<package>@<version>`, not on the branch or pull request. A successful score is kept for 24 hours
-  and served to every run, every pull request and the pre-push hook. Failures are never cached.
-  `IPC_SOCKET_CACHE_DIR` moves the cache, `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
-  `IPC_SOCKET_CACHE=off` disables it. The cache is local to a machine: CI deliberately does not
-  persist it with `actions/cache`, because a cache written by a workflow that runs pull-request
-  code can be poisoned (CodeQL `actions/cache-poisoning`), and the scaffolded workflows use no
-  caches at all for the same reason.
-
-## Bootstrap order
-
-IPC has a deliberate dev-time cycle with `repo-contract`. IPC depends on the _published_
-`repo-contract` (`~0.12.0`) at runtime: every check is a `repo-contract` check. `repo-contract`, in turn,
-declares IPC as a _development_ dependency (`github:MaverickCER/internal-package-contract#<tag>`) and
-consumes its API-contract engine and benchmark kit. It works because `repo-contract`'s own
-self-contract runs against its freshly built `dist/` while IPC resolves the published package, so
-neither ever needs the other's unreleased code.
-
-The upgrade order for a breaking `repo-contract` change follows from that:
-
-1. publish the new `repo-contract`;
-2. bump IPC's `repo-contract` dependency and release IPC (a new tag);
-3. re-pin `repo-contract`'s own IPC devDependency to that tag.
-
-The full rationale is [`repo-contract` ADR 0018](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md).
-
-## Dependency overrides every consumer needs
-
-`npm` honors `overrides` only from the **root** project, so a fix made here does not reach a package
-that depends on this one. `GithubActions` is run through `github-actionlint`, which unzips the
-actionlint release at install time with `adm-zip@^0.5`; every `adm-zip` before 0.6.1 carries
-published advisories (decompression bombs, SUID/SGID and symlink extraction). Add this to your own
-`package.json` (the `init` scaffold already does):
-
-```json
-{ "overrides": { "adm-zip": "0.6.1" } }
-```
+- **It runs last.** Every other check runs first; the scan happens only if all of them passed. A failing run
+  prints `[SKIPPED] SecuritySocket` and costs nothing.
+- **It is cached.** Socket scores a published version, so the result depends on `<package>@<version>` only. A
+  successful score is kept for 24 hours; failures are never cached. `IPC_SOCKET_CACHE_DIR` moves the cache,
+  `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, `IPC_SOCKET_CACHE=off` disables it. CI persists no cache: a
+  cache written by a workflow that runs pull-request code can be poisoned, so the scaffolded workflows use none.
 
 ## Overriding a bundled config
 
-Write your own — the check picks it up automatically. Extend the bundled one so
-the baseline still evolves centrally:
+Write your own and the check picks it up (`resolveConfig` in `checks/shared.ts`). Extend the bundled one so the
+baseline still evolves centrally:
 
 ```js
 // .dependency-cruiser.cjs
@@ -290,95 +239,25 @@ const base = require("internal-package-contract/config/dependency-cruiser")
 module.exports = { ...base, forbidden: [...base.forbidden /* yours */] }
 ```
 
-Available: `./config/dependency-cruiser`, `./config/knip`, `./config/stryker`,
-`./config/commitlint`, `./config/secretlint`, `./config/markdownlint`, plus the
-`./eslint`, `./prettier`, `./tsconfig` baselines (extend, never copy). The
-`tsconfig` baseline is the strictest practical configuration. The `eslint` baseline carries one rule of its own,
-`ipc/no-network`: nothing under `src/` imports a network module (`http`, `https`, `http2`, `net`, `tls`, `dns`,
-`dgram`, `undici`, `ws`) or uses a network global (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`,
-`navigator`); type-only imports are allowed, and a package's executable boundary outside `src/` is its own
-decision.
+Available: `./config/dependency-cruiser`, `./config/knip`, `./config/stryker`, `./config/commitlint`,
+`./config/secretlint`, `./config/markdownlint`, plus the `./eslint`, `./prettier`, `./tsconfig` baselines. The
+`eslint` baseline carries one rule of its own, `ipc/no-network`: nothing under `src/` imports a network module
+(`http`, `https`, `http2`, `net`, `tls`, `dns`, `dgram`, `undici`, `ws`) or uses a network global (`fetch`,
+`XMLHttpRequest`, `WebSocket`, `EventSource`, `navigator`). Type-only imports are allowed; a package's `bin/` or
+bundled compiler is outside the rule (`test/eslint-no-network.test.ts`).
 
-The thresholds `COVERAGE_THRESHOLDS`, `CRAP_THRESHOLD` / `MAX_COMPLEXITY` live
-in [`checks/`](checks/) — raise them there when the whole fleet is ready,
-never per-consumer. `Mutation` has no threshold to raise: it requires zero
-Survived/NoCoverage/Timeout mutants, matching repo-contract's own policy.
+`npm` honors `overrides` only from the root project, so a fix made here does not reach a consumer. `GithubActions`
+runs through `github-actionlint`, which unzips actionlint with `adm-zip@^0.5`; every `adm-zip` before 0.6.1 carries
+published advisories. The `init` scaffold already adds this to the consumer's `package.json`:
 
-## Stability: what a release promises
-
-This package is internal and is consumed at a pinned release, but it is the standard the other
-packages are held to, so changing it is a versioned event. A release's version tells you whether a
-consumer's `npm run contract` can start failing:
-
-- **patch** -- a fix that makes a check more correct for a package that already satisfies the standard;
-- **minor** -- a new check or a stricter rule (a consumer may need changes to pass it), a new export,
-  flag or subcommand; below 1.0.0 a stricter rule is a patch-level bump, as for any 0.x package;
-- **major** -- removing or renaming a check id, a subcommand, a flag or an export; changing the shape
-  of an exception record, the report in `reports/contract/`, or the check ids a consumer's exception
-  records are keyed to.
-
-The promised surface is exactly: the check ids in [`contract.ts`](contract.ts); the `internal-package-contract`
-subcommands and flags (`init`, `exceptions`, `sync-benchmark-guides`, `update-baseline`, `--checks`,
-`--only`, `--skip`, `--strict`); the `./checks/*` (including `./checks/parts`), `./logs`, `./config/*`, `./eslint`, `./prettier`, `./tsconfig`
-and `./benchmark` exports; the exception-record format ([EXCEPTIONS.md](EXCEPTIONS.md)); and the
-`evidence.json` / `report.json` written by every run. The `check-*.mjs` evidence scripts' output envelopes are promised; everything else under `scripts/` that is
-not named above is exported for reuse but is an implementation detail. A test pins the check ids, so changing them is never accidental.
-
-There is no documentation website: this package is not published and has no end users, so its
-README, [EXCEPTIONS.md](EXCEPTIONS.md) and the guides in `template/` are its documentation. The site
-requirement in the standard applies to the packages that ship to users, which scaffold one.
-
-## Exceptions
-
-Where a package has a good reason to break a rule, the reason is a committed record in
-`.repo-contract/exceptions/` that the owning check reads back every run -- never a comment or a flag.
-[EXCEPTIONS.md](EXCEPTIONS.md) documents the record, every registry, how a check that _could not run_
-is handled, and `internal-package-contract exceptions`, which lists what is in force.
-
-## env-cap and data-cap, carried by this package
-
-`env-cap` (what a package needs from its environment) and `data-cap` (what data it handles) are dependencies of
-this package, and every entry point is handed on, so a package that uses this one installs neither and lists
-neither in its own `package.json`:
-
-| Instead of                   | Import                                                                                                                             |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `@maverickcer/env-cap`       | `internal-package-contract/env-cap`                                                                                                |
-| `@maverickcer/env-cap/build` | `internal-package-contract/env-cap/build` (also `/node`, `/evidence`, `/helpers`)                                                  |
-| `data-cap`                   | `internal-package-contract/data-cap`                                                                                               |
-| `data-cap/build`             | `internal-package-contract/data-cap/build` (also `/runtime`, `/runtime/cache`, `/runtime/retry`, `/node`, `/evidence`, `/helpers`) |
-
-Each is the very module the package ships, not a copy. This package is a development dependency, so they are for
-code that never ships: build scripts, schema files that env-cap and data-cap only read, and tooling. Code that
-runs in production still depends on the library itself.
-
-### Documenting the environment
-
-`internal-package-contract env` documents the credentials and settings a package depends on, and writes
-`docs/ENVIRONMENT.md` (formatted with the package's own Prettier settings, and rewritten only when something other
-than its timestamp changed). What the standard itself reads, the credentials its workflows use (`PIN_SYNC_TOKEN`,
-`SOCKET_SECURITY_API_KEY`) and its tool settings, is described once, in this package's own `ci/env.schema.ts`, which
-it ships and declares under `envCap` in its `package.json`; env-cap's cross-package discovery includes it in every
-package's document, so a package never writes it again and the explanation cannot drift. A package's own
-`ci/env.schema.ts` holds only what is particular to it, and may be left empty or deleted. The scaffold adds the
-`docs:env` script and a weekly workflow, `env-rotation.yml` (kept current by `sync`), that opens one issue when a
-credential you gave an `expiresAt` is about to expire and closes it again once nothing is due. A package that wants
-an expiry date or an owner for one of the standard's credentials names the variable again in its own file with only
-that; env-cap fills everything the package leaves unset from the standard's declaration, so nothing else is repeated
-(this needs an env-cap that merges the declarations, which the standard's dependency on it must be raised to).
-
-**Nothing in it is required.** Every variable has a default, the contract is read and never executed, no
-manifest is generated (so nothing ships and no development dependency is imported at runtime), and the
-`EnvContract` check warns at most: a credential expiring or expired, or `docs/ENVIRONMENT.md` out of date. A
-package with no `ci/env.schema.ts` of its own passes. A missing Socket key is a warning in CI too: the scan did not run, and
-the warning says how to add the key. `internal-package-contract env --check` exits 1 when the document is out of
-date, for a script that wants to gate on it.
+```json
+{ "overrides": { "adm-zip": "0.6.1" } }
+```
 
 ## Customizing a check
 
-Every check is two halves that can be taken apart: the **evidence** (the command, its working directory,
-environment, timeout and output format) and the **policy** (what that evidence has to show). Take the
-standard apart, replace the half you need, put it back:
+Every check is two halves: the **evidence** (the command, its working directory, environment, timeout and output
+format) and the **policy** (what that evidence has to show). Replace the half you need:
 
 ```ts
 import { standardChecks } from "internal-package-contract/checks/standard"
@@ -398,12 +277,10 @@ checks.Lint = withEvidence(checks.Lint, { run: ["eslint", "--format", "json", "s
 | The per-check log hooks for your own run | `internal-package-contract/logs` (`onEvidenceSaveToRepoContractLogs`, `onVerdictPrependRepoContractLogs`)                                           |
 | A shared runtime module (managed copies) | `internal-package-contract/runtime/<name>`                                                                                                          |
 
-Only the `check-*.mjs` evidence scripts are exported, as source files, not wrapped: they are development tools,
-never part of what a package ships, and their output envelopes are part of the promised surface. The libraries
-behind them are internal. The shared runtime modules and the check factories are exported too. Every exported runtime module has a
-benchmark suite under [benchmarks/](benchmarks) (`npm run benchmark`; results are not committed in this repository);
-the entry shells themselves are a few lines that call the benchmarked library and print its result, so their cost
-is the library's plus a Node start-up.
+The `check-*.mjs` evidence scripts are exported as source files: development tools, never part of what a package
+ships. The libraries behind them are internal. Each exported runtime module has a benchmark suite under
+[benchmarks/](benchmarks) (`npm run benchmark`); no CI job runs those suites and nothing fails when a module lacks
+one.
 
 ## Running a subset
 
@@ -411,35 +288,31 @@ is the library's plus a Node start-up.
 npx internal-package-contract --checks Format,Lint,Typecheck,Tests
 npx internal-package-contract --checks Mutation
 npx internal-package-contract --skip Coverage,Crap,Mutation   # everything but the slow analyses
-```
-
-```sh
-npx internal-package-contract --changed           # only the checks that can be affected by what changed since the default branch
-npx internal-package-contract --json              # one machine-readable report on stdout (for editors and scripts)
-npx internal-package-contract --logs all          # keep each check's full output in reports/contract/logs/<Check>.log (all, failing (default) or off)
+npx internal-package-contract --changed           # only the checks that what changed since the default branch can affect
+npx internal-package-contract --json              # one machine-readable report on stdout
+npx internal-package-contract --logs all          # keep each check's output in reports/contract/logs/<Check>.log (all, failing, off)
 npx internal-package-contract --scope affected    # every check, but Tests, Mutation and Crap only for what the changes can affect
 npx internal-package-contract --scope auto        # affected on a pull request, everything on a push or a release
 ```
 
-The mode can also be set with `IPC_LOGS` or `"internal-package-contract": { "logs": ... }` in package.json (a flag wins over the
-environment, which wins over the package). A log file is created as soon as a check's evidence is available and, when the verdict is known, the
-verdict is prepended to the top of the file, so the part that matters is the first thing you see.
-Progress is streamed as each check finishes.
+`--strict` is the default when `CI` or `GITHUB_ACTIONS` is set (`scripts/contract-run.mjs`); it turns an
+unrecorded "not evaluated" result into a failure, and `--no-strict` turns it off. The log mode can also be set
+with `IPC_LOGS` or `"internal-package-contract": { "logs": ... }` in `package.json`; a flag wins over the
+environment, which wins over the package. A log file is written as soon as a check's evidence exists and its
+verdict is prepended when known.
 
-**Narrowing a run.** `--changed` chooses _checks_ (a documentation change cannot break the build); `--scope` narrows the
-_work inside_ the checks that scale with the code. With `--scope affected`, the contract asks `repo-contract`'s affected analysis
-which test files and which sources the changes can reach, through the import graph and down to the exported symbol, and then
-`Tests` runs only those test files, `Mutation` mutates only those sources, and `Crap` weighs only their functions. `Coverage` is
-a package-wide aggregate that a narrowed run cannot say anything about, so it reports a warning rather than a pass. Anything the
-analysis cannot reason about makes it say "everything" and the run is full: a lockfile or a tool config, a file it cannot place,
-a module that does not parse, a dynamic `import()` it cannot read, git failing. `--scope auto` lets the environment decide:
-a pull request narrows, a push to the default branch and a release do not, and `CI_FULL=1` forces everything. A bare run covers
-everything, exactly as before. The scope of the run is printed first and written to `reports/contract/scope.json`;
-`--base <ref>` chooses what it is compared with (the upstream branch, then `origin/main`, by default). The pre-commit hook
-runs `--scope affected`; the Contract workflow runs `--scope auto`. Mutation is never reused from an earlier run for a different scope.
+**Narrowing a run.** `--changed` chooses checks; `--scope` narrows the work inside the checks that scale with the
+code (`scripts/affected-scope.mjs`; `test/affected-scope.test.ts`). With `--scope affected`, `repo-contract`'s
+affected analysis finds which test files and sources the changes can reach, and then `Tests` runs only those
+files, `Mutation` mutates only those sources, and `Crap` weighs only their functions. `Coverage` is a package-wide
+aggregate, so a narrowed run reports it as a warning. Anything the analysis cannot place makes the run full: a
+lockfile, a tool config, a module that does not parse, a dynamic `import()`, git failing. `--scope auto` narrows
+on a pull request and runs everything on a push to the default branch or a release; `CI_FULL=1` forces
+everything. The scope is printed first and written to `reports/contract/scope.json`; `--base <ref>` chooses the
+comparison (the upstream branch, then `origin/main`). Limit: the set to mutate is built from changed files, so a
+change outside `src/` that maps to a source is mutated as that source (known follow-up).
 
-The logs are written by two hooks that ship with `repo-contract` and are re-exported here, so a package that runs
-the contract itself does not install `repo-contract` just to get them:
+The logs are written by two hooks that ship with `repo-contract` and are re-exported here:
 
 ```ts
 import { runRepoContract } from "repo-contract"
@@ -450,124 +323,144 @@ import {
 
 await runRepoContract(config, {
   onEvidence: onEvidenceSaveToRepoContractLogs(), // the raw output, the moment a check's evidence exists
-  onVerdict: onVerdictPrependRepoContractLogs(), // the verdict, at the top of the same file, the moment its policy returns
+  onVerdict: onVerdictPrependRepoContractLogs(), // the verdict, at the top of the same file
 })
 ```
 
 Both take the same options (`cwd`, `directory`, `mode`, `onProblem`). Writes happen in the background in order;
 `await repoContractLogs(options).flush()` before reading the logs or ending the process.
 
-## CI
+## CI in a consumer
 
-`init` writes [`.github/workflows/contract.yml`](template/contract.yml) — `npm ci`
-then `npm run contract`, with `fetch-depth: 0` so `Commits` has the base branch.
+`init` writes [`.github/workflows/contract.yml`](template/contract.yml). Its `contract` job checks out with
+`fetch-depth: 0` (so `Commits` has the base branch), grants `security-events: read`, passes the Socket key and
+`GH_TOKEN`, runs `npm run contract -- --scope auto`, and uploads `reports/contract`. Two more jobs, `node-floor`
+(build and test on Node 22, the declared `engines.node` floor) and `typescript-7` (type-check under TypeScript 7),
+feed a `required` job that fails unless both finished `success`.
+
+What the ruleset requires decides what blocks a merge. `init --github` writes a ruleset requiring `contract` and
+`required`, both pinned to the GitHub Actions app (`scripts/github-repo.mjs`). A repository that predates that
+must add `required` itself; the three current consumers require `contract` and `lint` only, so `node-floor` and
+`typescript-7` are advisory there until they do. `BranchProtection` checks for `contract` only. The `ci-jobs-test`
+managed copy proves every job is in `required.needs`, not that `required` blocks a merge. The template is not a
+managed file: a consumer may edit it without `ManagedFiles` noticing.
 
 ## Release
 
-`init` also writes [`.github/workflows/release.yml`](template/release.yml) — a thin
-caller that invokes this package's own
-[`release-npm-changesets.yml`](.github/workflows/release-npm-changesets.yml) reusable
-workflow (Changesets + npm OIDC trusted publishing, matching every current
-consumer's own `RELEASING.md`). The real logic lives in that one reusable workflow,
-not the caller: a fix or improvement there (a `changesets/action` version bump, a new
-publish flag) reaches every consumer's next push to `main` with zero per-repo edits,
-the same reason checks live in `checks/` rather than each consumer's own config.
-Requires the consumer to already have Changesets set up (`npm run version` /
-`npm run release` scripts, `.changeset/config.json`) and its own npm trusted
-publisher registered on npmjs.com — `init` does not set either of those up. Pass
-`roll-floating-major-tag: false` in the caller's `with:` (see the reusable
-workflow's own input doc comment) for an npm-only consumer with no composite GitHub
-Action to version.
+`init` writes [`.github/workflows/release.yml`](template/release.yml), a thin caller of this repository's
+[`release-npm-changesets.yml`](.github/workflows/release-npm-changesets.yml), pinned by full commit SHA with the
+release tag in a comment. A fix in the reusable workflow reaches a consumer when the consumer re-pins that SHA
+(`dependency-pin-sync.yml` opens that pull request); nothing reaches a consumer without a change in its own
+repository. The caller needs the `version` and `release` scripts and the consumer's npm trusted publisher registered.
+`init` writes `.changeset/config.json` but not those scripts, and never registers the publisher. Pass `roll-floating-major-tag: false` for an npm-only consumer with no composite GitHub Action.
 
-A consumer whose `typedoc.json` makes it an `ApiContract` target also needs a thin
-caller of [`api-baseline-sync.yml`](.github/workflows/api-baseline-sync.yml) (`on:
-pull_request`, gated on `github.head_ref == 'changeset-release/main'`), so the
-committed baseline tracks each release's real version instead of falling one release
-behind on the very next PR.
+The reusable workflow is three jobs (`test/release-workflow.test.ts` pins the shape):
+
+1. `version` holds no npm identity. It generates a changeset for a commit that has none (from its Conventional
+   Commit type, and a `Changeset: <bump>` trailer overrides; below 1.0.0 a generated bump never exceeds minor), opens or updates the "chore: version packages"
+   pull request and dispatches CI on it. A person merges it; a major crossing is a `::notice`, not a block.
+2. `build` is read-only. It installs with `--ignore-scripts` and runs `npm run verify` when the package defines it.
+   It requires a workflow run on a commit with exactly this tree to have finished a job named `contract` with
+   success. It then runs `PromptBlocks` under `IPC_RELEASE=1`, packs the tarball and installs it into a clean
+   project. The contract step was added in 0.17.0 and no real release has run through it yet. It looks for
+   `contract`, not `required`.
+3. `publish` checks out and installs nothing. From the default branch only, it publishes the exact tarball with
+   OIDC and provenance (no `NPM_TOKEN`). It then tags the release, moves the floating `v<major>` tag within its
+   major and creates a GitHub Release (`continue-on-error`). It fails unless npm serves the version with its
+   attestation.
+
+A consumer whose `typedoc.json` makes it an `ApiContract` target also needs a thin caller of
+[`api-baseline-sync.yml`](.github/workflows/api-baseline-sync.yml) (`on: pull_request`, gated on
+`github.head_ref == 'changeset-release/main'`), so the committed baseline tracks each release's real version.
+
+## Moving to a new release
+
+`internal-package-contract upgrade vX.Y.Z` installs the release, re-pins the workflows that call its reusable
+workflows, brings the managed files up to date (`sync --apply --update`), regenerates the landing page and copies
+the benchmark guides. It stops at the first failing step and leaves everything as uncommitted changes
+(`test/upgrade.test.ts`). The reusable `dependency-pin-sync.yml` uses it when the installed release has it.
+
+Each consumer's `sync-internal-package-contract.yml` runs daily with its own token, opens nothing when the pin is
+current, and re-pins workflows in the same pull request. GitHub does not let `GITHUB_TOKEN` push a change to
+`.github/workflows/*`, so a pin that moves a workflow SHA needs `PIN_SYNC_TOKEN`: a fine-grained token with
+"Contents", "Pull requests" and "Workflows" write access. Without it the run falls back to `GITHUB_TOKEN` and
+cannot push the workflow change. On 2026-11-12 env-cap and data-cap `main` pin v0.16.0 and repo-contract pins v0.13.3;
+the v0.17.0 pull requests are open.
 
 ## Benchmarks
 
-[`scripts/benchmark/kit/`](scripts/benchmark/kit) is the one self-contained way every package here
-benchmarks itself. A package supplies an **input** -- a `suite.mjs` that imports its real functions and
-documents each one -- and the kit stresses it through a ladder of doubling sizes (ten by default, each
-suite may declare its own), measures wall time, CPU time and memory, infers the big-O and compares it
-with the documented one, prices the result, and writes an **output**: `results.json` (a fixed,
-validated shape, schema version 4) and a cost-first `BENCHMARKS.md`.
+[`scripts/benchmark/kit/`](scripts/benchmark/kit) is the one way every package here benchmarks itself. A package
+supplies a `suite.mjs` that imports its real functions and documents each one. The kit runs a ladder of doubling
+sizes (ten by default) and measures wall time, CPU time and memory. It infers the big-O, prices the result, and
+writes `results.json` (schema version 4, validated by `test/benchmark-results-contract-exact.test.ts`) and
+`BENCHMARKS.md`.
 
-- **Three views:** end-to-end total impact (empty functions, with vs without the package), every
-  function on its own, and what makes up one operation (nested calls counted once).
+- **Three views:** end-to-end total impact (empty functions, with and without the package), every function on
+  its own, and what makes up one operation.
 - **Import and run:** `import { defineSuite } from "internal-package-contract/benchmark"`; list functions as
-  `{ call, input }` and the kit calls `call(...input(n))` at every size. `defineSuite` rejects
-  undocumented entries (why, what poor performance means, big-O and its reason, every variable).
-- **Commands:** `run-suite.mjs <suite> [--quick] [--check] [--render] [--only ...]`.
-- **`init`** scaffolds `benchmarks/README.md` (input and output shapes), `WRITING-BENCHMARKS.md` and
-  `READING-BENCHMARKS.md`, plus a working `suite.mjs` and the `benchmark` scripts with `--name`. The
-  two guides are canonical here; the `BenchmarkGuides` check fails a package whose copy differs, and
-  `internal-package-contract sync-benchmark-guides` rewrites them.
+  `{ call, input }`. `defineSuite` rejects undocumented entries.
+- **Commands:** `run-suite.mjs <suite> [--quick] [--check] [--render] [--only ...] [--typical-only]`.
+- **`init`** scaffolds `benchmarks/README.md`, `WRITING-BENCHMARKS.md`, `READING-BENCHMARKS.md`, a working
+  `suite.mjs` and the `benchmark` scripts. `BenchmarkGuides` fails a package whose copies differ from
+  [`template/benchmarks/`](template/benchmarks); `sync-benchmark-guides` rewrites them.
 
-### What is measured, and what may fail a pull request
+### What may fail a pull request
 
-Numbers from different runners, on different days, are not comparable, so a raw millisecond delta
-against another run is shown and never judged. What can fail a run is limited to properties of one run and
-ratios between quantities measured in the same run, which survive a change of machine
-([`scripts/benchmark/gates.mjs`](scripts/benchmark/gates.mjs)):
+Numbers from different runners are not comparable, so a raw time delta is shown and never judged
+([`scripts/benchmark/gates.mjs`](scripts/benchmark/gates.mjs); `test/benchmark-gates-exact.test.ts`):
 
-1. a function whose **measured growth class differs** from its documented big-O (the exponent is
-   fitted on the largest sizes, with an R² floor, so a fixed per-call cost does not read as
-   sub-linear growth);
-2. the package's **overhead relative to its own bare baseline** growing past an allowance (50% for
-   millisecond-scale work, 70% for microsecond-scale work). The baseline and the package are sampled
-   interleaved (A B, B A, ...), so the overhead is a per-pair difference with a 95% confidence
-   interval, and a growth inside the intervals of the two runs compared is a note, not a failure.
-   The reference that is judged is `main` measured on the same runner in the same job (the typical
-   size only); the committed results of the last run on `main` and of the last release are judged
-   only when they were measured on the same CPU model, and reported otherwise. A package tunes the
-   allowance with a `GATES` export in its `benchmarks/budgets.mjs`.
+1. a function whose **measured growth class differs** from its documented big-O (fitted on the largest sizes,
+   with an R² floor);
+2. the package's **overhead relative to its own bare baseline** growing past an allowance: 50% for
+   millisecond-scale work, 70% for microsecond-scale work. A package tunes the allowance with a `GATES` export
+   in `benchmarks/budgets.mjs`.
 
-A function whose big-O **cannot be determined** (too few usable sizes, no difference between them, or timings that follow no one growth rate) is a
-warning, and the warning says which and why in the pull-request comment and in the `BenchmarkComplexity` check, never a failure: nothing is known to
-be wrong, but nothing is checked either. There is no threshold on a raw time anywhere.
+The paired form of gate 2 ships in the first release after v0.17.0 (declared minor by
+`.changeset/accurate-overhead-gate.md`); a consumer gets it when it re-pins. The baseline and the package are
+sampled interleaved (A B, B A, ...), so the overhead is a per-pair difference with a 95% interval, and growth
+inside the intervals of the two runs compared is a note, not a failure (`scripts/benchmark/kit/measure.mjs`;
+`test/benchmark-measure-exact.test.ts`). The reference judged is `main`, measured on the same runner in the same
+job at the typical size; committed results of `main` and the last release are judged only on the same CPU model
+and reported otherwise. A suite `main` lacks has no reference and is reported, not judged.
+
+A function whose big-O **cannot be determined** is a warning that says why, in the pull-request comment and in
+`BenchmarkComplexity`, never a failure. There is no threshold on a raw time anywhere. Whether a red benchmark
+job blocks a merge is the consumer ruleset's decision; no consumer requires `benchmark-pr` today.
 
 ### Every input of every public function
 
-A public function with more than one input, several parameters or an object with several keys, has several
-things that can change its cost. The `BenchmarkCoverage` check reads the committed API baselines
-(`.repo-contract/api-contract`) and fails until each such function is benchmarked and each of its parameters and
-keys is accounted for in the benchmark that exercises it (`covers`): `swept`, `sweep:<variable>` (a second
-variable the function scales with, measured on its own with its own big-O), `variant:<name>`, `fixed: <why>` or
-`not covered: <why>`. A function that has no benchmark at all is listed under the suite's `notBenchmarked`, with
-the reason. A function a public object holds (`validators.range`) is checked the same way, and a name that is no
-longer a public function is stale and fails too. See `benchmarks/WRITING-BENCHMARKS.md`.
+`BenchmarkCoverage` reads the committed API baselines (`.repo-contract/api-contract`) and fails until each public
+function with several inputs is benchmarked and each parameter or key is accounted for in `covers`: `swept`,
+`sweep:<variable>`, `variant:<name>`, `fixed: <why>` or `not covered: <why>`. A function with no benchmark is
+listed under the suite's `notBenchmarked` with its reason; a name that is no longer public is stale and fails.
+See `benchmarks/WRITING-BENCHMARKS.md`.
 
 ### The workflows
 
-- [`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) (reusable): on a pull request, build, run
-  `npm run benchmark:check` and the benchmarks, render the summary with the gates, post or update the
-  comment, and fail the run if a gate failed. Its token can comment and nothing else: it never pushes
-  to the pull request. The caller lists suites (one `label|directory|history-file` per line) and names
-  `budgets-path`; a caller pins the workflow by commit SHA.
-- [`benchmark-record.yml`](.github/workflows/benchmark-record.yml) (reusable): after a merge, measure
-  the merge commit and open a small pull request recording `results.json`, `BENCHMARKS.md` and a history
-  entry that names the **merge commit**, its **pull request** and the **package version**; CI is
-  dispatched on it and it merges when green.
+- [`benchmark-pr.yml`](.github/workflows/benchmark-pr.yml) (reusable): on a pull request from the same
+  repository, never a bot's, it builds, runs `npm run benchmark:check` and the benchmarks, and measures `main`'s
+  end-to-end pair on the same runner. It renders the summary with the gates and posts or updates the comment.
+  It then fails the job if a gate failed (`test/benchmark-workflow.test.ts`). Its token can comment and nothing
+  else. The caller lists suites (one `label|directory|history-file` per line), names `budgets-path`, and pins
+  the workflow by commit SHA.
+- [`benchmark-record.yml`](.github/workflows/benchmark-record.yml) (reusable): after a merge, it measures the
+  merge commit and opens a results pull request naming the merge commit, pull request and package version. No
+  test covers this workflow.
 
 ### History, summaries and the page
 
-[`scripts/benchmark/`](scripts/benchmark) holds the consumer-agnostic scripts that turn results into
-history, a summary and a page:
+[`scripts/benchmark/`](scripts/benchmark) turns results into history, a summary and a page:
 
-- **`append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <n>]`** appends a compact
-  entry (each tier's `inputs`, `medianMs` and `unitsPerSecond`, the `versions` copied from the results).
+- **`append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <n>]`** appends a compact entry.
 - **`classify-complexity.mjs`** infers the growth class of a group from its tiers.
-- **`complexity-gain.mjs`** finds every group whose class got worse than at the last release and matches it against the exception registry; the `BenchmarkComplexity` check and the pull-request gate both use it, so a regression is stopped in the pull request and again before a release unless a human recorded why it is acceptable.
-- **`render-summary.mjs`** renders the pull-request comment: gate results first, then complexity shifts
-  since the last history entry, then one table with each function, the variable it varies, its big-O and whether that is the same, worse or improved since the last run (or N/A, with the reason, when either run could not determine it). A function that depends on more than one variable lists each under `sweeps` and gets one row, and one growth class, per variable.
-- **`render-page.mjs`** builds `docs/benchmarks/index.html` fresh on each deploy (never committed): one
-  chart per group with its inferred class and fit, every figure also as a table that links the commit,
-  pull request and version of each run. It needs no script and meets the same WCAG 2.2 AA bar as the
-  rest of a package's site.
+- **`complexity-gain.mjs`** finds every group whose class got worse than at the last release and matches it
+  against the exception registry; `BenchmarkComplexity` and the pull-request gate both use it.
+- **`render-summary.mjs`** renders the pull-request comment: gate results first, then class shifts, then one row
+  per function and variable with its big-O and whether that changed.
+- **`render-page.mjs`** builds `docs/benchmarks/index.html` on each deploy (never committed): one chart per group,
+  every figure also as a table, no script, WCAG 2.2 AA.
 
-A consumer wires the three scripts as thin npm scripts that forward to this package's copies:
+A consumer wires them as thin npm scripts:
 
 ```json
 {
@@ -579,44 +472,30 @@ A consumer wires the three scripts as thin npm scripts that forward to this pack
 }
 ```
 
-A package also defines `docs:benchmarks`: the `render-page.mjs` command with its own `--out docs/benchmarks/index.html`,
-`--readme` and one `--history "<label>|<file>"` per history file. The docs link to that page and it is never
-committed, so `internal-package-contract` runs `npm run docs:benchmarks` before the checks whenever the package
-defines it. A link check on a clean checkout, on a laptop and in CI therefore behaves the same, and a workflow does
-not need its own copy of the command.
+A package also defines `docs:benchmarks` (`render-page.mjs` with `--out docs/benchmarks/index.html`, `--readme`
+and one `--history "<label>|<file>"` per history file). The contract runs it before the checks whenever the package
+defines it, so a link check behaves the same on a clean checkout, a laptop and in CI.
 
 ## Landing page
 
-A package's landing page is written as content and generated, so every MaverickCER package meets one
-bar: it leads with the outcome for an organization, states each guarantee with its scope, shows real
-output, says who should not adopt it, and ships a one-page `brief.html` a developer can hand to a
-manager.
-
-1. Write `docs/site.json` (hero outcome, problem, model, demo, scoped guarantees, comparison, adoption,
-   `notFor`, manager brief, resources). The validator names every missing or weak field.
-2. Run `npx internal-package-contract site` to write `docs/index.html`, `brief.html`, `styles.css` and
-   `script.js`. `--check` reports stale output without writing; `--content` and `--out` override the
-   paths.
-3. The `LandingPage` check fails if the content is invalid or the committed pages differ from what it
-   produces, so the pages cannot drift from the content. `Accessibility` scans the result.
-
-What the validator enforces is mechanical (required sections, a stated scope on each guarantee, a
-`notFor` entry, a brief with its risks). Whether the copy is true and persuasive stays a human review.
+A package's landing page is content in `docs/site.json`, rendered by `npx internal-package-contract site` into
+`docs/index.html`, `brief.html`, `styles.css` and `script.js`. The validator names every missing or weak field
+(hero outcome, problem, model, demo, each promise with its scope, comparison, adoption, `notFor`, manager brief,
+resources). `site --check` reports stale output without writing. `LandingPage` fails when the content is invalid
+or the committed pages differ from what it produces; `Accessibility` scans the result. What the validator enforces
+is mechanical; whether the copy is true stays a human review.
 
 ## Generated regions, prompts and decision records
 
-Some facts a document states are derivable, so a person should not retype them. A document marks such a fact
-as a generated region, and `internal-package-contract generate` writes it:
+A document marks a derivable fact as a generated region, and `internal-package-contract generate` writes it:
 
 ```md
 <!-- ipc:begin entry-points -->
 <!-- ipc:end entry-points -->
 ```
 
-The `entry-points` region is the package's public API map: one row per entry point `package.json` exports, with
-the export, the source folder, the runtime constraint, the stability tier and the purpose. The export names and
-the number of rows come from `exports`; the rest is what only a person can say, kept once in `docs/surface.json`
-instead of in every document that lists the entry points:
+`entry-points` is the public API map: one row per entry point `package.json` exports, with the source folder,
+runtime constraint, stability tier and purpose from `docs/surface.json`:
 
 ```json
 {
@@ -631,18 +510,11 @@ instead of in every document that lists the entry points:
 }
 ```
 
-Two more regions read the same file:
-
-- `dependencies` states what installing the package adds, from `package.json` itself: each `dependencies`,
-  `optionalDependencies` and `peerDependencies` entry with its range and kind, and the reason for it from
-  `"dependencies"` in `docs/surface.json`. Required peers count as installed, as npm 7 and later install them;
-  optional peers are left to the consumer. A dependency without a reason, a reason for a package that is no longer
-  declared, or a reason that spans lines fails generation. A package with no dependencies gets the sentence that
-  says so, so "zero dependencies" is generated, not typed.
-- `standards` lists the standard-format documents the package generates (SARIF, OSCAL, CycloneDX, ...), one row
-  per entry in `"standards"`: the document, the standard, the function that produces it, what its format is
-  checked against, the test that checks it, and its limits. Generation fails when the cited test file does not
-  exist, so a claim that a format is validated cannot outlive its test.
+Two more regions read the same file. `dependencies` states what installing the package adds, from `package.json`
+itself, with the reason for each from `"dependencies"` in `docs/surface.json`; a dependency without a reason, or
+a reason for a package no longer declared, fails generation. `standards` lists the standard-format documents the
+package generates, one row per entry in `"standards"`; generation fails when the cited test file does not exist
+(`test/generate-standards.test.ts`). It checks that the file exists, not that it validates the format.
 
 ```json
 {
@@ -660,33 +532,29 @@ Two more regions read the same file:
 }
 ```
 
-`generate` rewrites only what is between the markers, formats it with the package's own Prettier settings, and
-changes nothing on a second run. `generate --check` writes nothing; the `GeneratedRegions` check runs it, and
-fails on a stale region, on markers that are missing, repeated or out of order, and on a source that omits an
-exported entry point or lists one that is not exported. Only the fixed list of documents in
-`scripts/generate/documents.mjs` is read (the contributor documents, plus `specs/generated-artifacts.md`). `add export <name>` adds the new entry point to `docs/surface.json` as
-`Experimental`, with a `TODO:` purpose.
+`generate` rewrites only what is between the markers and changes nothing on a second run. `generate --check`
+writes nothing; `GeneratedRegions` runs it and fails on a stale region, on markers that are missing, repeated or
+out of order, and on a source that disagrees with `exports`. Only the documents listed in
+`scripts/generate/documents.mjs` are read. `add export <name>` adds a new entry point to `docs/surface.json` as
+`Experimental` with a `TODO:` purpose.
 
-A scaffold asks for what only its author knows with a single-line comment, `<!-- ipc:prompt: ... -->` (or a
-`TODO:` value in `docs/surface.json`). Answering means replacing the whole comment. The `PromptBlocks` check
-warns while any is left and fails when a release is being verified: the release workflow runs it with
-`IPC_RELEASE=1` before it packs the tarball. It checks that a question is gone, never that the answer is good.
+A scaffold asks for what only its author knows with `<!-- ipc:prompt: ... -->` (or a `TODO:` value in
+`docs/surface.json`). `PromptBlocks` warns while any is left and fails under `IPC_RELEASE=1`, which the release
+`build` job sets. It checks that a question is gone, never that the answer is good.
 
-`internal-package-contract new adr "<title>"` starts a decision record in `specs/decisions` (or
-`docs/decisions`, `docs/adr`) with the next number and the sections every record has, each with its prompt.
+`internal-package-contract new adr "<title>"` starts a decision record in `specs/decisions` (or `docs/decisions`,
+`docs/adr`) with the next number and the sections every record has.
 
 ## Optional checks
 
-A check that not every package needs is off until the package names it. `internal-package-contract add check
-AmbientCapabilities` writes the name under `"internal-package-contract"."checks"` in `package.json`, with the
-settings the check reads written out beside it; `init` never turns one on.
+A check that not every package needs is off until the package names it: `internal-package-contract add check
+AmbientCapabilities` writes the name under `"internal-package-contract"."checks"` in `package.json`, with its
+settings beside it. `init` never turns one on.
 
-`AmbientCapabilities` reads the tarball npm would publish and fails if a shipped file reaches the filesystem
-(`node:fs`), starts a process (`node:child_process`) or reads `process.env` itself, or if the package declares a
-dependency it must not have. A library that is handed these lets a consumer see, and replace, everything it can
-do, and a supply-chain scanner flags every package that reaches them itself. Each capability lists the entry
-points that may use it (`"bin"`, or an export such as `"./node"`), derived from `package.json` and never from a
-glob. A capability that is not listed is not checked.
+`AmbientCapabilities` reads the tarball npm would publish and fails if a shipped file reaches `node:fs`,
+`node:child_process` or `process.env` outside the entry points listed for that capability, or declares a
+forbidden dependency. Each capability lists its allowed entry points (`"bin"`, or an export such as `"./node"`);
+a capability that is not listed is not checked.
 
 ```json
 "internal-package-contract": {
@@ -700,22 +568,16 @@ glob. A capability that is not listed is not checked.
 }
 ```
 
-It is a textual defense in depth, not a proof: it catches a literal reintroduction and cannot show that no evasion
-exists. `internal-package-contract tool ambient` gives the same answer to a build step or a CI job without running
-the contract. A package with its own contract file (as `repo-contract` has) imports `ambientCapabilitiesCheck`
-from `internal-package-contract/checks/ambient-capabilities` and declares it after its tests.
+It is a textual defense, not a proof: it catches a literal reintroduction, and splitting the string evades it.
+`internal-package-contract tool ambient` gives the same answer without running the contract. A package with its
+own contract file imports `ambientCapabilitiesCheck` from `internal-package-contract/checks/ambient-capabilities`.
 
 ## Agent skills
 
-An AI agent that is handed a package's link should learn how to use it without loading the whole repository.
-`internal-package-contract skill` writes `skills/<name>/SKILL.md`, a manual short enough to load every time
-(600 words by default, 1000 at most), and `skills/<name>/references/api.md`, the signatures an agent loads only
-when it needs them. `skill --check` reads and writes nothing and fails when what is written is not what would be
-written now.
-
-Nearly all of it is read from what the package already says about itself: its name and version from
-`package.json`, the import table from `docs/surface.json`, the signatures from the committed API baselines. It
-cannot drift, because nobody types it. The few things only the author knows live in `docs/skill.json`:
+`internal-package-contract skill` writes `skills/<name>/SKILL.md`, a manual short enough to load every time (600
+words by default, 1000 at most), and `skills/<name>/references/api.md`, the signatures. `skill --check` writes
+nothing and fails when the output is stale. Nearly all of it is read from `package.json`, `docs/surface.json` and
+the committed API baselines; the rest lives in `docs/skill.json`:
 
 ```json
 {
@@ -731,168 +593,179 @@ cannot drift, because nobody types it. The few things only the author knows live
 }
 ```
 
-The example is taken from a real file, at most 40 lines, so it is compiled and tested with the package rather than
-retyped. `when` is at most 300 characters, because it is what an agent reads to decide whether to load the rest.
-The command prints the link to give an agent. `internal-package-contract add check AgentSkill` turns on the
-`AgentSkill` check, which fails on a stale or invalid skill or one over its budget. It judges shape and size,
-never whether the advice is good, and nothing measures whether a skill makes an agent more accurate: compare an
-agent with and without it on your own tasks before relying on it.
+The example is taken from a real file, no longer than `LONGEST_EXAMPLE` in `scripts/skill/inspect.mjs`. `when` is at most 300 characters. `add check AgentSkill`
+turns on `AgentSkill`, which fails on a stale, invalid or over-budget skill. It judges shape and size, never
+whether the advice is good; nothing measures whether a skill makes an agent more accurate.
 
 ## Build and release helpers
 
-The scripts every package used to copy are run from here, from the package's root, as `internal-package-contract
-tool <name>`:
+The scripts every package used to copy run from here as `internal-package-contract tool <name>`:
 
-- `size`: Fails when an entry point is over its gzip budget. The budgets are the package's own, the default export of `ci/size-budgets.mjs` (a module, so each raise can say why). `--json <file>` also writes the sizes.
-- `badges`: Writes the coverage and size badges from their summaries. `"badges": { "sizeEntry": "<label>" }` picks the entry shown.
-- `api-report`: Fails when `docs/api-report/` is not what `typedoc.markdown.json` generates.
-- `cjs-interop`: Makes `require()` of the built ESLint plugin return the plugin, not `{ default, ...rules }`.
-- `compiler-isolation`: Fails when a client entry can reach the bundled TypeScript compiler.
-- `ambient`: The `AmbientCapabilities` answer, without the contract.
+- `size`: fails when an entry point is over its gzip budget, the default export of `ci/size-budgets.mjs`.
+  `--json <file>` also writes the sizes.
+- `badges`: writes the coverage and size badges from their summaries.
+- `api-report`: fails when `docs/api-report/` is not what `typedoc.markdown.json` generates.
+- `cjs-interop`: makes `require()` of the built ESLint plugin return the plugin.
+- `compiler-isolation`: fails when a client entry can reach the bundled TypeScript compiler.
+- `ambient`: the `AmbientCapabilities` answer, without the contract.
 
 ## Shared files
 
-Files that are the same in every package are carried as managed copies, so there is one to change and a drift
-check for the rest: `.editorconfig`, `typedoc.markdown.json`, `benchmarks/budgets.mjs` and the two benchmark
-guides, next to the code copies. The official schemas a package's tests validate its standard-format output
-against are managed copies too (`schema-sarif-2.1.0`, `schema-oscal-assessment-results-1.1.2`,
-`schema-cyclonedx-1.6`, which brings the SPDX and JSF schemas it references), carried into `test/fixtures/standards/`
-with a README that records each one's release URL and SHA-256; this repository's tests fail if a byte changes.
-Two test-support copies carry a gate into each package's own test suite: `ci-jobs-test` (with `ci-jobs`) fails
-when a job of `.github/workflows/ci.yml` is not waited for by the `required` job, so a job cannot become
-advisory by omission (`package.json` `"internal-package-contract": { "ciJobs": { "exempt": [...] } }` names the
-jobs that are not gates), and `vm-bundle` runs a browser bundle in a `vm` context with no Node globals, so a
-"runs in the browser" sentence is proven by running, not by grep.
-`sync --add <name>` enrols one and `sync --apply --update` restores it; `init` on
-an existing package enrols each one it already carries unchanged. The workflows (`release`, `scorecard`,
-`env-rotation`, `sync-internal-package-contract`) and `.changeset/config.json` are always managed.
+Files that are the same in every package are managed copies: one place to change, a drift check for the rest.
+The workflows (`release`, `scorecard`, `env-rotation`, `sync-internal-package-contract`) and
+`.changeset/config.json` are always managed (`scripts/managed-files/inspect.mjs`; `test/managed-files.test.ts`).
+Opt-in copies, enrolled with `sync --add <name>` and restored with `sync --apply --update`: `.editorconfig`,
+`typedoc.markdown.json`, `benchmarks/budgets.mjs`, the two benchmark guides, the shared runtime modules under
+`src/_ipc/`, and the official schemas a package's tests validate against (`schema-sarif-2.1.0`,
+`schema-oscal-assessment-results-1.1.2`, `schema-cyclonedx-1.6` with its SPDX and JSF references), carried into
+`test/fixtures/standards/` with a README that records each release URL and SHA-256
+(`test/standard-schemas.test.ts` fails if a byte changes). Two test-support copies carry a gate into each package's
+own suite: `ci-jobs-test` fails when a job of `ci.yml` is not waited for by `required`, and `vm-bundle` runs a
+browser bundle in a `vm` context with no Node globals.
 
-## Moving to a new release
+### Documenting the environment
 
-`internal-package-contract upgrade vX.Y.Z` does in one command what a new release asks of a package: it installs
-the release, re-pins the workflows that call its reusable workflows, brings the managed files up to date
-(`sync --apply --update`), regenerates the landing page and copies the benchmark guides. It stops at the first
-step that fails and leaves everything as uncommitted changes to review, add a changeset to, and commit. The
-reusable `dependency-pin-sync.yml` uses it when the installed release has it. GitHub does not let the default
-`GITHUB_TOKEN` push a change to `.github/workflows/*`, so a pin-sync pull request that changes a pinned workflow
-needs a token that can: pass one as the `PIN_SYNC_TOKEN` secret (a fine-grained token with "Contents", "Pull
-requests" and "Workflows" write access); without it the run falls back to `GITHUB_TOKEN`.
+`internal-package-contract env` writes `docs/ENVIRONMENT.md` from `ci/env.schema.ts`, the credentials and
+settings a package depends on, read with env-cap and never run. What the standard itself reads (`PIN_SYNC_TOKEN`,
+`SOCKET_SECURITY_API_KEY`, its tool settings) is declared once in this package's own `ci/env.schema.ts`, which
+env-cap's cross-package discovery includes in every consumer's document. A package's own file holds only what is
+particular to it. The scaffold adds `docs:env` and a weekly `env-rotation.yml` that opens one issue when a
+credential with an `expiresAt` is due and closes it when nothing is. Nothing in it is required: every variable has
+a default, no manifest is generated, and `EnvContract` warns at most. `env --check` exits 1 when the document is
+out of date, for a script that wants to gate on it.
+
+### env-cap and data-cap, carried by this package
+
+Every entry point of `env-cap` and `data-cap` is handed on, so a consumer installs neither and lists neither
+(`test/reexports.test.ts` checks each is the very module the package ships):
+
+| Instead of                   | Import                                                                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `@maverickcer/env-cap`       | `internal-package-contract/env-cap`                                                                                                |
+| `@maverickcer/env-cap/build` | `internal-package-contract/env-cap/build` (also `/node`, `/evidence`, `/helpers`)                                                  |
+| `data-cap`                   | `internal-package-contract/data-cap`                                                                                               |
+| `data-cap/build`             | `internal-package-contract/data-cap/build` (also `/runtime`, `/runtime/cache`, `/runtime/retry`, `/node`, `/evidence`, `/helpers`) |
+
+This package is a development dependency, so these are for code that never ships. Production code depends on the
+library itself.
 
 ## README layout
 
-A published package's README exists to help a developer decide whether to install and adopt it, so every
-package answers the same questions in the same order and sends everything else to its guides. The
-`ReadmeStructure` check enforces the layout: **Why it exists**, **How it differs**, **What it does** (with a
-`### See it run` showing real output), **Install and verify**, **Fit and capabilities**, **Limits and when
-not to use it**, **Security and supply chain**, **Maturity, versioning and support**, **Documentation** and
-**Next steps** (Evaluate, Integrate, Verify). The badges above the first section are CI status, npm version,
-coverage, mutation, Scorecard, Socket and license, and the README stays within 220 lines. The coverage and mutation badges read JSON the package publishes to its Pages site, and each has a details file beside it (`coverage.json`, `mutation.json`, `size.json`) that repeats the number and says what it is: the coverage headline is the lowest of lines, statements, functions and branches (not their average), shown with all four and what each counts; the mutation score is the share of applicable mutants detected, with the count of each status; the size is a gzip size against its budget. A reviewer never has to guess which measure a number is. The README badges link to those files; `node node_modules/internal-package-contract/scripts/run-mutation-badge.mjs` writes `docs/mutation-badge.json` from the Stryker report, and the `ScorecardWorkflow` check requires the workflow that publishes the Scorecard the badge reads. A section that does not help that
-decision belongs in a guide. The scaffold's README already has this shape, with a prompt in each section.
-Whether the prose is accurate and persuasive stays a human review; every code block and command in it
-should be run as written before release.
+A published package's README helps a developer decide whether to adopt it, so every package answers the same
+questions in the same order. `ReadmeStructure` (`scripts/readme/validate.mjs`; `test/readme-check.test.ts`)
+enforces the layout: **Why it exists**, **How it differs**, **What it does** (with `### See it run`), **Install
+and verify**, **Fit and capabilities**, **Limits and when not to use it**, **Security and supply chain**,
+**Maturity, versioning and support**, **Documentation** and **Next steps** (Evaluate, Integrate, Verify); the
+seven badges (CI, npm, coverage, mutation, Scorecard, Socket, license); 220 lines at most. It checks presence,
+not the values: the coverage and mutation badges read JSON the package publishes to its Pages site, with a
+details file beside each (`coverage.json`: the lowest of four measures; `mutation.json`: the share of applicable
+mutants detected; `size.json`). `scripts/run-mutation-badge.mjs` writes `docs/mutation-badge.json` from the
+Stryker report. Whether the prose is true stays a human review.
 
 ## What stands between a change and a release
 
-A release is gated by evidence that already exists, not by a second system. This is where each requirement
-lives, so a new check is added only for something no existing one covers.
+A release is gated by evidence that already exists, not by a second system.
 
-| Requirement                                                                                                                                       | Enforced by                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Quality gates pass; the branch cannot merge red                                                                                                   | The contract run in CI, `BranchProtection` (required status check, review threads resolved)                                   |
-| Public API and CLI/schema/Action surface changes carry the right version bump                                                                     | `ApiContract`, `SurfaceContract`, Changesets (a human merges the release PR)                                                  |
-| The package metadata, license and contents are right                                                                                              | `Packaging` (publint), `Licenses`, `GitHygiene`, `DistNoUrls`, `Size`                                                         |
-| The published types resolve under every module mode                                                                                               | `TypeResolution` (attw, on the packed tarball)                                                                                |
-| **What npm would ship installs and imports for a consumer**                                                                                       | `PackedConsumer`, and the same script run on the exact tarball in the release build job, before it is uploaded for publishing |
-| **The declared minimum Node.js is tested**                                                                                                        | `EngineMatrix`                                                                                                                |
-| **Workflows and config this package owns have not drifted**                                                                                       | `ManagedFiles`; `internal-package-contract sync` shows the difference and restores files only when told to                    |
-| Third-party actions are pinned; pins agree                                                                                                        | `GithubActions`, `PinConsistency`                                                                                             |
-| Publishing uses OIDC with no stored token, `id-token` only on the publish job, the pinned npm, and publishes the exact tarball the build job made | `release-npm-changesets.yml`                                                                                                  |
-| **Publishing happens only from the default branch**                                                                                               | the `publish` job's `if` in `release-npm-changesets.yml`                                                                      |
-| **The registry serves the version, with its provenance attestation**                                                                              | the last step of the `publish` job; a failure turns the run red                                                               |
-| The package's own security posture is visible and scored                                                                                          | `SecurityDeps`, `SecuritySocket`, `ScorecardWorkflow`, `CodeScanning`                                                         |
-| The README answers whether to adopt it                                                                                                            | `ReadmeStructure`                                                                                                             |
+| Requirement                                                                    | Enforced by                                                                                   | Limit                                                                          |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Quality gates pass; the branch cannot merge red                                | the consumer's `contract` job, required by its ruleset; `BranchProtection` checks the ruleset | admin bypass by pull request; `required` is not required in any consumer today |
+| API and surface changes carry the right bump                                   | `ApiContract`, `SurfaceContract`; a human merges the release pull request                     | behaviour behind an unchanged signature is unseen                              |
+| Package metadata, license and contents are right                               | `Packaging`, `Licenses`, `GitHygiene`, `DistNoUrls`, `Size`                                   |                                                                                |
+| The published types resolve under every module mode                            | `TypeResolution` on the packed tarball                                                        |                                                                                |
+| What npm would ship installs and imports for a consumer                        | `PackedConsumer`; the same script on the exact tarball in the release `build` job             | peer-dependent entries are skipped in both places                              |
+| The declared minimum Node.js is tested                                         | `EngineMatrix`                                                                                | reads the literal, not whether the job is required                             |
+| Workflows and config this package owns have not drifted                        | `ManagedFiles`; `sync` shows the difference and restores only when told                       | "current" means the installed release                                          |
+| Third-party actions are pinned; pins agree                                     | `GithubActions`, `PinConsistency`                                                             | offline; the SHA is not checked against this repository's branches             |
+| Publishing uses OIDC, no stored token, the pinned npm, the exact built tarball | `release-npm-changesets.yml` (`test/release-workflow.test.ts`)                                | the 0.17.0 path has not produced a real release yet                            |
+| Publishing happens only from the default branch                                | the `publish` job's `if`                                                                      |                                                                                |
+| The registry serves the version with its provenance attestation                | the last step of the `publish` job                                                            |                                                                                |
+| The package's security posture is visible and scored                           | `SecurityDeps`, `SecuritySocket`, `ScorecardWorkflow`, `CodeScanning`                         | Socket scores the published version                                            |
+| The README answers whether to adopt it                                         | `ReadmeStructure`                                                                             | structure only                                                                 |
 
-The bold rows were added after auditing a proposal list against this table. Two proposals were not adopted
-as asked: a single "release readiness" verdict would only repeat the contract's own report, which already
-names every failing check, and a managed-file list covering the whole scaffold would report drift in files a
-package is meant to change (its README, sources and docs). `init` stays non-destructive, `sync` is a
-separate act from checking, and nothing is rewritten on install. The managed list is deliberately short:
-the release, pin-sync, env-rotation and Scorecard workflows and the Changesets config, compared on what they mean.
+A single "release readiness" verdict would repeat the contract's own report, and a managed-file list covering the
+whole scaffold would report drift in files a package is meant to change. So `init` stays non-destructive, `sync`
+is a separate act from checking, and the managed list is five files compared on what they mean.
 
 ## Describing a change once
 
-A pull request needs a description of what it changes, and a package already holds the evidence for most of it.
-`internal-package-contract report` reads that evidence and writes the account as Markdown to paste into the
-pull request, so it is not documented a second time by hand: what changed by area (source, tests, benchmarks,
-documents, exceptions, workflows), what it means for a release (each new changeset, with the bump and its summary),
-the decision records it adds, the exceptions it records or retires with the first sentence of their reasons, the
-dependencies it moves, and what each check said in the last contract run (tests, coverage, mutation, API and surface
-contracts, benchmark coverage and growth). It ends with what no local run can see (CodeRabbit's review, GitHub's own settings,
-the benchmark job, the CI jobs the contract does not run), so none of those is assumed to have passed. Nothing in it is
-written by hand and every line comes from a source a reader can open; the prose a person still writes is the changeset
-summary and the decision records, which stay next to the code they describe.
-
-`report --base <ref>` measures against another ref (default `origin/main`, else `main`), and `--out <file>` writes
-it to a file. Run the contract first, or the report says that it has not been run.
+`internal-package-contract report` reads the evidence a package already holds and writes the pull-request
+account as Markdown (`test/change-report.test.ts`): what changed by area, each new changeset with its bump, the
+decision records added, the exceptions recorded or retired, the dependencies moved, and what each check said in
+the last contract run. It ends with what no local run can see (CodeRabbit's review, GitHub's settings, the
+benchmark job, the CI jobs the contract does not run), so none of those is assumed to have passed. Nothing in it
+is written by hand. `report --base <ref>` measures against another ref (default `origin/main`); `--out <file>`
+writes it. Run the contract first, or the report says that it has not been run.
 
 ## Changing the standard without breaking what depends on it
 
-Three packages run this contract, so a change here is only as good as the last time someone ran it against them.
-`internal-package-contract verify-consumers <checkout>...` does that mechanically. For each checkout of a package that
-depends on this standard it runs the contract's fast, offline checks twice in throwaway copies, once with the version
-of the standard the package has installed and once with this one, and names every check that got worse. A check that
-fails both ways was already failing and is not blamed on the change; the checkout itself is never touched. The leftover
-checks (the network and service checks, coverage, CRAP and mutation) are not run, since they either say the same thing
-whatever the standard does or are run by CI anyway; `--skip a,b` leaves out more and `--keep` keeps the copies.
+`internal-package-contract verify-consumers <checkout>...` runs each consumer's fast offline checks twice in
+throwaway copies, once with the standard the package has installed and once with this one, and names every
+check that got worse (`test/verify-consumers.test.ts`). A check that fails both ways is not blamed on the change;
+the checkout is never touched. The network and service checks, coverage, CRAP and mutation are not run; `--skip
+a,b` leaves out more and `--keep` keeps the copies. It also says where an install would add its own copy of a
+package the standard depends on. It runs on demand only, never in CI: running it on every pull request needs a
+token that can read the four repositories.
 
-It also says where an install would add its own copy of a package the standard depends on, because the checkout has
-none or an incompatible one: that is a version difference an upgrade would surface, and the kind that makes two copies of
-a lint plugin load at once. It is run on demand today. Running it on every pull request needs a token that can read the
-three repositories and this one, which is a decision for the maintainer, not something a workflow can assume.
+## Mutation testing
 
-Mutation testing is the longest part of this repository's own contract. The check always runs every mutant, whatever a
-package's own `incremental` setting or file says: a result carried over from a run made under other conditions (a loaded
-machine whose tests timed out and so counted as kills, a different concurrency) can pass a gate that a cold run in CI
-would fail, as one did here. A run over inputs that have not changed in
-any way is not run a second time: when a clean run was kept for the same hash of every file git does not ignore, and
-of the Node.js version, its evidence is put back and the `Mutation` check judges it exactly as it would a fresh one.
-Anything that changes any input, including a file the tests only read, runs the whole thing. While writing, `internal-package-contract mutation`
-mutation-tests only what a change touched (and the sources its changed tests import), with every mutant of those files and
-the package's own concurrency; it is a fast loop and says so, since a test in a file nobody touched can kill a mutant in
-one that was, and only the full check can say a change is finished. It never applies under CI,
-and `IPC_MUTATION_MEMO=0` runs the mutation testing regardless. What it cannot see: files git ignores that are not derived
-from the ones it does, and installed packages beyond what the lockfile pins. Only a run in which every mutant was caught or
-left out is kept, so a result produced while the machine was struggling is never replayed.
+The check always runs every mutant, whatever a package's `incremental` setting says: a result carried over from
+other conditions can pass a gate a cold run would fail, as one did here (`test/mutation.test.ts`). A run over
+inputs that have not changed is not run twice. When a clean run was kept for the same hash of every file git does
+not ignore and of the Node.js version, its evidence is put back and judged as a fresh one. The memo never applies
+under CI, and `IPC_MUTATION_MEMO=0` runs regardless; only a run in which every mutant was caught or left out is
+kept (`test/mutation-memo.test.ts`). While writing, `internal-package-contract mutation` mutation-tests only what
+a change touched; only the full check can say a change is finished.
 
-A mutant that times out is not always one that loops: on a machine that is swapping, whichever mutant happened to be running
-when it stalled is reported as a timeout, a different one each run and none of them when run alone. Before a timeout counts,
-that mutant is run again alone (at most five are); one that is caught the second time is recorded as caught, with the reason
-in the evidence, and one that times out again stays a failure.
+A mutant that times out is run again alone before the timeout counts (at most five are); one caught the second
+time is recorded as caught, one that times out again stays a failure (`test/mutation-confirm-timeouts.test.ts`).
 
-When the whole run does not fit in one job (GitHub stops a job after six hours), split it. `IPC_MUTATION_SHARD=i/n` makes
-a run mutate slice `i` of `n`: the files the Stryker config's `mutate` patterns match, cut heaviest-first by size so the
-slices take about as long, the same way every time. Each slice is judged by the same rule as a full run and its log says
-which slice it was, but a record in `.repo-contract/exceptions/mutation.json` for a mutant in another slice is not called
-stale, since only the merged report can say so. A run asks for more slices than there are files, or for an unreadable
-selector, and fails. Run the slices as a matrix, upload each slice's `reports/mutation/mutation.json`, and put them back
-together with `node node_modules/internal-package-contract/scripts/run-merge-mutation-reports.mjs --total <n> --out
-reports/mutation/mutation.json 1=<report> 2=<report> ...`: it writes the report an unsharded run would have, or nothing
-and a failure when a slice is missing, repeated, unreadable, or mutated a file another slice also did.
-Then a full contract run with `IPC_MUTATION_REPORT=<merged report>` judges that report instead of mutating again: it is the
-evidence the `Mutation` check reads, judged by the same rule, stale exceptions included, because the merged report is
-every file. It adopts a report only if it is evidence about the checkout it is judged in: every mutant has a status Stryker
-reports, it covers exactly the files a full run of this checkout mutates, and each file in it is the text that is on disk,
-so slices made from another revision or another plan cannot be put together into a report that only looks complete. Whatever
-it refuses, the evidence a previous run left is removed first, so a refused report is never judged as if it had been
-adopted, and a change that affects no source has no report to judge. Stryker writes no entry for a file it places no
-mutant in (a module of re-exports, a module of types), so a file the plan has and the report lacks is accepted exactly
-when Stryker's instrumenter finds no mutant in the text on disk (a mutant a run only ignores still counts, since the
-report lists it); a lacking file with mutants, or one that cannot be read or parsed, refuses the report. A run that names a report mutates nothing, whatever
-`IPC_MUTATION_SHARD` it also has. A `mutate` pattern's defaults are Stryker's own (`src` and `lib`, test files left out),
-and a line range after a file (`src/a.ts:1-10`) stays with its file in the slice that mutates it.
+When the run does not fit in one job, split it. `IPC_MUTATION_SHARD=i/n` mutates slice `i` of `n`, cut
+heaviest-first by size, the same way every time. A record in `mutation.json` for a mutant in another slice is not
+called stale. Merge with `node node_modules/internal-package-contract/scripts/run-merge-mutation-reports.mjs
+--total <n> --out reports/mutation/mutation.json 1=<report> 2=<report> ...`; it writes nothing and fails when a
+slice is missing, repeated, unreadable, or overlaps another (`test/mutation-merge.test.ts`). Then a full run with
+`IPC_MUTATION_REPORT=<merged report>` judges that report instead of mutating. It adopts a report only when every
+mutant has a status, the file set matches a full run of this checkout, and each file's text matches disk
+(`test/mutation-adopt.test.ts`); whatever it refuses, the previous evidence is removed first. A file the plan has
+and the report lacks is accepted exactly when Stryker's instrumenter finds no mutant in it. data-cap is the only
+consumer that shards today; no template workflow does.
+
+## Stability: what a release promises
+
+A release's version tells a consumer whether `npm run contract` can start failing:
+
+- **patch**: a fix that makes a check more correct for a package that already satisfies the standard;
+- **minor**: a new check or a stricter rule, a new export, flag or subcommand; below 1.0.0 a stricter rule is a
+  patch-level bump, as for any 0.x package;
+- **major**: removing or renaming a check id, a subcommand, a flag or an export; changing the shape of an
+  exception record or of the report in `reports/contract/`.
+
+What a gate holds to that: the check ids (`test/contract.test.ts`), and the `--help` text and exit codes of the
+CLI (`SurfaceContract` on this repository, baseline in `.repo-contract/surface-contract/baseline.json`). The
+`./checks/*`, `./logs`, `./config/*`, `./eslint`, `./prettier`, `./tsconfig` and `./benchmark` exports, the
+exception-record format ([EXCEPTIONS.md](EXCEPTIONS.md)), the `check-*.mjs` output envelopes and
+`evidence.json` / `report.json` are intended to follow the same levels, but nothing diffs them: review decides.
+Everything else under `scripts/` is an implementation detail.
+
+There is no documentation website: this package is not published, so its README, [EXCEPTIONS.md](EXCEPTIONS.md),
+[TOOLKIT.md](TOOLKIT.md), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and the guides in
+`template/` are its documentation.
+
+## Bootstrap order
+
+IPC depends on the published `repo-contract` (`~0.12.0` in `package.json`) at runtime: every check is a
+`repo-contract` check. `repo-contract` declares IPC as a development dependency
+(`github:MaverickCER/internal-package-contract#<tag>`) and consumes its API-contract engine and benchmark kit.
+Neither needs the other's unreleased code, because `repo-contract`'s self-contract runs against its own fresh
+`dist/` while IPC resolves the published package. The upgrade order for a breaking `repo-contract` change:
+
+1. publish the new `repo-contract`;
+2. bump IPC's `repo-contract` dependency and release IPC (a new tag);
+3. re-pin `repo-contract`'s own IPC devDependency to that tag.
+
+The rationale is [`repo-contract` ADR 0018](https://github.com/MaverickCER/repo-contract/blob/main/specs/decisions/0018-ecosystem-bootstrap-cycle-and-package-names.md).
 
 ## Evolving the standard
 
-Per ADR 0010: a review finding becomes a new check here only when it exposes a
-**repeatable error class** that materially affects packages and can be
-mechanically detected. One-off fixes stay in the package that found them.
+Per ADR 0010: a review finding becomes a new check here only when it exposes a repeatable error class that
+affects packages and can be mechanically detected. One-off fixes stay in the package that found them.

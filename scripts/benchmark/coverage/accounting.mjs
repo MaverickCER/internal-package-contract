@@ -1,5 +1,7 @@
-// How a benchmark says what it did with one parameter (or key) of a function it exercises. Every parameter has
-// one of these, so a reader can see that none was forgotten and why a fixed one was fixed.
+// How a benchmark says what it did with one parameter (or key) of a function it exercises.
+//
+// `BenchmarkCoverage` fails a function whose inputs are not all accounted for, so every parameter needs one of
+// these forms. A reason shorter than `MIN_REASON` characters does not count as a form.
 //
 //   swept              the suite's own unit is this parameter: it is what the size ladder varies
 //   sweep:<variable>   one of the function's `sweeps` varies this parameter

@@ -1,7 +1,12 @@
 /**
- * Small helpers shared by the recreated bespoke checks. repo-contract keeps the
- * equivalents in `src/presets/shared/` but does not export them, so the few
- * lines each are reproduced here.
+ * Helpers the checks share. Where this package's bundled `config/` lives. How a check picks the
+ * package's own tool config over the bundled one. How a failing check reads a tool's own error.
+ *
+ * `resolveConfig` decides at contract-assembly time, with the package as the working directory, so
+ * the chosen path is baked into a check's `run`. `withErrorHeadline` makes a failure lead with the
+ * error the tool died with. The cause is then not buried under "output could not be parsed".
+ * `parseToolEnvelope` fails a check closed when its script did not finish or printed no `{ ok }`
+ * JSON. repo-contract keeps the equivalents private, so the few lines each are kept here.
  */
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

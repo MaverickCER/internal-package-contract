@@ -1,10 +1,11 @@
-// Asks GitHub whether the pins of this package in a consumer are real.
+// Asks GitHub whether the pins of this package in a consumer are real. Not a contract check: it needs the
+// network and is run by hand through scripts/audit-pins.mjs.
 //
-// `pin-consistency.mjs` checks, offline, that a consumer's pins agree with one another. They can all
-// agree on a commit that is not part of this repository's history: the release bot once tagged an
-// unmerged release-branch commit, and three consumers pinned it. This audit asks GitHub two things
-// per pin: is the commit reachable from the default branch, and does the `# vX` comment name a tag
-// that points at that very commit. GitHub being unreachable is "blocked", never a pass.
+// `pin-consistency.mjs` checks, offline, that a consumer's pins agree with one another. They can all agree
+// on a commit that is not part of this repository's history; a release once tagged an unmerged commit and
+// consumers pinned it. This asks GitHub two things per pin: is the commit reachable from the default branch,
+// and does the `# vX` comment name a tag that points at that very commit. GitHub being unreachable is
+// "blocked", never a pass.
 
 import { shaFromLockfile } from "./init-lib.mjs"
 import { workflowPins } from "./pin-consistency.mjs"

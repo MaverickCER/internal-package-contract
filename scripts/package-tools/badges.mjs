@@ -1,10 +1,12 @@
 // Badge data for the Pages site: reads coverage/coverage-summary.json (the coverage reporter's "json-summary")
-// and coverage/size-summary.json (`size --json`), and writes shields.io "endpoint badge" JSON into docs/.
-// Never runs against stale or missing inputs silently: each section fails loudly rather than writing a
-// badge from nothing.
+// and coverage/size-summary.json (`size --json`), and writes shields.io "endpoint badge" JSON into docs/. Beside
+// each badge goes a file saying what the number is (scripts/badges/meaning.mjs). A missing input fails with a
+// message rather than writing a badge from nothing. The coverage headline is the lowest of the four metrics, so
+// one low number is never masked by three higher ones.
 //
 // The size badge shows the entry point named by `"badges": { "sizeEntry": "<label>" }` under
-// "internal-package-contract" in package.json, else the first one in the summary.
+// "internal-package-contract" in package.json, else the first one in the summary. `--no-size` is for a package
+// with no size budget.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

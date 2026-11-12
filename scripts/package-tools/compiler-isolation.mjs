@@ -1,8 +1,7 @@
-// Release-blocking check: the bundled TypeScript compiler (`bundleDependencies`) belongs to the build-time
-// scanner and to nothing else.
+// The bundled TypeScript compiler (`bundleDependencies`) belongs to the build-time scanner and to nothing else.
 //
-// A consumer who only imports the runtime must never load, or pay for the bytes of, a compiler. This walks
-// the static import graph of every built entry point in `dist/` and fails if
+// A consumer who only imports the runtime must never load, or pay for the bytes of, a compiler. This walks the
+// static import graph of every built entry point in `dist/` and fails if
 //
 //   - any client entry (every exported entry point except `./build`, and not the CLI) can reach the compiler
 //     loader, the bundled package, or `node:module` (the loader's `createRequire`), or
@@ -10,8 +9,8 @@
 //     own ESLint/typescript-eslint process and takes the consumer's `typescript` by design), or
 //   - the build entry does NOT reach the bundled compiler (which would make this check vacuous).
 //
-// Run after the build. Works on the built output, so it also covers whatever chunk-splitting the bundler
-// decides to share between entries.
+// Run after the build. It works on the built output, so it also covers whatever chunk-splitting the bundler
+// decides to share between entries. A built file that is missing fails with "build the package first".
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

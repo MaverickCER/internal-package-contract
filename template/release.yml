@@ -1,14 +1,13 @@
 # internal-package-contract caller workflow. Runs the shared Changesets + npm OIDC
-# trusted-publishing release flow on every push to main. Don't inline the release
-# logic itself here -- it lives in the shared, centrally-maintained reusable workflow
-# this calls; a fix or improvement there reaches every consumer without a per-repo
-# edit. See
+# trusted-publishing release flow on every push to main. Do not inline the release
+# logic here: it lives in the reusable workflow this calls, pinned below by commit SHA.
+# A fix there reaches this repository when the SHA is moved, which `dependency-pin-sync`
+# does in a reviewed pull request; nothing changes here without that. See
 # https://github.com/MaverickCER/internal-package-contract/blob/main/.github/workflows/release-npm-changesets.yml
 #
-# Requires Changesets already set up in this repo (`npm run version` / `npm run
-# release` scripts, `.changeset/config.json`) and this repo's own npm trusted
-# publisher registered on npmjs.com -- neither is set up by `internal-package-contract
-# init`. See the reusable workflow's own `roll-floating-major-tag` input doc comment
+# Requires the `npm run version` and `npm run release` scripts and this repo's own npm trusted
+# publisher registered on npmjs.com. `internal-package-contract init` writes
+# `.changeset/config.json` but not those scripts, and never registers the publisher. See the reusable workflow's own `roll-floating-major-tag` input doc comment
 # (linked above) before your first release: it defaults to true (every consumer had a
 # composite GitHub Action to version when this default was chosen), which moves the
 # floating `v<major>` git tag (`v0` while the package is 0.x) on every successful publish.

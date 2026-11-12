@@ -1,11 +1,11 @@
 /**
- * Fails with a readable message when neither the installed `typescript` nor the bundled
- * `@typescript/typescript6` exposes the classic compiler API (`createSourceFile`) the build-time scanner is
- * written against. TypeScript 7 ships no programmatic API, so a package normally falls back to the bundled
- * TypeScript 6 (see `typescript.ts`); this only fires when that dependency was stripped from the install, where
- * a raw call would die with "ts.createSourceFile is not a function".
+ * Fails with a readable message when no loaded compiler exposes the classic API (`createSourceFile`) the
+ * build-time scanner is written against. TypeScript 7 ships no programmatic API, so a package falls back to the
+ * bundled `@typescript/typescript6` (see `typescript.ts`). This fires only when that dependency was stripped from
+ * the install; a raw call would otherwise die with "ts.createSourceFile is not a function".
  *
- * This file is the canonical source; a package carries a managed copy (see `sync`) and binds its own name.
+ * This file is the canonical source; a package carries a managed copy (`src/_ipc/compiler-api.ts`, see `sync`)
+ * and binds its own name.
  * @param product - The package's name, as users install it, for the message.
  * @param compiler - The resolved compiler module (a parameter so a test can hand in a stand-in).
  * @throws Error naming the installed version and how to restore the bundled compiler.

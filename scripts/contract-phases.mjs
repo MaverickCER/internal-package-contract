@@ -1,6 +1,6 @@
-// Plans the two phases of `internal-package-contract`: every check except SecuritySocket first, and
-// SecuritySocket only if all of them passed. A Socket scan spends API quota (100 units of a small
-// daily budget), so it must never run for a change that is already failing something cheaper.
+// The two phases of a run: every selected check except SecuritySocket first, then SecuritySocket only when all
+// of them passed. A Socket scan spends API quota from a small daily budget, so it never runs for a change that is
+// already failing something cheaper. SecuritySocket selected on its own runs at once; there is nothing to wait for.
 
 /** The one check that runs last, and only after every other selected check passed. */
 export const DEFERRED_CHECK = "SecuritySocket"

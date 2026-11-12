@@ -1,6 +1,6 @@
 ## What changed and why
 
-<!-- What changes for a consumer, not just what changed in the diff. -->
+<!-- What changes for a consumer, not only what changed in the diff. -->
 
 ## Changeset
 

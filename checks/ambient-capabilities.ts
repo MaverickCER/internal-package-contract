@@ -1,16 +1,25 @@
 /**
- * Proves the package that would be published takes what it touches from its caller. A library that is handed
- * its filesystem, its way to start a process and its environment lets a consumer see, and replace, everything
- * it can do, and a supply-chain scanner such as socket.dev flags every package that reaches them itself. The
- * package says which of those it must never reach and which entry points (its `bin`, an export like `./node`)
- * are the exception, in package.json under "internal-package-contract"."ambientCapabilities"; this reads the
- * tarball npm would publish, since that, not the source, is what a consumer receives and what a bundler may
- * have pulled more code into.
+ * `AmbientCapabilities`: the package that would be published reaches no filesystem, process or
+ * environment its caller did not hand it.
  *
- * A textual defense in depth, not a proof: it catches a literal reintroduction (a stray `require("child_process")`,
- * a `process.env` reference, a forbidden dependency) and cannot show that no evasion exists. It is not part of
- * the standard set; a package turns it on (see `add check AmbientCapabilities`). A private package publishes
- * nothing and is exempt.
+ * Reads: the tarball `npm pack` would publish, unpacked and scanned by
+ * `scripts/check-ambient-capabilities.mjs` and `scripts/ambient/scan.mjs`. The rules come from
+ * package.json's `"internal-package-contract"."ambientCapabilities"`: what must not be reached, and
+ * which entry points may. The tarball is what a consumer receives, and what a bundler may have
+ * pulled more code into.
+ *
+ * Fails on a shipped file that reaches a forbidden capability. Fails on a forbidden dependency in
+ * package.json. Fails on an invalid `ambientCapabilities` setting, and when the tarball cannot be
+ * packed or unpacked. Never warns. Passes for a private package, which publishes nothing.
+ *
+ * Exceptions: none in a registry. An entry point that must reach a capability (a `bin`, an export
+ * such as `./node`) is listed under `"ambientCapabilities"."<capability>"`.
+ *
+ * Not in the standard set: a package turns it on by name (`add check AmbientCapabilities`). It then
+ * waits on `Tests`, so the build it packs is done.
+ *
+ * Limit: a textual scan. It catches a literal `require("child_process")` or `process.env`; it
+ * cannot show that no indirect route exists.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

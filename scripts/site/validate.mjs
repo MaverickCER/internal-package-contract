@@ -1,7 +1,17 @@
-// Checks a package's landing-page content (docs/site.json) against the quality bar every MaverickCER site
-// meets. The bar is mechanical on purpose: it cannot judge whether copy is good, but it can refuse the
-// failures that make a page useless to a decision-maker -- a missing organizational outcome, a guarantee
-// with no stated scope, a pre-1.0 package that does not say so, a manager's brief nobody could read.
+// The bar `docs/site.json` must meet before `site` writes anything and before `LandingPage` passes. It is
+// mechanical on purpose. It cannot judge whether copy is good. It does refuse what makes a page useless to a
+// decision-maker:
+//
+//   - a missing section, field or list;
+//   - a hero outcome that is not one sentence, or a hero over its word limit;
+//   - a quick start that does not install the package;
+//   - a `guarantees` entry with no `scope` of its own;
+//   - a pre-1.0 package with no `maturity` note;
+//   - a brief sentence too long for a non-specialist;
+//   - a URL that is neither https nor relative;
+//   - placeholder text (TODO, TBD, FIXME, lorem ipsum).
+//
+// Every problem is returned, not only the first.
 
 const MAX_HERO_WORDS = 80
 const MAX_INSTALL_COMMANDS = 3

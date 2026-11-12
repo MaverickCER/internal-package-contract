@@ -1,5 +1,8 @@
-// Entry point for the `ReadmeStructure` check (see checks/readme-structure.ts). Prints one JSON envelope;
-// never exits non-zero for a finding (policy decides).
+// Entry point for the `ReadmeStructure` check (see checks/readme-structure.ts). Reads package.json and
+// README.md of the working directory and prints one JSON envelope: `exempt` for a private package, `problem`
+// when the README is missing or breaks the shared layout (scripts/readme/validate.mjs), else `current`. The
+// policy decides the verdict.
+
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { validateReadme } from "./readme/validate.mjs"

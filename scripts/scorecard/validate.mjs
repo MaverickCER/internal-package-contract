@@ -1,7 +1,13 @@
-// A public package publishes its OpenSSF Scorecard result so anyone can see it live (the README badge
-// reads it). Publishing has requirements of its own: the scorecard action pinned to a commit, results
-// published, the OIDC token permission that signs them, and a schedule so the score does not go stale
-// between pushes.
+// A public package publishes its OpenSSF Scorecard result so anyone can see it live (the README badge reads
+// it); `ScorecardWorkflow` enforces that. Publishing has requirements of its own, each a failure when absent:
+//
+//   - a workflow under `.github/workflows` that uses `ossf/scorecard-action`, pinned to a full commit SHA;
+//   - `publish_results: true`;
+//   - the `id-token: write` permission that signs the result;
+//   - a `schedule:` trigger, so the score does not go stale between pushes.
+//
+// The workflow text is read line by line, comments stripped; nothing is run. A private package is exempt
+// (scripts/check-scorecard-workflow.mjs).
 
 const ACTION = "ossf/scorecard-action@"
 

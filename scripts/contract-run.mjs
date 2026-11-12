@@ -1,7 +1,16 @@
-// The run loop `bin/contract.mjs` (a consumer's contract) and `scripts/run-contract.mjs` (this
-// repository's own self-hosting contract) share: select the checks, run them in the two phases of
-// `planPhases`, print the verdict, and -- unlike a bare print-and-discard -- keep a durable record
-// of what happened (see `scripts/contract-report.mjs`).
+// The run loop `bin/contract.mjs` (a consumer's contract) and `scripts/run-contract.mjs` (this repository's own
+// self-contract) share. It selects the checks, decides the scope, runs the two phases of `planPhases`, prints
+// the verdict, writes the report (`scripts/contract-report.mjs`) and sets the exit code.
+//
+// What decides the exit code: a failing check the package has promoted (every check, outside adoption mode),
+// and under `--strict` a "not evaluated" result with no record in `.repo-contract/exceptions/environment.json`.
+// `--strict` is the default when `CI` or `GITHUB_ACTIONS` is set; `--no-strict` turns it off. The scope
+// (`--scope`, `--base`) is written to `reports/contract/scope.json` before any check runs, and the Tests
+// command is narrowed to the affected test files.
+//
+// A log per check goes to repo-contract's log directory as each finishes; a failure is printed at once. The
+// engine's working files (`.stryker-tmp`, and `coverage/` and `reports/*` when the run created them) are
+// removed afterwards; `reports/contract` stays.
 
 import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"

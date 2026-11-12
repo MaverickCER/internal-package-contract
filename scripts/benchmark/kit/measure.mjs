@@ -1,9 +1,13 @@
-// Timing and memory sampling. Pure Node builtins; no dependency on any package under test.
+// Timing and memory sampling. Node builtins only; nothing under test is imported.
 //
 // Every sample records three things, because they answer three different cost questions:
-//   - wall time   -- what a caller waits (latency; also what serverless platforms bill for)
-//   - CPU time    -- what the machine actually works (what a CPU-priced platform bills for)
-//   - heap delta  -- how much memory the operation leaves retained / allocates (memory pressure)
+//   - wall time   -- what a caller waits (latency; what duration-priced platforms bill for)
+//   - CPU time    -- what the machine works (what CPU-priced platforms bill for)
+//   - heap delta  -- how much memory the operation leaves allocated
+//
+// Operations too fast for the clock to resolve are repeated inside one sample and divided back out. A
+// sub-microsecond function still gets a usable figure that way. `global.gc()` runs before each counted sample
+// when Node was started with `--expose-gc`, which run-suite.mjs arranges.
 
 /** @returns {{ rssBytes: number, heapUsedBytes: number }} a snapshot of this process's memory. */
 export function snapshotMemory() {

@@ -1,18 +1,22 @@
-// Entry point for the `CodeRabbit` check, invoked via `run: ["tsx", <absolute path to this file>]`
-// in checks/coderabbitai.ts. Prints ONLY the JSON evidence to stdout (for `output: { format:
-// "json" }` to parse) -- the same stdout contract scripts/check-accessibility.mjs already follows.
+// The script behind the `CodeRabbit` check; checks/coderabbitai.ts runs it with `tsx`. Only the JSON evidence
+// goes to stdout.
 //
-// A generic recreation of repo-contract's own scripts/coderabbitai/review.ts, rebuilt on this
-// package's own checks/exception-record.ts plus repo-contract's PUBLISHED `repo-contract/helpers`
-// surface; see checks/coderabbitai.ts's own doc comment.
+// It reads `CI` from the environment, asks git whether `HEAD` is detached, whether the tree has uncommitted
+// edits, and whether `origin/main` exists, and loads `.repo-contract/exceptions/coderabbit.json`. It then spawns
+// `coderabbit review --agent --uncommitted`, or `--committed --base <ref>` when the tree is clean, so the
+// commits about to be pushed are what gets reviewed. The CLI is not a dependency of this package; it is
+// installed per machine.
 //
-// Wrapper tooling, not a published library module: this script may read the ambient environment
-// (`process.env.CI`) and spawn a git subprocess for its own pre-flight check, the same latitude
-// scripts/git-hygiene.mjs and scripts/github-repo.mjs already take.
+// Under `CI` no review runs: the GitHub App reviews the pull request instead (`not-applicable`). A detached
+// `HEAD`, a missing CLI, no sign-in or no network is `unavailable`. A stream with a non-JSON line, a malformed
+// finding, a `complete` event with the wrong status or count, or no `complete` event is `error`. Each of these
+// is a `warn` in the check, and `not-applicable`/`unavailable` is recorded as `environment:CodeRabbit:<status>`.
 //
-// Report-only: this script's own exit code is never the pass/fail signal (checks/coderabbitai.ts's
-// policy, reading this same evidence, is) -- it always exits 0 once it has produced *some*
-// well-formed evidence, including `status: "not-applicable"`/`"unavailable"`/`"error"`.
+// The registry is reconciled and written back only after a review ran. A finding with no record gets a blank
+// stub; a record matching no finding is reported stale. Both are warnings: findings are advice, and the same diff
+// is worded differently on every review. Only a registry that cannot be loaded or written fails the check.
+//
+// This script always exits 0 once it has printed evidence. The verdict belongs to the policy.
 
 import { sync as spawnSync } from "cross-spawn"
 import path from "node:path"

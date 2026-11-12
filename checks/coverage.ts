@@ -1,11 +1,19 @@
 /**
- * Aggregate test-coverage thresholds. A pure reader: it does NOT run tests --
- * the `Tests` check runs Vitest with V8 coverage once, and this reads the
- * `coverage/coverage-summary.json` that produced. Declared `dependsOn: ["Tests"]`
- * in contract.ts.
+ * `Coverage`: the package-wide test coverage holds the standard's thresholds.
  *
- * The threshold is this standard's number ({@link COVERAGE_THRESHOLDS}), not
- * Vitest's -- a consumer never lowers it by editing their own vitest config.
+ * Reads: `coverage/coverage-summary.json`, which `Tests` wrote, and `Tests`' exit code from the
+ * run's evidence. It runs no tests itself (`run` is a no-op) and declares `dependsOn: ["Tests"]`.
+ *
+ * Fails when lines, statements, functions or branches is below {@link COVERAGE_THRESHOLDS} (80%
+ * each). Fails when the summary is missing although `Tests` passed, or has no `total`. Fails when
+ * nothing was instrumented: no source under `src/` yet. Warns, not evaluated, when `Tests` failed:
+ * that is already red. Warns, not evaluated, under `--scope affected`: a run of only the affected
+ * test files says nothing about the package.
+ *
+ * Exceptions: none. The threshold is the standard's, not the package's vitest config.
+ *
+ * Runs in the consumer `contract` job and in IPC's own self-contract. The pre-commit hook runs it
+ * narrowed, where it warns; the pre-push hook skips it by name.
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

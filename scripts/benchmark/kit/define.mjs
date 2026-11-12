@@ -1,7 +1,9 @@
-// Declares a benchmark suite and REFUSES to accept one that is not documented. A benchmark nobody can
-// interpret is noise, so the documentation is part of the definition: why the function is measured,
-// what poor performance would mean, its expected big-O and the reason for it, and every variable that
-// could change its cost. `defineSuite` collects every gap and throws once, listing all of them.
+// Declares a benchmark suite and refuses one that is not documented. A benchmark nobody can interpret is
+// noise, so the documentation is part of the definition. That means why each function is measured, what poor
+// performance would mean, and its expected big-O with the reason. It also means every variable that can change
+// its cost, and what each benchmark covers of the public functions (coverage/accounting.mjs). `defineSuite`
+// collects every gap and throws one `SuiteDefinitionError` listing all of them; run-suite.mjs prints it and
+// exits 1. Defaults are applied for `tiers` (the standard ladder) and `workload.typicalN`.
 
 import { parseAccounting } from "../coverage/accounting.mjs"
 import { STANDARD_TIERS, validateTiers } from "./tiers.mjs"

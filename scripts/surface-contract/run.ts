@@ -1,9 +1,16 @@
 /**
- * The `SurfaceContract` check and its baseline update. The baseline is the surface of the last
- * release, committed at `.repo-contract/surface-contract/baseline.json` with the version it was taken
- * at. The check compares the current surface with it, works out the release level the difference
- * needs (the same rules `ApiContract` uses, including the pre-1.0 deflation) and compares that with
- * what the branch's changesets declare.
+ * The script behind the `SurfaceContract` check, and the baseline update `update-baseline` calls.
+ *
+ * It reads `package.json`, the current surface (collect.ts), the committed baseline at
+ * `.repo-contract/surface-contract/baseline.json`, the pending `.changeset/*.md`, and `CI`. A package
+ * with no CLI, schema or action and no baseline reports `no-surface`, which passes. With no baseline,
+ * the first one is written and reported, except under `CI=true`, where the run reports
+ * `missing-baseline` and fails; removing the file is not a way past the gate. Otherwise the difference
+ * is classified (classify.ts), the required level follows `ApiContract`'s rules including the pre-1.0
+ * deflation, and the branch fails unless its changesets declare at least that or the version is already
+ * bumped. A baseline that is not JSON, or records an unparseable version, throws.
+ *
+ * The update never moves the baseline backwards and writes nothing when it already matches.
  */
 import { existsSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"

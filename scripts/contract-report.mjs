@@ -1,17 +1,18 @@
 // The durable record of a contract run, shared by `bin/contract.mjs` and `scripts/run-contract.mjs`.
 //
-// A run produces repo-contract's `Evidence` (what each check executed) and `Verdict` (what the
-// repository's own policy concluded). Printing them and throwing them away leaves nothing a
-// reviewer, a dashboard or a later run can read, so this module turns them into:
+// A run produces repo-contract's `Evidence` (what each check executed) and `Verdict` (what the policy
+// concluded). Printing them and throwing them away leaves nothing a reviewer, a dashboard or a later run can
+// read, so this module writes:
 //
-//   reports/contract/evidence.json   the merged evidence of every phase, validated against
-//                                    repo-contract's own `Evidence` shape (version 1)
+//   reports/contract/evidence.json   the evidence of every phase, merged into one version-1 document
 //   reports/contract/report.json     the verdict plus per-check class, timing and run totals
-//   reports/contract/summary.md      the same, as Markdown, written to $GITHUB_STEP_SUMMARY in CI
+//   reports/contract/summary.md      the same as Markdown; contract-run.mjs appends it to $GITHUB_STEP_SUMMARY
 //
-// `warn` is overloaded -- "a real but non-blocking finding" and "this could not be evaluated here"
-// read the same -- so each result is also given a CLASS (see `classifyResult`). A run that is
-// yellow only because of unexplained "not evaluated" results is not the same as one that is green.
+// `warn` is overloaded: "a real but non-blocking finding" and "this could not be evaluated here" read the same.
+// Each result is therefore also given a class (see `classifyResult`), read from how its rationale starts. A run
+// that is yellow only because of unexplained "not evaluated" results is not the same as a green one; under
+// `--strict` it fails. A failing check a package has not promoted (adoption mode) is counted but does not fail
+// the run.
 
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"

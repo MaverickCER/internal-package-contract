@@ -1,21 +1,17 @@
 /**
- * GitHub Actions workflow correctness + security via actionlint (rhysd/actionlint),
- * run through the `github-actionlint` npm wrapper -- it resolves the official
- * actionlint binary on first use and caches it, so the standard stays
- * `npm install`-only. A generic recreation of repo-contract's own
- * `github-actions` check; the analysis is actionlint's, this policy only turns it
- * into a verdict.
+ * `GithubActions`: every workflow under `.github/workflows/` passes actionlint.
  *
- * Any finding blocks. No workflow files -> pass (nothing to lint).
+ * Reads: the workflow files through `github-actionlint`. That npm wrapper fetches the official
+ * actionlint binary on first use and caches it, so the standard stays `npm install`-only.
  *
- * actionlint itself shells out to `git` to resolve the project root, and fails
- * with an opaque "no project was found in any parent directories" when the
- * consumer isn't a git repository yet (a real state for a brand-new
- * `internal-package-contract init`'d package that hasn't `git init`'d). That
- * failure is about actionlint's own precondition, not the workflow files'
- * correctness, so it's recognized here and turned into the same clear,
- * actionable message `GitHygiene` already gives for the identical precondition,
- * instead of a confusing raw actionlint dump.
+ * Fails on any finding. Fails when actionlint cannot resolve a project root because this is not a
+ * git repository yet; the fix is `git init`, as `GitHygiene` says. Never warns. Passes with no
+ * `.github/workflows/` directory. Passes on a clean exit with no JSON: some actionlint versions
+ * print nothing.
+ *
+ * Exceptions: none.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput, firstExisting } from "./shared.js"

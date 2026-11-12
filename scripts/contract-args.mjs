@@ -1,10 +1,11 @@
-// Parses the check selection shared by `bin/contract.mjs` and `scripts/run-contract.mjs`:
+// The check selection `bin/contract.mjs` and `scripts/run-contract.mjs` share.
 //
-//   --checks a,b   / --only a,b    run only these checks (and their dependencies)
-//   --skip c,d                     run every check EXCEPT these
+//   --checks a,b   / --only a,b    run only these checks
+//   --skip c,d                     run every check except these
 //
-// `--skip` is how the bundled pre-push hook leaves out the slow analyses without an allow-list that
-// silently excludes every check added later (a new check is in the pre-push set unless named here).
+// A name the contract does not declare is refused before anything runs, with the closest declared name as a
+// hint. `--skip` is how the bundled pre-push hook leaves out Coverage, Crap and Mutation: a deny-list, so a check
+// added later is in the pre-push set unless it is named there.
 
 import { nearest } from "./contract-help.mjs"
 

@@ -1,20 +1,21 @@
-// Run via the `internal-package-contract-update-baseline` bin -- the ONLY normal way
-// `.repo-contract/api-contract/<target>/baseline.*` is updated once a baseline already exists (the
-// check itself only ever bootstraps the very first one per target; see check.ts). Regenerates every
-// target's current contract and overwrites its baseline in the working tree for review and commit
-// -- by a human, or by a CI job on the Changesets "Version Packages" PR branch.
+// The code behind `internal-package-contract update-baseline` (bin/update-baseline.mjs). It is the one normal
+// way a target's `.repo-contract/api-contract/<target>/baseline.*` changes once it exists; the `ApiContract`
+// check writes only a target's first baseline (check.ts). The surface baseline `SurfaceContract` compares
+// against moves in the same run (scripts/surface-contract/run.ts), so both land in one commit.
 //
-// Intended lifecycle: change public API in a commit whose changeset declares the right bump
-// (ApiContract gates this) -> PR merges -> the Version Packages PR bumps package.json/CHANGELOG.md
-// and the release publishes -> this command runs -> commit the new baseline.
+// It reads `typedoc.json` for the targets, `package.json` for the version, each committed baseline, and the
+// built declarations API Extractor extracts from. A package with no `typedoc.json` has no API targets; only its
+// surface baseline is updated. Files are written to the working tree for a person, or the CI job on the
+// Changesets "Version Packages" branch, to review and commit.
 //
-// Adapted from repo-contract's own `scripts/api-contract/update-baseline.ts`: loops every target
-// (see targets.ts) instead of operating on one hardcoded entry point.
+// Intended order: a public-API change merges with a changeset declaring the right bump (`ApiContract` fails
+// otherwise), the Version Packages pull request bumps `package.json`, the release publishes, this command runs,
+// the new baseline is committed.
 //
 // Per-target outcomes -- only `updated` and `current` exit 0:
 //   updated   no baseline yet for this target (bootstrap); or package.json's version is strictly
 //             greater than the committed baseline's; or the version is unchanged but the public
-//             API contents actually differ (an API-changing commit that merged while the Release
+//             API contents differ (an API-changing commit that merged while the Release
 //             PR was open) -> regenerates and writes.
 //   current   the baseline already carries package.json's version AND its contents match ->
 //             writes nothing. This is what every Release-PR `synchronize` after the first sync
@@ -24,7 +25,7 @@
 //             records an unparseable version.
 //   failed    API Extractor reported errors for this target.
 //
-// The command's own overall exit code is non-zero iff any target's outcome is `refused`/`failed`.
+// The command's exit code is 1 when any target's outcome is `refused` or `failed`, else 0.
 
 import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"

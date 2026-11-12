@@ -1,17 +1,26 @@
 /**
- * The semver gate for everything a package exposes besides its TypeScript API: the `--help` and exit
- * code of each `bin`, the JSON Schemas its `exports` serve, and the inputs and outputs of its root
- * `action.yml`. `ApiContract` guards the types; this guards the rest, the same way: the surface of
- * the last release is committed (`.repo-contract/surface-contract/baseline.json`), a difference
- * decides the release level it needs, and the branch fails unless its changesets declare at least that
- * (or the version has already been bumped, as on a release pull request). A package with none of
- * these passes vacuously, and the day it gains one the first baseline is created.
+ * `SurfaceContract`: the CLI, schema and action surface changed no more than the changesets
+ * declare. That surface is the `--help` and exit code of each `bin`, the JSON Schemas `exports`
+ * serve, and the root `action.yml`. `ApiContract` guards the types; this guards the rest.
  *
- * In CI the first baseline is never created: a package with a surface and no committed baseline
- * fails, so removing the file cannot be a way around the gate.
+ * Reads: package.json, the current surface (`scripts/surface-contract/collect.ts`), and the
+ * committed `.repo-contract/surface-contract/baseline.json`. Also the pending `.changeset/*.md`,
+ * and `CI`. All through `scripts/surface-contract/run.ts`.
  *
- * What it does not see: a change in behaviour behind an unchanged `--help`, or in the files a CLI
- * writes. Those stay a review concern.
+ * Fails when the difference requires a higher release level than the changesets declare. A version
+ * that is already bumped, as on a release pull request, satisfies it. Fails under `CI` when the
+ * package has a surface and no committed baseline. CI never creates one, so deleting the file is
+ * not a way past the gate. Never warns. Passes with no CLI, schema or action. Locally with no
+ * baseline, the first one is written and must be committed.
+ *
+ * Exceptions: none. Add a changeset at the required level, or run `internal-package-contract
+ * update-baseline` after a release.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract. The
+ * self-contract baselines this package's own CLI text.
+ *
+ * Limit: a behaviour change behind an unchanged `--help`, or in the files a CLI writes, is
+ * invisible here.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

@@ -1,14 +1,46 @@
 /**
- * The consumer's whole Vitest suite, run once WITH V8 coverage instrumentation.
+ * `Tests`: the whole Vitest suite passes, with coverage recorded, and every skipped test has a
+ * committed reason.
  *
- * repo-contract splits this into `test-unit`/`test-integration`/`test-property`/
- * `test-e2e`; here one `Tests` check runs everything. It is the single
- * heaviest check, so it also produces the coverage artifacts the `Coverage` and
- * `Crap` checks then read (they `dependsOn` it) -- one Vitest run, not three.
+ * Reads: `vitest run` with V8 coverage, once. It writes `coverage/`, which `Coverage` and `Crap`
+ * read. Its JSON report goes to `reports/vitest/vitest-report.json`, which repo-contract's `test`
+ * preset reads for the verdict. When a test was skipped, also
+ * `.repo-contract/exceptions/skipped-tests.json`.
  *
- * The Vitest JSON report goes to a file (`--outputFile`) so stdout stays free
- * for the coverage reporter; the policy reads the file and delegates the verdict
- * to repo-contract's own `test` preset policy.
+ * Fails as the preset does, on a failing test or a run with no tests. Fails when the report was not
+ * written. Fails on a file with a skipped or `todo` test and no complete, unexpired
+ * `skipped-test:<file>` record. Fails when that registry cannot be loaded. Never warns. Under
+ * `--scope affected` the command names only the affected test files. It passes without running when
+ * there are none.
+ *
+ * Exceptions: id `skipped-test:<file>` with a `file` field and the version 2 fields; one record
+ * covers every skip in the file. A record with no matching skip is not stale: a suite that skips
+ * only on Windows has no skip on Linux.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract. It is
+ * `isolated`: the heaviest check, and a package's own subprocess tests flake under contention.
+ *
+ * Example record:
+ *
+ * ```json
+ * {
+ *   "exceptions": [
+ *     {
+ *       "id": "skipped-test:test/hooks.test.ts",
+ *       "version": 2,
+ *       "justification": "The hook tests need a POSIX shell and skip on Windows.",
+ *       "file": "test/hooks.test.ts",
+ *       "ruleBroken": "Every test runs in the contract job.",
+ *       "attempted": "Running the hooks through a Windows shell; git's hook runner differs.",
+ *       "constraint": "The hooks are POSIX shell scripts.",
+ *       "whyPreferable": "The Linux CI job runs them; a Windows skip loses nothing the job covers.",
+ *       "residualRisk": "A hook regression that only shows on Windows is not caught.",
+ *       "revisitWhen": "The hooks are rewritten in Node, or a Windows job is added.",
+ *       "expires": ""
+ *     }
+ *   ]
+ * }
+ * ```
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

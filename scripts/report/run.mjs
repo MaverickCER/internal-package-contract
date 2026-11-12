@@ -1,4 +1,7 @@
-// `internal-package-contract report`: what this change does to the package, as Markdown to paste into a pull request.
+// `internal-package-contract report`: what this change does to the package, as Markdown to paste into a pull
+// request. The facts come from scripts/report/collect.mjs and the text from scripts/report/render.mjs. The base
+// is `--base <ref>`, else `origin/main`, else `main`; with none of them the command refuses. `--out <file>`
+// writes the report instead of printing it.
 
 import { writeFileSync } from "node:fs"
 import path from "node:path"

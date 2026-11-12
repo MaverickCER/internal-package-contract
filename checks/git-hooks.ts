@@ -1,10 +1,19 @@
 /**
- * Whether git in this clone is using the bundled internal-package-contract hooks. They run the contract
- * before a commit, so a clone without them finds its failures in CI. This warns rather than fails: a
- * missing hook is a convenience lost, not a defect in the package, and CI (where this check does not
- * apply) is the gate. The fix is one explicit command, `internal-package-contract install-hooks`; nothing
- * installs the hooks as a side effect of `npm install`, because an install-time script is exactly what a
- * supply-chain policy should not have to trust.
+ * `GitHooks`: git in this clone uses the bundled hooks, so a commit and a push run the contract
+ * before CI does.
+ *
+ * Reads: whether the working directory is a repository, `core.hooksPath`, and the real location of
+ * the bundled `hooks/` directory, through `scripts/check-git-hooks.mjs` and
+ * `scripts/git-hooks.mjs`.
+ *
+ * Never fails. Warns when the hooks are not installed: a convenience lost, not a defect in the
+ * package, and CI is the gate. Passes under CI without looking, and outside a git repository.
+ *
+ * Exceptions: none needed. `npx internal-package-contract install-hooks` sets `core.hooksPath` once
+ * per clone. Nothing installs hooks from an install script, which a supply-chain policy would have
+ * to trust.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

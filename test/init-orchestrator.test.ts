@@ -327,7 +327,7 @@ describe("init in an existing package: --docs", () => {
     write("SUPPORT.md", "my own support text\n")
     const h = harness()
     expect(run(["--docs"], dir, h.io, h.hooks)).toBe(0)
-    expect(read("SUPPORT.md")).toContain("Thank you for using `@acme/widgets`.")
+    expect(read("SUPPORT.md")).toContain("How to get help with `@acme/widgets`")
     expect(read("SUPPORT.md").startsWith("<!-- Managed by internal-package-contract.")).toBe(true)
     expect(JSON.parse(read("package.json"))["internal-package-contract"].copies).toEqual([
       "code-of-conduct",
@@ -701,7 +701,7 @@ describe("init in a new directory", () => {
     const h = harness()
     expect(setup(["--docs", "--strict"], dir, h.io, h.hooks)).toBe(0)
     expect(h.err.join("")).toBe("")
-    expect(read("SUPPORT.md")).toContain("Thank you for using")
+    expect(read("SUPPORT.md")).toContain("How to get help with")
     expect(existsSync(path.join(dir, ".repo-contract/adoption.json"))).toBe(false)
   })
   it("says exactly which arguments it does not understand, each once, even when one follows another", () => {

@@ -1,11 +1,16 @@
-// Runs a defined suite and produces the results object: raw per-tier measurements for every group
-// (compatible with append-history / render-summary / render-page, which read
-// `results[group].tiers[tier].durationMs.medianMs` and `inputs`), plus an `analysis` section that turns
-// those measurements into the three things a platform engineer asks:
-//   1. endToEnd     -- what does adopting the package add to one operation, at every size?
-//   2. functions    -- how does each function scale, and does it match its documented big-O?
+// Runs a defined suite and produces the results object. It holds raw per-tier measurements for every group,
+// plus an `analysis` section that turns those measurements into what the checks and reports read:
+//   1. endToEnd     -- what adopting the package adds to one operation, at every size
+//   2. complexity   -- how each group scales, and whether that matches its documented big-O (`agreement`)
 //   3. contribution -- which functions make up the end-to-end operation, and how much time each is
-//                      responsible for (nested calls counted once, against the operation's total)?
+//                      responsible for (nested calls counted once, against the operation's total)
+//   4. cost         -- the estimated price at the typical and the largest size
+//   5. coverage     -- what each benchmark covers of the public functions, which `BenchmarkCoverage` reads
+//
+// Every group varies one variable: the suite's unit, or one other variable with the rest held at base values.
+// So each group has one growth class. `agreement` calls neighbouring classes "close" and two or more apart
+// "differs"; only "differs" fails the complexity gate (gates.mjs). `--quick` swaps in `QUICK_TIERS` and short
+// sampling, for a smoke test and not for results that are committed.
 
 import { classifyGroup, MIN_R_SQUARED } from "../classify-complexity.mjs"
 import { estimateCost, DEFAULT_RATES } from "./cost-model.mjs"

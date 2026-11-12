@@ -1,13 +1,16 @@
 /**
- * The standard: every check a MaverickCER package must continuously satisfy, as a map
- * of check id -> definition. `contract.ts` wraps this in a `defineRepoContract` for a
- * consuming package; `repo-contract`'s own self-contract composes it too, overriding only what
- * it must (`{ ...standardChecks(), Coverage: stricter }`) and adding what is its own alone, so
- * "a MaverickCER package" means one thing and a fix to a check lands once.
+ * The standard: every check a package must keep passing, as one map of check id to definition, in
+ * schedule order. `contract.ts` wraps it for a consumer. `repo-contract.config.ts` composes IPC's
+ * own self-contract from the same functions, leaving out the checks that need a `dist/` or a
+ * published package.
  *
- * Declaration order = schedule (repo-contract ADR 0002); see `contract.ts` for the phases.
- * @returns A fresh check map. Resolution of each tool's config (the consumer's own, else the bundled
- *   one) happens now, with the repository as the working directory.
+ * Declaration order is the schedule. First the writers: `ApiDocs`, `ApiDocsReport`,
+ * `ReadmeExample`, `Lint`, `Format`, `Schema`. Then the `Build` barrier. Then the readers,
+ * concurrent except where `isolated` or `dependsOn` says otherwise, with `Mutation` last. Each
+ * check's own header says what it reads and what fails it. Tool configs are resolved when this
+ * function runs, with the package as the working directory.
+ * @returns A fresh check map, each policy wrapped so a failure leads with the error its tool died
+ *   with.
  */
 import { format, license, lint, publint, typecheck } from "repo-contract/presets"
 import { accessibility } from "./accessibility.js"

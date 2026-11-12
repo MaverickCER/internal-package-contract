@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Dispatched from `internal-package-contract install-hooks` (see bin/contract.mjs).
+// Entry for `internal-package-contract install-hooks` (dispatched by bin/contract.mjs). It gathers what
+// `scripts/install-hooks.mjs` needs from git and the filesystem; the decision is made there. It exits 0 whether
+// or not the hooks were installed.
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync } from "node:fs"
 import path from "node:path"

@@ -1,20 +1,22 @@
-// Stryker runner for the `Mutation` check.
+// The script behind the `Mutation` check: it runs Stryker and leaves the report the policy judges.
 //
-// Mutation testing is part of the standard contract and runs on every
-// `npm run contract` -- it is NOT opt-in, and a package cannot satisfy the contract by leaving
-// out a `stryker.config.*`. It is expensive (minutes to tens of minutes on a large `src/`), so the
-// pre-push hook skips it by name and the pre-commit hook runs it only when the change reaches mutated
-// source (`--scope affected`); a consumer that wants a fast local loop runs an explicit subset
-// (`internal-package-contract --skip Mutation`). A full contract -- a push to main, a release, or a
-// bare `npm run contract` -- always includes it.
+// It reads the package's own `stryker.config.*` when there is one, else the bundled baseline passed as
+// `--fallback-config`; the scope document of the run (`reports/contract/scope.json`); `IPC_MUTATION_REPORT`,
+// `IPC_MUTATION_SHARD`, `IPC_MUTATION_MEMO` and `CI` from the environment; and every file git does not ignore,
+// hashed as the inputs of the run. It writes `reports/mutation/mutation.json` and the memo beside it.
 //
-// Uses the consumer's own `stryker.config.*` when present; otherwise the bundled baseline passed as
-// `--fallback-config`. On a package with nothing to mutate yet, Stryker's own dry run fails
-// ("No tests were executed") and so does the check: like Lint, Typecheck and Build, Mutation is
-// not something a new package gets to skip.
+// Every mutant is run (`--force`), whatever an incremental file says: a result carried over from a loaded machine
+// could pass a local gate that CI, starting cold, then fails. A narrowed run (`--scope affected`) mutates only the
+// sources the change affects, and skips when there are none (scripts/mutation/narrow.mjs). A sharded run mutates
+// one slice (scripts/mutation/shard.mjs). `IPC_MUTATION_REPORT` judges a report made elsewhere instead of mutating
+// (scripts/mutation/adopt.mjs). A clean run is reused while nothing it depends on has changed, never under CI
+// (scripts/mutation/memo.mjs). A timeout is run again alone before it counts (scripts/mutation/confirm-timeouts.mjs).
 //
-// Stryker copies the whole project into `.stryker-tmp/sandbox-*/` (hundreds of
-// MB); this wrapper always cleans it, and `bin/contract.mjs` cleans it again.
+// Nothing here lets a package skip mutation testing. The pre-push hook leaves the check out by name; the pre-commit
+// hook and the consumer `contract` job run it. Stryker's sandbox under `.stryker-tmp` is removed afterwards, as far
+// as the file system allows; `bin/contract.mjs` removes it again.
+//
+// The exit code is Stryker's. The verdict is the policy's, in checks/mutation.ts.
 //
 // Usage: node run-mutation.mjs --fallback-config <abs path>
 

@@ -1,18 +1,21 @@
 /**
- * A generic check that runs one of the consumer's own npm scripts.
+ * The factory behind `ApiDocs`, `ApiDocsReport`, `ReadmeExample`, `Schema`, `Build` and `Size`: one
+ * of the package's own npm scripts, run as a check.
  *
- * Several of repo-contract's bespoke checks reduce to this shape:
- *   - `build`    -> run `build`, must exit 0
- *   - `size`     -> run `size`, must exit 0 (the consumer's script owns the budget)
- *   - `api-docs` -> run `docs:api`, must exit 0
- *   - `schema`   -> run `schema`, must exit 0 AND regenerate nothing (the
- *                   committed `schemas/*.json` already match their source types)
+ * Reads: `scripts` in the package's package.json, and the script's exit code and output. With
+ * `mustNotChange`, the script runs through `scripts/run-generated.mjs`. That wrapper hashes the
+ * watched paths before and after, so a regeneration that changes a committed file is seen without
+ * git history.
  *
- * repo-contract wires these to its own private `scripts/*.mjs`; expressed against
- * a consumer's own scripts they become one small factory. The "regenerate
- * nothing" variant (`mustNotChange`) runs through
- * {@link file://../scripts/run-generated.mjs}, which diffs the watched paths by
- * content hash before/after -- so it works even in a repo with no git history.
+ * Fails when the script exits non-zero. With `mustNotChange`, fails when it regenerated any watched
+ * file: the committed output is stale. Never warns. When the package has no such script,
+ * `whenMissing: "fail"` fails (`Build`). The default passes and says the check does not apply
+ * (`ReadmeExample`, `Schema`, the rest).
+ *
+ * Exceptions: none; the script owns its own rules (a size budget, a schema generator).
+ *
+ * Where each runs is set in `checks/standard.ts`. All six run in the consumer `contract` job and
+ * both git hooks. None runs in IPC's own self-contract, which has no build and no library surface.
  */
 import path from "node:path"
 import { fileURLToPath } from "node:url"

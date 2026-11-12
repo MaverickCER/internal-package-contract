@@ -1,6 +1,7 @@
 // The facts a change report is made of, read from what the repository and the contract already hold: git, the
-// pending changesets, the exception registries, the decision records, the manifest, and the last contract run's report.
-// Nothing is computed that is not already evidence, so a reader can check any line against its source.
+// pending changesets, the exception registries, the decision records, the manifest, and the last contract run's
+// report (`reports/contract/report.json`). Nothing is computed that is not already evidence, so a reader can
+// check any line against its source. A report that cannot be read reads as "the contract has not been run".
 
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, readdirSync } from "node:fs"

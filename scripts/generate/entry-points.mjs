@@ -1,8 +1,10 @@
-// The "public API map": one row per entry point a package publishes, from `exports` in `package.json` and
+// The "entry-points" region: one row per entry point a package publishes, from `exports` in `package.json` and
 // what only a person can say about each (`docs/surface.json`). The export name, the entry point's existence and
-// the number of rows are derived, so a table can no longer omit an entry point or list one that is gone; the
-// source folder, runtime constraint, stability tier and purpose are the person's, kept in one place instead of
-// in every document that lists the entry points.
+// the number of rows are derived. So a table can no longer omit an entry point or list one that is gone. The
+// source folder, runtime constraint, stability tier and purpose are the person's. They are kept in one place
+// instead of in every document that lists the entry points. Generation stops, and `GeneratedRegions` fails, on
+// an entry point without a surface entry or a surface entry without an export. A missing field or an unknown
+// tier stops it too.
 
 const TIERS = ["Stable", "Experimental", "Internal"]
 const FIELDS = ["source", "environment", "tier", "purpose"]

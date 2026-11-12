@@ -1,10 +1,10 @@
 /**
- * Evidence shape printed to stdout by check.ts (as JSON, for `checks/api-contract.ts`'s
- * `output: { format: "json" }` to parse). Adapted from repo-contract's own
- * `scripts/api-contract/evidence-types.ts` for two differences: this engine is generic across
- * consumers with several public entry points (not one hardcoded target), so evidence is now
- * per-target plus an aggregate; and the declared-bump source is a Changeset file
- * (`.changeset/*.md`), not a Conventional Commit message -- see changesets.ts.
+ * The JSON shape check.ts prints and checks/api-contract.ts reads. The policy re-derives nothing from source,
+ * TypeScript or git: what is here is the whole input to the verdict.
+ *
+ * Evidence is per target, one per `typedoc.json` entry point, plus an aggregate. The declared bump comes from
+ * `.changeset/*.md` (changesets.ts), not from commit messages. A diff that could not be classified carries no
+ * `requiredLevel` and no `minimumRequiredVersion`, so the policy warns instead of inventing a level.
  */
 
 /** Aggregate fact about the public contract delta between baseline and current. "unknown" means the delta could not be safely classified -- never silently downgraded to "compatible" or "unchanged". */

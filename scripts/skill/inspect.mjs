@@ -1,5 +1,16 @@
-// Whether a package's agent skill is right: what it should say, what is on disk, and whether what the author wrote
-// still holds (the example exists, the links resolve, the commands are real, and the manual is short enough to load).
+// Whether a package's agent skill is right, for `skill --check` and the `AgentSkill` check.
+//
+// Reads docs/skill.json and the package facts (facts.mjs), renders what the files should be, and compares
+// with what is under skills/<name>/. `state: "none"` means there is no docs/skill.json. `"invalid"` lists the
+// problems that stop rendering:
+//
+//   - a field of the wrong shape, or a budget outside its range;
+//   - a `when` too long to scan, or a table cell that would be cut;
+//   - a reference or example file not in the package;
+//   - example lines out of range, or too many of them.
+//
+// A manual over its word budget (front matter not counted) is also a problem. `stale` names the files whose
+// text is not what would be written now. Notes (no example, no rules) fail nothing.
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

@@ -1,13 +1,15 @@
-// Reads, offline, whether every pin of this package in a consumer names the same revision.
+// Reads, offline, whether every pin of this package in a consumer names the same revision. The
+// `PinConsistency` check fails on each disagreement found.
 //
-// A consumer pins this package in three places that must agree: the `devDependency` ref in
-// `package.json`, the commit `package-lock.json` resolved it to, and the commit SHA (with a `# vX`
-// comment) of every reusable workflow it calls. They drift apart when one is bumped by hand, and
-// the symptom is a repository that runs one revision's checks and another revision's release.
-// This module only compares; it never rewrites (`upgrade` and `dependency-pin-sync.yml` do that).
+// A consumer pins this package in three places that must agree: the `devDependency` ref in package.json,
+// the commit package-lock.json resolved it to, and the commit SHA (with a `# vX` comment) of every reusable
+// workflow it calls. They drift apart when one is bumped by hand. The symptom is a repository that runs one
+// revision's checks and another revision's release. This module only compares; it never rewrites
+// (`upgrade` and the consumer's pin-sync workflow do that). A repository that neither depends on this
+// package nor calls its workflows, this one included, does not apply.
 //
-// It cannot tell whether the commit is reachable from this repository's default branch -- that needs
-// the network and is a separate, scheduled audit.
+// It cannot tell whether a commit is reachable from this repository's default branch; that needs the
+// network and is scripts/pin-audit.mjs's question.
 
 import { shaFromLockfile } from "./init-lib.mjs"
 

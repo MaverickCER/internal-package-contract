@@ -1,5 +1,8 @@
-// Entry point for the `EngineMatrix` check (see checks/engine-matrix.ts). Prints one JSON envelope; never
-// exits non-zero for a finding (policy decides).
+// Entry point for the `EngineMatrix` check (see checks/engine-matrix.ts). Reads package.json and every
+// `.github/workflows/*.yml` of the working directory, and prints one JSON envelope saying whether a workflow
+// tests the minimum Node.js `engines.node` declares (scripts/engines/validate.mjs). A private package is
+// `exempt` before anything is judged. The policy decides the verdict.
+
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { judgeEngineMatrix } from "./engines/validate.mjs"

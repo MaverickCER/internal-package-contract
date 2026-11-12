@@ -1,12 +1,14 @@
 // `internal-package-contract init`: one command to start using this standard.
 //
-//   in an existing package:        internal-package-contract init [--tag vX.Y.Z] [--owner <owner>] [--dry-run]
-//   in an empty directory:         internal-package-contract init --name <package> [--owner <owner>] [--description <text>]
+//   in an existing package:   init [--tag vX.Y.Z | --spec <spec>] [--owner <owner>] [--github] [--docs] [--strict] [--dry-run]
+//   in an empty directory:    init --name <package> [--owner <owner>] [--description <text>] [--spec <spec>] [--github] [--dry-run]
 //
-// An existing package is adopted, or has its setup finished if it already is (see scripts/init/existing.mjs). A new package is scaffolded, installed, scaffolded
-// again (the workflows that pin a commit can only be written once the lockfile names one), has its generated
-// regions written, and ends with `doctor`. Either way the command ends by listing what is left, including the
-// steps only a person can take.
+// A directory with a package.json is adopted, or has its setup finished if it already is
+// (scripts/init/existing.mjs); `--name` and `--description` are refused there. An empty directory needs
+// `--name`. A new package is started as a git repository and scaffolded, then installed. It is scaffolded again,
+// because the workflows that pin a commit need the lockfile to name one. It then gets its API map and
+// environment document, and ends with `doctor`. The first step that fails stops the run. Branch protection is
+// applied only with `--github`.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

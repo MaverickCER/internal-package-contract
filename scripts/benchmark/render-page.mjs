@@ -1,31 +1,18 @@
 #!/usr/bin/env node
-// Builds a static `docs/benchmarks/index.html` page from one or more
-// consumer-owned history JSON files -- small-multiples line charts, one per
-// named benchmark group, tiers as categorical-colored series within each
-// chart, annotated with the group's currently-inferred complexity class
-// (see classify-complexity.mjs). Generated fresh by a consumer's own
-// `deploy` job right before the Pages artifact upload (see this package's
-// .github/workflows/benchmark-pr.yml doc comment) -- never committed, same
-// treatment `docs/api/` already gets in this fleet.
+// Builds a static `docs/benchmarks/index.html` from one or more benchmark history files. It draws one line
+// chart per group, tiers as series, each annotated with the group's current growth class
+// (classify-complexity.mjs). A package runs it from its own `docs:benchmarks` script on deploy; the page is
+// never committed.
 //
-// Design follows the `dataviz` skill's procedure: line form for
-// change-over-time, categorical color assigned in the documented fixed
-// slot order (never cycled), 2px lines with >=8px end markers, hairline
-// recessive gridlines, an always-present legend (>=2 series per chart),
-// dark mode selected via both `prefers-color-scheme` and a `data-theme` scope, using the skill's own
-// validated default palette (references/palette.md).
+//   node render-page.mjs --out docs/benchmarks/index.html --history 'Runtime|docs/benchmark-history/runtime.json'
+//     [--history 'Build-time|...' ...] [--max-entries 200] [--readme <url>] [--repo <https://github.com/owner/repo>]
 //
-// The page is rendered entirely on the server and needs no script. Each chart is an SVG with an
-// accessible name and a generated description, its series are told apart by dash pattern and a direct
-// label as well as colour, and every figure is also a table (with the commit, pull request and version
-// of each run). A hover tooltip is deliberately absent: it reached only mouse users.
-//
-// Usage:
-//   node render-page.mjs \
-//     --out docs/benchmarks/index.html \
-//     --history 'Runtime|docs/benchmark-history/runtime.json' \
-//     [--history 'Build-time|docs/benchmark-history/buildtime.json' ...] \
-//     [--max-entries 200]
+// The page is rendered on the server and needs no script. Each chart is an SVG with an accessible name and a
+// generated description. Series are told apart by dash pattern and a direct label as well as colour. Every
+// figure is also a table with the commit, pull request and version of each run. There is no hover tooltip,
+// because it would reach only mouse users. Colours follow the dataviz skill's validated default palette, with
+// dark mode under both `prefers-color-scheme` and a `data-theme` scope. The `Accessibility` check scans this
+// page when it is built under `docs/`.
 
 import { readFileSync } from "node:fs"
 import fs from "node:fs/promises"

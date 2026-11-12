@@ -1,11 +1,11 @@
 /**
- * Converts one glob pattern to a `RegExp`. Handles `**` as "any number of path segments, including zero", so
- * `**\/node_modules/**` matches a root-level `node_modules` and `**\/x.ts` matches a root-level file, not
- * just nested ones; a plain `**` to `.*` substitution gets both wrong.
+ * Converts one glob pattern to a `RegExp`. `**` means any number of path segments, including zero, so
+ * `**\/node_modules/**` matches a root-level `node_modules` and `**\/x.ts` a root-level file. A plain `**` to
+ * `.*` substitution gets both wrong.
  *
- * One implementation for every package: build-time discovery and ESLint options need exactly the same matching,
- * and four hand-kept copies (two designs) had already accumulated. This file is the canonical source; a
- * package carries a managed copy (see `sync`).
+ * One implementation for every package: build-time discovery and ESLint options need the same matching, and
+ * hand-kept copies had already diverged. This file is the canonical source; a package carries a managed copy
+ * (`src/_ipc/glob.ts`, see `sync`).
  */
 export function globToRegExp(pattern: string): RegExp {
   let out = ""

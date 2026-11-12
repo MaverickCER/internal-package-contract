@@ -8,10 +8,10 @@ import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpe
  * CodeRabbit finding -- an AI opinion, not a deterministic tool result -- requires a complete
  * finding-specific exception regardless of severity, so one group-level `default` expresses "every
  * severity, same requirements". Required fields: `justification`, `remediation`, `method`,
- * `exceptionType` (all root fields on the reconciled record). `method` may only be
- * `"independent-human-review"` for a CodeRabbit waiver (there is no tool to mechanically re-run) --
- * enforced by `scripts/coderabbitai/registry.ts`'s exclusion of `"validated-false-positive"` from
- * its allowed `exceptionType` set.
+ * `exceptionType` (all root fields on the reconciled record). `method` must not be
+ * `"mechanical-reverification"`: no tool can re-run an AI finding, so `scripts/coderabbitai/registry.ts`
+ * rejects that value and `"independent-human-review"` is the expected one; it also excludes
+ * `"validated-false-positive"` from the allowed `exceptionType` set.
  *
  * `alternatives` is deliberately NOT required (unlike `SecuritySocket`'s `middle`/`unknown` tier):
  * "what else could we have used instead" is a supply-chain question about a dependency choice, and

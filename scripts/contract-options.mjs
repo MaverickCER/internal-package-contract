@@ -1,11 +1,12 @@
-// The options of a contract run that are not about which checks to run: how it reports.
+// The options of a contract run that are not about which checks run: how it reports.
 //
 //   --json            print the report as JSON on stdout and nothing else (for an editor or a script)
 //   --changed         run only the checks the changed files can affect (see scripts/changed.mjs)
 //   --logs <mode>     write a log file per check: all, failing or off
 //
-// The log mode can also be set once for a package, in package.json under "internal-package-contract":
-// { "logs": "all" }, or per run with IPC_LOGS. A flag wins over the environment, which wins over the package.
+// The log mode can also be set once for a package, in package.json under "internal-package-contract" as
+// `{ "logs": "all" }`, or per run with IPC_LOGS. A flag wins over the environment, which wins over the package.
+// A mode that is none of the three is refused, naming where it was set.
 
 import { readFileSync } from "node:fs"
 import path from "node:path"

@@ -1,5 +1,8 @@
-// Entry point for the `GeneratedRegions` check (see checks/generated-regions.ts). Prints one JSON envelope;
-// never exits non-zero for a finding (policy decides).
+// Entry point for the `GeneratedRegions` check (see checks/generated-regions.ts). Runs `generate --check`
+// in this process (scripts/generate/run.mjs) with its output captured, and prints one JSON envelope: `absent`
+// when no document marks a region, `current` when every region matches its sources, else `problem` with
+// what the command said. The policy decides the verdict.
+
 import { run } from "./generate/run.mjs"
 
 const cwd = process.cwd()

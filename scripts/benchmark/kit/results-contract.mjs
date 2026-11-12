@@ -1,11 +1,12 @@
-// The OUTPUT contract of the benchmark kit: the exact shape of the `results.json` it writes. Anything
-// that reads results (history, PR summary, history page, dashboards, a CTO's spreadsheet) can rely on
-// this shape; `validateResults` checks a results object against it and returns every violation.
+// The output contract of the benchmark kit: the exact shape of the `results.json` it writes. Anything that
+// reads results (the history, the pull-request summary, the history page, the contract checks) relies on this
+// shape. `validateResults` returns every departure from it, and run-suite.mjs refuses to write results that
+// have one.
 //
 // results.json (schemaVersion 4)
 // {
 //   metadata: {
-//     schemaVersion: 3,
+//     schemaVersion: 4,
 //     package: { name, version?, bundleFiles? },
 //     workload: { unit, description, typicalN },
 //     tiers: number[],                        // the ladder this run measured

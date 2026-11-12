@@ -1,17 +1,19 @@
-// `internal-package-contract init`: brings an existing package under this standard in one command.
+// `internal-package-contract init` in a package that already exists: brings it under this standard in one
+// command.
 //
-//   internal-package-contract init [--tag vX.Y.Z] [--owner <github owner>] [--dry-run]
+//   init [--tag vX.Y.Z | --spec <dependency spec>] [--owner <github owner>] [--github] [--docs] [--strict] [--dry-run]
 //
-// It adds the pin and the `contract` script, installs, runs `init` for the files every package carries
-// (hygiene files, the contract and release workflows, hooks, branch protection), adds what `init` leaves to a
-// new package (the Scorecard and pin-sync workflows, the Changesets config), enrols the shared documents the
-// package does not already have, drafts `docs/surface.json` from its exports, generates the API map, and ends
-// with `doctor`, which lists what is left, including the steps only a person can take.
+// It adds the pin and the `contract` script, plus the scripts, devDependencies and overrides of the template
+// the package lacks. It installs, runs `bin/scaffold.mjs` for the files every package carries, and
+// `sync --apply` for the managed files. It enrols the shared documents the package has or lacks, drafts
+// `docs/surface.json` from the exports, generates the API map, documents the environment and ends with
+// `doctor`. Unless `--strict` is passed, a package adopting for the first time starts in adoption mode
+// (`.repo-contract/adoption.json`).
 //
-// It is built to be reviewed, not trusted: it refuses to start over uncommitted changes (git is the way back),
-// never overwrites a file the package already has, and leaves every result as uncommitted changes. A document
-// the package already has that differs from the standard's is left alone and named, so adopting never rewrites
-// what a person wrote.
+// It is built to be reviewed, not trusted. It refuses to start over uncommitted changes (git is the way back),
+// never overwrites a file the package has, and leaves every result uncommitted. A shared document that differs
+// from the standard's is left alone and named; `--docs` replaces it. A package that already depends on the
+// standard is not refused: the run finishes what is missing and never moves the pin (`upgrade` does that).
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"

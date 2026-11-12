@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-// Keeps a package's copies of the two benchmark guides identical to the canonical ones.
+// What the `BenchmarkGuides` check reads, and what `sync-benchmark-guides` writes.
 //
-// `WRITING-BENCHMARKS.md` and `READING-BENCHMARKS.md` explain how benchmarks are written and read; they
-// are the same for every package, so a package carries copies (they sit next to the report that links
-// them, and ship with the repository). Four hand-maintained copies drift: they already disagreed with
-// the kit about how many sizes it measures and about what the pull-request summary shows. The canonical
-// text lives in `template/benchmarks/`; the `BenchmarkGuides` check fails a package whose copy differs,
-// and `internal-package-contract sync-benchmark-guides` rewrites them.
+// The check compares `benchmarks/WRITING-BENCHMARKS.md` and `benchmarks/READING-BENCHMARKS.md` with the
+// copies this package ships in `template/benchmarks/`. A missing or differing copy fails the check. A package
+// with no `benchmarks/` directory is not applicable and passes. There is no exception registry for it:
+// `npx internal-package-contract sync-benchmark-guides` rewrites the copies, and the bundled text is the only
+// source. The check is in the standard set, so it runs in a consumer's contract job and git hooks; this
+// repository's own contract leaves it out.
 //
-//   node benchmark-guides.mjs --check    print { ok, differing: [...] } for the cwd
+//   node benchmark-guides.mjs            print { ok, applicable, missing, differing } for the cwd
 //   node benchmark-guides.mjs --write    copy the canonical guides over the package's copies
+//
+// Any argument other than `--write` compares; the check passes `--check` for readability only.
 
 import { copyFileSync, existsSync, readFileSync } from "node:fs"
 import path from "node:path"

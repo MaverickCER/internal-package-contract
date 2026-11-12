@@ -2,14 +2,16 @@
 
 ## Before you start
 
-- `npm ci`, then `npm run contract` -- the full gate CI runs on a push to main; if it passes locally,
-  CI should pass too. Pre-push runs it without Coverage, Crap and Mutation; a pull request runs the
-  subset the change can reach (`--scope auto`).
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (enforced by
-  commitlint on `commit-msg`); `git commit` picks up `.gitmessage` as a template once
-  `internal-package-contract init` has run.
-- Every change lands through a pull request -- the default branch is protected (see
-  `internal-package-contract init`'s branch-protection setup) and cannot be pushed to directly.
+- `npm ci`, then `npm run contract`: the full gate CI runs on a push to main. Pre-push runs it without
+  Coverage, Crap and Mutation; a pull request runs the subset the change can reach (`--scope auto`), so
+  the full run is the push to main after the merge.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) and carry no
+  `Co-Authored-By` trailer; commitlint on `commit-msg` and the `Commits` check reject both. `git commit`
+  picks up `.gitmessage` as a template once `internal-package-contract init` has run.
+- Every change lands through a pull request. `internal-package-contract init --github` writes the ruleset once
+  (deletion and force-pushes blocked; a pull request with resolved review threads and the `contract` and
+  `required` status checks, strict). The `BranchProtection` check fails the contract when the ruleset lacks any
+  of that except `required`, which it does not assert.
 
 ## Making a change
 
@@ -37,6 +39,6 @@ failed first. A documentation-only change does not need this.
 
 ## Releasing
 
-Releases are [Changesets](https://github.com/changesets/changesets)-driven, not a manual,
-developer-machine step -- see this repo's own `.github/workflows/release.yml` and, if one exists,
-`RELEASING.md`, for the exact flow.
+Releases are [Changesets](https://github.com/changesets/changesets)-driven, never a step on a developer
+machine: see this repository's `.github/workflows/release.yml` and, if one exists, `RELEASING.md` for the
+flow.

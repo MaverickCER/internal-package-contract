@@ -1,5 +1,7 @@
-// Reads a package's tarball and says what it reaches (see scan.mjs). Shared by the `AmbientCapabilities` check's
-// entry shell and by `tool ambient`, so the two cannot disagree.
+// Reads a package's tarball and says what it reaches (see scan.mjs). Shared by the `AmbientCapabilities`
+// check's entry point and by `tool ambient`, so the two cannot disagree. A private package is `exempt`
+// before anything is packed; a configuration that is not valid is `misconfigured`; a tarball that is not
+// there is `unpacked`. The packed package.json, not the working one, is what the scan judges.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"

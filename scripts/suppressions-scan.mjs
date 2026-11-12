@@ -1,15 +1,18 @@
-// Finds every suppression comment in a repository: each place a source file tells a tool not to
-// enforce one of its rules (ESLint, TypeScript, Stryker, V8/c8/Istanbul coverage, jscpd, Prettier,
-// markdownlint, secretlint).
+// Finds every suppression comment in a repository: each place a source file tells a tool not to enforce one of its
+// rules (ESLint, TypeScript, Stryker, V8/c8/Istanbul coverage, jscpd, Prettier, markdownlint, secretlint).
 //
-// A suppression is an exception to the standard written as a comment, and a comment is the weakest
-// possible place for one: nothing reads it back, nothing notices when it stops being true, and nothing
-// counts them. This module is the "read it back" half. It reports each suppression with the tool it
-// silences, the rule, where it is, and the reason it gives; the `Suppressions` check
-// (checks/suppressions.ts) then holds each to the policy, and the whole list is the check's evidence.
+// A suppression is an exception to the standard written as a comment, and a comment is the weakest place for one:
+// nothing reads it back, nothing notices when it stops being true, and nothing counts them. This is the "read it
+// back" half. It reports each suppression with the tool it silences, the rule, where it is, and the reason it gives;
+// the `Suppressions` check (checks/suppressions.ts) holds each to the policy, and the whole list is the check's
+// evidence. A suppression with no reason of the required length, or one that names no rule, fails the check unless
+// `.repo-contract/exceptions/suppressions.json` holds a complete record `suppression:<domain>:<rule>:<file>:<anchor>`.
 //
-// Comments are found by parsing each file with the TypeScript scanner, not by searching text, so a
-// string literal or a doc example that merely MENTIONS `eslint-disable` is never counted.
+// The files are those git tracks or would track, or a directory walk outside a repository; generated, vendored and
+// scaffolded trees (`node_modules/`, `dist/`, `docs/api/`, `template/`, fixtures, ...) are left out. Comments are
+// found by parsing each file with the package's own TypeScript scanner, not by searching text, so a string or a doc
+// example that merely mentions `eslint-disable` is never counted. An id is anchored to the directive and the code
+// it covers, not to a line number, so an edit elsewhere in the file leaves a record valid.
 
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"

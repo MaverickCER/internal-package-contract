@@ -1,43 +1,20 @@
 #!/usr/bin/env node
-// Diffs a "previous" and "current" results.json for one or more named
-// examples (env-cap/data-cap each have exactly two -- runtime and
-// build-time -- but nothing here assumes that count), renders a single
-// Markdown PR-comment summary. It leads with any complexity-shift flags (see
-// classify-complexity.mjs) -- a change in a group's inferred Big-O shape,
-// not just an ordinary "got somewhat slower." The table gives each function's big-O and how it moved;
-// a raw time against another run is not shown, because it is not comparable between machines.
+// Renders the pull-request benchmark comment from a previous and a current results.json per suite, and
+// evaluates the gates (gates.mjs).
 //
-// What may FAIL a run is deliberately narrow (see gates.mjs): only properties of one run, or ratios
-// between quantities measured in the same run -- a function whose measured growth class differs from
-// its documented one, and the package's overhead as a percentage of the bare baseline growing past a
-// threshold against main measured on this runner (and the committed results of main and the last
-// release when they came from the same CPU model), beyond the runs' confidence intervals. A function whose big-O cannot be
-// determined is a warning. Raw millisecond deltas between two runs on different machines are not
-// shown. With `--gate` the script exits 1 when a gate fails;
-// without it, it exits 0 and only renders.
+//   node render-summary.mjs --budgets <budgets.mjs> [--marker <marker>] [--exceptions <registry.json>] [--gate]
+//     --example 'label|prev|cur|history[|release[|main-on-this-runner]]' [--example ...]
 //
-// Generalizes env-cap's scripts/render-benchmark-summary.mjs and data-cap's
-// benchmarks/render-benchmark-summary.mjs (near-identical; this reconciles
-// the one real difference -- data-cap's `previous?.metadata` guard against a
-// first-run `{}` "previous" is strictly more correct than env-cap's bare
-// `previous &&`, since `{}` is truthy but has no real metadata to compare --
-// by adopting data-cap's version everywhere).
+// Each `--example` is pipe-separated. Its fields are a label, the previous results.json (empty on a first
+// run), and the current one (required). Next is the history file (empty to skip shift detection). Then, optionally,
+// the last release's results and main measured on this runner. A missing or unreadable previous, release or
+// history file counts as no prior data. `--exceptions` is the benchmark-complexity registry; without it every
+// complexity gain is unaccepted.
 //
-// Usage:
-//   node render-summary.mjs \
-//     --budgets <path/to/budgets.mjs> \
-//     --marker '<!-- my-benchmark-summary -->' \
-//     --example 'Runtime (`benchmark/performance-runtime`)|<prev-results.json>|<cur-results.json>|<history.json>|<release-results.json>|<main-on-this-runner-results.json>' \
-//     [--example 'Build-time (...)|...|...|...|...' ...] [--gate]
-//
-// Each --example's fields are pipe-separated: label, previous results.json
-// path (empty string for "no prior run," e.g. first-ever run), current
-// results.json path (required), history.json path (empty string to skip
-// complexity-shift detection for that example -- the ordinary table
-// still renders), and optionally the results.json of the last release (a
-// fixed reference, so a series of small regressions cannot ratchet the
-// previous run upward unnoticed). Any missing/unreadable "previous" or
-// "release" file is treated as "no prior data."
+// The comment leads with complexity shifts against the history (classify-complexity.mjs). Then comes the gate
+// verdict with every finding by level, then one section per suite with each function's big-O and how it moved.
+// A raw time from another run is not shown, because runs on different machines are not comparable. The comment
+// is always written; only `--gate` turns a failed gate into exit 1. `--help` exits 0; no `--example` exits 1.
 
 import path from "node:path"
 import { pathToFileURL } from "node:url"

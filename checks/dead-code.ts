@@ -1,8 +1,17 @@
 /**
- * Dead-code / unused-dependency detection via knip (the `deadCode` preset),
- * pointed at the consumer's own `knip.{json,jsonc,ts,js}` if present, otherwise
- * the bundled baseline (`config/knip.json` -- `src/index.ts` + common entry
- * patterns, `src/**` project, `examples/`/`dist/` ignored).
+ * `DeadCode`: no unused file, export or dependency, as knip sees them.
+ *
+ * Reads: the package through repo-contract's `deadCode` preset (knip). The config is the package's
+ * own `knip.{json,jsonc,ts,js}`, `knip.config.{ts,js}` or `.kniprc.json` when one exists. Else it
+ * is the bundled `config/knip.json`: `src/index.ts` and common entry patterns, with `examples/` and
+ * `dist/` ignored.
+ *
+ * Fails and warns exactly as the preset does; this file only chooses the config.
+ *
+ * Exceptions: none in a registry. A devDependency knip cannot see in use is passed as
+ * `exemptUnusedDevDependencies`, or listed in the package's own knip config.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig } from "repo-contract"
 import { deadCode as deadCodePreset } from "repo-contract/presets"

@@ -1,15 +1,24 @@
 /**
- * Git repository maintenance: the checks that keep a package's repo publishable
- * and its history clean, independent of the code itself.
+ * `GitHygiene`: the repository is publishable. Nothing tracked that must not be, nothing imported
+ * that is not tracked, and a `package.json` that scopes what ships.
  *
- * Blocks on: not a git repo; a tracked path that should be ignored (build output,
- * `node_modules`, coverage, logs, tarballs); an unresolved merge-conflict marker
- * in a tracked file; a `.gitignore` that does not cover the essentials; a
- * `package.json` missing `files` (an unscoped publish ships everything).
+ * Reads, through `scripts/git-hygiene.mjs`: whether this is a git repository, every tracked path,
+ * and tracked files holding a merge-conflict marker. Also the imports of tracked source that
+ * resolve only to an untracked file. Also the text of `.gitignore`, and whether `.gitattributes`,
+ * `.editorconfig` and `.nvmrc` exist. Also which of `private`, `files`, `license`, `repository`,
+ * `engines.node` and `type` package.json carries.
  *
- * Warns on: missing `.gitattributes` / `.editorconfig` / `.nvmrc`; `package.json`
- * missing `license` / `repository` / `engines.node` / `type`. Run
- * `internal-package-contract init` to scaffold the missing files.
+ * Fails when this is not a git repository, or when there is no `.gitignore`. Fails on a tracked
+ * path that is build output, `node_modules`, coverage, reports, `.stryker-tmp`, a log or a tarball.
+ * Fails on a tracked file holding a conflict marker, and on an import that resolves only to an
+ * untracked file. Fails when a non-private package has no `files` array. Warns, never fails, when
+ * `.gitignore` omits an essential. Warns when `.gitattributes`, `.editorconfig` or `.nvmrc` is
+ * missing. Warns when package.json lacks `license`, `repository` (non-private only), `engines.node`
+ * or `type`.
+ *
+ * Exceptions: none. `internal-package-contract init` scaffolds the missing files.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

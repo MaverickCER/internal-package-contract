@@ -1,15 +1,14 @@
 /**
- * The one place a filesystem path crosses from "real, absolute, usable for `fs` and import resolution" into
- * "the path a generated artifact publishes".
+ * The one place a real, absolute path becomes the path a generated artifact publishes.
  *
- * Absolute paths originate once, at discovery, and are the right currency for every internal read, but they are
- * a bug in a published artifact: `/Users/someone/dev/app/src/user.ts` in a committed JSON or Markdown file is
- * machine-specific, makes two developers' (or CI's) regeneration differ for no real reason, and leaks a local
- * directory layout into a document meant to be reviewed and diffed. Models therefore store the root-relative
- * path, produced here at the last step before they are returned, and anything that later needs a real path
- * re-derives it with {@link absolutePathFrom}.
+ * Absolute paths originate once, at discovery, and are right for every internal read. In a committed JSON or
+ * Markdown file they are a bug: `/Users/someone/dev/app/src/user.ts` is machine-specific, makes two machines'
+ * regeneration differ for no reason, and leaks a local layout into a reviewed document. Models therefore store
+ * the root-relative path, produced here as the last step before they are returned. Anything that later needs a
+ * real path re-derives it with {@link absolutePathFrom}.
  *
- * This file is the canonical source; a package carries a managed copy (see `sync`). It uses only `node:path`.
+ * This file is the canonical source; a package carries a managed copy (`src/_ipc/display-path.ts`, see `sync`).
+ * It uses only `node:path`.
  */
 import path from "node:path"
 

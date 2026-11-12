@@ -1,17 +1,27 @@
 /**
- * The generic, check-owned exception-registry validator every `.repo-contract/exceptions/*.json`
- * file in a CONSUMER repository shares -- the layer `repo-contract/helpers`' own
- * specs/decisions/0013-reusable-exception-policy-helper.md deliberately leaves unpublished
- * ("Not published; an outside consumer wanting it writes their own"), ported here so every check
- * in this package that adopts the registry model (`Mutation`, `SecuritySocket`, `SecurityDeps`,
- * `CodeScanning`, `DistNoUrls`, `CodeRabbit` and the environment-precondition registry) shares one
- * tested core instead of re-deriving it.
+ * The record validator every `.repo-contract/exceptions/*.json` registry shares, and the
+ * security-family fields and verdict helpers the registry-backed checks build on. repo-contract
+ * leaves this layer unpublished, so it is kept here once instead of in every check.
  *
- * Owns the core every record carries (`id`/`version`/`justification`, plus -- on a `version: 2`
- * record -- the structured fields in {@link EXCEPTION_V2_FIELD_KEYS} that say what rule is being
- * broken and why), the record's id namespace, unknown-own-key rejection, and id uniqueness across
- * the whole registry array. A per-registry `ExceptionRegistrySchema` fills in everything
- * registry-specific -- see `checks/mutation.ts` for the `Mutation` check's own schema.
+ * Every record carries `id`, `version` and `justification`. A `version: 2` record also carries
+ * `ruleBroken`, `attempted`, `constraint`, `whyPreferable`, `residualRisk`, `revisitWhen` and
+ * `expires`. `expires` is `YYYY-MM-DD`, or `""` for none; the key must be present. A `version: 1`
+ * record is still read so a registry can migrate one record at a time.
+ *
+ * A registry fails to load when a record has an unknown key, an id outside the registry's
+ * namespace, or a duplicate id. The same for a wrong version or an invalid field. Its check then
+ * fails, listing every problem. A blank field does not fail loading: completeness is each check's
+ * policy. A scaffolded stub therefore loads and then fails as incomplete.
+ *
+ * The security-family registries add `alternatives`, `remediation`, `method` and `exceptionType`.
+ * Those are `socket.json`, `security-deps.json`, `dist-urls.json`, `code-scanning.json` and
+ * `coderabbit.json`. `validated-false-positive` needs `method: "mechanical-reverification"`.
+ * `SecuritySocket` accepts only {@link SOCKET_EXCEPTION_TYPES}; `CodeScanning` only
+ * `dev-only-not-shipped`.
+ *
+ * `loadAndReconcileExceptionRegistry` is the one place a check writes to the consumer's tree. It
+ * writes a blank stub for each new finding. It keeps a record whose finding is gone, marked stale
+ * for the policy.
  */
 import { mkdir } from "node:fs/promises"
 import path from "node:path"

@@ -1,7 +1,8 @@
 // Drift check for the committed Markdown API report (`docs/api-report/`, the `typedoc --options
-// typedoc.markdown.json` output). Regenerates the report into a temp directory and compares the WHOLE tree,
-// so an added, removed or changed file all count as drift: a change to the public API surface cannot land
-// without the report (and the diff a reviewer reads) being updated too.
+// typedoc.markdown.json` output). It regenerates the report into a temp directory and compares the whole tree,
+// so an added, removed or changed file all count as drift. A change to the public API surface then cannot land
+// without the report, and the diff a reviewer reads, being updated too. A report that is not committed yet
+// fails the same way. The `ApiDocsReport` check gates the same thing inside the contract (checks/standard.ts).
 
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"

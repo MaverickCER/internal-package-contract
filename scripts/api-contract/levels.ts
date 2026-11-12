@@ -1,7 +1,7 @@
 /**
- * SemVer bump-magnitude arithmetic over `RequiredReleaseLevel`. Ported from repo-contract's own
- * `scripts/api-contract/levels.ts` — this engine now lives only here (see contract.ts's own note on
- * `ApiContract`); repo-contract consumes it as a devDependency rather than hosting a copy.
+ * Release-level arithmetic for `ApiContract`: which of `none`/`patch`/`minor`/`major` is larger, whether a
+ * declared bump covers a required one, and what a classified diff requires. Below 1.0.0 the requirement is
+ * deflated, so a 0.x package reaches 1.0.0 only through a hand-written `major` changeset.
  */
 
 import type { ContractImpact, RequiredReleaseLevel } from "./evidence-types.js"

@@ -1,12 +1,14 @@
-// Prompts a person has not answered yet.
+// Prompts a person has not answered yet, which `PromptBlocks` reports.
 //
 // A scaffolded document asks for the one thing only its author knows with a single-line comment:
 //
 //   <!-- ipc:prompt: Say who this is for and who it is not for. -->
 //
-// Answering means replacing the whole comment with the answer. While one is left the document still describes
-// nothing, so the `PromptBlocks` check warns during development and fails when a release is being verified.
-// It only ever looks for the comment; it makes no judgement of the answer.
+// Answering means replacing the whole comment with the answer. The documents in generate/documents.mjs are
+// read, and so is every Markdown file in the package's decision-record folder (`ADR_DIRECTORIES`, first one
+// found). In `docs/surface.json`, a value still starting with `TODO:` counts as a prompt too. While one is
+// left the document still describes nothing, so the check warns during development. It fails when a release
+// is being verified (`IPC_RELEASE=1`). It only ever looks for the comment; it makes no judgement of the answer.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"

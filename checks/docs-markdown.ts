@@ -1,12 +1,18 @@
 /**
- * Markdown structure/style lint via markdownlint-cli2.
+ * `DocsMarkdown`: the root and `docs/` Markdown passes markdownlint.
  *
- * A recreation rather than the `markdownlint` preset because the preset needs the
- * consumer's config to wire a JSON output formatter, and markdownlint-cli2
- * unscoped walks node_modules into an OOM. This check scans only the root and
- * `docs/` markdown, uses the consumer's own `.markdownlint-cli2.*` if present
- * (otherwise the bundled `config/markdownlint.jsonc`), and reads
- * markdownlint-cli2's own exit code plus printed findings. Any issue blocks.
+ * Reads: `*.md` and every `.md` under `docs/` through markdownlint-cli2. The config is the
+ * package's own `.markdownlint-cli2.*` or `.markdownlint.*` when one exists; that config then owns
+ * the globs. Else it is the bundled `config/markdownlint.jsonc`. The globs are explicit because an
+ * unscoped run walks `node_modules` into an out-of-memory crash.
+ *
+ * Fails on any finding, read from markdownlint-cli2's exit code and printed output. Never warns.
+ * Passes when the globs match nothing.
+ *
+ * Exceptions: none in a registry. A rule is relaxed in the package's own markdownlint config. An
+ * inline `markdownlint-disable` is read back by `Suppressions`.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput, resolveConfig } from "./shared.js"

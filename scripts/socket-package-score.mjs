@@ -1,20 +1,19 @@
-// Entry point for the `SecuritySocket` check (see checks/security-socket.ts).
+// The script behind the `SecuritySocket` check (checks/security-socket.ts).
 //
-// Why `socket package score` and not `socket ci`: `socket ci` scans the repo's manifests against the
-// org security policy and by default reports ONLY "error"-level alerts -- confirmed against a real
-// data-cap run: `socket ci` reported `healthy: true, alerts: {}` while the package page showed
-// `urlStrings`, `minifiedFile`, `shellAccess` (cross-spawn), `gptDidYouMean` (hashery) and
-// `usesEval` (ajv). `socket package score` returns exactly what the package's own Socket page
-// shows, for the package itself and its whole transitive closure (peer dependencies included).
+// It reads `package.json`, asks npm whether the current version is published, and runs `socket package score` on
+// it, or on the latest published version when Socket has no result for the current one yet. `socket package score`
+// returns what the package's own Socket page shows, for the package and its whole transitive closure. `socket ci`
+// is not used: it reports only alerts at the org policy's error level and said `healthy` for a package whose page
+// listed several alerts. A fresh cached score for the same version is used instead of spending quota
+// (socket-score-cache.mjs). A private or unnamed package publishes nothing, so there is nothing to score, and the
+// check passes.
 //
-// Scores the current `package.json` version; if Socket has no result for it (not published yet, or
-// not indexed yet) it scores the latest published version instead and says so. A private or
-// unnamed package ships nothing, so there is nothing to score.
-//
-// Prints ONE JSON envelope to stdout, in Socket's own `{ ok, message, cause, data }` shape for
-// failures (passed through verbatim so the policy can classify them) and
-// `{ ok: true, data: { skipped | unpublished | purl, scoredVersion, requestedVersion, alerts } }`
-// otherwise. Never exits non-zero for a Socket-side problem -- the policy decides.
+// It prints one JSON envelope to stdout: `{ ok: true, data: { skipped | unpublished | package, purl, scoredVersion,
+// requestedVersion, alerts } }`, or Socket's own `{ ok: false, message, cause, data }` passed through so the policy
+// can classify it. Socket's HTTP 429 is retried a few times before it is passed through. A registry lookup that
+// fails for any reason but "no such version" is reported as a failure, never treated as unpublished. The script
+// always exits 0; the policy decides, and it warns without a key and fails on a refused key, a network error or a
+// rate limit.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync } from "node:fs"

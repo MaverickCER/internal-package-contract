@@ -1,6 +1,7 @@
 // A first draft of `docs/surface.json` for a package that has none: one entry per published entry point, with
-// the source folder guessed from where the code is and everything a person must say left as a `TODO:` that the
-// `PromptBlocks` check reports until it is answered.
+// the source folder guessed from where the code is. Everything a person must say is left as a `TODO:` that the
+// `PromptBlocks` check reports until it is answered. A hand-written API table in AGENTS.md seeds the draft, so
+// adopting loses none of it.
 
 import { publishedEntries } from "../generate/entry-points.mjs"
 
