@@ -1,7 +1,9 @@
-// What a package's consumers can actually reach, and how to read it when reaching it fails. Source-level
-// tests prove the code works; only installing the packed tarball into a clean project and importing each
-// entry point proves the published package does. This module is the pure half: which entries to try, and
-// whether a failure is the package's fault or only a peer dependency the consumer has not installed.
+// What a package's consumers can reach, and how to read it when reaching it fails. Source-level tests show
+// the code works; only installing the packed tarball into a clean project and importing each entry point
+// shows the published package does. This module is the pure half, read by scripts/check-packed-consumer.mjs
+// and scripts/ambient/inspect.mjs: which entries to try, which files the manifest promises, how to list a
+// tarball without an external `tar`, and whether a failed import is the package's fault or only a peer
+// dependency the consumer has not installed.
 
 import { gunzipSync } from "node:zlib"
 

@@ -1,7 +1,13 @@
 /**
- * Checks that are not part of the standard set, which a package turns on by name. A package lists them in
- * package.json, `"internal-package-contract": { "checks": ["AmbientCapabilities"] }`, so one it does not need
- * never runs and never has to be waived (`add check <name>` writes the entry).
+ * The checks a package turns on by name instead of getting by default: `AgentSkill` and
+ * `AmbientCapabilities`.
+ *
+ * Reads: package.json `"internal-package-contract"."checks"`. A name that is not an optional check
+ * throws when the contract is assembled, naming the ones that exist. A typo therefore never runs
+ * nothing in silence.
+ *
+ * An optional check is placed before `Mutation`, which must stay last and isolated. It waits on
+ * what `OPTIONAL_CHECKS` says it depends on. `add check <Name>` writes the entry.
  */
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

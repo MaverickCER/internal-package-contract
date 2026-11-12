@@ -1,10 +1,12 @@
 // `internal-package-contract mutation`: mutation testing of what a change touched, as a fast loop while writing.
 //
-// It runs every mutant of the files that changed, and of the source files the changed tests import, and nothing
-// else: always every mutant of those files (`--force`, so no earlier result stands in for a run), under the package's
-// own concurrency, which it never overrides. It is advice, not the gate. A mutant in a file nobody touched can be
-// killed by a test that did, and this loop does not look there, so only a full run (the `Mutation` check) can say a
-// change is finished; this says what to fix before paying for one.
+// It reads git for the files changed against `--base` (or `origin/main`, else `main`), and the relative imports of
+// each changed test, and runs every mutant of those source files with `--force`, under the package's own
+// concurrency. The config's own `!` exclusions still apply. Exit code 1 means a mutant survived, had no coverage
+// or timed out, or Stryker did not finish.
+//
+// This is advice, not the gate. A mutant in a file nobody touched can be killed by a test that did, and this loop
+// does not look there; only the `Mutation` check, which mutates everything, says a change is finished.
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

@@ -1,8 +1,11 @@
 /**
- * A check is two independent halves: the **evidence** (how to collect it: the command, its working
- * directory, environment, timeout and output format) and the **policy** (what that evidence has to
- * show). Every check this package ships already has both, so none of them needs a bespoke
- * customization point: take it apart, swap the half you need and put it back.
+ * A check in two halves, for a package that needs one of them changed. The evidence is the command,
+ * its working directory, environment, timeout and output format. The policy is what that evidence
+ * must show. Every check this package ships has both, so none needs a bespoke customization point.
+ *
+ * `withPolicy` keeps the standard's evidence and judges it by another rule. `withEvidence` keeps
+ * the rule and collects the evidence another way. `evidenceOf`, `policyOf`, `composeCheck`,
+ * `evidenceOfAll` and `policiesOfAll` are the pieces those two are made of.
  *
  * ```ts
  * import { standardChecks } from "internal-package-contract/checks/standard"
@@ -15,8 +18,9 @@
  * checks.Lint = withEvidence(checks.Lint, { run: ["eslint", "--format", "json", "src"] })
  * ```
  *
- * The evidence scripts themselves (`scripts/check-*.mjs`) are exported too (`internal-package-contract/scripts/*`),
- * so a package can also run one directly, or wrap it, without going through the contract.
+ * The evidence scripts (`scripts/check-*.mjs`) are exported as
+ * `internal-package-contract/scripts/*`. A package can run one directly, or wrap it, without the
+ * contract.
  */
 import type { CheckDefinitionConfig } from "repo-contract"
 

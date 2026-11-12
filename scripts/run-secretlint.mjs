@@ -1,13 +1,14 @@
-// Runs secretlint over the files a repository actually has -- tracked, plus untracked but not git-ignored --
-// instead of the `**/*` glob.
+// Runs secretlint for the `SecuritySecrets` check over the files the repository has (tracked, plus untracked but
+// not ignored) instead of the `**/*` glob the preset passes.
 //
-// secretlint expands `**/*` itself and applies its ignore file only afterwards, so on a working tree with
-// generated output (a 700 MB `node_modules` inside an example, a `.next` cache, benchmark fixtures, a
-// database binary) it walks every one of them first and can run for tens of minutes. The files git knows
-// about are exactly the ones that could ever be committed or published, and listing them takes milliseconds.
-// Outside a git repository, or when the list is too long for one command line, it falls back to the glob.
+// secretlint expands `**/*` itself and applies its ignore file only afterwards, so on a working tree with generated
+// output (a `node_modules` inside an example, a `.next` cache, benchmark fixtures) it walks every file first and can
+// run for a long time. The files git knows about are exactly the ones that could be committed or published, and
+// listing them is quick. Outside a git repository, or when the list is too long for one command line
+// (`MAX_ARGUMENT_BYTES`), the glob is passed through unchanged. The exit code is secretlint's, and the check's
+// preset judges its report.
 //
-// Usage: node run-secretlint.mjs <secretlint args ending in the "**/*" glob>
+// Usage: node run-secretlint.mjs <command> <secretlint args ending in the "**/*" glob>
 import { sync as spawnSync } from "cross-spawn"
 import path from "node:path"
 import { fileURLToPath } from "node:url"

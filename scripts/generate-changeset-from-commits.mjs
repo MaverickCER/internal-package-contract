@@ -1,26 +1,23 @@
 #!/usr/bin/env node
-// Guarantees every RELEASABLE commit on `main` since the last release gets a changeset --
-// either the hand-written one its own PR already added, or one generated here --
-// so `changeset version` never runs with a silent "no changeset needed" gap. A commit is
-// releasable when its Conventional Commit type changes what a user gets (`feat`, `fix`, `perf`,
-// `revert`), when it is marked breaking, or when it carries an explicit `Changeset: <bump>`
-// trailer; `chore`, `ci`, `docs`, `test`, `build`, `refactor`, `style` -- and anything a bot
-// authored, such as a benchmark-results refresh or a dependency re-pin -- never becomes a
-// release, so a changelog lists what changed for users and npm gets no empty releases. Run
-// from a CONSUMER's own repo root (this package is a devDependency; every
-// consumer's release-npm-changesets.yml invokes this exact file from
-// node_modules), never from internal-package-contract's own repo, so nothing
-// here assumes anything beyond a normal git checkout + package.json.
+// Gives every releasable commit on `main` since the last release a changeset: the hand-written one its own pull
+// request added, or one generated here. `changeset version` then never runs with a silent "no changeset needed"
+// gap. A commit is releasable when its Conventional Commit type changes what a user gets (`feat`, `fix`, `perf`,
+// `revert`), when it is marked breaking, or when its body carries a `Changeset: <bump>` trailer. `chore`, `ci`,
+// `docs`, `test`, `build`, `refactor` and `style`, and anything a bot authored (a benchmark refresh, a dependency
+// re-pin), never become a release, so npm gets no empty releases. A commit that touches only `.github/` or
+// `.vscode/` is exempt whatever its type. Below 1.0.0 a bump is deflated one level: breaking is `minor`, `feat`
+// is `patch`.
 //
-// Left alone on purpose: any `.changeset/*.md` file a commit's own diff already
-// added. It can carry a richer description or force a higher bump than a commit
-// prefix implies, and always takes precedence over what this script would have
-// inferred.
+// It runs from a consumer's own repository root: the reusable release workflow
+// (`.github/workflows/release-npm-changesets.yml`), which every consumer's `release.yml` calls, invokes this file
+// from node_modules. It assumes nothing beyond a git checkout and a package.json. When HEAD is the "chore:
+// version packages" commit itself it writes nothing, because generating then would turn a publish run back into
+// a version-bump run. With no release commit in history it anchors on the commit that added
+// `.changeset/config.json`, so older history is never re-bumped.
 //
-// See specs/decisions in the "Standardize npm release + GitHub Pages deploy"
-// plan, part B, for the full design rationale (bump-derivation rules, the
-// first-adoption bootstrap, and why this must never run on a publish-triggered
-// checkout).
+// A `.changeset/*.md` file a commit's own diff added is left alone. It may say more, or force a higher bump,
+// than the subject implies, and always wins over what this script would infer. The highest bump across all
+// pending changesets is recorded in `.changeset/.release-bump.json`, which the workflow reads.
 
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"

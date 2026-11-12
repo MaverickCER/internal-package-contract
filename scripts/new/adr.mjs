@@ -1,8 +1,10 @@
-// `internal-package-contract new adr "<title>"`: starts a decision record with the next number and the
-// sections every record in this standard has, each with the question a good answer starts from.
+// `internal-package-contract new adr "<title>"`: starts a decision record with the next number and the sections
+// every record in this standard has, each opened by the question a good answer starts from.
 //
-// The questions are prompts (see scripts/prompts/scan.mjs): they warn until answered and fail a release.
-// It never overwrites a file, and it writes only inside the package's own decision folder.
+// The questions are prompts (scripts/prompts/scan.mjs): `PromptBlocks` reports them until they are answered and
+// fails a release. The record goes in the package's own decision folder (specs/decisions, docs/decisions or
+// docs/adr); a package with none is told to create one. The number is one past the highest already there, so no
+// file is ever overwritten.
 
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import path from "node:path"

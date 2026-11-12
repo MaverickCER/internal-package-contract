@@ -1,32 +1,55 @@
 /**
- * Runtime dependency vulnerability scanning via `npm audit`, gated through the same reviewable,
- * file-based exception-registry model every other security-family check in this package uses
- * (`SecuritySocket`, and the shared core in `./exception-record.js`) -- never a hardcoded
- * in-source allowlist. `npm audit`'s own raw evidence is read and reported verbatim; an accepted
- * finding is never stripped from it. Acceptance is decided entirely at the policy layer: a
- * finding with no matching, complete exception record fails, regardless of how well-known or
- * long-standing it is.
+ * `SecurityDeps`: no known vulnerability ships in what users install, unless a committed record
+ * accepts it.
  *
- * `--omit=dev` scopes the scan to the dependency graph actually shipped to a consumer's own
- * installers; a finding can still surface here for a package that is transitively required by
- * this package's own dev tooling (npm's own arborist/pacote/sigstore chain via `licensee`,
- * Vitest's coverage internals, markdownlint-cli2's TOML parser, adm-zip via `github-actionlint`)
- * when npm's own `--omit` filtering doesn't cleanly separate a hoisted/deduplicated package from
- * every path that reaches it. Each such finding is a record in
- * `.repo-contract/exceptions/security-deps.json` (id, justification, alternatives considered,
- * remediation status, method, exceptionType, and the structured v2 fields) -- reviewable and
- * revisable like any other exception, never a name silently dropped from a Set. A repository with
- * nothing to excuse has an empty registry.
+ * Reads: `npm audit --omit=dev --json` over the lockfile and the registry, and
+ * `.repo-contract/exceptions/security-deps.json`. The audit's raw output stays in the evidence; an
+ * accepted finding is never stripped from it.
  *
- * A critical advisory is forbidden outright: a published package must not ship a known critical
- * vulnerability in what users install, and "critical, but excused" is the inverted ordering
- * `SecuritySocket` (which forbids critical and high alike) never had. Every lower severity needs the
- * full field set -- a dependency vulnerability is often deep in a *required* chain with no patched
- * release yet, and the exception system exists to make that judgment call reviewable.
+ * Fails on a `critical` advisory, which no record can accept. Fails on any lower advisory whose
+ * record is missing or incomplete. Fails on a record whose advisory is gone (stale; delete it).
+ * Fails when the audit output is not JSON, and when the registry cannot be loaded or written. Never
+ * warns.
  *
- * `--omit=dev` scopes this to what users install. The published packages here have no runtime
- * dependencies, so this check is vacuous for them by design; the development and CI tooling --
- * where the real exposure of a CI-centric ecosystem is -- is audited by `SecurityDevDeps`.
+ * Exceptions: id `security-deps:<package>@<range>` with `package`, `range` and `severity` fields,
+ * the security fields and the version 2 fields. The security fields are `alternatives`,
+ * `remediation`, `method` and `exceptionType`, of any type. A blank stub is written for every new
+ * finding; the check fails until it is filled in.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * Limits: one finding per vulnerable package, as npm groups them, so one entry can cover several
+ * advisories. npm's `--omit=dev` does not always separate a hoisted package from the dev-only paths
+ * that reach it. A tooling-only package can therefore surface here. `SecurityDevDeps` audits the
+ * rest of the tree.
+ *
+ * Example record:
+ *
+ * ```json
+ * {
+ *   "exceptions": [
+ *     {
+ *       "id": "security-deps:tar@<6.2.1",
+ *       "version": 2,
+ *       "justification": "Reached only through the publisher's own tooling; no patched release yet.",
+ *       "alternatives": "Replace the dependency that pulls it in.",
+ *       "remediation": "Upgrade as soon as a patched release exists.",
+ *       "method": "independent-human-review",
+ *       "exceptionType": "scheduled-remediation",
+ *       "package": "tar",
+ *       "range": "<6.2.1",
+ *       "severity": "high",
+ *       "ruleBroken": "No known vulnerability ships in what users install.",
+ *       "attempted": "An `overrides` entry; the dependency's own version range rejects it.",
+ *       "constraint": "The patched release is not published yet.",
+ *       "whyPreferable": "A tracked, dated exception beats removing the feature that needs the dependency.",
+ *       "residualRisk": "The advisory's path traversal, in a dependency users install.",
+ *       "revisitWhen": "A patched release is published.",
+ *       "expires": "2026-12-31"
+ *     }
+ *   ]
+ * }
+ * ```
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

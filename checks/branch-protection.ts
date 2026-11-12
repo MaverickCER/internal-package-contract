@@ -1,16 +1,27 @@
 /**
- * Verifies the consumer's own default branch is protected against deletion,
- * force-pushes and merging without a pull request, requires the `contract` status
- * check to pass (strict) before a merge, and requires review threads to be resolved,
- * via a GitHub ruleset. Without the required-check rule a red CI run can be merged --
- * and a merge to the default branch is what triggers the release pipeline. Run
- * through the bundled `scripts/check-branch-protection.mjs`, which shells out
- * to the `gh` CLI (see that script's own doc comment for why).
+ * `BranchProtection`: the default branch of the repository `origin` points at cannot be merged into
+ * without a green `contract` job.
  *
- * When `gh` isn't installed/authenticated or the origin remote isn't a recognizable GitHub URL
- * this check cannot tell "genuinely unprotected" apart from "couldn't check", so it records a
- * degradation (`checks/environment-exceptions.ts`) instead of failing: a `warn` locally, accepted
- * only by a written exception, and a failure under the CI gate (`--strict`) without one.
+ * Reads: the repository's active GitHub rulesets through the `gh` CLI, by way of
+ * `scripts/check-branch-protection.mjs`. Locally that is a person's `gh auth login`; in Actions it
+ * is `GH_TOKEN` or `GITHUB_TOKEN`.
+ *
+ * Fails when the default branch lacks deletion protection, force-push protection, or a pull-request
+ * rule. Fails when it lacks a required-status-checks rule, or that rule lacks the `contract`
+ * context. Fails when that rule is not strict (the branch must be up to date before it merges).
+ * Fails when review threads need not be resolved. It asks for `contract` only, never an aggregate
+ * `required` context. Never warns on a finding.
+ *
+ * Exceptions: none for a finding; `internal-package-contract init --github` writes the ruleset. One
+ * degradation, `BranchProtection:gh-unavailable`: `gh` missing or signed out, an `origin` that is
+ * not a GitHub URL, or a failed API call. It warns locally. Under `--strict`, the CI default, it
+ * fails unless `.repo-contract/exceptions/environment.json` holds a complete record. The record id
+ * is `environment:BranchProtection:gh-unavailable`.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * Limit: a ruleset whose details cannot be read is skipped. The branch then reads as unprotected
+ * rather than as a degradation.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

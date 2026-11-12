@@ -1,57 +1,61 @@
 /**
- * Supply-chain alert scanning from Socket.dev, evaluated against the package's own Socket page.
+ * `SecuritySocket`: every alert on the package's own Socket.dev page is fixed or accepted by a
+ * committed record.
  *
- * `run` executes `scripts/socket-package-score.mjs`, which wraps `socket package score` -- the same
- * data the package's page on socket.dev shows, for the package itself AND its whole transitive
- * closure (peer dependencies included). It deliberately does NOT use `socket ci`: that scans repo
- * manifests against the org policy and by default reports only "error"-level alerts, so it returned
- * `healthy: true, alerts: {}` for a package whose page showed `urlStrings`, `minifiedFile`,
- * `shellAccess`, `usesEval` and more (confirmed on data-cap). The script scores the current
- * `package.json` version, falls back to the latest published version when Socket has no result
- * for it yet, and passes vacuously for a private or never-published package (DistNoUrls and
- * NoMinify gate what is about to ship; this check gates what is already out and its closure).
+ * Reads: package.json, and the npm registry, to learn whether the current version is published.
+ * Then `socket package score` for that version, or the latest published one when Socket has no
+ * result yet, through `scripts/socket-package-score.mjs`. A fresh cached score for the same version
+ * is reused. Then `.repo-contract/exceptions/socket.json`. The score covers the package and its
+ * whole transitive closure, peers included. `socket ci` is not used: it reports only the org
+ * policy's error level.
  *
- * ## Policy
+ * Fails on a `critical` or `high` alert, which no record can accept. Fails on any other alert whose
+ * record is missing or incomplete. Fails on a record whose alert is gone (stale; delete it). Fails
+ * when the registry cannot be loaded or written. Fails when the scan could not run for a reason
+ * other than a missing key. Those reasons are: the CLI is not installed, the token was refused, the
+ * network is unreachable, Socket rate-limited the token. Passes for a private package, and for a
+ * package that is not published yet. Never warns on a finding.
  *
- * - `critical`/`high` alerts are `forbidden` outright.
- * - **Every other alert** (`supplyChainRisk` included, at any severity) is waivable only via a
- *   finding-specific record in `.repo-contract/exceptions/socket.json` (the shared exception-policy
- *   primitive from `repo-contract/helpers`) with **every field fully written** -- `justification`,
- *   `alternatives`, `remediation`, `method` and `exceptionType` -- where `exceptionType` says what is
- *   actually true: `validated-false-positive`, `tooling-limitation`, `accepted-risk` or
- *   `required-for-package-to-exist` (the flagged dependency or behavior is the reason the package
- *   exists at all, and `justification` must say why).
- * - **The scan can never be skipped silently.** CLI not installed, token rejected, network down and
- *   rate limiting all FAIL. With no API key, locally or in CI, the check WARNS: the scan did not run
- *   and its alerts were not checked, with the steps to fix it (see `./socket-guidance.ts`). The
- *   steps differ between CI and a developer machine.
+ * Exceptions: id `socket:<package>@<version>:<alert type>`, with `package`, `packageVersion`,
+ * `type` and `severity` fields, the security fields and the version 2 fields. The version is `self`
+ * for the scored package itself, so a release does not orphan the record. `exceptionType` must be
+ * one of `validated-false-positive`, `tooling-limitation`, `accepted-risk` or
+ * `required-for-package-to-exist`. A blank stub is written for every new alert. One degradation,
+ * `SecuritySocket:no-key`: no API token here or in CI. It warns locally, with the steps to get a
+ * token (`checks/socket-guidance.ts`). Under `--strict`, the CI default, it fails unless
+ * `.repo-contract/exceptions/environment.json` holds a complete record. The record id is
+ * `environment:SecuritySocket:no-key`; `init` writes one with an expiry date.
  *
- * Example record (id is `socket:<package>@<version>:<alert name>`; alerts on the scored package
- * itself use the version `self`, so their records survive releases):
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * Example record:
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
  *       "id": "socket:data-cap@self:unpopularPackage",
- *       "version": 1,
+ *       "version": 2,
  *       "justification": "A new package with few downloads yet; popularity is not something code can change.",
- *       "alternatives": "None -- publishing is the way to gain adoption.",
+ *       "alternatives": "None; publishing is the way to gain adoption.",
  *       "remediation": "Resolves itself as the package is adopted.",
  *       "method": "independent-human-review",
  *       "exceptionType": "required-for-package-to-exist",
  *       "package": "data-cap",
  *       "packageVersion": "self",
  *       "type": "unpopularPackage",
- *       "severity": "middle"
+ *       "severity": "middle",
+ *       "ruleBroken": "Every Socket alert on the package is fixed or accepted.",
+ *       "attempted": "Nothing; the alert measures downloads.",
+ *       "constraint": "A package is new before it is popular.",
+ *       "whyPreferable": "Recording the alert keeps the page honest while adoption grows.",
+ *       "residualRisk": "None to users; the alert is informational.",
+ *       "revisitWhen": "The alert disappears from the package page.",
+ *       "expires": ""
  *     }
  *   ]
  * }
  * ```
- *
- * The registry is reconciled every run: a blank stub is scaffolded for a genuinely new alert and a
- * record with no matching alert this run is reported stale, via the same
- * `reconcileExceptions`/`writeExceptionRegistry` (`repo-contract/helpers`) primitives.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"

@@ -1,15 +1,18 @@
 /**
- * Published-package type-resolution correctness via `@arethetypeswrong/cli`.
+ * `TypeResolution`: the published types resolve under every module resolution a consumer may use.
  *
- * attw's `--format json` output truncates when written to a pipe once a package
- * has more than a couple of entrypoints, and repo-contract captures every
- * check's stdout through a pipe -- so this check runs attw via
- * {@link file://../scripts/run-attw.mjs}, which packs the tarball with
- * `--ignore-scripts` and redirects attw's stdout to a real file. The policy then
- * reads that file and hands it to repo-contract's own `arethetypeswrong` preset
- * policy, so the interpretation is repo-contract's, not a reimplementation --
- * after dropping `node10` (pre-`exports`) resolution problems, which a package
- * publishing modern `exports` is not expected to satisfy.
+ * Reads: a tarball packed with `--ignore-scripts` by `scripts/run-attw.mjs`, which runs
+ * `@arethetypeswrong/cli`. attw's JSON goes to `reports/arethetypeswrong.json`: it truncates on a
+ * pipe once a package has several entry points.
+ *
+ * Fails when the report is missing or unreadable. Otherwise the verdict is repo-contract's own
+ * `arethetypeswrong` preset's, once `node10` problems are removed. `node10` is dropped because a
+ * package with modern `exports` does not serve that resolver.
+ *
+ * Exceptions: none.
+ *
+ * Runs in the consumer `contract` job and in both git hooks, after `Tests`, so two packs never
+ * race. IPC's own self-contract leaves it out: this package is never packed for npm.
  */
 import { readFile } from "node:fs/promises"
 import path from "node:path"

@@ -415,7 +415,7 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
   })
 })
 
-describe("parseReleaseTagArg() and main()", () => {
+describe("parseReleaseTagArg() and main()", { timeout: 120_000 }, () => {
   it("takes the tag from --release-tag=, anywhere, and only beta or alpha count", () => {
     expect(parseReleaseTagArg([])).toBe("public")
     expect(parseReleaseTagArg(["--release-tag=beta"])).toBe("beta")

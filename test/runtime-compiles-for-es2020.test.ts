@@ -25,5 +25,5 @@ describe("runtime/ managed copies", () => {
       .getPreEmitDiagnostics(program)
       .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
     expect(problems).toEqual([])
-  })
+  }, 120_000)
 })

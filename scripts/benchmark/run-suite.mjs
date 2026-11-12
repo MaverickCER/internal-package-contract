@@ -1,18 +1,20 @@
 #!/usr/bin/env node
-// Runs a benchmark suite and writes its results and report.
+// Runs a benchmark suite and writes its `results.json` and `BENCHMARKS.md`.
 //
-//   node run-suite.mjs <suite.mjs> [--quick] [--check] [--only a,b] [--out <dir>] [--config <file>]
+//   node run-suite.mjs <suite.mjs> [--quick] [--check] [--render] [--only a,b] [--typical-only] [--out <dir>] [--config <file>]
 //
-//   --render  re-render BENCHMARKS.md from the existing results.json (no measuring)
-//   --check   validate the suite's documentation and shape, measure nothing (cheap enough for CI)
-//   --quick   5 smaller sizes and short sampling -- a smoke test, never for committed results
-//   --only    run just these benchmark ids (use `end-to-end` for the end-to-end pair)
-//   --out     where to write results.json and BENCHMARKS.md (default: the suite's own directory in CI, whose
-//             figures are the ones committed; `.benchmark-local/<suite>` anywhere else, which is never committed)
-//   --config  benchmark.config.json: { costRates?, bundleFiles?, root?, docsPath? } (default: next to the suite)
+//   --check         load the suite and validate its documentation and shape; measure nothing
+//   --render        re-derive `analysis` and BENCHMARKS.md from the stored results.json; measure nothing
+//   --quick         the short size ladder (`QUICK_TIERS`) and brief sampling: a smoke test, never for committed results
+//   --only          run only these benchmark ids (`end-to-end` for the end-to-end pair)
+//   --typical-only  measure the suite's typical size alone, as a same-runner reference for the overhead gate
+//   --out           where to write; default: the suite's own directory in CI, `.benchmark-local/<suite>` elsewhere
+//   --config        benchmark.config.json: { costRates?, bundleFiles?, root?, docsPath? }; default: next to the suite
 //
-// Re-launches itself under `node --expose-gc` when needed so garbage from one sample is not billed
-// to the next.
+// A suite that `defineSuite` refuses, or results that depart from the documented shape (kit/results-contract.mjs),
+// exit 1 and write nothing. A measuring run re-launches itself under `node --expose-gc`, so one sample's garbage
+// is not billed to the next. `--render` is what `BenchmarkCoverage` asks for when committed results predate
+// `analysis.coverage`.
 
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -39,6 +41,7 @@ function parse(argv) {
     else if (arg === "--check") options.check = true
     else if (arg === "--render") options.render = true
     else if (arg === "--only") options.only = (argv[++index] ?? "").split(",").filter(Boolean)
+    else if (arg === "--typical-only") options.typicalOnly = true
     else if (arg === "--out") options.out = argv[++index]
     else if (arg === "--config") options.config = argv[++index]
     else if (!arg.startsWith("--") && options.suite === undefined) options.suite = arg
@@ -51,7 +54,7 @@ async function main() {
   const options = parse(process.argv.slice(2))
   if (!options.suite) {
     console.error(
-      "Usage: node run-suite.mjs <suite.mjs> [--quick] [--check] [--only a,b] [--out <dir>] [--config <file>]",
+      "Usage: node run-suite.mjs <suite.mjs> [--quick] [--check] [--only a,b] [--typical-only] [--out <dir>] [--config <file>]",
     )
     process.exitCode = 1
     return
@@ -122,6 +125,8 @@ async function main() {
   const results = await runSuite(suite, {
     quick: options.quick,
     only: options.only,
+    // The one size the overhead gate judges: what a same-runner reference needs, and nothing more.
+    ...(options.typicalOnly ? { tiers: [suite.workload.typicalN] } : {}),
     rates: config.costRates,
     bundleFiles: config.bundleFiles,
     root,

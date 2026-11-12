@@ -1,9 +1,19 @@
 /**
- * Keeps the facts a package's documents derive from its own sources from drifting. A document marks such a
- * fact as a generated region (`<!-- ipc:begin entry-points -->` ... `<!-- ipc:end entry-points -->`);
- * `internal-package-contract generate` writes it from `package.json` and `docs/surface.json`. This check runs
- * `generate --check`: it fails when a region is stale, when its markers are malformed, or when its source is
- * missing or disagrees with what the package really exports. A package with no regions passes.
+ * `GeneratedRegions`: every generated region in the package's documents matches what its sources
+ * produce.
+ *
+ * Reads: the documents that carry `<!-- ipc:begin name -->` ... `<!-- ipc:end name -->` markers,
+ * and the `package.json` and `docs/surface.json` they are generated from.
+ * `scripts/check-generated-regions.mjs` runs `generate --check` in-process.
+ *
+ * Fails when a region is stale, or when its markers are malformed. Fails when a region's source is
+ * missing or disagrees with what the package exports. Never warns. Passes when no document marks a
+ * region.
+ *
+ * Exceptions: none. Run `internal-package-contract generate` and commit the result.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * its documents mark no region.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

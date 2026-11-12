@@ -1,7 +1,12 @@
 // The imports of a package's tracked source that resolve only to a file git does not track. Everything a
-// local gate reads comes from the working tree, so a file that is ignored by a pattern that is too wide, or
-// was never added, passes every check on the machine that has it and is missing from every clean checkout,
-// which is what CI and a consumer get.
+// local gate reads comes from the working tree, so a file hidden by a .gitignore pattern that is too wide,
+// or never added, passes every check on the machine that has it and is missing from every clean checkout,
+// which is what CI and a consumer get. The `GitHygiene` check fails on each one found.
+//
+// Only relative specifiers are followed, with the extensions TypeScript and Node may resolve, and an
+// `index` file in a directory. An import that resolves to nothing at all is left to the type check. A
+// target under a folder a build, a test run or an install fills (GENERATED) is produced there, not
+// missing, and is not reported.
 
 import path from "node:path"
 

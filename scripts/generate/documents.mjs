@@ -1,4 +1,4 @@
-/** The documents that may carry generated regions or unanswered prompts: fixed, never taken from the package's own files. */
+/** The documents that may carry generated regions or unanswered prompts. Fixed here, never read from the package, so `generate` and `PromptBlocks` look in the same places. */
 export const DOCUMENTS = [
   "README.md",
   "AGENTS.md",

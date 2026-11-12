@@ -1,6 +1,12 @@
-// Reads what the check needs from a repository: the public functions (from the committed API baselines) and
-// what each benchmark suite says it covers (from the committed results, whose `analysis.coverage` is derived from
-// the suite's own definition).
+// What `BenchmarkCoverage` reads from a repository: the public functions, and what each suite covers.
+//
+// The functions come from the committed API baselines (`.repo-contract/api-contract/<entry>/baseline.api.json`,
+// plus `baseline.d.ts` where it exists). What each benchmark covers comes from the suite's current `results.json`
+// (`analysis.coverage`, local or committed). Nothing is built or measured.
+//
+// `no-api`: no baseline, so no public functions, and the check passes. `no-coverage`: a suite's results predate
+// `analysis.coverage` and must be re-rendered with `--render`; the check fails and no finding is judged.
+// `checked`: the findings are what the check reports.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"

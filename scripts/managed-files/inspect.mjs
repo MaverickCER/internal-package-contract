@@ -1,14 +1,19 @@
-// Which files in a consumer repository this package owns, and whether they still say what it says.
+// Which files in a consumer repository this package owns, and whether they still say what it says. The
+// `ManagedFiles` check and `internal-package-contract sync` both read the answer here.
 //
 // `init` scaffolds a starter and then steps back: everything it writes is the consumer's afterwards, and
 // most of it should change (a README, the sources, the docs). A few files are different. They are plumbing
 // that exists only to call this package's shared workflows or to configure the release it drives, so a
-// consumer copy that drifts is a release that quietly stops behaving like the standard. Those are listed
-// here as MANAGED; everything else stays consumer-owned and is never reported.
+// consumer copy that drifts is a release that stops behaving like the standard. Those are MANAGED;
+// everything else stays consumer-owned and is never reported.
 //
-// Drift is judged on what a file means, not on its bytes: comments, blank lines and the commit an action is
-// pinned to are ignored (the pin is moved by `dependency-pin-sync`, not by hand), so wording improvements
-// in the template do not read as drift in every consumer.
+// A consumer may also carry COPIES of shared code and documents, enrolled by name in package.json under
+// "internal-package-contract"."copies" (see `sync --add`); only the enrolled ones are written and compared.
+//
+// Drift is judged on what a file means, not on its bytes. For a workflow, comments, blank lines and the
+// commit an action is pinned to are ignored (the pin is moved by the pin-sync workflow, not by hand), so a
+// wording change in the template does not read as drift in every consumer. JSON is compared after
+// parsing. A copy, a document or a plain file is code or canon, and is compared byte for byte.
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

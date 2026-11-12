@@ -1,31 +1,43 @@
 /**
- * No URL may ship in the build output unexplained: Socket.dev flags every `scheme://` string as a
- * "URL strings" supply-chain alert, so the safe default is none at all. This runs repo-contract's
- * `distNoUrls` scanner (every file under the build directory -- code, declarations, sourcemaps)
- * and judges what it finds with the SAME reviewed-exception mechanism every other governed check
- * here uses:
+ * `DistNoUrls`: every URL in the build output is explained by a committed record.
  *
- * - every distinct URL needs a finding-specific record in `.repo-contract/exceptions/dist-urls.json`
- *   with a non-empty `justification`, `alternatives`, `remediation`, `method` and `exceptionType`;
- * - a URL with no record gets a blank stub scaffolded for you to fill in (the check fails until you do);
- * - a record whose URL is no longer shipped is stale and fails until deleted.
+ * Reads: every file under `dist/` (code, declarations, sourcemaps) through repo-contract's
+ * `distNoUrls` scanner, and `.repo-contract/exceptions/dist-urls.json`. Socket.dev flags each
+ * `scheme://` string in a published package as a "URL strings" alert, so none ships unexplained.
  *
- * Nothing is forbidden outright -- a bundled third-party string you cannot change may be accepted
- * with an honest written reason -- but nothing ships unexplained, and each exception is a
- * reviewable diff. Example record (id is `dist-url:<url>`):
+ * Fails on a distinct URL whose record is missing or incomplete. Fails on a record whose URL no
+ * longer ships (stale; delete it). Fails when `dist/` does not exist (build first), and when the
+ * registry cannot be loaded or written. Never warns.
+ *
+ * Exceptions: id `dist-url:<url>` with a `url` field, the security fields and the version 2 fields.
+ * The security fields are `alternatives`, `remediation`, `method` and `exceptionType`, of any type.
+ * A blank stub is written for every new URL; the check fails until it is filled in. No URL is
+ * forbidden outright.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. It runs after `Build`. IPC's own
+ * self-contract leaves it out: this package has no `dist/`.
+ *
+ * Example record:
  *
  * ```json
  * {
  *   "exceptions": [
  *     {
  *       "id": "dist-url:https://example.test/spec",
- *       "version": 1,
+ *       "version": 2,
  *       "justification": "Part of a bundled dependency's error message; not authored here.",
  *       "alternatives": "Stop bundling that dependency.",
  *       "remediation": "Revisit when the dependency is replaced.",
  *       "method": "independent-human-review",
  *       "exceptionType": "accepted-risk",
- *       "url": "https://example.test/spec"
+ *       "url": "https://example.test/spec",
+ *       "ruleBroken": "No URL ships in the build output.",
+ *       "attempted": "Stripping the string at build time; the message then points nowhere.",
+ *       "constraint": "The dependency's error message is its own text.",
+ *       "whyPreferable": "A documented URL in an error beats a truncated one.",
+ *       "residualRisk": "Socket.dev lists the URL on the package page.",
+ *       "revisitWhen": "The dependency is replaced or stops embedding the URL.",
+ *       "expires": ""
  *     }
  *   ]
  * }

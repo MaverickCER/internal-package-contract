@@ -1,5 +1,6 @@
-// Pure helpers for `internal-package-contract init` (bin/scaffold.mjs): argument parsing, placeholder
-// rendering and template discovery. Kept free of side effects so each piece is unit-testable.
+// Pure helpers for `internal-package-contract init` (bin/scaffold.mjs): argument parsing, placeholder rendering,
+// lockfile pin reading and template discovery. Nothing here touches the filesystem except listing a template
+// directory, so each piece is tested on its own.
 
 import { readdirSync } from "node:fs"
 import path from "node:path"

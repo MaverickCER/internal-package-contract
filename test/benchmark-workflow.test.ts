@@ -47,6 +47,17 @@ describe("benchmark-pr.yml", () => {
     expect(text).toContain("/tmp/benchmark-release/${safe}.json")
   })
 
+  it("measures main on the same runner, at the typical size only, and hands it to the summary as the sixth example field", () => {
+    const measure = text.indexOf("Measure main's end-to-end pair on this runner")
+    const run = text.indexOf("name: Run the benchmarks")
+    expect(measure).toBeGreaterThan(0)
+    expect(measure).toBeLessThan(run)
+    expect(text).toContain("git worktree add --detach /tmp/main-checkout origin/main")
+    expect(text).toContain("--only end-to-end --typical-only")
+    expect(text).toContain("git worktree remove --force /tmp/main-checkout")
+    expect(text).toContain('|/tmp/benchmark-main/${safe}/results.json"')
+  })
+
   it("benchmarks on the Node version CI uses, not an older one", () => {
     expect(text).toMatch(/node-version:[\s\S]*?default: 24\.x/)
   })

@@ -1,7 +1,7 @@
-// What a mutation report must look like before anything judges it or builds on it: a `files` object whose every entry
-// has a `mutants` array, and whose every mutant has a status Stryker can report. Anything else is not evidence -- a
-// file with `mutants: null` or a mutant without a status would be skipped by the policy, so a report could pass
-// having judged less than it appears to.
+// What a mutation report must look like before anything judges it or builds on it: a `files` object with at least
+// one entry, each with a `mutants` array, and each mutant with a status Stryker can report. Anything else is not
+// evidence: a file with `mutants: null` or a mutant without a status would be skipped by the policy, so a report
+// could pass having judged less than it appears to.
 
 /** The statuses Stryker gives a mutant. */
 const STATUSES = new Set([

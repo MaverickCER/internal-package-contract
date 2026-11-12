@@ -1,7 +1,9 @@
-// What a package's agent skill is made of. Almost all of it is read from what the package already holds: its
-// manifest, the entry points it documents in `docs/surface.json`, the public API its committed baselines record, and its
-// scripts. The rest is the few things only the author knows, written in `docs/skill.json`: when the skill applies, one
-// worked example, the rules and invariants an agent cannot infer from the types, and the mistakes that matter.
+// What a package's agent skill is made of. Almost all of it is read from what the package already holds.
+// That is its manifest, the entry points it documents in `docs/surface.json`, and its repository address. It
+// is also the public API its committed baselines record (`.repo-contract/api-contract/<folder>/baseline.api.json`,
+// `Public` and `Beta` members only). The rest is the few things only the author knows, written in
+// `docs/skill.json`. Those are when the skill applies, one worked example, the rules the types cannot state,
+// and the mistakes that matter. A file that is missing or not JSON reads as undefined; the caller decides.
 
 import { readFileSync } from "node:fs"
 import path from "node:path"

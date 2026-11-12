@@ -227,12 +227,12 @@ describe("measure", () => {
       warmupIterations: 0,
       minIterations: 1,
       maxIterations: 1000,
-      targetDurationMs: 30,
+      targetDurationMs: 300,
       minSampleMs: 0,
     })
     // More than `minIterations` (1) proves sampling continued towards the target; the exact count
-    // depends on the platform's timer granularity (about 15 ms on Windows, so as few as two samples
-    // reach a 30 ms target), so it is not pinned any tighter.
+    // depends on the platform's timer granularity and on load (a 2 ms timer can take tens of
+    // milliseconds beside a full gate), so the target is generous and the count is not pinned tighter.
     expect(result.wallMs.length).toBeGreaterThan(1)
     expect(result.wallMs.length).toBeLessThan(1000)
   })
@@ -1375,8 +1375,9 @@ describe("per-function ladders and sampling", () => {
       },
       root: process.cwd(),
     })
+    // The two sides are sampled as interleaved pairs, so a side's override sets the pair count for both.
     expect(results.results["end-to-end:baseline"].tiers.n20.durationMs.iterations).toBe(2)
-    expect(results.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(4)
+    expect(results.results["end-to-end:with-package"].tiers.n20.durationMs.iterations).toBe(2)
   })
   it("falls back to the nearest measured size for the typical workload when there is no end-to-end data", () => {
     const suite = defineSuite(

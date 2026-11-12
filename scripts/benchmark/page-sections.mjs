@@ -1,5 +1,9 @@
-// Pure helpers for the benchmark page: what kind of group a benchmark is, the package-cost table, and
-// where the recorded runs came from. No HTML here; render-page.mjs turns these into markup.
+// Pure helpers for the benchmark page: what kind of group a name is, the package-cost table, and where the
+// recorded runs came from. No HTML here; render-page.mjs turns these into markup.
+//
+// `end-to-end:overhead` is derived from two measured groups, not measured, so `isDerivedGroup` keeps it out of
+// every complexity judgement (complexity-gain.mjs skips it). A baseline below the noise floor gets no relative
+// cost, because the ratio would be noise.
 
 import { inputTotal } from "./classify-complexity.mjs"
 

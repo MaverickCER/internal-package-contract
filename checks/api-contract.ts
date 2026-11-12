@@ -1,3 +1,26 @@
+/**
+ * `ApiContract`: the public TypeScript API changed no more than the branch's changesets declare.
+ *
+ * Reads: `typedoc.json`, whose entry points are the targets (`scripts/api-contract/targets.ts`).
+ * Then the fresh `dist/.dts/` the `Build` barrier produced, each target's committed baseline under
+ * `.repo-contract/api-contract/`, `package.json`, and the pending `.changeset/*.md`. Extraction,
+ * diff and classification live in `scripts/api-contract/check.ts`; this policy only reads its
+ * evidence.
+ *
+ * Fails when the diff requires a higher release level than the changesets declare. Fails when an
+ * exported interface with a literal `version` member changed while that literal did not. No setting
+ * or record opts out of that rule. Warns when the change could not be classified, so a person must
+ * confirm the declared bump. Passes with no `typedoc.json`: the package documents no entry points
+ * this way. A target with no baseline gets its first one written and passes; commit it.
+ *
+ * Exceptions: none. Add a changeset at the required level (`npx changeset add`). After a release,
+ * `internal-package-contract update-baseline` regenerates the baselines.
+ *
+ * Runs in the consumer `contract` job and in both git hooks, after `Build`. IPC's own self-contract
+ * leaves it out: this package has no library surface, and `SurfaceContract` guards its CLI.
+ *
+ * Limit: a behaviour change behind an unchanged type signature is invisible here.
+ */
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -17,20 +40,6 @@ const checkScript = path.join(
   "api-contract",
   "check.ts",
 )
-
-/**
- * The breaking-API-change gate: fails a PR whose branch changesets declare a smaller bump than
- * what the public-API diff (across every target -- see targets.ts) actually requires. Ported from
- * repo-contract's own `checks/api-contract.ts`, adapted for a Changesets-declared bump instead of a
- * Conventional-Commits-declared one (see `scripts/api-contract/changesets.ts`) and for a consumer
- * with several independent public entry points instead of one.
- *
- * This engine lives only here now, not duplicated in repo-contract -- repo-contract itself
- * consumes it as a devDependency (see its own `repo-contract.config.ts`), since every repo in this
- * fleet, including repo-contract after its own migration off release-please, versions via
- * Changesets. Keeping one implementation is what makes "the declared bump" mean the same thing
- * everywhere.
- */
 
 interface EvaluateApiContractPolicyInput {
   readonly evidence: ApiContractEvidence

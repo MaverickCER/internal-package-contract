@@ -1,11 +1,17 @@
 /**
- * Nothing this organization ships may be minified: minified code is a Socket.dev supply-chain
- * alert, and 0 minification is permitted. Two layers, both fail-closed (see
- * {@link file://../scripts/check-no-minify.mjs}): a static check that no tsup config or
- * package.json script requests `minify*`, and an inspection of the real build output for
- * minified-looking code (very long lines). No allowlist, no configuration.
+ * `NoMinify`: nothing the package ships is minified, and nothing asks for minification.
  *
- * A package with no build output directory ships nothing built, so it passes vacuously.
+ * Reads: every `tsup.config.*` and every package.json script, for a `minify*` option or flag. Also
+ * every `.js`, `.cjs` and `.mjs` under `dist/`, for lines that look minified. Both through
+ * `scripts/check-no-minify.mjs`. Minified code is a Socket.dev supply-chain alert.
+ *
+ * Fails on any request for minification and on any shipped file that looks minified. Never warns.
+ * Passes when `dist/` does not exist and nothing is requested: nothing built ships.
+ *
+ * Exceptions: none, and no configuration. Remove the `minify*` option and rebuild.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. It runs after `Build`. IPC's own
+ * self-contract leaves it out: this package has no `dist/`.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

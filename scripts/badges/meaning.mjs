@@ -1,7 +1,9 @@
-// What each published figure means, said where the figure is published. A badge is one number and a color; a reader
-// who sees "coverage 98.4%" cannot tell which of the four coverage measures it is, or whether it is an average or the
-// worst of them. Each badge therefore has a details file beside it with the same number, the statistic it is, every
-// value it summarises, and a sentence saying what each of them counts.
+// What each published figure means, said where the figure is published.
+//
+// A badge is one number and a colour. A reader who sees "coverage 98.4%" cannot tell which coverage measure it
+// is. Nor whether it is an average or the worst of them. Each badge therefore has a details file beside it. The
+// file carries the same number, the statistic it is, every value it summarises and what each counts. The texts
+// here are what those files say.
 
 /** The four things a coverage report measures, in the order they are shown. */
 export const COVERAGE_METRICS = /** @type {const} */ ([

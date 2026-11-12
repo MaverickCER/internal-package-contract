@@ -1,5 +1,6 @@
-// What a published benchmark page shows of a failure's message: its first line, with every absolute path cut to
-// its file name. A stack trace and the paths of the machine that ran the benchmark stay in results.json.
+// What a published benchmark page or warning shows of a failure's message: its first line, with every
+// absolute path cut to its file name. The stack trace and the paths of the machine that ran the benchmark
+// stay in results.json.
 
 /**
  * Where a path inside a message can start: after whitespace, a quote, a parenthesis or `=` (`path=/tmp/x.json`),

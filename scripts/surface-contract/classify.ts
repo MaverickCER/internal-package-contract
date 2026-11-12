@@ -1,14 +1,12 @@
 /**
- * What a package promises its users besides its TypeScript types, and how a change to it is
- * classified for SemVer: the `--help` text and exit code of each CLI, the JSON Schemas it exports,
- * and the inputs and outputs of its GitHub Action. `ApiContract` covers the TypeScript API; this
- * covers the rest of the surface a consumer can depend on (see checks/surface-contract.ts).
+ * How a change to a package's non-TypeScript surface is judged for SemVer: the `--help` text and exit
+ * code of each CLI, the JSON Schemas it exports, and the inputs and outputs of its GitHub Action.
+ * `ApiContract` covers the types; `SurfaceContract` (checks/surface-contract.ts) covers this.
  *
- * The classification is conservative on purpose. A change is `compatible` only when it cannot
- * break a consumer who relied on the old surface: something optional was added, a documentation
- * string changed, a constraint was relaxed in a way that only widens what is accepted. Anything else
- * is `breaking`, so the cost of a wrong guess is a bump that is larger than necessary, never a
- * breaking change published as a patch.
+ * The classification errs toward `breaking`. A change is `compatible` only when it cannot break
+ * someone who relied on the old surface: an optional addition, a documentation keyword, a constraint
+ * relaxed so that it accepts more. Everything else is `breaking`. A wrong guess therefore costs a
+ * larger bump than needed, never a breaking change released as a patch.
  */
 
 /** A CLI as a user sees it: what `--help` printed and how the process exited. */

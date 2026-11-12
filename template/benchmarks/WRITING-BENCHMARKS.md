@@ -36,7 +36,7 @@ a function whose cost nobody can see.
 - **Cold start**, if the package does work at import or startup (module evaluation, building
   registries, reading configuration). Cold start is paid by every process, every deploy and every
   serverless invocation that scales from zero.
-- **Memory**, not just time: what the operation allocates and retains. The report records the heap
+- **Memory**, as well as time: what the operation allocates and retains. The report records the heap
   delta of every sample.
 - **Every variable that could change the cost.** This is the part that is easy to skip and the part
   that matters most. Walk through each of these for every function and decide, explicitly, whether it

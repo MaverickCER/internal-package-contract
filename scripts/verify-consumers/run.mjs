@@ -1,14 +1,16 @@
 // `internal-package-contract verify-consumers <path>...`: does this change to the standard still work for the
 // packages that depend on it?
 //
-// A consumer is only ever as reliable as the last time someone remembered to run its contract against a new version of
-// the standard. This runs it, mechanically, and says what the change did: for each consumer checkout it runs the
-// contract's fast, offline checks twice in throwaway copies of the checkout, once with the version of the standard the
-// consumer has installed and once with this one, and reports every check that got worse. A check that fails both ways
-// was already failing and is not blamed on the change.
+// A consumer is only ever as reliable as the last time someone remembered to run its contract against a new
+// version of the standard. This runs it, mechanically, and says what the change did. For each consumer checkout
+// it runs the contract twice in throwaway copies of the checkout: once with the version of the standard the
+// consumer has installed and once with this one. Every check that got worse is reported. A check that fails
+// both ways was already failing and is not blamed on the change. The network-bound and long checks (`NOT_RUN`)
+// are left out, plus any named with `--skip`. A check absent from the first run counts as passing, so a new
+// check that fails is a regression.
 //
-// The consumer's own working tree and node_modules are never touched: the copies share its installed packages through
-// symbolic links and replace only the standard.
+// The consumer's own working tree and node_modules are never touched: the copies share its installed packages
+// through symbolic links and replace only the standard.
 
 import { spawnSync } from "node:child_process"
 import {

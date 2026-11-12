@@ -1,24 +1,16 @@
 /**
- * Shapes for the `CodeRabbit` check -- `scripts/coderabbitai/review.ts` normalizes the real,
- * installed CodeRabbit CLI's own `--agent` structured event stream into this model, reconciles the
- * consumer's `.repo-contract/exceptions/coderabbit.json` against the findings it produced (only
- * when a review actually ran), and `checks/coderabbitai.ts`'s policy reads (never re-derives) the
- * result. A generic recreation of repo-contract's own `scripts/coderabbitai/evidence-types.ts` --
- * see that repo's specs/decisions/0014-coderabbit-as-a-surfaced-check.md and
- * specs/decisions/0013-reusable-exception-policy-helper.md for the design this mirrors.
+ * The JSON shape `scripts/coderabbitai/review.ts` prints and `checks/coderabbitai.ts` reads. The script runs
+ * the installed CodeRabbit CLI, normalizes its `--agent` event stream into these findings, and reconciles
+ * `.repo-contract/exceptions/coderabbit.json` against them when a review ran. The policy reads the result and
+ * re-derives nothing.
  *
- * Confirmed real `finding` event shape: `{severity, fileName, codegenInstructions, suggestions}` --
- * **no** `line`, **no** `category`, **no** native finding-id. `codegenInstructions` is a free-text
- * block; `review.ts` keeps it as `summary`. Because the CLI provides no stable finding id and the
- * summary prose is AI-generated (not guaranteed byte-stable across re-reviews of an unchanged
- * diff), the finding `id` is `coderabbit:<file>:<severity>:<hash of summary>` -- injective over a
- * run, and deliberately churny across re-reviews whose prose changed (that is exactly when a human
- * should re-confirm any waiver still applies).
+ * A `finding` event carries `severity`, `fileName` and `codegenInstructions`; it has no line, category or id of
+ * its own. The summary is AI prose and can change between reviews of the same diff. The id is therefore
+ * `coderabbit:<file>:<severity>:<hash of summary>`: distinct within a run, and stale as soon as the wording
+ * changes, which is when a person should re-confirm the record.
  *
- * The four security-family authoring fields a record carries come from this package's own
- * `checks/exception-record.ts` ({@link SecurityExceptionFields}), not from repo-contract:
- * repo-contract keeps its equivalent in an unpublished `scripts/shared/` module (ADR 0013's
- * deliberate "not published" boundary), so there is nothing importable to reuse.
+ * The four authoring fields a record carries (`alternatives`, `remediation`, `method`, `exceptionType`) come
+ * from this package's own `checks/exception-record.ts`; repo-contract does not publish its equivalent.
  */
 
 import type { ExceptionV2Fields, SecurityExceptionFields } from "../../checks/exception-record.js"

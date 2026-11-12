@@ -1,10 +1,11 @@
-// A mutant that timed out is not always a mutant that loops. On a machine that is swapping, or whose process is paused,
-// the one test run that happened to be going when it stalled takes minutes, and the mutant is reported as a timeout
-// that fails the check. That is a different mutant in every run, and none of them times out when run alone.
+// A mutant that timed out is not always a mutant that loops. On a machine that is swapping, or whose process was
+// paused, the one test run going when it stalled takes minutes, and that mutant is reported as a timeout, which
+// fails the `Mutation` check. It is a different mutant in every run, and none of them times out alone.
 //
-// Before a timeout counts, this runs that one mutant again, alone, with nothing else going. A mutant that is caught
-// the second time is caught (the evidence is changed, and says so); one that times out again really does loop
-// or hang, and stays what it was. Only a handful are ever re-run: a run with many timeouts is not a stall.
+// Before a timeout counts, this runs that one mutant again, alone, at concurrency 1. A mutant caught the second
+// time is caught, and the evidence file is rewritten to say so with `statusReason`; one that times out again stays
+// a timeout and fails the check. At most `MAXIMUM_CONFIRMED` timeouts are re-run: more than that is not a stall
+// but a broken run, and it is left as it is.
 
 import { spawnSync } from "node:child_process"
 import { readFileSync, rmSync, writeFileSync } from "node:fs"

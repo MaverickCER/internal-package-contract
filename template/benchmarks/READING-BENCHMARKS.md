@@ -2,8 +2,8 @@
 
 This guide is for the person **reading** `BENCHMARKS.md`: a platform engineer deciding whether to run
 this package, a CTO estimating what it adds to the infrastructure bill, or a maintainer checking a
-change. It explains why the benchmarks exist, how to read each number, and -- just as important --
-what you must **not** do with them.
+change. It explains why the benchmarks exist, how to read each number, and, as important, what you
+must **not** do with them.
 
 Its companion, [WRITING-BENCHMARKS.md](WRITING-BENCHMARKS.md), explains how benchmarks are written and
 documented.
@@ -42,7 +42,7 @@ you what you are paying for them, in time and in money, and how the bill grows w
 | Column          | Meaning                                                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | size (`n`)      | The workload size for that row. The unit (record, call, file...) is stated at the top of the section.                    |
-| Median          | The middle sample. Robust against the occasional slow outlier; the number to quote.                                      |
+| Median          | The middle sample. Unmoved by the occasional slow outlier; the number to quote.                                          |
 | p95             | 95% of samples were this fast or faster. The gap between median and p95 is the variability you should plan for.          |
 | CPU (median)    | CPU time actually spent. Can exceed wall time slightly because of background compilation and garbage collection threads. |
 | Heap Δ          | Memory the operation left allocated (can be negative when garbage was collected during the sample).                      |
@@ -101,7 +101,7 @@ one moment.** It is not a property of the package.
   timings by 10-40%.
 - Do **not** compare one package's numbers with another package's. The workloads differ; the
   comparison means nothing.
-- Do **not** treat any single number as a promise. It is not a guarantee, a service-level agreement or
+- Do **not** treat any single number as a promise. It is not a commitment, a service-level agreement or
   a competitive claim.
 
 What the numbers **are** good for:
@@ -109,7 +109,7 @@ What the numbers **are** good for:
 - **Change over time on comparable hardware.** The same suite on the same kind of machine before and
   after a change shows whether the change made the package slower. Look for movement larger than the
   run-to-run noise.
-- **Shape, not just level.** A change in growth class (O(n) becoming O(n²)) is a much bigger signal
+- **Shape, not only level.** A change in growth class (O(n) becoming O(n²)) is a much bigger signal
   than a 15% shift in a timing, and it is far less sensitive to the machine than a time is, because it
   is a ratio between sizes on the same run. It still assumes the same sizes, workload and runtime.
 - **Relative cost between functions.** Which function dominates the overhead is usually the same on
@@ -172,9 +172,15 @@ not the speed of the machine: the measured class against the documented big-O (a
 fails, unless `.repo-contract/exceptions/benchmark-complexity.json` records a person's acceptance of it).
 The third is a ratio: the package's overhead _relative to its own baseline_, measured in the same run,
 growing past an allowance (50% for millisecond-scale work, 70% for microsecond-scale work, which is
-noisier) against both the last run on main and the last release. A function whose big-O could not be
+noisier). The baseline and the package are sampled interleaved, so the overhead is a per-pair
+difference with a 95% confidence interval; a growth that sits inside the intervals of the two runs
+compared is reported as a note, never a failure. What the gate judges is main measured on the same
+runner in the same job; the committed results of main and of the last release are judged only when
+they came from the same CPU model, since for fast work the ratio also depends on how much of a bare
+baseline is process start-up. A function whose big-O could not be
 determined (too few sizes, or no difference between them) is a **warning**: nothing is known to be wrong, but
-nothing is checked. Raw time against another run is shown, never judged.
+nothing is checked. Raw time against another run is shown, never judged. A failed gate fails the benchmark
+job; whether a red job blocks the merge is decided by the repository's ruleset, not by the gate.
 
 After a merge, a job measures the merge commit and records it -- the results file and a history entry
 naming the commit, pull request and version -- through its own small pull request. Each entry also keeps

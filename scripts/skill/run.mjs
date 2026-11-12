@@ -1,5 +1,9 @@
-// `internal-package-contract skill`: writes a package's agent skill from docs/skill.json and what the package
-// already says about itself, or with --check says whether what is written is current.
+// `internal-package-contract skill`: writes a package's agent skill from docs/skill.json and the package's own
+// facts. With `--check` it says whether what is written is current.
+//
+// A problem in docs/skill.json (inspect.mjs) exits 1 and writes nothing. `--check` exits 1 naming the stale
+// files; without it only the stale files are rewritten. The `AgentSkill` check reads the same inspection
+// through scripts/check-agent-skill.mjs, not this command.
 
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"

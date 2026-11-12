@@ -1,22 +1,19 @@
 /**
- * Vulnerabilities in the DEVELOPMENT and CI tooling, via `npm audit`.
+ * `SecurityDevDeps`: the development and CI tooling carries no critical advisory, and every lower
+ * one is visible.
  *
- * `SecurityDeps` audits what users install (`npm audit --omit=dev`). The published packages in this
- * ecosystem have no runtime dependencies, so for them that audit is vacuous -- and the tooling that
- * builds, tests and publishes them (it runs in CI with repository credentials, and some of it in the
- * job that publishes) goes unaudited by the contract, left to Dependabot alone. This check closes that
- * gap: it finds every advisory that is reachable only through development dependencies
- * (`scripts/audit-dev-deps.mjs` audits the whole tree and the production tree and subtracts one from the
- * other).
+ * Reads: `npm audit --json` for the whole tree and `npm audit --omit=dev --json`, through
+ * `scripts/audit-dev-deps.mjs`. An advisory present in the first and absent from the second is
+ * reachable only through development dependencies. That tooling runs in CI with repository
+ * credentials, so it is not left to Dependabot alone.
  *
- * It is deliberately **not** a waivable finding with a registry record the way a runtime advisory is,
- * and not silent either:
+ * Fails on a `critical` development-only advisory. Fails when either audit could not run or print
+ * JSON. Warns, listing the packages (capped), on anything lower. Passes with none.
  *
- * - a `critical` development-only advisory **fails**: tooling that runs in CI with write access is a
- *   supply-chain foothold, and a fix or a pinned override is nearly always available;
- * - anything lower is a `warn` that lists the packages (a `high` advisory with no patched release
- *   yet is common in a required chain), so it is visible in every report and step summary until
- *   Dependabot or an override resolves it.
+ * Exceptions: none in a registry. Update the dependency, or pin a fixed version with an `overrides`
+ * entry.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

@@ -1,6 +1,7 @@
-// What the pull-request summary says about each function: its big-O now, and whether that is the same as, worse
-// than or better than at the last run, or why that cannot be said. Pure: it reads the `analysis.complexity` of two
-// results.json files, which hold one entry per measured group.
+// What the pull-request summary says about each function: its big-O now, and how it moved since the last run.
+// A move is the same, worse or better, or a reason why that cannot be said. Pure: it reads the
+// `analysis.complexity` of two results.json files, one entry per measured group. It fails nothing;
+// gates.mjs decides what fails.
 
 import { COMPLEXITY_CLASSES } from "./classify-complexity.mjs"
 import { parseGroup } from "./kit/define.mjs"

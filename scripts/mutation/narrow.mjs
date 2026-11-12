@@ -1,8 +1,10 @@
-// What a narrowed run changes about mutation testing: only the sources a change affects are mutated.
+// What a narrowed run (`--scope affected`) changes about mutation testing: only the sources the change affects
+// are mutated, and nothing is mutated when there are none.
 //
-// Every mutant of a source that no changed symbol reaches would be killed, or survive, exactly as it did the last
-// time that source was mutated; spending an hour to find that out again is what a narrowed run avoids. A run that is
-// not narrowed mutates everything, as it always has.
+// Every mutant of a source no changed symbol reaches would end as it did the last time; a narrowed run does not
+// pay to learn that again. The list comes from the affected analysis, not from the Stryker config's `mutate`
+// patterns, so a changed file outside `src/` that the analysis can mutate is mutated too. A run that is not
+// narrowed mutates everything the config selects.
 
 /**
  * @param {{ scope: string, mutate?: readonly string[] } | undefined} scope - the scope of the run, when it has one.

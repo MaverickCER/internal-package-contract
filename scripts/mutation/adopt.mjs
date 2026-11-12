@@ -1,14 +1,12 @@
-// Judging a mutation report that was made elsewhere: the slices of a sharded run (see ./shard.mjs), merged by
-// ./merge.mjs. `IPC_MUTATION_REPORT=<file>` names the merged report; the run puts it where Stryker would have written
-// its own and the `Mutation` check judges it by the same rule, stale exceptions included, without mutating again.
+// Judging a mutation report made elsewhere, such as the merged slices of a sharded run (./shard.mjs, ./merge.mjs).
+// `IPC_MUTATION_REPORT=<file>` names it; the run copies it where Stryker would have written its own, and the
+// `Mutation` check judges it by the same rules, without mutating again.
 //
-// A report is adopted only if it is evidence about THIS checkout: it covers the files a full run would mutate, and each
-// file in it is the text that is on disk. Stryker writes no entry for a file it places no mutant in (a module of
-// re-exports, a module of types), so a file the plan has and the report lacks is accepted exactly when Stryker's
-// instrumenter finds no mutant in the text on disk (see ./mutant-free.mjs); a lacking file with mutants would go
-// unjudged, and refuses the report. Slices made from another revision or another plan cannot be combined into a report
-// that looks complete but judged different code. Whatever is wrong, the evidence a previous run left is removed first,
-// so a failed adoption can never be judged as if it had succeeded.
+// A report is adopted only when it is evidence about this checkout: every file a full run would mutate is in it,
+// or Stryker's instrumenter finds no mutant in that file's text on disk (./mutant-free.mjs), no file is in it that
+// this run would not mutate, and each file's recorded source is the text on disk. Anything else refuses the report,
+// and the check fails: slices made from another revision or another plan would otherwise judge different code. The
+// evidence a previous run left is removed first, so a refused report is never judged as if it had been accepted.
 
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import path from "node:path"

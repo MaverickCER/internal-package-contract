@@ -1,11 +1,14 @@
-// What a package's public functions accept, read from its committed API baselines
-// (`.repo-contract/api-contract/<entry>/baseline.api.json`), so no build and no TypeScript is needed. A function
-// that takes several parameters, or an object with several keys, has several things that can change its cost;
-// each one is something a benchmark has to account for.
+// What a package's public functions accept, read from its committed API baselines, so no build and no
+// TypeScript is needed.
 //
-// A baseline is what api-extractor writes, so every package has `members`, every entry point has `members`, and
-// every function has `parameters`; and it comes from code that compiled, so a type is never its own base.
-// Nothing here guards against a file that is not one.
+// A function that takes several parameters, or an object with several keys, has several things that can
+// change its cost. Each is a path a benchmark must account for. Only `Public` and `Beta` members count, and
+// overloads are merged. A function held by a public object (`validators: { range: typeof range }`) is missing
+// from the model. It is read from the rolled-up `baseline.d.ts` instead. Wrapped (`Readonly<...>`),
+// aliased and inherited object types are followed. A scalar, union, function or foreign type has no keys.
+//
+// A baseline is what api-extractor writes from code that compiled, so its shape is trusted as it is. Nothing
+// here guards against a file that is not one.
 
 const WRAPPERS = /^(?:Readonly|Partial|Required)<([\s\S]*)>$/
 const GENERIC = /^([A-Za-z_$][\w$]*)<[\s\S]*>$/

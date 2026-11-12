@@ -1,10 +1,15 @@
 // The scope of a contract run: everything, or only what the changes can affect.
 //
 // `--scope affected|full|auto` (and `--base <ref>`) choose it. Nothing is narrowed unless asked for: a bare run
-// is a full one, `auto` lets the environment decide (a pull request narrows, a push and a release do not), and
-// a release is full whatever is asked. When the analysis cannot be sure, it says "everything" and so does this.
-// The answer is written to `reports/contract/scope.json`, where the checks that can use it read it from; the
-// run's cleanup leaves that directory alone.
+// is a full one, and REPO_CONTRACT_SCOPE in the environment counts as asking, below a flag. `auto` lets
+// repo-contract's `resolveScope` decide from the environment: a pull request narrows, a release is full whatever
+// is asked. When the analysis cannot be sure, or cannot run (no usable TypeScript compiler API, git failing),
+// the run is full and says why.
+//
+// A narrowed run still runs every check. Every policy is handed the scope as `ctx.scope`. `Tests` is narrowed
+// to the affected test files, or runs nothing when none is affected. The checks that import `checks/scope.ts`
+// (Coverage, Crap, Mutation, Tests) judge only what the run covered. The answer is written to
+// `reports/contract/scope.json`, where those checks read it; the run's cleanup leaves that directory alone.
 
 import { spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"

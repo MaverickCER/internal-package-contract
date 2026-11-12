@@ -1,13 +1,45 @@
 /**
- * Keeps the few files this package owns in a consumer from quietly drifting: the release, pin-sync,
- * env-rotation and Scorecard workflows and the Changesets config. A consumer copy that no longer means what the standard's
- * does (a missing file, a changed trigger, another permission) is a release or an update that stops
- * behaving like the standard. Wording, comments and the pinned commit are ignored, and every other
- * scaffolded file belongs to the consumer and is never judged (see scripts/managed-files/inspect.mjs).
+ * `ManagedFiles`: the files this package owns in a consumer still mean what the standard's copies
+ * mean.
  *
- * Drift is fixed with `internal-package-contract sync`, which shows the difference and only replaces a file
- * when told to. A deliberate difference is accepted by a complete, unexpired record in
- * `.repo-contract/exceptions/managed-files.json`, with the id `managed-file:<path>` and a `path` field.
+ * Reads: the consumer's release, pin-sync, env-rotation and Scorecard workflows, its Changesets
+ * config, and every managed copy it enrolled. `scripts/check-managed-files.mjs` and
+ * `scripts/managed-files/inspect.mjs` compare them with this package's templates. When something
+ * differs, also `.repo-contract/exceptions/managed-files.json`. Wording, comments and the pinned
+ * commit are ignored. Every other scaffolded file belongs to the consumer and is never judged.
+ *
+ * Fails on a managed file that is missing or drifted and has no complete, unexpired record. Fails
+ * when the registry cannot be loaded. Never warns. Passes for a private package, which owns no
+ * files in a consumer.
+ *
+ * Exceptions: id `managed-file:<path>` with a `path` field and the version 2 fields. Or run
+ * `internal-package-contract sync` to see the difference, and `sync --apply --update` to restore
+ * the file.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * this repository is the source of the files, not a consumer.
+ *
+ * Example record:
+ *
+ * ```json
+ * {
+ *   "exceptions": [
+ *     {
+ *       "id": "managed-file:.github/workflows/scorecard.yml",
+ *       "version": 2,
+ *       "justification": "The Scorecard workflow runs weekly here, not daily: the package changes rarely.",
+ *       "path": ".github/workflows/scorecard.yml",
+ *       "ruleBroken": "A managed workflow keeps the standard's trigger.",
+ *       "attempted": "The standard's daily schedule; it exhausted the API quota shared with the benchmarks.",
+ *       "constraint": "One quota serves every workflow of the repository.",
+ *       "whyPreferable": "A weekly score stays current for a package released a few times a year.",
+ *       "residualRisk": "A regression in the score is seen up to a week later.",
+ *       "revisitWhen": "The package starts releasing weekly, or the quota is raised.",
+ *       "expires": ""
+ *     }
+ *   ]
+ * }
+ * ```
  */
 import path from "node:path"
 import { loadExceptionRegistry } from "repo-contract/helpers"

@@ -1,10 +1,20 @@
 /**
- * Proves the package type-checks as a clean checkout has it: only the files git tracks, with this installation's
- * dependencies. Every other check reads the working tree, where an ignored or never-added file is present, so a
- * missing file passes every one of them and fails CI and every consumer. This copies what is tracked (the index,
- * so staged files count) to a temporary folder, links `node_modules`, and runs the package's own `typecheck`
- * script (or `check`) there. It does not run the tests (`GitHygiene` also fails on an import of an untracked
- * file); a package with neither script passes, saying why it was not tried.
+ * `CleanCheckout`: the files git tracks type-check on their own, as CI and every consumer will see
+ * them.
+ *
+ * Reads: the git index, so staged files count. It is copied to a temporary folder with
+ * `node_modules` linked in. There the package's own `typecheck` script, else `check`, runs; through
+ * `scripts/check-clean-checkout.mjs` and `scripts/clean-checkout/run.mjs`.
+ *
+ * Fails when that type check fails: a file this machine has is ignored or was never added. Never
+ * warns. Passes, saying why, when the package has neither script.
+ *
+ * Exceptions: none. Add the file, or fix the `.gitignore` pattern that hides it.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * Limit: the tests are not run there. `GitHygiene` separately fails on an import of an untracked
+ * file.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

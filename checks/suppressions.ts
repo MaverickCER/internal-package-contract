@@ -1,15 +1,29 @@
 /**
- * Every place a source file tells a tool to stop enforcing a rule -- `eslint-disable`, `@ts-expect-error`,
- * `// Stryker disable`, a `v8 ignore` comment, `jscpd:ignore-start`, `prettier-ignore`, `markdownlint-disable`,
- * `secretlint-disable` -- is an exception to the standard written as a comment. A comment is the
- * weakest place for one: nothing reads it back, nothing notices when it stops being true, and nothing
- * counts them. This check reads them all back (`scripts/suppressions-scan.mjs` finds them by parsing
- * the code, so a string that merely mentions `eslint-disable` is not one), and the complete list is
- * kept verbatim in the contract's evidence on every run.
+ * `Suppressions`: every comment that tells a tool to stop enforcing a rule says why, or has a
+ * committed record.
  *
- * ## Policy
+ * Reads: every suppression comment in the files git tracks or would track, and
+ * `.repo-contract/exceptions/suppressions.json`. The directives are `eslint-disable`,
+ * `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck`, `// Stryker disable`, `v8 ignore`,
+ * `jscpd:ignore-start`, `prettier-ignore`, `markdownlint-disable` and `secretlint-disable`.
+ * `scripts/suppressions-scan.mjs` finds them by parsing each file, so a string that mentions one is
+ * not counted. The whole list stays in the run's evidence.
  *
- * A suppression must **say why**. The reason is written where the suppression is:
+ * Fails on a suppression with no reason of at least {@link MIN_REASON_LENGTH} characters on the
+ * directive. For a `Stryker disable`, the comment block above it counts, at {@link
+ * MIN_BLOCK_REASON_LENGTH} characters. Fails on a blanket suppression: `eslint-disable` naming no
+ * rule, `@ts-ignore`, `@ts-nocheck`. A complete, unexpired record covers either. Fails on a record
+ * whose suppression is gone or now gives its reason (stale; delete it). Fails when the scan errors,
+ * and when the registry cannot be loaded. Never warns.
+ *
+ * Exceptions: id `suppression:<domain>:<rule>:<file>:<anchor>`, with `domain`, `rule`, `file` and
+ * `anchor` fields and the version 2 fields. It is for a suppression that cannot carry its reason,
+ * such as a generated or vendored file. The anchor is derived from the directive and the code it
+ * covers, not a line number. The failing rationale prints the exact id. No stub is written.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * A reason is written where the suppression is:
  *
  * ```ts
  * // eslint-disable-next-line @typescript-eslint/no-explicit-any -- suites are user-shaped data; typing each figure only forces casts on callers.
@@ -18,19 +32,7 @@
  * // v8 ignore comments take the same form: `v8 ignore next -- <why>`.
  * ```
  *
- * A reason is at least {@link MIN_REASON_LENGTH} characters on the directive itself, or -- for the
- * directives that cannot carry one (a `// Stryker disable` whose explanation runs on above it) -- the
- * comment block directly above it, at least {@link MIN_BLOCK_REASON_LENGTH} characters.
- *
- * A **blanket** suppression -- one that names no rule (`eslint-disable` alone), `@ts-ignore` (which goes
- * quiet by itself) or `@ts-nocheck` (a whole file) -- is never accepted by a reason alone.
- *
- * Anything that fails either test needs a complete record in
- * `.repo-contract/exceptions/suppressions.json`, the same registry model every other exception uses (see
- * EXCEPTIONS.md): for the rare suppression that cannot carry its own reason, such as a generated or
- * vendored file. A record whose suppression is gone, or has since been given a reason, is stale and
- * fails until deleted. The record id is anchored to the directive and the code it covers, not to a line
- * number, so an edit elsewhere in the file leaves it alone:
+ * Example record:
  *
  * ```json
  * {

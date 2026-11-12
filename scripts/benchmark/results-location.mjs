@@ -1,6 +1,9 @@
-// Where a benchmark suite's results live. Only CI's figures are committed (and so published); a run on a
-// developer's machine is a gate, not a figure, so it is written under `.benchmark-local/` (never committed) and the
-// checks read it in preference to the committed results when it exists.
+// Where a benchmark suite's results live, and which copy the checks read.
+//
+// Only CI's figures are committed (`CI=true` or `CI=1`). A run on a developer's machine writes under
+// `.benchmark-local/<suite>/`, which is never committed. `BenchmarkComplexity` and `BenchmarkCoverage` prefer
+// the local results when both copies exist. So a local run can change what a local contract run judges, while
+// CI sees only what is committed. A suite counts only when one of the two holds a `results.json`.
 
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"

@@ -1,22 +1,22 @@
 /**
- * Commit-message governance via commitlint (the `commitlint` preset).
+ * `Commits`: every commit since `origin/main` is a Conventional Commit.
  *
- * Uses the consumer's own commitlint config if present, otherwise the bundled
- * baseline (`config/commitlint.config.mjs` -> `@commitlint/config-conventional`,
- * which ships with this package).
+ * Reads: `origin/main..HEAD` through commitlint (repo-contract's `commitlint` preset). The config
+ * is the package's own when one exists, else the bundled `config/commitlint.config.mjs`, which
+ * extends `@commitlint/config-conventional`.
  *
- * Lints `origin/main..HEAD`. Two situations become a `warn` instead of a hard
- * fail, because neither is "you regressed", which is what this check is for on a
- * PR:
- *   - no `origin/main` at all (fresh local repo, shallow CI checkout) -- there
- *     is nothing to lint;
- *   - EVERY commit in the range is non-conforming and there are many of them
- *     (>= {@link PRE_ADOPTION_THRESHOLD}) -- that is a branch that predates the
- *     standard, not a typo. The fix (`git rebase -i origin/main` to reword, or a
- *     squash-merge) is a git-history operation the maintainer performs, and the
- *     warn spells it out.
- * A mix of conforming and non-conforming commits, or just a few bad ones, still
- * fails -- that is a real regression.
+ * Fails as the preset does: one or more non-conforming commits in the range. Never warns on its
+ * own.
+ *
+ * Exceptions: none for a bad message; reword it (`git rebase -i origin/main`) or squash-merge. Two
+ * degradations exist. `Commits:no-base`: `origin/main` cannot be resolved (a fresh clone, a shallow
+ * CI checkout). `Commits:pre-adoption`: at least {@link PRE_ADOPTION_THRESHOLD} commits in the
+ * range fail, whatever else the range holds. That reads as history older than the standard. Each
+ * warns locally. Under `--strict`, the CI default, each fails unless
+ * `.repo-contract/exceptions/environment.json` holds a complete record. The record id is
+ * `environment:Commits:<code>`.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { commitlint as commitlintPreset } from "repo-contract/presets"

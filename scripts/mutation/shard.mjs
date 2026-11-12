@@ -1,9 +1,10 @@
-// What a sharded run changes about mutation testing: one slice of the package's sources is mutated, so that the
-// slices can run as parallel jobs and finish where one job would not.
+// What a sharded run changes about mutation testing: one slice of the sources is mutated, so that the slices can
+// run as parallel jobs and finish where one job would not.
 //
-// `IPC_MUTATION_SHARD=i/n` selects slice `i` of `n`. The slices are the files the Stryker config's `mutate` patterns
-// match, split heaviest-first (by size, a stand-in for how many mutants a file has) so they finish at about the same
-// time, and the same files always give the same slices. Every file is in exactly one slice; `run-merge-mutation-reports.mjs`
+// `IPC_MUTATION_SHARD=i/n` selects slice `i` of `n`. The slices are cut from the files the Stryker config's `mutate`
+// patterns match (or the sources a narrowed run selected), heaviest first by file size so they finish at about the
+// same time; the same files always give the same slices, and every file is in exactly one. A selector that is not
+// `i/n`, or asks for more slices than there are files, throws, and the check fails. `run-merge-mutation-reports.mjs`
 // puts the slices' reports back together and refuses a missing or repeated one.
 
 import { existsSync, globSync, readFileSync, statSync } from "node:fs"

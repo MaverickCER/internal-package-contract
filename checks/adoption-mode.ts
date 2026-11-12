@@ -1,8 +1,20 @@
 /**
- * Says whether the package is adopting the standard, and holds it to the end date. While `.repo-contract/
- * adoption.json` is active, every other check still reports its errors but only the promoted ones can fail the run (see scripts/adoption/mode.mjs) and
- * this check warns with what is still not enforced and how long is left. Once the date has passed it fails, so
- * "adopting" cannot become permanent; `internal-package-contract promote --all` ends the mode.
+ * `AdoptionMode`: whether the package is still adopting the standard, and whether that period is
+ * over.
+ *
+ * Reads: `.repo-contract/adoption.json`, through `scripts/check-adoption-mode.mjs` and
+ * `scripts/adoption/mode.mjs`. While the file is active, the run loop lets only promoted checks
+ * fail the run. Every other check still reports its errors.
+ *
+ * Warns while adoption is active, naming the end date and the checks that already enforce. Fails
+ * once the end date has passed, so adoption cannot become permanent. Fails when the file is
+ * invalid. Passes when there is no file.
+ *
+ * Exceptions: none. `internal-package-contract promote <Check>` enforces one check; `promote --all`
+ * ends the mode.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * this package is not adopting its own standard.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

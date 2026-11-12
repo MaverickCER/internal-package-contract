@@ -1,5 +1,9 @@
-// `@typescript-eslint/utils` is an optional peer of every package that carries this rule; its `eslint-utils`
-// subpath keeps the loaded surface small, and the main entry is only needed for the node-type enum.
+// The `no-node-fs` ESLint rule: library code must not import `node:fs`; it takes a filesystem from its caller
+// (see `build-fs.ts`). This file is the canonical source; a package carries a managed copy
+// (`src/_ipc/no-node-fs.ts`, see `sync`) and supplies its own wording.
+//
+// `@typescript-eslint/utils` is an optional peer of every package that carries this rule. Its `eslint-utils`
+// subpath keeps the loaded surface small; the main entry is needed only for the node-type enum.
 import { RuleCreator } from "@typescript-eslint/utils/eslint-utils"
 import { AST_NODE_TYPES, type TSESTree } from "@typescript-eslint/utils"
 import { matchesAllowList } from "./glob.js"

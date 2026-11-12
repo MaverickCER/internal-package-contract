@@ -1,14 +1,25 @@
 /**
- * Proves the package that would be published works for a consumer. It takes the packed tarball, installs
- * it into an empty project and imports every entry point in the export map the way a consumer would
- * (and `require`s the ones that promise CommonJS), also confirming that every file `package.json` promises
- * is in the tarball (see scripts/check-packed-consumer.mjs and scripts/packed-consumer/plan.mjs). Source
- * tests cannot show this: they run the source, not what npm would ship.
+ * `PackedConsumer`: the tarball npm would publish installs into an empty project, and every entry
+ * point imports.
  *
- * An entry that fails only because a declared peer dependency is not installed (an optional integration,
- * such as an ESLint plugin) is reported as skipped, not as a failure. When the install itself cannot run
- * (no network, an unreachable registry) the check is not evaluated, recorded as an environment exception
- * like every other check that could not run. A private package publishes nothing and is exempt.
+ * Reads: the tarball packed from the working directory with install scripts off, installed under
+ * the temporary directory. Each entry of the export map is imported the way a consumer would, and
+ * `require`d where CommonJS is promised. Every file package.json promises is checked against the
+ * tarball. All through `scripts/check-packed-consumer.mjs` and `scripts/packed-consumer/plan.mjs`.
+ * Source tests cannot show this: they run the source, not what npm ships.
+ *
+ * Fails on an entry that does not import, and on a promised file the tarball lacks. An entry that
+ * fails only because a declared peer dependency is absent is listed as skipped, not failed. Never
+ * warns on a finding. Passes for a private package, and for a package with no entry point.
+ *
+ * Exceptions: none for a finding. One degradation, `PackedConsumer:install`: the install itself
+ * could not run (no network, an unreachable registry). It warns locally. Under `--strict`, the CI
+ * default, it fails unless `.repo-contract/exceptions/environment.json` holds a complete record.
+ * The record id is `environment:PackedConsumer:install`.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. It runs after `Tests`, so two packs
+ * never race. The shared release workflow runs the script again on the tarball it is about to
+ * publish. IPC's own self-contract leaves it out: this package is never packed for npm.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

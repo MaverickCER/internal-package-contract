@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest"
 import {
   computeDurationStats,
+  computePairedStats,
   percentile,
   sample,
+  samplePaired,
   snapshotMemory,
   timed,
 } from "../scripts/benchmark/kit/index.mjs"
@@ -449,5 +451,201 @@ describe("sample() garbage collection", () => {
     for (const cpu of result.cpuMs) expect(cpu).toBeGreaterThanOrEqual(0)
     expect(result.heapDeltaBytes).toHaveLength(2)
     for (const delta of result.heapDeltaBytes) expect(Number.isFinite(delta)).toBe(true)
+  })
+})
+
+describe("computePairedStats()", () => {
+  it("takes the median and mean of the differences, the sample deviation and a t-based 95% interval", () => {
+    const stats = computePairedStats([10, 12, 14, 16, 18])
+    expect(stats.pairs).toBe(5)
+    expect(stats.medianMs).toBe(14)
+    expect(stats.meanMs).toBe(14)
+    // Sample variance over n - 1: (16 + 4 + 0 + 4 + 16) / 4 = 10.
+    expect(stats.stdDevMs).toBeCloseTo(Math.sqrt(10), 12)
+    // t(4 df, 95%) = 2.776, times s / sqrt(n).
+    expect(stats.ci95Ms).toBeCloseTo((2.776 * Math.sqrt(10)) / Math.sqrt(5), 12)
+  })
+
+  it("has no interval below two pairs, and the normal quantile past thirty", () => {
+    expect(computePairedStats([])).toEqual({
+      pairs: 0,
+      medianMs: 0,
+      meanMs: 0,
+      stdDevMs: 0,
+      ci95Ms: null,
+    })
+    expect(computePairedStats([7])).toEqual({
+      pairs: 1,
+      medianMs: 7,
+      meanMs: 7,
+      stdDevMs: 0,
+      ci95Ms: null,
+    })
+    const two = computePairedStats([1, 3])
+    expect(two.stdDevMs).toBeCloseTo(Math.SQRT2, 12)
+    expect(two.ci95Ms).toBeCloseTo((12.706 * Math.SQRT2) / Math.SQRT2, 12)
+    const many = computePairedStats(Array.from({ length: 40 }, (_, i) => (i % 2 === 0 ? 1 : 3)))
+    expect(many.ci95Ms).toBeCloseTo((1.96 * many.stdDevMs) / Math.sqrt(40), 12)
+  })
+
+  it("sorts before taking the median, so order does not matter", () => {
+    expect(computePairedStats([30, 10, 20]).medianMs).toBe(20)
+    expect(computePairedStats([-5, 5, -5, 5]).medianMs).toBe(5)
+  })
+})
+
+describe("samplePaired()", () => {
+  const side = (step: number, log: string[], name: string) => ({
+    run: () => {
+      log.push(name)
+      return name
+    },
+    instruments: instruments(step),
+  })
+
+  it("interleaves the two sides A B, B A, A B, and records each pair's difference as b minus a", async () => {
+    const log: string[] = []
+    const raw = await samplePaired(
+      { a: side(10, log, "a"), b: side(25, log, "b") },
+      { warmupIterations: 1, minIterations: 3, maxIterations: 3, instruments: instruments(1) },
+    )
+    expect(log).toEqual(["a", "b", "a", "b", "b", "a", "a", "b"])
+    expect(raw.a.wallMs).toEqual([10, 10, 10])
+    expect(raw.b.wallMs).toEqual([25, 25, 25])
+    expect(raw.differenceMs).toEqual([15, 15, 15])
+    expect(raw.a.cpuMs).toEqual([4, 4, 4])
+    expect(raw.configuration).toEqual({
+      targetDurationMs: 300,
+      minIterations: 3,
+      maxIterations: 3,
+      warmupIterations: 1,
+      interleaved: "abba",
+      gcEnabled: false,
+    })
+  })
+
+  it("stops at the time budget once the minimum pairs are taken, never past the maximum", async () => {
+    const log: string[] = []
+    // The shared clock advances 100 ms per reading: the budget check alone spends it after the minimum.
+    const raw = await samplePaired(
+      { a: side(1, log, "a"), b: side(1, log, "b") },
+      {
+        warmupIterations: 0,
+        minIterations: 2,
+        maxIterations: 50,
+        targetDurationMs: 100,
+        instruments: instruments(100),
+      },
+    )
+    expect(raw.differenceMs).toHaveLength(2)
+    const capped = await samplePaired(
+      { a: side(1, [], "a"), b: side(1, [], "b") },
+      {
+        warmupIterations: 0,
+        minIterations: 1,
+        maxIterations: 4,
+        targetDurationMs: 1e9,
+        instruments: instruments(1),
+      },
+    )
+    expect(capped.differenceMs).toHaveLength(4)
+  })
+
+  it("runs prepare and release around every sample of a side, warmups included, and honours timed()", async () => {
+    const events: string[] = []
+    const raw = await samplePaired(
+      {
+        a: {
+          run: () => timed(7),
+          prepare: () => events.push("prepare"),
+          release: () => events.push("release"),
+          instruments: instruments(1),
+        },
+        b: { run: () => timed(9), instruments: instruments(1) },
+      },
+      { warmupIterations: 1, minIterations: 2, maxIterations: 2, instruments: instruments(1) },
+    )
+    expect(events).toEqual(["prepare", "release", "prepare", "release", "prepare", "release"])
+    expect(raw.a.wallMs).toEqual([7, 7])
+    expect(raw.differenceMs).toEqual([2, 2])
+  })
+
+  it("uses the shared instruments for a side that brings none, and reports gc as enabled when the shared ones collect", async () => {
+    let collected = 0
+    const raw = await samplePaired(
+      { a: { run: () => 1 }, b: { run: () => 2 } },
+      {
+        warmupIterations: 0,
+        minIterations: 1,
+        maxIterations: 1,
+        instruments: instruments(3, { gc: () => void (collected += 1) }),
+      },
+    )
+    expect(raw.a.wallMs).toEqual([3])
+    expect(raw.b.wallMs).toEqual([3])
+    expect(raw.differenceMs).toEqual([0])
+    expect(collected).toBe(2)
+    expect(raw.configuration["gcEnabled"]).toBe(true)
+  })
+})
+
+describe("samplePaired() details the gate relies on", () => {
+  const side = (step: number, log: string[], name: string) => ({
+    run: () => {
+      log.push(name)
+      return name
+    },
+    instruments: instruments(step),
+  })
+
+  it("takes as many warmup pairs as asked, defaulting to one, and keeps the last result reachable", async () => {
+    const log: string[] = []
+    await samplePaired(
+      { a: side(1, log, "a"), b: side(1, log, "b") },
+      { warmupIterations: 2, minIterations: 1, maxIterations: 1, instruments: instruments(1) },
+    )
+    expect(log).toEqual(["a", "b", "a", "b", "a", "b"])
+    const defaulted: string[] = []
+    await samplePaired(
+      { a: side(1, defaulted, "a"), b: side(1, defaulted, "b") },
+      { minIterations: 1, maxIterations: 1, instruments: instruments(1) },
+    )
+    expect(defaulted).toEqual(["a", "b", "a", "b"])
+    expect((globalThis as Record<string, unknown>)["__benchmarkSink"]).toBe("b")
+  })
+
+  it("records each side's heap delta and tolerates a side that returns null", async () => {
+    const raw = await samplePaired(
+      {
+        a: { run: () => null, instruments: instruments(2) },
+        b: { run: () => null, instruments: instruments(3) },
+      },
+      { warmupIterations: 0, minIterations: 2, maxIterations: 2, instruments: instruments(1) },
+    )
+    // The test instruments' heap gauge alternates 1000 and 1512 per reading: a delta of 512 per sample.
+    expect(raw.a.heapDeltaBytes).toEqual([512, 512])
+    expect(raw.b.heapDeltaBytes).toEqual([512, 512])
+    expect(raw.a.wallMs).toEqual([2, 2])
+    expect(raw.b.wallMs).toEqual([3, 3])
+    expect(raw.differenceMs).toEqual([1, 1])
+  })
+
+  it("spends the budget as elapsed time from the first pair, not as the clock's absolute reading", async () => {
+    // The shared clock reads 100, 200, 300, ... : the budget (250 ms) is met after the fourth pair's
+    // check reads 400 (elapsed 300), not when the clock itself first passes 250.
+    const raw = await samplePaired(
+      {
+        a: { run: () => 1, instruments: instruments(1) },
+        b: { run: () => 2, instruments: instruments(1) },
+      },
+      {
+        warmupIterations: 0,
+        minIterations: 2,
+        maxIterations: 50,
+        targetDurationMs: 250,
+        instruments: instruments(100),
+      },
+    )
+    expect(raw.differenceMs).toHaveLength(4)
   })
 })

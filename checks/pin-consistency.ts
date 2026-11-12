@@ -1,15 +1,22 @@
 /**
- * A consumer pins this package in three places -- the `devDependency` ref in `package.json`, the
- * commit `package-lock.json` resolved it to, and the commit SHA of every reusable workflow it calls --
- * and they must name one revision, or the repository runs one revision's checks and another
- * revision's release. This reads all three offline and fails on any disagreement (see
- * {@link file://../scripts/pin-consistency.mjs}); it never rewrites anything (`upgrade` and the
- * pin-sync workflow do that).
+ * `PinConsistency`: the three pins of this package in a consumer name one revision.
  *
- * A repository that does not depend on this package, including this one, passes vacuously.
+ * Reads, offline: the `devDependency` ref in package.json, and the commit package-lock.json
+ * resolved it to. Also the commit SHA of every reusable workflow under `.github/workflows/*.yml`
+ * that calls this repository. Through `scripts/check-pin-consistency.mjs` and
+ * `scripts/pin-consistency.mjs`.
  *
- * It does not check that the commit is reachable from this repository's default branch; that needs
- * the network and is a separate audit.
+ * Fails on any disagreement: the repository would run one revision's checks and another revision's
+ * release. Never warns. Passes when the repository does not depend on this package.
+ *
+ * Exceptions: none. `internal-package-contract upgrade <tag>` re-pins all three; nothing here
+ * rewrites a pin.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * this repository is the pinned package, not a consumer.
+ *
+ * Limit: it does not check that the commit is reachable from this repository's default branch. That
+ * needs the network (`scripts/pin-audit.mjs`, run by hand).
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

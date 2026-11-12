@@ -1,11 +1,22 @@
 /**
- * Fails when a benchmark group got worse at big-O than the last release and no human accepted it. The
- * committed benchmark results are compared with the results committed at the last release tag; a group
- * whose fitted complexity class increased (linear to quadratic, say) fails unless a complete, unexpired
- * record in `.repo-contract/exceptions/benchmark-complexity.json` accepts that group growing to that class.
- * Writing the record is the review: it states the rule being broken, what was tried, the constraint, why
- * the outcome is preferable and what risk remains, so the increase is read before the version ships. A
- * package with no benchmarks, or no release to compare with, has nothing to judge and passes.
+ * `BenchmarkComplexity`: no benchmark group grew to a worse growth class than it had at the last
+ * release without a person accepting it.
+ *
+ * Reads: the committed `benchmarks/<suite>/results.json` of the working tree and of the last
+ * release tag, through `scripts/check-benchmark-complexity.mjs` and
+ * `scripts/benchmark/complexity-scan.mjs`. When a group got worse, also
+ * `.repo-contract/exceptions/benchmark-complexity.json`.
+ *
+ * Fails when a group's fitted class increased and no complete, unexpired record accepts that class
+ * for that group. Fails when the registry cannot be loaded. Warns when a group's class could not be
+ * determined, since that group is not checked. Passes with no committed results, or with no release
+ * tag to compare with.
+ *
+ * Exceptions: a record with id `benchmark-complexity:<suite>:<group>:<class>`, the fields `suite`,
+ * `group` and `to`, and the version 2 fields. The failing rationale names the exact id to add.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
+ * its benchmark results are not committed.
  *
  * Example record:
  *
@@ -22,9 +33,9 @@
  *       "ruleBroken": "Parsing scales linearly with the number of declarations.",
  *       "attempted": "A hash-based duplicate check was prototyped and kept ordering bugs.",
  *       "constraint": "Declaration ordering must be preserved for the generated manifest.",
- *       "whyPreferable": "Real inputs stay under 200 declarations, where the pairwise check costs microseconds.",
+ *       "whyPreferable": "Real inputs stay small, where the pairwise check costs microseconds.",
  *       "residualRisk": "A generated schema with thousands of declarations would parse visibly slower.",
- *       "revisitWhen": "Any input above 1000 declarations is reported, or the ordering requirement changes.",
+ *       "revisitWhen": "A large input is reported, or the ordering requirement changes.",
  *       "expires": ""
  *     }
  *   ]

@@ -1,36 +1,20 @@
 # Support
 
-Thank you for using `{{name}}`.
+How to get help with `{{name}}`, report a bug, or ask for a change.
 
-This document explains how to get help, report issues, and request improvements.
+## Before opening an issue
 
-## Before Opening a Discussion or Issue
+- Read the README and the guides it links.
+- Search the existing GitHub Issues; a question may already have an answer.
 
-Please take a moment to:
+## Questions and usage help
 
-- Read the project documentation and README.
-- Search existing GitHub Discussions.
-- Search existing GitHub Issues.
+Open a GitHub Issue. Questions, design discussion, integration advice and general feedback all go there;
+this repository does not use GitHub Discussions.
 
-This helps reduce duplicate reports and may provide an immediate answer.
+## Bug reports
 
-## Questions and Usage Help
-
-If you have questions about using `{{name}}`, need help understanding its behavior, or would like guidance on best practices, please start a **GitHub Discussion**.
-
-Discussions are the best place for:
-
-- Usage questions
-- Design discussions
-- Architecture advice
-- Integration guidance
-- General feedback
-
-## Bug Reports
-
-If you believe you have found a bug, please open a **GitHub Issue**.
-
-When reporting a bug, include:
+Open a GitHub Issue and include:
 
 - The version of `{{name}}`
 - Your Node.js version
@@ -38,37 +22,29 @@ When reporting a bug, include:
 - Steps to reproduce the issue
 - Expected behavior
 - Actual behavior
-- Any relevant code snippets, configuration, or logs
+- Any relevant code, configuration or logs
 
-Whenever possible, provide a minimal reproducible example.
+A minimal reproducible example shortens the time to a fix.
 
-## Feature Requests
+## Feature requests
 
-Feature requests are welcome.
-
-Before opening a new request, please search existing Issues and Discussions to avoid duplicates.
-
-A strong feature request explains:
+Search existing Issues first. A strong request explains:
 
 - The problem being solved
 - Why the current behavior is insufficient
 - The proposed API or workflow
 - Alternative solutions that were considered
 
-## Security Vulnerabilities
+## Security vulnerabilities
 
-Please **do not** report security vulnerabilities through public Issues or Discussions.
+Do not report security vulnerabilities through public Issues. Follow the private process in
+[SECURITY.md](SECURITY.md).
 
-Instead, follow the responsible disclosure process described in `SECURITY.md`.
+## Supported versions
 
-## Supported Versions
+Only the latest released version receives fixes. This is policy; nothing enforces it.
 
-Only the latest released version is actively supported.
+## Response expectations
 
-Older releases may receive limited support or no updates.
-
-## Response Expectations
-
-`{{name}}` is maintained as an open source project.
-
-While all Issues and Discussions are appreciated, response times cannot be guaranteed. Community participation is encouraged, and well-documented bug reports and feature proposals help improve the project for everyone.
+`{{name}}` is maintained as an open source project. No response time is promised. Well-documented reports and
+proposals are read first.

@@ -1,16 +1,16 @@
 // Which pages the `Accessibility` check scans.
 //
-// Scanning only the landing pages said nothing about the pages most likely to fail -- the generated
-// benchmark history (charts), and each kind of API reference page -- so a clean run was not evidence
-// of a conforming site. This picks, from whatever a repository has built under `docs/`:
+// Scanning only the landing pages said nothing about the pages most likely to fail. Those are the generated
+// benchmark history, with its charts, and each kind of API reference page. So a clean run was not evidence of
+// a conforming site. This picks, from whatever a repository has built under `docs/`:
 //
 //   - every top-level `docs/*.html` and every `docs/<dir>/index.html` (the site, the API landing page,
 //     the benchmark history, any other section's landing page);
-//   - ONE representative page from each subdirectory of `docs/api/` (TypeDoc renders every symbol of a
-//     kind with the same template: its classes/, functions/, interfaces/ ... pages share one structure,
-//     so one of each covers the template without scanning thousands of near-identical files).
+//   - one representative page from each subdirectory of `docs/api/`: TypeDoc renders every symbol of a kind
+//     with the same template, so one page of each kind covers the template without scanning them all.
 //
-// Capped, so a pathological tree cannot make the check run for an hour.
+// A `docs/api/` with no `index.html` is a broken generator run. It throws, which fails the check. The list is
+// capped at `MAX_PAGES`, so a pathological tree cannot make the check run for an hour.
 
 import { readdir, stat } from "node:fs/promises"
 import { join } from "node:path"

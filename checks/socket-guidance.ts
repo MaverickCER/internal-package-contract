@@ -1,7 +1,8 @@
 /**
- * The exact steps a contributor needs when the Socket scan cannot run, chosen at the moment of
- * failure from two facts: WHERE the contract is running (CI vs a developer machine) and WHY Socket
- * could not be reached. Printing every possible remedy would bury the one that applies.
+ * The steps printed when the Socket scan could not run. They are chosen from where the contract
+ * runs (CI or a developer machine) and why Socket was not reached. Printing every remedy would bury
+ * the one that applies. The CI steps link to the repository's Actions secrets page, resolved from
+ * `origin`.
  */
 import { resolveOwnerRepo } from "../scripts/github-repo.mjs"
 

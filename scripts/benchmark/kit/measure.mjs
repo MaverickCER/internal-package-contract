@@ -1,9 +1,13 @@
-// Timing and memory sampling. Pure Node builtins; no dependency on any package under test.
+// Timing and memory sampling. Node builtins only; nothing under test is imported.
 //
 // Every sample records three things, because they answer three different cost questions:
-//   - wall time   -- what a caller waits (latency; also what serverless platforms bill for)
-//   - CPU time    -- what the machine actually works (what a CPU-priced platform bills for)
-//   - heap delta  -- how much memory the operation leaves retained / allocates (memory pressure)
+//   - wall time   -- what a caller waits (latency; what duration-priced platforms bill for)
+//   - CPU time    -- what the machine works (what CPU-priced platforms bill for)
+//   - heap delta  -- how much memory the operation leaves allocated
+//
+// Operations too fast for the clock to resolve are repeated inside one sample and divided back out. A
+// sub-microsecond function still gets a usable figure that way. `global.gc()` runs before each counted sample
+// when Node was started with `--expose-gc`, which run-suite.mjs arranges.
 
 /** @returns {{ rssBytes: number, heapUsedBytes: number }} a snapshot of this process's memory. */
 export function snapshotMemory() {
@@ -173,6 +177,135 @@ export async function sample(iteration, options = {}) {
       minSampleMs,
       batchSize: batch,
       gcEnabled: Boolean(gc),
+    },
+  }
+}
+
+/**
+ * Two-sided 95% Student t quantiles by degrees of freedom 1..30; the normal quantile past that.
+ * Used for the confidence interval of a paired difference, where the sample is small by design.
+ */
+const T95 = [
+  12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.16, 2.145,
+  2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048,
+  2.045, 2.042,
+]
+
+/**
+ * @param {readonly number[]} differences - one per pair: the second side's time minus the first's.
+ * @returns {{ pairs: number, medianMs: number, meanMs: number, stdDevMs: number, ci95Ms: number | null }}
+ *   the paired difference's median and mean, its sample standard deviation, and the half-width of
+ *   its 95% confidence interval (`null` below two pairs, where no interval exists).
+ */
+export function computePairedStats(differences) {
+  const sorted = [...differences].sort((a, b) => a - b)
+  const pairs = sorted.length
+  const mean = sorted.reduce((sum, value) => sum + value, 0) / (pairs || 1)
+  // The sample variance (n - 1): the mean was estimated from the same pairs.
+  const variance =
+    pairs > 1 ? sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (pairs - 1) : 0
+  const stdDevMs = Math.sqrt(variance)
+  const t = pairs > 1 ? (T95[pairs - 2] ?? 1.96) : null
+  return {
+    pairs,
+    medianMs: percentile(sorted, 0.5),
+    meanMs: mean,
+    stdDevMs,
+    ci95Ms: t === null ? null : (t * stdDevMs) / Math.sqrt(pairs),
+  }
+}
+
+/**
+ * @typedef {object} PairedSide
+ * @property {() => unknown} run - one operation; may be async; may return `timed(ms)`.
+ * @property {() => unknown} [prepare] - runs untimed before every sample of this side.
+ * @property {() => unknown} [release] - runs untimed after every sample of this side.
+ * @property {Instruments} [instruments] - this side's own clock and gauges (for tests); the shared ones otherwise.
+ */
+
+/**
+ * Samples two operations interleaved, A B then B A then A B ..., so a drift in the machine over the
+ * run (a boost clock, a thermal limit, a neighbour on the runner) lands on both sides alike and the
+ * per-pair difference carries only what distinguishes them. The difference is the figure to judge
+ * when the two sides are close: two separately sampled medians put their noise on top of each
+ * other, a pair subtracts it. No batching: this is for operations long enough to time on their own.
+ * @param {{ a: PairedSide, b: PairedSide }} sides - the two operations.
+ * @param {{ warmupIterations?: number, targetDurationMs?: number, minIterations?: number, maxIterations?: number, instruments?: Instruments }} [options] - counts are in pairs; one warmup pair by default.
+ * @returns {Promise<{ a: { wallMs: number[], cpuMs: number[], heapDeltaBytes: number[] }, b: { wallMs: number[], cpuMs: number[], heapDeltaBytes: number[] }, differenceMs: number[], configuration: object }>}
+ *   per-pair values for each side, the per-pair difference (b minus a) and how the sampling was configured.
+ */
+export async function samplePaired(sides, options = {}) {
+  const warmupIterations = options.warmupIterations ?? 1
+  const targetDurationMs = options.targetDurationMs ?? 300
+  const minIterations = options.minIterations ?? 5
+  const maxIterations = options.maxIterations ?? 60
+  const shared = options.instruments ?? realInstruments()
+
+  const once = async (side) => {
+    const { now, cpuUsage, heapUsed, gc } = side.instruments ?? shared
+    await side.prepare?.()
+    gc?.()
+    const heapBefore = heapUsed()
+    const cpuBefore = cpuUsage()
+    const start = now()
+    const returned = await side.run()
+    const wall = now() - start
+    const cpu = cpuUsage(cpuBefore)
+    const heapAfter = heapUsed()
+    globalThis["__benchmarkSink"] = returned
+    await side.release?.()
+    const reportedMs =
+      typeof returned === "object" &&
+      returned !== null &&
+      TIMED in returned &&
+      Number.isFinite(returned[TIMED])
+        ? returned[TIMED]
+        : undefined
+    return {
+      wallMs: reportedMs ?? wall,
+      cpuMs: (cpu.user + cpu.system) / 1000,
+      heapDeltaBytes: heapAfter - heapBefore,
+    }
+  }
+
+  for (const warmup of Array(warmupIterations).keys()) {
+    void warmup
+    await once(sides.a)
+    await once(sides.b)
+  }
+
+  const a = { wallMs: [], cpuMs: [], heapDeltaBytes: [] }
+  const b = { wallMs: [], cpuMs: [], heapDeltaBytes: [] }
+  const differenceMs = []
+  const startedAt = shared.now()
+  for (const pair of Array(maxIterations).keys()) {
+    if (pair >= minIterations && shared.now() - startedAt >= targetDurationMs) break
+    // Every second pair runs in the opposite order, so a steady drift favours neither side.
+    const order = pair % 2 === 0 ? ["a", "b"] : ["b", "a"]
+    const taken = {}
+    for (const key of order) taken[key] = await once(sides[key])
+    for (const [key, into] of [
+      ["a", a],
+      ["b", b],
+    ]) {
+      into.wallMs.push(taken[key].wallMs)
+      into.cpuMs.push(taken[key].cpuMs)
+      into.heapDeltaBytes.push(taken[key].heapDeltaBytes)
+    }
+    differenceMs.push(taken.b.wallMs - taken.a.wallMs)
+  }
+
+  return {
+    a,
+    b,
+    differenceMs,
+    configuration: {
+      targetDurationMs,
+      minIterations,
+      maxIterations,
+      warmupIterations,
+      interleaved: "abba",
+      gcEnabled: Boolean(shared.gc),
     },
   }
 }

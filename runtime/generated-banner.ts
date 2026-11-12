@@ -1,14 +1,14 @@
 /**
- * The marker every generated file starts with, and the two standing notices every governance-adjacent
- * artifact carries, written once for every MaverickCER package that generates files.
+ * The marker every generated file starts with, and the two standing notices a generated artifact carries,
+ * written once for every package that generates files.
  *
- * This file is the canonical source. A package that uses it holds a managed copy (see `sync`), so it
- * needs no dependency on this repository at runtime. It is deliberately self-contained: no imports, no
- * Node APIs, no environment access, so it is safe in any bundle.
+ * This file is the canonical source; a package carries a managed copy (`src/_ipc/generated-banner.ts`, see
+ * `sync`), so it needs no dependency on this repository at runtime. It has no imports, no Node APIs and no
+ * environment access, so it is safe in any bundle.
  *
- * One marker means one place decides what "generated" looks like: the code that writes the marker and the
- * code that reads it (to refuse to overwrite a hand-written file, or to ignore a file that only imports a
- * generated one) can never drift apart.
+ * One marker means one place decides what "generated" looks like. The code that writes it and the code that
+ * reads it (to refuse to overwrite a hand-written file, or to ignore a file that only imports a generated one)
+ * cannot drift apart.
  */
 
 /** What differs between packages; everything else is shared. */

@@ -1,5 +1,9 @@
-// Entry point for the `GitHooks` check (see checks/git-hooks.ts). Prints one JSON envelope; never
-// exits non-zero for a finding (policy decides).
+// Entry point for the `GitHooks` check (see checks/git-hooks.ts). Asks git whether the working directory is
+// a repository and what `core.hooksPath` is, resolves both that path and the bundled hooks/ directory to
+// their real locations, and prints one JSON envelope with the state (scripts/git-hooks.mjs). Under CI the
+// state is `ci` whatever git says. A relative `core.hooksPath` is resolved against the working directory,
+// which is the repository root here. The policy decides the verdict.
+
 import { sync as spawnSync } from "cross-spawn"
 import { realpathSync } from "node:fs"
 import path from "node:path"

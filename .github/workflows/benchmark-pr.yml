@@ -122,9 +122,9 @@ jobs:
       - name: Validate every suite's documentation
         run: npm run benchmark:check --if-present
 
-      # Two references for the same-run ratios: main's committed results (the previous run), and the
-      # results committed at the last release (a fixed point, so a series of small regressions cannot
-      # ratchet "previous" upward unnoticed).
+      # Two committed references: main's results (the previous run), and the results committed at the
+      # last release (a fixed point, so a series of small regressions cannot ratchet "previous" upward
+      # unnoticed). Their overhead ratios are judged only when they were measured on this CPU model.
       - name: Snapshot main's and the last release's committed results
         env:
           SUITES: ${{ inputs.suites }}
@@ -141,6 +141,41 @@ jobs:
               echo '{}' > "/tmp/benchmark-release/${safe}.json"
             fi
           done
+
+      # The overhead ratio is machine-bound for fast work (how much of a bare baseline is process
+      # start-up differs by CPU), so the reference that is judged is main measured here, on this
+      # runner, minutes apart from the pull request: the same suite file at main's commit, run by this
+      # checkout's runner at the suite's typical size only. A suite main does not have yet has no
+      # reference, and the committed results of main and the last release stay as reported figures.
+      - name: Measure main's end-to-end pair on this runner
+        env:
+          SUITES: ${{ inputs.suites }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+          INSTALL_DIRS: ${{ inputs.install-dirs }}
+        run: |
+          mkdir -p /tmp/benchmark-main
+          git worktree add --detach /tmp/main-checkout origin/main
+          (
+            cd /tmp/main-checkout
+            npm ci --ignore-scripts
+            if [ -n "$BUILD_COMMAND" ]; then bash -c "$BUILD_COMMAND"; fi
+            printf '%s\n' "$INSTALL_DIRS" | while IFS= read -r dir; do
+              [ -z "$dir" ] && continue
+              [ -d "$dir" ] && (cd "$dir" && npm install --ignore-scripts)
+            done
+          )
+          printf '%s\n' "$SUITES" | while IFS='|' read -r label dir _history; do
+            [ -z "$label" ] && continue
+            safe=$(printf '%s' "$dir" | tr '/' '_')
+            if [ -f "/tmp/main-checkout/${dir}/suite.mjs" ]; then
+              node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs \
+                "/tmp/main-checkout/${dir}/suite.mjs" --only end-to-end --typical-only \
+                --out "/tmp/benchmark-main/${safe}"
+            else
+              mkdir -p "/tmp/benchmark-main/${safe}" && echo '{}' > "/tmp/benchmark-main/${safe}/results.json"
+            fi
+          done
+          git worktree remove --force /tmp/main-checkout
 
       - name: Run the benchmarks
         env:
@@ -178,7 +213,7 @@ jobs:
           while IFS='|' read -r label dir history; do
             [ -z "$label" ] && continue
             safe=$(printf '%s' "$dir" | tr '/' '_')
-            args+=(--example "${label} (\`${dir}\`)|/tmp/benchmark-previous/${safe}.json|${dir}/results.json|${history}|/tmp/benchmark-release/${safe}.json")
+            args+=(--example "${label} (\`${dir}\`)|/tmp/benchmark-previous/${safe}.json|${dir}/results.json|${history}|/tmp/benchmark-release/${safe}.json|/tmp/benchmark-main/${safe}/results.json")
           done <<< "$SUITES"
           status=0
           node node_modules/internal-package-contract/scripts/benchmark/render-summary.mjs \

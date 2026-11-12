@@ -1,8 +1,8 @@
 /**
- * Reads a package's public surface besides its TypeScript API: the `--help` of each `bin`, the JSON
- * Schemas its `exports` serve, and the inputs and outputs of its root `action.yml`. See classify.ts
- * for how a difference is judged. Everything here is deterministic: keys are sorted and the CLI is
- * run with colour off, so two runs on the same commit give the same surface.
+ * Reads a package's surface besides its TypeScript API: the `--help` of each `package.json` `bin`, the
+ * JSON Schemas its `exports` serve, and the inputs and outputs of its root `action.yml`. Each CLI is run
+ * with colour off and keys are sorted, so two runs on one commit read the same surface. A CLI that is
+ * not built yet, or that prints its help to stderr, is read as it is; classify.ts judges the difference.
  */
 import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"

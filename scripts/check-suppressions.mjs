@@ -1,10 +1,8 @@
-// Entry point for the `Suppressions` check (see checks/suppressions.ts).
-//
-// Scans the repository for suppression comments (scripts/suppressions-scan.mjs) and prints ONE JSON
-// envelope to stdout -- `{ ok: true, files, suppressions: [...] }` or `{ ok: false, error }`. That
-// stdout is kept verbatim in the contract's evidence, so the complete list of every rule this
-// repository tells a tool to ignore is part of the record of each run, not only the verdict on it.
-// Never exits non-zero for a scan problem; the policy decides.
+// Entry point for the `Suppressions` check (see checks/suppressions.ts). Finds every suppression comment in
+// the repository (scripts/suppressions-scan.mjs) and prints one JSON envelope: `{ ok: true, files,
+// suppressions }`, or `{ ok: false, error }` when the scan itself failed. The contract keeps that stdout as
+// evidence, so every rule the repository tells a tool to ignore is part of the record of each run, not
+// only the verdict. The policy decides the verdict.
 
 import { scanRepository } from "./suppressions-scan.mjs"
 

@@ -1,6 +1,9 @@
-// Says why a group's big-O could not be determined, in terms of what the run measured, so the person reading
-// a warning knows what to change. Pure: it reads one `analysis.complexity` entry of a results.json. A failure's
-// message is shown as `publicMessage` makes it, so a stack trace and the machine's paths are never published.
+// Why a group's big-O could not be determined, in terms of what the run measured.
+//
+// Reads one `analysis.complexity` entry of a results.json and names what to change. The reasons are too few
+// usable sizes (and which were lost, and why), no size variation, or a fit too poor to trust. A failure's
+// message goes through `publicMessage`, so a stack trace or a machine's paths is never published. Pure; no
+// file is read.
 
 import { publicMessage } from "./public-message.mjs"
 

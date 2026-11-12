@@ -1,26 +1,25 @@
 /**
- * Broken-link detection across a consumer's docs, via linkinator -- both the
- * Markdown link graph reachable from `README.md`, and a second, HTML-mode
- * crawl over `docs/` (the site itself, and `docs/api/**` once generated).
- * Both crawls run through the bundled `scripts/check-docs-links.mjs` (see its
- * own doc comment for exactly why two separate crawls, not one).
+ * `DocsLinks`: no local link in the docs is broken, and every external one was reachable or is
+ * accepted.
  *
- * Differences from the `brokenLinks` preset, all forced by linkinator quirks:
- *   - the Markdown crawl starts at `README.md` and `--recurse`s the relative-
- *     link graph -- its directory-recurse mode only follows `index.html`,
- *     never loose `.md` files -- with `--markdown` explicit (linkinator
- *     silently stops parsing markdown when `--format json` is set otherwise);
- *   - the HTML crawl starts at `docs` and `--recurse`s the same way, with no
- *     `--markdown` flag;
- *   - external (`http(s)://`) links are filtered in this policy, not via
- *     linkinator's `--skip` (whose regex handling zeroes the whole crawl for
- *     several common patterns). An unreachable external link is not proof the
- *     link is dead (rate limiting, bot walls), so it is a recorded degradation,
- *     accepted per URL in `.repo-contract/exceptions/environment.json`
- *     (`environment:DocsLinks:<url>`); a broken *local* link is always blocking.
- *   - a local link that resolves to an existing file OR directory on disk is
- *     not counted broken -- linkinator 404s a bare directory link (`specs/`)
- *     that a git host (GitHub, GitLab) renders fine.
+ * Reads: the relative-link graph from `README.md`, in Markdown mode, and the site under `docs/`, in
+ * HTML mode, `docs/api/` included once generated. Those are two linkinator crawls run by
+ * `scripts/check-docs-links.mjs`. Each crawl runs only when its start file exists.
+ *
+ * Fails on a local link linkinator reports broken that does not exist on disk as a file or
+ * directory. A bare directory link is fine: git hosts render it. Fails when linkinator could not
+ * run or printed no JSON. Passes with neither `README.md` nor `docs/index.html`. An external link
+ * that answered HTTP 429 is passed over: a rate limit says nothing about whether the page exists.
+ *
+ * Exceptions: none for a local link. Each other unreachable external link is a degradation
+ * `DocsLinks:<url>`. It warns locally. Under `--strict`, the CI default, it fails unless
+ * `.repo-contract/exceptions/environment.json` holds a complete record. The record id is
+ * `environment:DocsLinks:<url>`, one per URL.
+ *
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
+ *
+ * Limit: external links are filtered in this policy, not with linkinator's `--skip`, whose regex
+ * handling can empty a whole crawl.
  */
 import { existsSync } from "node:fs"
 import path from "node:path"

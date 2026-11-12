@@ -1,12 +1,16 @@
-// Complexity is a promise about how a function scales, so getting worse at it is a decision, not a side
-// effect. This module finds every benchmark group whose fitted big-O class got worse than the baseline
-// (the last release's results), and matches each one against the exception records a human wrote to accept
-// it. The same logic gates the pull-request benchmark run and the `BenchmarkComplexity` contract check,
-// so what a pull request is allowed to do is what a release is allowed to ship.
+// Which benchmark groups got worse at big-O than the last release, and whether a human accepted each one.
 //
-// Only a class that got worse counts, and only when its fitted exponent also moved by the shift margin
-// (see classify-complexity.mjs), so a label flipping at a class boundary because of noise is not a gain.
-// An improvement is never a finding.
+// A gain is a group whose fitted class is worse than the baseline's and whose exponent moved by at least
+// `SHIFT_MARGIN` (classify-complexity.mjs). An improvement is never a finding. A label that flips at a class
+// boundary without the exponent moving is not one either. A derived group (the overhead) is skipped.
+//
+// A gain is accepted by a complete, unexpired record in `.repo-contract/exceptions/benchmark-complexity.json`
+// with the id `benchmark-complexity:<suite>:<group>:<class>`. A record accepts growth to its `to` class or any
+// cheaper one; growing past it needs a new record. The first complete matching record wins. An incomplete
+// match is reported by id with its missing fields (exception-fields.mjs).
+//
+// The `BenchmarkComplexity` check and the pull-request benchmark gate (gates.mjs) both judge with this
+// module. So what a pull request may do is what a release may ship.
 
 import { COMPLEXITY_CLASSES, detectComplexityShift } from "./classify-complexity.mjs"
 import { resultsToMeasurements } from "./lib/results.mjs"

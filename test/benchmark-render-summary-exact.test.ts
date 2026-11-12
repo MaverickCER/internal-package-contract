@@ -360,9 +360,29 @@ describe("summarize -- exact output", () => {
     expect(out).not.toContain("Complexity shifts")
   })
 
+  it("judges the sixth example field as main measured on this runner", async () => {
+    const typical = (overheadPercent: number) =>
+      JSON.stringify({
+        analysis: { cost: { typical: { n: 80, baselineMs: 800, overheadPercent } } },
+      })
+    const current = path.join(dir, "current.json")
+    const main = path.join(dir, "main-on-this-runner.json")
+    writeFileSync(current, typical(9))
+    writeFileSync(main, typical(2))
+    const { markdown } = await summarize({
+      marker: "m",
+      examples: [`Checks||${current}|||${main}`],
+    })
+    expect(markdown).toContain("(main measured on this runner)")
+    expect(markdown).toContain("both were measured on this runner in this job")
+    // Without the field, nothing is judged against a same-runner reference.
+    const alone = await summarize({ marker: "m", examples: [`Checks||${current}||`] })
+    expect(alone.markdown).not.toContain("(main measured on this runner)")
+  })
+
   it("rejects an example missing its label or its current results", async () => {
     await expect(summarize({ marker: "m", examples: ["|a|b|c"] })).rejects.toThrow(
-      '--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath]"',
+      '--example must be "label|prevResultsPath|curResultsPath|historyPath[|releaseResultsPath[|mainOnThisRunnerResultsPath]]"',
     )
     await expect(summarize({ marker: "m", examples: ["label|a||c"] })).rejects.toThrow(
       "--example must be",

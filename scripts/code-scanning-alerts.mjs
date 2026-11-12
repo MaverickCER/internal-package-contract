@@ -1,12 +1,17 @@
-// Entry point for the `CodeScanning` check (see checks/code-scanning.ts).
+// The script behind the `CodeScanning` check (checks/code-scanning.ts).
 //
-// Reads this repository's OPEN GitHub code-scanning alerts with the developer's own `gh` login and
-// prints ONE JSON envelope to stdout: `{ ok: true, data: { alerts } | { skipped } }`, or
-// `{ ok: false, message, data: { kind } }` when the alerts could not be read. Locally it reads with the
-// developer's own `gh` login and the checked-out branch; in CI it reads with the workflow's token
-// (`permissions: security-events: read`, `GH_TOKEN: ${{ github.token }}`), for the repository named by
-// GITHUB_REPOSITORY and the ref being built (GITHUB_REF, which for a pull request is its merge ref).
-// It never exits non-zero for a GitHub-side problem -- the policy decides.
+// It reads the repository's open GitHub code-scanning alerts through `gh api`, page by page. Locally it uses the
+// developer's own `gh` login, the `origin` remote and the checked-out branch. In CI (`CI` or `GITHUB_ACTIONS`) it
+// uses `GH_TOKEN` or `GITHUB_TOKEN`, `GITHUB_REPOSITORY` and `GITHUB_REF`, which for a pull request is its merge
+// ref; the contract job needs `permissions: security-events: read`. Alerts are scoped to that ref, so a branch
+// carrying a fix is judged on its own analysis, and a ref with no analysis yet has none.
+//
+// It prints one JSON envelope to stdout. `{ ok: true, data: { repo, alerts } }` is what the policy judges.
+// `{ ok: true, data: { skipped } }` means scanning is not enabled, or there is no GitHub remote; the check records
+// that as `environment:CodeScanning:not-enabled` or `:no-remote`, a warning locally and a failure under `--strict`
+// without a record. `{ ok: false, message, data: { kind } }` means the alerts could not be read (no token in CI, `gh`
+// not installed, not authenticated, no access, unreadable output, or more pages than the safety limit), and the
+// check fails with the steps to fix it. The script itself always exits 0.
 
 import { sync as spawnSync } from "cross-spawn"
 import path from "node:path"

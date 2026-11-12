@@ -1,18 +1,27 @@
 /**
- * WCAG2AA accessibility scan of a consumer's own built docs site, via pa11y --
- * a generic recreation of repo-contract's own `accessibility` check, run
- * through the bundled `scripts/check-accessibility.mjs` (see its own doc
- * comment for exactly which pages are scanned, and why).
+ * `Accessibility`: the package's committed docs site has no WCAG 2 AA error.
  *
- * `pa11y` is a real, hard dependency (package.json) -- never something a consumer (env-cap,
- * data-cap, ...) has to separately install -- but its own `puppeteer` dependency is aliased to
- * `puppeteer-core` via package.json's `overrides`, so no Chromium-download postinstall script
- * ever runs (a Socket.dev "Install scripts" finding directly hurts a public package's own
- * supply-chain score). `puppeteer-core` bundles no browser, so the scan script auto-detects a
- * system Chrome/Chromium instead; not finding one (or a built site) means nothing was scanned, which
- * this check cannot tell apart from "genuinely clean" -- so it is recorded as a degradation
- * (`checks/environment-exceptions.ts`): a `warn` locally, accepted only by a written exception, and
- * a failure under the CI gate (`--strict`) without one.
+ * Reads: the HTML pages `scripts/accessibility-pages.mjs` resolves under `docs/`. pa11y scans each
+ * in a headless Chrome, through `scripts/check-accessibility.mjs`. Chrome comes from
+ * `PUPPETEER_EXECUTABLE_PATH` or `CHROME_PATH` when set, else the platform's usual install
+ * locations. Nothing is downloaded: an install script is a supply-chain finding of its own.
+ *
+ * Fails on any pa11y finding of type `error`. Warns on `warning` findings when there is no error.
+ * Drops `notice` findings. Fails when the scan script reports an error other than a missing
+ * browser.
+ *
+ * Exceptions: none for a finding. Two degradations exist: no Chrome (`Accessibility:no-chrome`) and
+ * no built site (`Accessibility:no-site`). Each warns locally. Under `--strict`, the CI default,
+ * each fails unless `.repo-contract/exceptions/environment.json` holds a complete record. The
+ * record id is `environment:Accessibility:<code>`.
+ *
+ * Runs in the consumer `contract` job and in both git hooks. It reads `docs/api/` after the writers
+ * regenerated it. IPC's own self-contract leaves it out: this package is private and publishes no
+ * site.
+ *
+ * Limit: some results are counted but never failed on. Those are results axe marks for manual
+ * review, TypeDoc's nested-interactive navigation result, and HTML_CodeSniffer's duplicate-id
+ * result on prototype-named ids.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

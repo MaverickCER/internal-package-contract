@@ -1,10 +1,13 @@
 // `internal-package-contract env`: documents the environment variables and secrets a package depends on, from
 // `ci/env.schema.ts`, with env-cap (which this package carries, so the package installs nothing extra).
 //
-// None of it is required. A package with no `ci/env.schema.ts` has nothing to document and is told so; a variable
-// with no expiry date or no owner is reported as a warning; nothing here fails a run on its own except asking
-// `--check` whether the generated files are current. The schema is only ever read, never executed (env-cap parses
-// it), and the files written are documentation: no manifest is generated, so nothing ships in a package.
+// None of it is required. A package with no `ci/env.schema.ts` has nothing to document and is told so. A
+// variable with no expiry date or no owner is reported as a finding, not a failure. Only `--check` fails, when
+// `docs/ENVIRONMENT.md` differs from what the schema produces; the `EnvContract` check runs that
+// (checks/env-contract.ts). `--rotation-issue` opens, updates or closes the one GitHub issue for credentials due
+// for rotation, through `gh`. The schema is only read, never executed (env-cap parses it). The document is
+// written through the package's own Prettier settings, with the machine's paths and the per-run stamp left out,
+// so two machines produce the same text. No evidence or manifest is written, so nothing ships in a package.
 
 import {
   existsSync,

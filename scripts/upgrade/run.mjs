@@ -1,11 +1,13 @@
 // `internal-package-contract upgrade <vX.Y.Z>`: moves a package to a release of this one and brings everything
 // that release owns up to date, in one command.
 //
-// Moving the pin is the easy half. The release also changes files the package carries: the workflows that
-// call its reusable workflows (pinned by commit), the managed copies and documents, the generated landing
-// page, and the benchmark guides. Done by hand that is six commands in the right order, and a package that
-// misses one fails its own contract on the next run. This runs them, stops at the first that fails, and
-// leaves the result as ordinary uncommitted changes for a person to review and commit.
+// Moving the pin is the easy half. The release also changes files the package carries: the workflows that call
+// its reusable workflows (pinned by commit), the managed copies and documents, the generated landing page and
+// the benchmark guides. Done by hand that is several commands in the right order, and a package that misses one
+// fails its own contract on the next run. This runs them, stops at the first that fails, and leaves the result
+// as uncommitted changes for a person to review. It refuses to start while package.json, the lockfile or the
+// workflows have uncommitted changes. It needs a `github:` dependency on this package to know where the release
+// is.
 
 import { sync as spawnSync } from "cross-spawn"
 import { spawnSync as gitSync } from "node:child_process"

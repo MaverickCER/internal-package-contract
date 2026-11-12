@@ -1,6 +1,9 @@
-// A package that declares a minimum Node.js in `engines` promises it works there. That promise is only
-// as good as the CI that runs on that version, so this finds the declared minimum and whether any
-// workflow tests it. It reads declarations, never runs anything.
+// A package that declares a minimum Node.js in `engines` promises it works there. That promise is only as good
+// as the CI that runs on that version, so `EngineMatrix` fails when no workflow tests the declared minimum.
+// This finds the lowest major in `engines.node` (`>=22`, `^22.4`, `22.x`, `>=22 <25`). It then finds every
+// major on a `node-version:` line, or in the block list under one, across every file in `.github/workflows`.
+// It reads declarations, never runs anything. A missing `engines.node`, or one no minimum can be read from, is
+// its own failure state. A private package is exempt (scripts/check-engines.mjs).
 
 /**
  * @param {unknown} range - the `engines.node` value, such as `>=22.0.0`, `^22.4`, `22.x` or `>=22 <25`.

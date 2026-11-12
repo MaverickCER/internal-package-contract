@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// "What rules are we currently breaking, and why?" -- one answer, across every exception registry.
+// "What rules are we breaking on purpose, and why?" answered once, across every exception registry.
 //
 //   internal-package-contract exceptions [--json]
 //
-// Reads every `.repo-contract/exceptions/*.json` and reports, per registry, how many records it holds,
-// how they break down by `exceptionType`, how many are still the legacy `version: 1` shape (which
-// cannot say what rule is broken or when to revisit it), how many have expired, and how many are blank
-// stubs waiting to be written. The same inventory is attached to the contract's `report.json` and shown
-// in its step summary, so the answer travels with every run.
+// It reads every `.repo-contract/exceptions/*.json` and reports, per registry, how many records it holds, how they
+// break down by `exceptionType`, how many are still the legacy `version: 1` shape (which cannot say what rule is
+// broken or when to revisit it), how many have expired, and how many are incomplete. A file that cannot be read is
+// listed as unreadable, never thrown: the check that owns that registry fails on it. The inventory decides nothing.
+// The same inventory is attached to the contract's `report.json` and shown in its step summary.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"

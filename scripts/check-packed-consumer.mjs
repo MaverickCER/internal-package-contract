@@ -1,12 +1,19 @@
 #!/usr/bin/env node
-// Entry point for the `PackedConsumer` check (see checks/packed-consumer.ts), and the release build's
-// last gate before a tarball is published. Takes the packed tarball, installs it into an empty project,
-// and imports every entry point the way a consumer would. Prints one JSON envelope.
+// Entry point for the `PackedConsumer` check (see checks/packed-consumer.ts). Takes the packed tarball,
+// installs it into an empty project under the temporary directory, and imports every entry point the way
+// a consumer would, `require`-ing the ones whose export map promises CommonJS. It also lists every file
+// package.json promises that the tarball lacks (scripts/packed-consumer/plan.mjs). Prints one JSON
+// envelope; the policy decides the verdict.
 //
 //   node check-packed-consumer.mjs [--tarball <file.tgz>] [--strict]
 //
-// Without `--tarball` it packs the package in the working directory. With `--strict` a problem is also a
-// non-zero exit, which is what a release workflow wants; the contract check reads the envelope instead.
+// Without `--tarball` it packs the package in the working directory with install scripts off. A private
+// package is `exempt`, and a package with no entry point is `none`. An entry that fails only because a
+// declared peer dependency is absent is listed as skipped, not as a problem. An install that fails is
+// `install-failed`, which the policy records as the `PackedConsumer:install` degradation.
+//
+// With `--strict`, a `problem` or `install-failed` state is also a non-zero exit. The shared release
+// workflow runs it that way on the tarball it is about to publish, so a broken package stops there.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"

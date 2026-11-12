@@ -1,20 +1,18 @@
-// On-disk cache for `socket package score` results (see socket-package-score.mjs).
+// On-disk cache for `socket package score` results (socket-package-score.mjs).
 //
-// Socket scores a PUBLISHED version, so the answer depends only on `<package>@<version>` (plus
-// Socket's own database, which moves slowly) -- not on the branch, the lockfile or which pull
-// request asks. One entry per scored version therefore serves every run, every pull request and
-// the pre-push hook for a day, and a scan costs quota only when a version is genuinely new.
+// Socket scores a published version, so the answer depends only on `<package>@<version>` and Socket's own slowly
+// moving database, not on the branch, the lockfile or the pull request. One entry per scored version therefore
+// serves every run and the hooks until it expires, and a scan costs quota only for a new version. Only a successful
+// score is cached: a failure (auth, rate limit, network) is retried, never replayed.
 //
-// Only successful scores are cached: a failure (auth, rate limit, network) must be retried, never
-// replayed. Set `IPC_SOCKET_CACHE_DIR` to relocate the cache, `IPC_SOCKET_CACHE_TTL_HOURS` to change
-// the 24 h lifetime, or `IPC_SOCKET_CACHE=off` to bypass it. CI does not persist the cache between
-// runs (a cache written by a workflow that runs pull-request code can be poisoned).
+// `IPC_SOCKET_CACHE_DIR` relocates the cache, `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
+// `IPC_SOCKET_CACHE=off` bypasses it. CI does not keep the cache between runs: a cache written by a workflow that
+// ran pull-request code could be poisoned.
 //
-// The cache is TRUSTED input -- an entry with `alerts: []` makes the check pass -- so it lives in a
-// directory only the current user can write (default `~/.cache/ipc-socket-score-cache`, mode 0700,
-// never a shared temp directory), a directory owned by someone else or writable by others is not
-// used at all, and an entry is used only if it is shaped like a score for exactly the package and
-// version asked about.
+// The cache is trusted input: an entry with `alerts: []` makes the check pass. It therefore lives in a directory
+// only the current user can write (by default under `~/.cache`, created with mode 0700, never a shared temp
+// directory). A directory owned by someone else or writable by others is not read or written, and an entry is used
+// only when it is shaped like a score for exactly the package and version asked about.
 
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"

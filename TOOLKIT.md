@@ -33,16 +33,13 @@ line traces back to a file they can inspect, plus a way to check that the docume
 | `repo-contract` | The `Evidence` and `Verdict` documents of a run (`schemas/*.schema.json`)                                                                                                                                                     | None in a standard format; its own repository commits CycloneDX 1.6 SBOMs (checked by `cyclonedx-npm --validate`) and an OpenSSF Scorecard document that leads with the published result                      |
 | This repository | The repository itself as GitHub serves it: workflows, branch protection, reviews, releases, dependencies (Scorecard reads these). Each package's `coverage.json`, `mutation.json` and `size.json` feed only its README badges | The OpenSSF Scorecard result, through `ossf/scorecard-action` with `publish_results: true` (required by `ScorecardWorkflow`), produced by OpenSSF's own binary                                                |
 
-Both tables are written by `internal-package-contract generate` from `docs/surface.json`, and the official schemas
-the tests validate against are the hash-pinned managed copies in `template/standards/`, so every package states and
-checks its formats the same way. What a package installs is generated the same way, in its `dependencies` region.
+The `standards` tables in env-cap and data-cap are written by `internal-package-contract generate` from `docs/surface.json`, which fails when a cited test file does not exist (`test/generate-standards.test.ts`); it checks that the file exists, not that it validates the format. The official schemas the tests validate against are the hash-pinned managed copies in `template/standards/` (`test/standard-schemas.test.ts`), so every package states and checks its formats the same way. What a package installs is generated the same way, in its `dependencies` region.
 
 Two limits a reviewer should know. First, a generated document is unsigned: anyone can edit the file and, for the
 `repo-contract` manifest, recompute its digest. Second, the commit and time a document records are supplied by
 the caller, never read ambiently. Attesting the document in CI closes the first: it signs the file's digest with
 the workflow's identity and records the commit that run built from. It does not check the commit or time written
-inside the document, so a reviewer should compare those fields with the commit the attestation names. The CI
-step:
+inside the document, so a reviewer should compare those fields with the commit the attestation names. No workflow in this repository or its templates carries this step yet; it is an instruction for a consumer. The CI step:
 
 ```yaml
 permissions:
@@ -78,7 +75,7 @@ gh attestation verify data.evidence.json --repo MaverickCER/data-cap
 
 Where the four repositories differ on purpose, the reason is here; where they differ for no reason, that is
 marked so it gets converged. This table is the record, so a difference that is not listed is a bug in
-the table or in the repository. Checked against each repository's default branch on 2026-11-09.
+the table or in the repository. Checked against each repository's default branch on 2026-11-09; nothing mechanical keeps it current, so a row is as good as its date.
 
 - **Intentional**: stays as it is; the reason is recorded.
 - **Open**: needs a decision before it can be called either way.
@@ -97,7 +94,7 @@ the table or in the repository. Checked against each repository's default branch
 | Benchmark PR job: `env-cap` and `data-cap` call the reusable workflow; `repo-contract` inlines it                                                                                                                                                     | Converge    | Same.                                                                                                                                                                                                       |
 | `typescript`: `^6.0.3` everywhere (a runtime dependency here, a dev dependency in the three packages); the consumer template now starts at `^6.0.3` too                                                                                               | Converged   | TypeScript 7 has no compiler API, so the toolchain stays on 6 and 7 is tested in CI.                                                                                                                        |
 | `.nvmrc`: 22 in `env-cap`, 24 in the others                                                                                                                                                                                                           | Converge    | `repo-contract`'s CONTRIBUTING says to develop on Node 24 and let CI prove the Node 22 floor.                                                                                                               |
-| `env-cap` and `data-cap` pin this repository at `v0.16.0`; `repo-contract` moves there in its next release                                                                                                                                            | Converge    | The pin-sync workflow needs a `PIN_SYNC_TOKEN` with Workflows write to move it; until then the bump is by hand.                                                                                             |
+| On `main`, `env-cap` and `data-cap` pin this repository at `v0.16.0` and `repo-contract` at `v0.13.3`; the `v0.17.0` pull requests the pin-sync bot opened are not merged yet                                                                         | Converge    | A pin that moves a workflow SHA needs `PIN_SYNC_TOKEN` with Workflows write in the consumer; without it the bump is by hand. Pins re-checked 2026-11-12.                                                    |
 
 ## Duplication left between `env-cap` and `data-cap`
 
@@ -119,6 +116,6 @@ duplication that is not a verified copy.
 
 ## Part of the MaverickCER toolkit
 
-The shared paragraph every README carries (kept identical on purpose; a test in this repository checks that it matches):
+The shared paragraph every README carries. `test/toolkit.test.ts` checks that this repository's README carries it verbatim; each consumer tests its own copy:
 
 > `@maverickcer/env-cap` governs configuration and `data-cap` governs application data: siblings that apply the same capability-ownership model. `repo-contract` and `internal-package-contract` are how they are verified. See [the toolkit overview and glossary](https://github.com/MaverickCER/internal-package-contract/blob/main/TOOLKIT.md).

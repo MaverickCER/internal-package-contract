@@ -1,31 +1,32 @@
 /**
- * Reviews the open GitHub code-scanning alerts of the branch you are on and rejects each one
- * explicitly (a branch with no analysis yet has none, so a branch carrying a fix is never blocked by
- * the default branch's still-open alert). Locally it reads them with the developer's own `gh` login;
- * in CI with the workflow's `GH_TOKEN` (`permissions: security-events: read`), scoped to the ref
- * being built (see {@link file://../scripts/code-scanning-alerts.mjs}).
+ * `CodeScanning`: every open GitHub code-scanning alert on this ref is fixed, or sits in
+ * development-only code and is rejected by a committed record.
  *
- * ## Policy
+ * Reads: the open alerts of the current ref through `gh api`, by way of
+ * `scripts/code-scanning-alerts.mjs`. Locally that is a person's `gh` login and the checked-out
+ * branch. In CI it is `GH_TOKEN` or `GITHUB_TOKEN`, `GITHUB_REPOSITORY` and `GITHUB_REF`, and the
+ * job needs `permissions: security-events: read`. Also package.json `files`, and
+ * `.repo-contract/exceptions/code-scanning.json`. A ref with no analysis yet has no alerts, so a
+ * fix branch is never blocked by the default branch's open alert.
  *
- * An alert is judged by WHERE it is, not by its severity or level:
+ * Fails on any alert in code that builds, runs or ships. Development-only code is `test/`,
+ * `tests/`, `examples/`, `benchmarks/`, `docs/`, `.github/`, `scripts/` and the test and config
+ * file patterns, minus anything package.json `files` publishes. Fails when a development-only alert
+ * has an incomplete record. Fails when the registry cannot be loaded or written. Fails when the
+ * alerts could not be read: no token, `gh` missing, not signed in, no access, too many pages. Never
+ * warns on a finding.
  *
- * - **Development-only code** (tests, scripts that are not published, docs, examples, benchmarks,
- *   `.github/`, `*.config.*`): the alert cannot reach a user, so it is rejected with a standing
- *   exception -- the same reason every time -- recorded in
- *   `.repo-contract/exceptions/code-scanning.json`. The check scaffolds that record, fully written,
- *   for you; only the one `exceptionType` `dev-only-not-shipped` is accepted.
- * - **Anything that builds, runs or ships** (`src/`, `bin/`, published package files, ...): the alert
- *   must be FIXED. There is no exception for it; the check fails until GitHub no longer reports it.
+ * Exceptions: only for development-only code. The id is `code-scanning:<rule>@<path>`, with `rule`
+ * and `path` fields, `exceptionType` `dev-only-not-shipped` and `method` `policy-rule`. The check
+ * writes that record fully for each such alert. A shipped alert has no exception. Two degradations
+ * exist: scanning not enabled (`CodeScanning:not-enabled`) and no GitHub remote
+ * (`CodeScanning:no-remote`). Each warns locally. Under `--strict`, the CI default, each fails
+ * unless `.repo-contract/exceptions/environment.json` holds a complete record. The record id is
+ * `environment:CodeScanning:<code>`.
  *
- * ## The registry is committed
+ * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  *
- * `.repo-contract/exceptions/code-scanning.json` is committed like every other registry, so the
- * decision to reject a development-only alert is reviewed in the pull request that introduces it and
- * CI sees the same records a developer does. It only ever names alerts in development-only code
- * (tests, scripts, docs, CI configuration), which are low-sensitivity by definition; an alert in code
- * that ships can never be recorded here at all.
- *
- * Example record (id is `code-scanning:<rule>@<path>`; one record covers every alert of a rule in a file):
+ * Example record (one covers every alert of a rule in a file):
  *
  * ```json
  * {

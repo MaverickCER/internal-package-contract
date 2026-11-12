@@ -1,7 +1,8 @@
 // The "standards" region: the standard-format documents a package generates (SARIF, OSCAL, CycloneDX, PROV, ...),
-// listed once in `docs/surface.json`. Each entry names the test that checks the document's format, and generation
-// fails when that test file does not exist, so "checked against the official schema" stays something a reader can
-// rerun rather than a sentence that outlives its test.
+// listed once in `docs/surface.json`. Each entry names the test that checks the document's format. Generation
+// stops when that test file does not exist. So a claim that a document matches its schema stays something a
+// reader can rerun, not a sentence that outlives its test. An empty list renders one sentence saying the
+// package generates none. A missing list, a missing field or a line break in a cell stops generation.
 
 import { toTable } from "./entry-points.mjs"
 

@@ -1,10 +1,10 @@
-// The usage text of `internal-package-contract`. Kept out of the dispatcher so the public surface the
-// SurfaceContract check snapshots (this text) is tested, and so `--help` never reaches code that would
-// run the contract.
+// The usage text of `internal-package-contract`. It lives outside the dispatcher so the public surface
+// `SurfaceContract` snapshots (this text) is tested, and so `--help` never reaches code that runs the contract.
 //
-// One table describes every command: the overview groups them by what a person is doing, and
-// `internal-package-contract <command> --help` prints that command's own page from the same entry, so the two
-// cannot disagree.
+// One table describes every command. The overview groups them by what a person is doing, and
+// `internal-package-contract <command> --help` prints that command's page from the same entry, so the two cannot
+// disagree. The run options listed are the "(none)" command's; `--scope` and `--base`, which
+// `scripts/affected-scope.mjs` reads, are not among them.
 
 /** The `init` options whose next argument is their value, so a `-h` there is a value and not a request for help. */
 const INIT_VALUE_OPTIONS = ["--name", "--owner", "--description", "--tag", "--spec"]

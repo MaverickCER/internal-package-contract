@@ -1,5 +1,6 @@
-// What it takes for an exception record to count as accepted, shared by every registry that is judged in
-// plain JavaScript (the benchmark gate runs in a workflow, outside the contract engine).
+// What it takes for an exception record to count as accepted outside the registry validators of
+// checks/exception-record.ts: every structured field written and `expires` not in the past. Shared by the
+// `ManagedFiles` check and the benchmark complexity gate, which runs in a workflow outside the contract engine.
 
 /** The structured fields every accepted record must have written, as for every other registry. */
 export const REQUIRED_FIELDS = [

@@ -1,14 +1,10 @@
 #!/usr/bin/env node
-// The thin script `npm run contract` invokes for THIS package's own
-// self-hosting run (see repo-contract.config.ts's own doc comment for why
-// that file, not contract.ts, is loaded here). Imports the installed
-// `repo-contract` package's public API -- this package ships no `dist/` of
-// its own to import instead -- and runs it against repo-contract.config.ts.
-//
-// `--checks a,b` / `--only a,b` / `--skip a,b` / `--strict` behave exactly as
-// bin/contract.mjs offers a consumer (the run loop is shared:
-// scripts/contract-run.mjs). Never calls `process.exit()` directly, only sets
-// `process.exitCode`, matching repo-contract's own run-repo-contract.ts.
+// `npm run contract` for THIS repository: its own self-contract. It loads `repo-contract.config.ts` (not
+// `contract.ts`, the product a consumer runs; that file's header says why) through tsx and runs it with the
+// installed `repo-contract` engine. The run loop is `scripts/contract-run.mjs`, shared with `bin/contract.mjs`,
+// so `--checks`, `--skip`, `--scope`, `--strict` and the rest behave the same here. The pre-commit and pre-push
+// hooks reach this through `npm run`, because only npm puts node_modules/.bin on PATH for the plain command
+// names the config spawns. Only `process.exitCode` is set; `process.exit()` is never called.
 
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"

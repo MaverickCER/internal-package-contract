@@ -1,6 +1,7 @@
 // The `add check <Name>` recipe: turns on an optional check (see checks/optional.ts) by naming it in
-// package.json under "internal-package-contract", with the settings a check needs written out so they can be
-// read and changed. Pure: it takes the file's text and returns the new text, or what is wrong.
+// package.json under "internal-package-contract", with the settings the check reads written out so they can be
+// seen and changed. Pure: it takes the file's text and returns the new text, or what is wrong. A setting the
+// package already has is kept.
 
 import { OPTIONAL_SETTINGS } from "./optional-settings.mjs"
 

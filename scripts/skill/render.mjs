@@ -1,7 +1,9 @@
-// An agent skill as two files: a short operating manual an agent loads whole, and a reference of every public
-// signature it loads only when it needs one. The manual says what the package is for, shows one example that works,
-// states what the types cannot, and says how to check the result; everything longer is a link, so the cost of loading
-// it stays small however large the package is. Pure: what goes in is read elsewhere.
+// An agent skill as two files. One is a short operating manual an agent loads whole. The other is a reference
+// of every public signature, loaded only when one is needed. The manual says what the package is for, shows
+// one example that works, states what the types cannot, and says how to check the result. Everything longer
+// is a link, so the cost of loading it stays small however large the package is. The word budget is
+// `DEFAULT_BUDGET` unless docs/skill.json sets one, up to `MAXIMUM_BUDGET`. Pure: what goes in is read
+// elsewhere (facts.mjs).
 
 /** How many words the manual may have before it stops being cheap to load. */
 export const DEFAULT_BUDGET = 600

@@ -1,11 +1,12 @@
-// The OUTPUT contract of the benchmark kit: the exact shape of the `results.json` it writes. Anything
-// that reads results (history, PR summary, history page, dashboards, a CTO's spreadsheet) can rely on
-// this shape; `validateResults` checks a results object against it and returns every violation.
+// The output contract of the benchmark kit: the exact shape of the `results.json` it writes. Anything that
+// reads results (the history, the pull-request summary, the history page, the contract checks) relies on this
+// shape. `validateResults` returns every departure from it, and run-suite.mjs refuses to write results that
+// have one.
 //
 // results.json (schemaVersion 4)
 // {
 //   metadata: {
-//     schemaVersion: 3,
+//     schemaVersion: 4,
 //     package: { name, version?, bundleFiles? },
 //     workload: { unit, description, typicalN },
 //     tiers: number[],                        // the ladder this run measured
@@ -23,13 +24,14 @@
 //       // with the others held at their base values (`held`). Its growth class is that variable's alone.
 //       tiers: { "n<size>": { id, status: "completed"|"failed", inputs: { <variable>: size }, held?: { <other variable>: value },
 //                              durationMs: { minMs, medianMs, p95Ms, maxMs, stdDevMs, iterations, warmupIterations },
-//                              cpuMs: <same stats>, heapDeltaBytes, opsPerSecond, configuration }
+//                              cpuMs: <same stats>, heapDeltaBytes, opsPerSecond, configuration,
+//                              paired?: { pairs, medianMs, meanMs, stdDevMs, ci95Ms } }   // on the with-package tiers: the interleaved per-pair difference (the overhead) and its 95% interval
 //                         | { id, status: "failed", inputs, error: { name, message } } }
 //     }
 //   },
 //   analysis: {
 //     complexity: { "<group>": { class, exponent, rSquared, reason?, variable, discarded?, size?, unmeasured?, minRSquared?, notation, points, expected?, expectedNotation?, agreement? } },
-//     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCpuMs, overheadHeapBytes, cost } ],
+//     endToEnd:   [ { n, baselineMs, withPackageMs, overheadMs, overheadPercent, overheadCi95Ms, overheadCi95Percent, pairs, overheadCpuMs, overheadHeapBytes, cost } ],
 //     contribution: [ { id, group, description, rows: [ { n, calls, estimatedMs, exclusiveMs, shareOfTotal } ] } ],
 //     cost: { typicalN, typical, largest },
 //     coverage: { benchmarks: [ { id, covers: { "<function>": { "<parameter or key>": "<accounting>" } } } ], notBenchmarked: { "<function>": "<why>" } }

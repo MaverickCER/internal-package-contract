@@ -1,3 +1,9 @@
+/**
+ * How a policy learns that the run was narrowed to what a change affects (`--scope affected`). The
+ * run loop hands every policy the scope document as `ctx.scope`. `Tests`, `Coverage`, `Crap` and
+ * `Mutation` read it. A full run, a unit test and a custom runner hand nothing, so a policy then
+ * judges the whole package.
+ */
 import type { ScopeDocument } from "../scripts/affected-scope.mjs"
 
 /**

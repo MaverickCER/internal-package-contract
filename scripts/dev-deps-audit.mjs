@@ -1,5 +1,6 @@
-// The `npm audit` runs behind the `SecurityDevDeps` check, separated from its entry point
-// (audit-dev-deps.mjs) so they can be tested without a registry.
+// The `npm audit` runs behind the `SecurityDevDeps` check, apart from their entry point (audit-dev-deps.mjs) so
+// they can be tested without a registry. `npm audit` exits non-zero whenever it finds anything, so its exit code is
+// not an error here; only a spawn failure or output that is not JSON is, and either fails the check.
 
 /**
  * @typedef {(command: string, args: string[], options: object) => { error?: Error & { code?: string }, stdout?: string, stderr?: string }} Spawn

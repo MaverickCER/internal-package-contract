@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-// Extracts a compact entry from a fresh results.json and appends it to a
-// consumer-owned history JSON file (env-cap's docs/benchmark-history/<name>.json,
-// data-cap's benchmarks/history/<name>.json, or wherever a future consumer
-// points it -- this script takes both paths as arguments and makes no
-// assumption about either one's location or naming). Generalizes env-cap's
-// and data-cap's own (near-identical) scripts/append-benchmark-history.mjs /
-// benchmarks/append-benchmark-history.mjs: same "called only by the
-// benchmark-pr job, only when the PR's diff touches benchmarked code, never
-// by a local run" contract, same compact-entry intent, but now carries each
-// tier's full `inputs` object through (schema v2 -- see below) instead of
-// deriving one hardcoded throughput figure (env-cap's `variablesPerSecond`)
-// and discarding the rest.
+// Appends one compact entry from a results.json to a package's benchmark history file.
 //
-// Usage: node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]
+//   node append-history.mjs <results.json> <history.json> [--commit <sha>] [--pr <number>]
 //
-// `--commit` and `--pr` say where the run belongs on main: the MERGE commit it measured and the pull
-// request that produced it. Without them an entry would carry the pull-request branch's head, which
-// disappears with a squash merge and so cannot be traced afterwards.
+// Run by the benchmark-record workflow, which a package calls from its push-to-main CI; never by a local run.
+// Each entry keeps, per completed group and tier, the median, the `inputs`, a derived `unitsPerSecond` and the
+// spread figures (`stdDevMs`, `p95Ms`, `iterations`). The rest stays reachable through `gitCommit` in that
+// commit's own results.json. `--commit` and `--pr` name the merge commit and pull request, because a branch
+// head disappears with a squash merge. `versions` is copied whole from `metadata.versions`, whatever keys a
+// package uses.
+//
+// The history schema is version 2: a tier carries `inputs` beside `medianMs`. Older entries are kept as they
+// are; classify-complexity.mjs leaves a tier without `inputs` out of its fit on its own. The file's version
+// marker says what the newest writer wrote, not what the oldest entry has.
 
 import fs from "node:fs/promises"
 import path from "node:path"

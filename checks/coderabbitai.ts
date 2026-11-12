@@ -1,45 +1,31 @@
 /**
- * AI code review via the real, installed CodeRabbit CLI (`coderabbit review --agent
- * --uncommitted`, or the committed branch diff against the base branch when the tree is clean), whose findings are
- * advisory: each one is reported as a suggestion to adopt where it improves the code, and a finding-specific record in
- * the consumer's own `.repo-contract/exceptions/coderabbit.json` documents why one was not taken -- a generic recreation of
- * repo-contract's own `coderabbitai` check (`checks/coderabbitai.ts` +
- * `scripts/coderabbitai/{review,evidence-types,policy-config,registry}.ts` in that repo, designed
- * in its specs/decisions/0014-coderabbit-as-a-surfaced-check.md on top of
- * specs/decisions/0013-reusable-exception-policy-helper.md), run through the bundled
- * `scripts/coderabbitai/review.ts` (see its own doc comment for the CLI contract it parses).
+ * `CodeRabbit`: an AI review of the change. Its findings are advice, and its non-execution is
+ * recorded.
  *
- * The whole point of ADR 0014, and the reason this is a real check rather than a git-hook shell
- * step: **its own non-execution is recorded**. A local skip surfaces the same visible `warn` on
- * every single run instead of a silent pass, so "CodeRabbit never looked at this" is never
- * indistinguishable from "CodeRabbit found nothing":
- * - `not-applicable` (`CI` is set) -- review is delegated to CodeRabbit's own GitHub App, which
- *   posts findings on the pull request. `warn`, naming `coderabbit-github-app`.
- * - `unavailable` (`cli-not-installed`, a detached `HEAD` or other git state a diff-based review can't
- *   anchor, not being signed in, or no network) --
- *   `warn`, exactly like `SecuritySocket`'s own not-authenticated case and `Accessibility`'s
- *   no-system-Chrome case. This check cannot distinguish "genuinely clean" from "never ran," so it
- *   never fails closed on absence alone.
- * - `error` (the CLI ran but produced a malformed event stream, timed out, or failed) -- `warn`:
- *   the run simply has no suggestions to offer.
+ * Reads: `CI`; git's answer on a detached `HEAD`, uncommitted edits and `origin/main`; and
+ * `.repo-contract/exceptions/coderabbit.json`. Then the event stream of `coderabbit review
+ * --agent`, with `--uncommitted`, or `--committed --base <ref>` on a clean tree. All through
+ * `scripts/coderabbitai/review.ts`. The `coderabbit` CLI is not a dependency of this package; it is
+ * installed per machine.
  *
- * The `coderabbit` CLI is deliberately NOT a dependency of this package (unlike `pa11y`,
- * `@socketsecurity/cli`, Stryker, ...): it is a credentialed, network-bound developer tool
- * installed once per machine (https://docs.coderabbit.ai/cli), not an npm executable a contract can
- * ship. That is precisely why its absence is a first-class, recorded `warn` state here.
+ * Fails only when the registry cannot be loaded, reconciled or re-validated. Fails when the
+ * evidence's findings and records do not correspond one to one, or when the script itself crashed.
+ * Everything else warns: an incomplete record, a stale record, a review that errored, a review that
+ * did not run. A review of the same diff is worded differently each time, so a finding never stops
+ * a commit.
  *
- * ## Exception policy
+ * Exceptions: id `coderabbit:<file>:<severity>:<hash>` with `file`, `severity` and `summary`
+ * fields, the security fields and the version 2 fields. A blank stub is written for a new finding
+ * once a review ran. `exceptionType` may not be `validated-false-positive`, and `method` may not be
+ * `mechanical-reverification`: no tool can re-run an AI finding. Two degradations exist.
+ * `CodeRabbit:not-applicable`: `CI` is set, and the GitHub App reviews the pull request.
+ * `CodeRabbit:unavailable`: no usable CLI. Each warns locally. Under `--strict`, the CI default,
+ * each fails unless `.repo-contract/exceptions/environment.json` holds a complete record. The
+ * record id is `environment:CodeRabbit:<code>`.
  *
- * Findings are advisory, never a reason to stop a commit: a review of the same diff words them differently on every
- * run, so a record keyed by the wording cannot be relied on to match the next one. A finding without a complete record,
- * and a record that matches no finding this run, are listed as a `warn`; only a broken registry fails. A record still
- * needs every field below when it is written, regardless of severity -- there is no
- * severity tier the way Socket alerts have one, because a CodeRabbit finding is an AI opinion, not
- * a deterministic tool result (`scripts/coderabbitai/policy-config.ts`). Required fields:
- * `justification`, `remediation`, `method`, `exceptionType`. `method` may only ever be
- * `"independent-human-review"`, and `exceptionType` may never be `"validated-false-positive"` --
- * there is no more-authoritative tool to mechanically re-run against an AI-generated finding, so a
- * false-positive claim has nothing to rest on (`scripts/coderabbitai/registry.ts`).
+ * Runs in the consumer `contract` job and in both git hooks. It is declared late among the readers
+ * and not isolated: it waits on the network, not on CPU. IPC's own self-contract leaves it out: the
+ * review bot is configured per consumer repository.
  *
  * Example record:
  *
@@ -48,37 +34,26 @@
  *   "exceptions": [
  *     {
  *       "id": "coderabbit:src/build/resolve.ts:major:7c1e9a4f2b03",
- *       "version": 1,
+ *       "version": 2,
  *       "justification": "The suggested early return would skip the cache write this function exists to perform; verified against the \"memoizes\" test.",
- *       "alternatives": "",
- *       "remediation": "None planned -- the current shape is intentional and documented.",
+ *       "alternatives": "Restructure the function so the cache write is unconditional.",
+ *       "remediation": "None planned; the current shape is intentional and documented.",
  *       "method": "independent-human-review",
  *       "exceptionType": "accepted-risk",
  *       "file": "src/build/resolve.ts",
  *       "severity": "major",
- *       "summary": "Consider returning early when the cache already holds a value."
+ *       "summary": "Consider returning early when the cache already holds a value.",
+ *       "ruleBroken": "A CodeRabbit finding is adopted or its rejection is recorded.",
+ *       "attempted": "The early return was tried; the memoization test failed.",
+ *       "constraint": "The cache write must happen on every call that computes a value.",
+ *       "whyPreferable": "Keeping the write unconditional keeps the memoization test meaningful.",
+ *       "residualRisk": "None; the reviewer's concern was readability, not behaviour.",
+ *       "revisitWhen": "The function is rewritten or the cache is removed.",
+ *       "expires": ""
  *     }
  *   ]
  * }
  * ```
- *
- * The registry is reconciled and rewritten every reviewed run (like `SecuritySocket`, unlike
- * `mutation.ts`'s deliberately non-reconciling model): a blank stub is scaffolded for a
- * newly-raised finding, and a record matching no finding this run is reported stale. A finding's id
- * hashes the CLI's own summary prose, so a re-review whose wording changed deliberately churns the
- * id -- that is exactly when a human should re-confirm the waiver still applies. `mutation.ts`'s
- * opt-out reasoning (Stryker's per-run non-determinism) does not apply: a CodeRabbit review of an
- * unchanged diff is a normal per-run reconciliation case.
- *
- * `checks/exception-record.ts` owns the shared `id`/`version`/`justification` core, the
- * security-family authoring fields, registry-shape validation, and the single
- * `reconcileAndPersistExceptionRegistry` reconcile -> validate -> persist entrypoint this check's
- * own wrapper script calls; `evaluateExceptionRecord`/`validateExceptionPolicyConfig`
- * (`repo-contract/helpers`) decide whether a matched record satisfies policy.
- *
- * Not `isolated`: the subprocess it spawns is a single network-bound CLI waiting on a remote
- * review, not a CPU-saturating worker pool, so it contends with nothing -- matching repo-contract's
- * own plain `coderabbitai,` registration.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

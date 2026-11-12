@@ -1,13 +1,20 @@
 /**
- * Proves the skill an AI agent is given for this package is current, and short enough to be worth loading. The
- * package writes what only its author knows (when to use it, what it is not for, the rules, the common mistakes,
- * one example) in docs/skill.json; everything else (name, version, exports, the API) is read from what the
- * package already says about itself, so it cannot drift. The manual is written to skills/<name>/SKILL.md by
- * `internal-package-contract skill`; this fails when what is written is not what would be written now, when
- * docs/skill.json is not valid, or when the manual is over its word budget.
+ * `AgentSkill`: the skill files an AI agent loads for this package are what
+ * `internal-package-contract skill` would write now.
  *
- * It judges shape and size, never whether the advice is good: that is the author's.
- * It is not part of the standard set; a package turns it on (see `add check AgentSkill`).
+ * Reads: `docs/skill.json` and the files under `skills/<name>/`, through
+ * `scripts/check-agent-skill.mjs` and `scripts/skill/inspect.mjs`. The rest comes from what the
+ * package already says about itself: name, version, exports, API.
+ *
+ * Fails when `docs/skill.json` is missing or invalid. Fails when the manual is over its word
+ * budget. Fails when a written file differs from what would be written now. Never warns. It judges
+ * shape and size, never whether the advice is good.
+ *
+ * Exceptions: none. Run `npx internal-package-contract skill` and commit the result.
+ *
+ * Not in the standard set: a package turns it on by name in package.json (`add check AgentSkill`).
+ * It then runs wherever that package's contract runs, waiting on nothing, since it reads source
+ * files only.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

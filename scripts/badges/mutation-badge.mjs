@@ -1,9 +1,14 @@
-// The mutation badge every package publishes beside its coverage badge. The score is the share of
-// applicable mutants the tests detect: Killed, RuntimeError and CompileError count as detected, Ignored
-// mutants leave the denominator, and every other status (Survived, NoCoverage, Timeout) stays in it, so a
-// timeout lowers the score exactly as a survivor does.
+// The mutation badge a package publishes beside its coverage badge, and the details file beside it.
 //
 //   node node_modules/internal-package-contract/scripts/run-mutation-badge.mjs [--report reports/mutation/mutation.json] [--out docs/mutation-badge.json]
+//
+// Reads a Stryker JSON report. The score is the share of applicable mutants the tests detect. Killed,
+// RuntimeError and CompileError count as detected. Ignored mutants leave the denominator. Survived, NoCoverage
+// and Timeout stay in it, so a timeout lowers the score exactly as a survivor does.
+//
+// A missing or unparseable report exits 1 and writes nothing, so a badge is never written from nothing. So
+// does a report with no applicable mutant. An unknown argument exits 2. This is a publishing helper, not a
+// contract check: the `Mutation` check, not this badge, decides whether a score is acceptable.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

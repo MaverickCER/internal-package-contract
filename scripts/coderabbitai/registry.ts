@@ -1,9 +1,11 @@
 /**
- * The `.repo-contract/exceptions/coderabbit.json` registry schema, its canonical id derivation, and
- * the blank stub `review.ts` scaffolds for a newly-seen finding -- a generic recreation of
- * repo-contract's own `scripts/coderabbitai/registry.ts`, rebuilt on this package's own
- * `checks/exception-record.ts` core (repo-contract keeps its equivalent unpublished; see that
- * module's own header).
+ * The record shape of `.repo-contract/exceptions/coderabbit.json`, how a record's id is derived, and the blank
+ * stub review.ts writes for a finding with no record yet.
+ *
+ * A record is invalid, and the `CodeRabbit` check fails, when its id does not match its own
+ * `file`/`severity`/`summary`, when `severity` is not one the stream can report, or when `method` is
+ * `mechanical-reverification`: no tool can re-run an AI finding to confirm it. `exceptionType` may be any
+ * shared type except `validated-false-positive`, for the same reason.
  */
 import { createHash } from "node:crypto"
 import {

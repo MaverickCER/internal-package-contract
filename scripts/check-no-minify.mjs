@@ -1,15 +1,14 @@
-// Entry point for the `NoMinify` check (see checks/no-minify.ts).
+// Entry point for the `NoMinify` check (see checks/no-minify.ts). Prints one JSON envelope with every
+// request for minification and every shipped file that looks minified; the policy decides the verdict.
 //
-// Minified code is a Socket.dev supply-chain alert ("minified file"), and 0 minification is allowed
-// across this organization's packages. Two independent layers, both fail-closed:
-//   1. Config: no `minify*` option (other than `false`) in a tsup config, and no `--minify*` flag
-//      in a package.json script -- catches the intent before a build even runs.
-//   2. Output: no shipped `.js/.cjs/.mjs` file in the build directory that looks minified (a line
-//      over MAX_LINE_LENGTH characters, or -- for files of at least MEAN_MIN_BYTES -- an average
-//      non-empty line length over MAX_MEAN_LINE_LENGTH). esbuild's `minifyWhitespace` alone
-//      trips both. Sourcemaps and declaration files are not code and are not inspected here.
-//
-// Prints one JSON envelope to stdout; never exits non-zero for a finding (policy decides).
+// Minified code is a supply-chain alert on Socket.dev, and none of it may ship. Two independent layers
+// catch it. The configuration layer reads every `tsup.config.*` for a `minify*` option other than `false`,
+// and every package.json script for a `--minify*` flag, so the intent is found before a build runs.
+// The output layer reads every `.js`, `.cjs` and `.mjs` file under the build directory (the argument,
+// `dist` by default) and flags a line longer than MAX_LINE_LENGTH, or a file of at least MEAN_MIN_BYTES
+// whose non-empty lines average more than MAX_MEAN_LINE_LENGTH. Sourcemaps and declaration files are not
+// code and are not read. A build directory that does not exist yields no output findings, and the
+// envelope says so with `dirExists`.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"

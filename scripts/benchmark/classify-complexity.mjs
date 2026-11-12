@@ -1,67 +1,23 @@
-// Pure algorithm: infers an algorithmic-complexity CLASS ("constant" through
-// "cubic-or-worse") from a named benchmark's per-tier {medianMs, inputs}
-// measurements, and diffs two such classifications to flag a "complexity
-// shift" -- the headline signal this whole feature exists for (see
-// render-summary.mjs / render-page.mjs, which are the only consumers of this
-// module; it has no CLI of its own).
+// How a benchmark group's growth class (big-O) is fitted from its measurements, and when two fits count as a
+// shift. Used by the kit's analysis, the gates, the complexity-gain check, and the summary and page renderers.
 //
-// No dependency on any consumer's tier-naming convention (env-cap's
-// baseline/stress/extreme/enterprise, data-cap's baseline/stress/extreme, or
-// any future renaming): a tier's "size" is always the sum of its own
-// `inputs` object's numeric values (see `inputTotal`), never a hardcoded tier
-// name or position.
+// A tier's size is the sum of its `inputs` numeric values, never a tier name or position. A tier without a
+// positive size or a positive `medianMs` is left out, with the reason recorded (`discardedTiers`). Fewer than
+// two usable tiers gives `reason: "insufficient-data"`; all at one size gives `"no-size-variation"`.
 //
-// ## The algorithm
+// The exponent `p` of `medianMs ~ size^p` is the least-squares slope of ln(medianMs) against ln(size). It is
+// fitted on the largest `FIT_WINDOW` sizes only: a fixed per-call overhead dominates the small end and would
+// report a linear function as logarithmic. A fit whose R-squared is below `MIN_R_SQUARED` gets no class
+// (`reason: "poor-fit"`). A group whose timings barely move is flat and keeps its class whatever the fit.
+// `p` is then snapped to the nearest class anchor; a tie goes to the cheaper class.
 //
-// For N >= 2 usable tiers (real `inputs`, positive size, positive medianMs),
-// fit a least-squares line through (ln(size), ln(medianMs)) across ALL of
-// them. Its slope `p` is the effective exponent of `medianMs ~ size^p` --
-// the standard log-log-slope estimator for the exponent of a power law, and
-// the natural generalization of "the ratio of medianMs growth against
-// input-size growth between consecutive tiers" (the brief's own phrasing) to
-// more than two points: for exactly N=2 tiers this reduces algebraically to
-// the single pairwise ratio `ln(T2/T1) / ln(N2/N1)`; for N>=3 it's the
-// consensus slope across every consecutive gap at once, weighted by how much
-// size each gap actually spans, which is more robust to one noisy tier than
-// eyeballing pairwise ratios independently would be.
+// A shift (`detectComplexityShift`) needs three things. Both fits have a class, the classes differ, and the
+// exponents are at least `SHIFT_MARGIN` apart. A label that flips at a boundary on noise alone is not a shift.
+// A group with no previous fit reports no shift, which is not a claim that nothing changed.
 //
-// `p` is then snapped to the nearest of six fixed "canonical" exponents, one
-// per complexity class (see CLASS_ANCHORS below) -- nearest-anchor
-// classification, ties broken toward the lower/simpler class (see
-// `snapExponentToClass`).
-//
-// ## Known limitations (see also each one's own dedicated unit test)
-//
-// - **constant vs logarithmic is the weakest distinction of the six.**
-//   log(n) grows so slowly that its effective exponent over any *bounded*
-//   size ratio (e.g. a 10x tier ladder) is small and gets smaller still as
-//   the absolute tier sizes grow -- there is no fixed exponent threshold
-//   that cleanly separates "truly flat" from "truly logarithmic" for every
-//   possible tier ladder. What keeps this useful anyway: the SAME tier
-//   ladder (same sizes, same thresholds) is reused for both the historical
-//   and the current classification of a given group, so whatever bias the
-//   boundary has is applied identically both times -- a genuine algorithmic
-//   change (say linear regressing to quadratic) moves `p` by roughly a full
-//   canonical gap (~1.0), far more than the constant/logarithmic ambiguity
-//   band (~0.3), so real shifts still clear the noise floor. Treat a
-//   constant<->logarithmic shift specifically as lower-confidence than any
-//   other transition.
-// - **linear vs linearithmic is similarly close** (n*log(n)'s effective
-//   exponent over realistic tier ratios sits only ~0.15-0.3 above linear's
-//   exact 1.0) -- same mitigation applies (see CLASS_ANCHORS' own comment).
-// - Needs >= 2 usable tiers; a tier missing `inputs`, with non-numeric/
-//   non-finite input values, with a non-positive size, or with a
-//   non-positive medianMs is EXCLUDED from the series, not fatal -- classify
-//   returns `{ complexityClass: null, reason: "insufficient-data" }` once
-//   fewer than 2 tiers survive that filter.
-// - If every surviving tier has the SAME size (no real size variation to
-//   measure a slope against), classification is impossible for a different
-//   reason -- `{ complexityClass: null, reason: "no-size-variation" }`.
-// - A shift can only be flagged when BOTH the current and the comparison
-//   (history) classification succeeded; compared against only pre-v2 history
-//   (no `inputs` recorded at all) or a group appearing for the first time,
-//   `detectComplexityShift` reports `shifted: false` -- there is nothing to
-//   diff against, not a claim that nothing changed.
+// Known limit: constant against logarithmic, and linear against linearithmic, are the closest anchors. They
+// are the least reliable to tell apart on a bounded ladder. The kit's `agreement` calls neighbouring classes
+// "close" for that reason, and only two or more classes apart fails the complexity gate.
 
 /** In size order, cheapest ("constant") to worst ("cubic-or-worse"). */
 export const COMPLEXITY_CLASSES = Object.freeze([

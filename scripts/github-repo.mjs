@@ -1,7 +1,13 @@
-// Parses `git remote get-url origin` into a GitHub `{ owner, repo }` pair.
-// Shared by scripts/check-branch-protection.mjs and bin/scaffold.mjs -- neither
-// this package nor repo-contract had this logic before either needed to talk
-// to `gh api repos/{owner}/{repo}/...`.
+// What this package knows about a consumer's GitHub repository, shared so every reader and writer of a
+// ruleset agrees: which `{ owner, repo }` the `origin` remote names (ssh or https), which ruleset covers
+// the default branch, which rules and status checks a default branch must require, and how to add what is
+// missing without loosening anything present.
+//
+// The owner/repo pair is read by scripts/check-branch-protection.mjs, scripts/code-scanning-alerts.mjs
+// and checks/socket-guidance.ts; checks/branch-protection.ts takes the required `contract` context from
+// here; `init --github` (bin/scaffold.mjs) writes the ruleset with the same rules. The required status
+// checks are pinned to GitHub Actions' app id, so a check of the same name from another app cannot
+// satisfy the rule.
 
 import { sync as spawnSync } from "cross-spawn"
 

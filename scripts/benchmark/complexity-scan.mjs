@@ -1,7 +1,13 @@
-// Finds every complexity gain in a repository: for each benchmark suite (`benchmarks/<suite>/results.json`),
-// the current results (this machine's run when it has one, else the committed ones) are compared with the results committed at the last release tag. The release is the
-// fixed point, so a series of small increases cannot ratchet the baseline upward unnoticed, and what ships is
-// what a human has accepted.
+// What `BenchmarkComplexity` reads from a repository before judging it.
+//
+// Each suite under `benchmarks/` that has results is compared with the `results.json` committed at the last
+// release tag (`git describe --tags --match 'v[0-9]*'`). The current results are a local run under
+// `.benchmark-local/<suite>/` when there is one, else the committed file (results-location.mjs). The release
+// is the fixed point, so a series of small increases cannot move the baseline unnoticed.
+//
+// States: `none` (no suite has results), `no-baseline` (no release tag yet), `compared`. A suite that did not
+// exist at the tag is skipped. Groups whose big-O could not be determined are listed separately with the
+// reason, so the check can warn about them without failing.
 
 import { spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"

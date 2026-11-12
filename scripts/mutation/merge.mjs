@@ -1,6 +1,6 @@
-// Puts the reports of a sharded mutation run back together (see ./shard.mjs): the report an unsharded run would
-// have written, or nothing at all. A missing, repeated or unreadable shard is a failure, never a smaller report that
-// looks complete.
+// Puts the reports of a sharded mutation run back together (./shard.mjs) into the report an unsharded run would
+// have written. A missing, repeated, unreadable or malformed shard report is refused with exit code 1, never
+// merged into a smaller report that looks complete; a wrong command line exits 2.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

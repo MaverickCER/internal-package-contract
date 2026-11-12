@@ -7,7 +7,10 @@
 //   internal-package-contract sync --add <name>     start carrying a managed copy of shared code, and write it
 //
 // Nothing here runs at install time, nothing outside the managed list is touched, and a drifted file is
-// never overwritten without `--update`, so a deliberate customization is never lost by surprise.
+// never overwritten without `--update`, so a deliberate customization is never lost by surprise. A
+// workflow is written with the version of this package and the commit package-lock.json resolved; without
+// that commit a missing workflow is reported, not written, until `npm install` records one. A wrong
+// argument exits 2.
 
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
