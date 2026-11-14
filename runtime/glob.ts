@@ -39,8 +39,9 @@ export function globToRegExp(pattern: string): RegExp {
 
 /**
  * Whether a lint rule's `allow` list covers a file. ESLint gives a rule the file's absolute path, while a config
- * writes its patterns relative to the working directory (`src/cli/**`), so each pattern is tested against the path
- * as given and, when the file is inside `cwd`, against the path from there, written with `/` on every platform.
+ * writes its patterns relative to the working directory (`src/cli/**`). So each pattern is tested against the path
+ * as given. When the file is inside `cwd`, it is also tested against the path from there, written with `/` on
+ * every platform.
  * (`split`/`join`, not `replaceAll`: a package that carries this copy may compile for ES2020.)
  * @param patterns - the rule's `allow` globs.
  * @param filename - the file as ESLint names it (`context.filename`).

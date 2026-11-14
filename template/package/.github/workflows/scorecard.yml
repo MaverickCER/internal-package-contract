@@ -1,6 +1,6 @@
 # Publishes this package's OpenSSF Scorecard result, which the README badge reads. The ScorecardWorkflow
-# check requires it. Scorecard rejects a publishing workflow with top-level env or defaults and limits the
-# job to a few trusted actions, so keep it as it is.
+# check requires it. Scorecard rejects a publishing workflow with top-level env or defaults. It also limits
+# the job to a few trusted actions, so keep it as it is.
 name: Scorecard
 
 on:

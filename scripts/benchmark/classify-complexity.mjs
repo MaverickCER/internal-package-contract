@@ -33,7 +33,7 @@ export const COMPLEXITY_CLASSES = Object.freeze([
  * The exponent `p` such that `medianMs ~ size^p` a "clean" example of each
  * class would produce. `linearithmic`'s 1.2 (rather than n*log(n)'s
  * theoretical non-power-law shape) is a deliberately chosen representative
- * value for typical benchmark tier ratios (5x-20x) -- see the module
+ * value for typical benchmark tier ratios (5x-20x): see the module
  * comment's "linear vs linearithmic" limitation. `cubic-or-worse`'s 3
  * is an anchor, not a ceiling: nearest-anchor classification means anything
  * with `p` past the quadratic/cubic midpoint (2.5) snaps here
@@ -49,9 +49,9 @@ const CLASS_ANCHORS = Object.freeze([
 ])
 
 /**
- * Sum of every finite numeric value in an `inputs` object -- deliberately
+ * Sum of every finite numeric value in an `inputs` object. It is deliberately
  * generic over its keys (never `inputs.variables` or `inputs.itemCount`
- * specifically), per data-cap's own "two independent axes" design: whatever
+ * specifically), per data-cap's own "two independent axes" design. Whatever
  * axis a given group actually varies along, its total is still a single
  * comparable scalar this way. Returns `undefined` for a missing/non-object
  * `inputs`, or one with no finite-numeric values at all.
@@ -66,10 +66,10 @@ export function inputTotal(inputs) {
 
 /**
  * Builds a size-ordered series from a group's `{ tierName: { medianMs,
- * inputs? } }` measurements (the shape shared by a normalized results.json
- * -- see lib/results.mjs's `resultsToMeasurements` -- and a history entry's
+ * inputs? } }` measurements (the shape shared by a normalized results.json:
+ * see lib/results.mjs's `resultsToMeasurements`; and a history entry's
  * own `measurements[group]`). Excludes any tier lacking a usable `inputs`
- * total, a positive size, or a positive finite `medianMs` -- see the module
+ * total, a positive size, or a positive finite `medianMs`: see the module
  * comment's "insufficient-data" / "no-size-variation" limitations for what
  * happens once too few points remain.
  */
@@ -108,7 +108,7 @@ export function discardedTiers(tiers) {
  * Least-squares slope of ln(medianMs) against ln(size) across `series`
  * (already filtered to positive size/medianMs by `buildSizeSeries`). Returns
  * `null` when fewer than 2 points are given, or when every point shares the
- * same size (zero variance on the x-axis -- the slope is undefined, not
+ * same size (zero variance on the x-axis: the slope is undefined, not
  * infinite or zero). For exactly 2 points this is algebraically identical to
  * the single pairwise ratio `ln(T2/T1) / ln(N2/N1)`.
  */
@@ -142,7 +142,7 @@ export const FIT_WINDOW = 5
 export const MIN_R_SQUARED = 0.8
 
 /**
- * A ratio between the slowest and fastest tier below which the group is simply flat: with that little
+ * A ratio between the slowest and fastest tier below which the group is flat. With that little
  * movement, noise rather than growth dominates the fit and R-squared is meaningless.
  */
 const FLAT_RATIO = 1.5
@@ -173,11 +173,11 @@ export function fitGrowth(series) {
 /**
  * Nearest-anchor snap of a growth exponent to one of COMPLEXITY_CLASSES.
  * CLASS_ANCHORS is ascending, and ties are broken toward the FIRST (lower,
- * simpler) anchor found at the minimum distance -- an exact midpoint between
+ * simpler) anchor found at the minimum distance. An exact midpoint between
  * two classes snaps to the cheaper one, so this classifier is conservative
  * about alarming a caller with a scarier label than the data strictly
- * supports (a strict `<` comparison below, not `<=`, is what keeps the
- * earlier/lower anchor as the incumbent on a tie).
+ * supports. A strict `<` comparison below, not `<=`, is what keeps the
+ * earlier/lower anchor as the incumbent on a tie.
  */
 export function snapExponentToClass(exponent) {
   const distance = (anchor) => Math.abs(exponent - anchor.exponent)
@@ -188,7 +188,7 @@ export function snapExponentToClass(exponent) {
 /**
  * Full classification of one group's tier measurements: builds the series,
  * estimates the exponent, and snaps it to a class. `points` in the result is
- * how many tiers actually survived filtering -- useful for a caller that
+ * how many tiers actually survived filtering: useful for a caller that
  * wants to show its confidence (2 points is the bare minimum; more is
  * better).
  */
@@ -238,8 +238,8 @@ export function classifyGroup(tiers) {
 
 /**
  * How far the fitted exponent must move, in addition to the class changing, before a shift is reported.
- * Classes are anchors on a line (0, 0.3, 1, 1.2, 2, 3), and a group whose exponent sits near the midpoint
- * of two of them changes label on a shift of a few hundredths: measured on real CI runs, an exponent of
+ * Classes are anchors on a line (0, 0.3, 1, 1.2, 2, 3). A group whose exponent sits near the midpoint
+ * of two of them changes label on a shift of a few hundredths. Measured on real CI runs, an exponent of
  * 1.13 became 1.03 (`linearithmic` to `linear`) with nothing but run-to-run noise. A real change of
  * algorithm moves the exponent by about a whole class gap (linear to quadratic is ~1.0), so requiring 0.25
  * keeps those and drops the label flips that are only noise at a boundary.
@@ -254,7 +254,7 @@ export function movedByMargin(previousExponent, currentExponent) {
 /**
  * Diffs a group's previous (history) vs current (fresh run) tier
  * measurements. `shifted` is true only when BOTH classifications succeeded
- * AND they disagree by at least {@link SHIFT_MARGIN} of exponent -- see the module comment's "known limitations" for why
+ * AND they disagree by at least {@link SHIFT_MARGIN} of exponent: see the module comment's "known limitations" for why
  * a `null` on either side never counts as a shift.
  */
 export function detectComplexityShift(previousTiers, currentTiers) {

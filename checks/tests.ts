@@ -66,7 +66,7 @@ export interface SkippedTestsRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * `skipped-test:<file>` -- one record covers every skipped or todo test in a file, because a file
+ * `skipped-test:<file>`: one record covers every skipped or todo test in a file, because a file
  * usually skips as a unit (`describe.skipIf(!installed)`), for one reason.
  * @param file - repo-relative, forward-slash test file path.
  * @returns the record id.
@@ -188,12 +188,12 @@ async function judgeSkips(report: VitestReport, passRationale: string): Promise<
     const record = records.get(id)
     const what = `${String(counts.skipped)} skipped${counts.todo > 0 ? `, ${String(counts.todo)} todo` : ""}`
     if (record === undefined) {
-      unexplained.push(`- ${file}: ${what} -- add ${id} to ${SKIPPED_REGISTRY_RELATIVE_PATH}`)
+      unexplained.push(`- ${file}: ${what}; add ${id} to ${SKIPPED_REGISTRY_RELATIVE_PATH}`)
       continue
     }
     const missing = incompleteFields(record, now)
     if (missing.length > 0) {
-      unexplained.push(`- ${file}: ${what} -- ${id} is incomplete (missing: ${missing.join(", ")})`)
+      unexplained.push(`- ${file}: ${what}; ${id} is incomplete (missing: ${missing.join(", ")})`)
     }
   }
   const totalSkipped = [...skips.values()].reduce((sum, c) => sum + c.skipped + c.todo, 0)

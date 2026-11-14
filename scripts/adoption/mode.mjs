@@ -1,8 +1,8 @@
 // Adoption mode: a package that is moving to this standard starts with every check reporting its errors
 // but only the promoted ones deciding the exit code, and promotes checks one at a time.
 //
-// Adopting a package at once is rarely possible: the first run finds Lint, Coverage, Docs and Security
-// issues that have been there for a long time, and failing the build on all of them on day one makes
+// Adopting a package at once is rarely possible. The first run finds Lint, Coverage, Docs and Security
+// issues that have been there for a long time. Failing the build on all of them on day one makes
 // people turn the standard off. `.repo-contract/adoption.json` says the package is adopting. While it is
 // active a failing check is still reported as a failure, with its full reason, but only the checks listed
 // under `enforce` decide the exit code; `AdoptionMode` itself always does. The policies are not softened,

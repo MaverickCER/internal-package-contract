@@ -85,7 +85,7 @@ describe("validateExceptionRegistry", () => {
     expect(result).toEqual({
       ok: false,
       errors: [
-        'exceptions[0] has unrecognized field(s) "extra" -- only "id", "version", "justification", "name" are permitted.',
+        'exceptions[0] has unrecognized field(s) "extra"; only "id", "version", "justification", "name" are permitted.',
       ],
     })
   })
@@ -269,7 +269,7 @@ describe("validateExceptionRegistry", () => {
     expect(result).toEqual({
       ok: false,
       errors: [
-        'exceptions[0] has unrecognized field(s) "extra" -- only "id", "version", "justification", "name" are permitted.',
+        'exceptions[0] has unrecognized field(s) "extra"; only "id", "version", "justification", "name" are permitted.',
       ],
     })
   })

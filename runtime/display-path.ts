@@ -22,7 +22,7 @@ import path from "node:path"
  *   helpers that call this again. Resolving a relative path against `process.cwd()` first, which is what
  *   `path.relative` does on its own, silently gives a wrong answer whenever the working directory is not `root`.
  * - An absolute path that would need to climb outside `root` is returned unchanged, never rewritten into a
- *   `../` escape: a file discovered in another package legitimately lives outside `root`, and its absolute path
+ *   `../` escape. A file discovered in another package legitimately lives outside `root`, and its absolute path
  *   is the only unambiguous thing to say about it.
  * @param root - The directory paths are published relative to.
  * @param filePath - An absolute path, or one already relative to `root`.

@@ -240,15 +240,15 @@ describe("renderMarkdown()", () => {
         "",
         "### WARN",
         "",
-        "- **Docs** -- first",
+        "- **Docs**: first",
         "",
         "### NOT EVALUATED (accepted)",
         "",
-        "- **Links** -- offline",
+        "- **Links**: offline",
         "",
         "### SKIPPED",
         "",
-        "- **Socket** -- quota",
+        "- **Socket**: quota",
         "",
         "### Exceptions in force",
         "",
@@ -310,7 +310,7 @@ describe("renderMarkdown()", () => {
         { id: "B", klass: "warn", rationale: "\nsecond" },
       ]),
     )
-    expect(markdown).toContain("- **A** -- \n- **B** -- \n")
+    expect(markdown).toContain("- **A**: \n- **B**: \n")
   })
 
   it("shows the exceptions section only when there are records, and the slowest only when something took time", () => {

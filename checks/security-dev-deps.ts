@@ -91,7 +91,7 @@ export function securityDevDeps(): CheckDefinitionConfig {
         return {
           outcome: "fail",
           rationale: [
-            `Dev dependency audit: ${String(blocking.length)} critical advisory(ies) in development tooling that runs in CI -- update the dependency or pin a fixed version with an \`overrides\` entry:`,
+            `Dev dependency audit: ${String(blocking.length)} critical advisory(ies) in development tooling that runs in CI; update the dependency or pin a fixed version with an \`overrides\` entry:`,
             ...blocking.map(
               (finding) => `- ${finding.name} [${finding.severity}] ${finding.range}`,
             ),

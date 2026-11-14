@@ -66,7 +66,7 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
         return degraded({
           check: "Commits",
           code: "no-base",
-          rationale: `Commits: could not resolve \`${from}..HEAD\` -- nothing to lint (fresh repo or missing base branch). Fetch \`${from}\` in CI to enable this check.`,
+          rationale: `Commits: could not resolve \`${from}..HEAD\`, so there is nothing to lint (fresh repo or missing base branch). Fetch \`${from}\` in CI to enable this check.`,
         })
       }
 
@@ -77,7 +77,7 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
       // Stryker disable next-line ArrayDeclaration: an equivalent mutant -- `String.prototype
       // .match` with a global regex returns `null` (never `undefined`) on zero matches, so this
       // `?? []` fallback IS reachable, but Stryker's own injected replacement is always a
-      // single-element array (`.length` 1), and `PRE_ADOPTION_THRESHOLD` is 8 -- no input can ever
+      // single-element array (`.length` 1), and `PRE_ADOPTION_THRESHOLD` is 8: no input can ever
       // make a 0-vs-1 difference cross that threshold, and `failingCommits`' exact value is never
       // read anywhere else. Hand-verified: forcing the fallback to a 1-element array leaves every
       // test in commits.test.ts passing unchanged.
@@ -87,7 +87,7 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
           check: "Commits",
           code: "pre-adoption",
           rationale: [
-            `Commits: ${String(failingCommits)} commits in \`${from}..HEAD\` are not Conventional Commits -- this looks like history that predates the standard, not a regression.`,
+            `Commits: ${String(failingCommits)} commits in \`${from}..HEAD\` are not Conventional Commits; this looks like history that predates the standard, not a regression.`,
             "Resolve it as a git-history operation before merge:",
             `  - squash-merge the branch (one conforming message), or`,
             `  - \`git rebase -i ${from}\` and \`reword\` each with a \`type: subject\` header.`,

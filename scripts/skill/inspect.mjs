@@ -4,10 +4,10 @@
 // with what is under skills/<name>/. `state: "none"` means there is no docs/skill.json. `"invalid"` lists the
 // problems that stop rendering:
 //
-//   - a field of the wrong shape, or a budget outside its range;
-//   - a `when` too long to scan, or a table cell that would be cut;
-//   - a reference or example file not in the package;
-//   - example lines out of range, or too many of them.
+//   - A field of the wrong shape, or a budget outside its range.
+//   - A `when` too long to scan, or a table cell that would be cut.
+//   - A reference or example file not in the package.
+//   - Example lines out of range, or too many of them.
 //
 // A manual over its word budget (front matter not counted) is also a problem. `stale` names the files whose
 // text is not what would be written now. Notes (no example, no rules) fail nothing.

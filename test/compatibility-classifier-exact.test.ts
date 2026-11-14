@@ -277,7 +277,7 @@ describe("metadata", () => {
       kind: "generic-parameter-changed",
       compatibility: "unknown",
       explanation:
-        "x's type parameters changed from [T] to [T, U] -- generic parameter changes are not safely classified automatically.",
+        "x's type parameters changed from [T] to [T, U]; generic parameter changes are not safely classified automatically.",
     })
     expect(
       only(
@@ -286,7 +286,7 @@ describe("metadata", () => {
           [{ ...base, typeParameterNames: ["T"] }],
         ),
       ).explanation,
-    ).toContain("from [T, U] to [T] --")
+    ).toContain("from [T, U] to [T];")
     expect(only(classify([base], [{ ...base, typeParameterNames: ["T"] }])).explanation).toContain(
       "from [] to [T]",
     )
@@ -303,7 +303,7 @@ describe("metadata", () => {
       kind: "heritage-changed",
       compatibility: "unknown",
       explanation:
-        "x's extends/implements clause changed -- inheritance changes are not safely classified automatically.",
+        "x's extends/implements clause changed; inheritance changes are not safely classified automatically.",
     }
     expect(
       only(

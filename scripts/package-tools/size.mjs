@@ -59,7 +59,7 @@ export async function run(argv, cwd, io) {
   let failed = false
   for (const { label, file, gzipBytes, maxGzipBytes } of entries) {
     if (gzipBytes === null) {
-      io.err(`[size] ${file} does not exist -- build the package first.\n`)
+      io.err(`[size] ${file} does not exist; build the package first.\n`)
       failed = true
       continue
     }

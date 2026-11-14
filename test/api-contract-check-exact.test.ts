@@ -15,6 +15,7 @@ import { loadApiModel } from "../scripts/api-contract/extractor-adapter.js"
 import { buildItemIndex, buildReferenceIndex } from "../scripts/api-contract/type-assignability.js"
 import { getApiExtractorVersion } from "../scripts/api-contract/extractor-adapter.js"
 import { summarizeChanges } from "../scripts/api-contract/summarize-changes.js"
+import { runUpdateBaseline } from "../scripts/api-contract/update-baseline.js"
 
 const tsc = path.join(
   path.dirname(createRequire(import.meta.url).resolve("typescript/package.json")),
@@ -277,7 +278,7 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
     rmSync(path.join(fx.root, ".changeset"), { recursive: true, force: true })
   })
 
-  it("counts a package version that has already reached the required minimum, with no changeset left", async () => {
+  it("never counts a version bump as the declaration, and names every baseline the version left behind", async () => {
     fx.setSources(replace(INDEX, "/** @public */\nexport function gone(): void {}\n", ""))
     const packageJsonPath = path.join(fx.root, "package.json")
     const original = readFileSync(packageJsonPath, "utf8")
@@ -287,17 +288,18 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
         original.replace('"version":"1.2.0"', `"version":"${version}"`),
       )
     try {
-      expect((await fx.run()).minimumRequiredVersion).toBe("2.0.0")
-      expect((await fx.run()).changesets.satisfied).toBe(false)
-
-      withVersion("1.9.9")
-      expect((await fx.run()).changesets.satisfied).toBe(false)
+      const atBaseline = await fx.run()
+      expect(atBaseline.minimumRequiredVersion).toBe("2.0.0")
+      expect(atBaseline.changesets.satisfied).toBe(false)
+      expect(atBaseline.staleBaselines).toEqual([])
 
       withVersion("2.0.0")
-      expect((await fx.run()).changesets.satisfied).toBe(true)
+      const bumped = await fx.run()
+      expect(bumped.changesets.satisfied).toBe(false)
+      expect(bumped.staleBaselines).toEqual(["index@1.2.0"])
 
-      withVersion("2.4.1")
-      expect((await fx.run()).changesets.satisfied).toBe(true)
+      withVersion("1.1.0")
+      expect((await fx.run()).staleBaselines).toEqual(["index@1.2.0"])
     } finally {
       writeFileSync(packageJsonPath, original)
     }
@@ -412,6 +414,23 @@ describe("one target at 1.2.0", { timeout: 180_000 }, () => {
     expect(JSON.parse(cli("--release-tag=beta"))).toEqual(
       JSON.parse(JSON.stringify(await fx.run("beta"))),
     )
+  })
+})
+
+describe("a branch that rewrote its baseline without a release", { timeout: 180_000 }, () => {
+  it("names the rewritten baseline, judged against the merge base with the base branch", async () => {
+    const fx = await repo("1.2.0", false)
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: fx.root, stdio: "ignore" })
+    // The guard reads origin/$GITHUB_BASE_REF (origin/main without it), so the fixture's base follows CI.
+    git("update-ref", `refs/remotes/origin/${process.env["GITHUB_BASE_REF"] || "main"}`, "HEAD")
+    git("checkout", "-q", "-b", "feature")
+    fx.setSources(`${INDEX}/** @public */\nexport function added(): void {}\n`)
+    await runUpdateBaseline(fx.root)
+    git("add", "-A")
+    git("commit", "-q", "-m", "rewrite the baseline at the same version")
+    expect((await fx.run()).editedBaselines).toEqual([
+      ".repo-contract/api-contract/index/baseline.api.json",
+    ])
   })
 })
 

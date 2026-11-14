@@ -114,7 +114,7 @@ function main() {
     return emit({
       ok: false,
       message:
-        "no GH_TOKEN in CI -- add `permissions: security-events: read` and `GH_TOKEN: ${{ github.token }}` to the contract job",
+        "no GH_TOKEN in CI; add `permissions: security-events: read` and `GH_TOKEN: ${{ github.token }}` to the contract job",
       data: { kind: "no-token" },
     })
   }
@@ -147,7 +147,7 @@ function main() {
   } else if (!exhausted) {
     emit({
       ok: false,
-      message: `more than ${String(MAX_PAGES * PAGE_SIZE)} open alerts -- refusing to judge a truncated list`,
+      message: `more than ${String(MAX_PAGES * PAGE_SIZE)} open alerts; refusing to judge a truncated list`,
       data: { kind: "truncated" },
     })
   } else {

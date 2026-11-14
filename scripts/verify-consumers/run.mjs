@@ -112,9 +112,9 @@ export function satisfies(version, range) {
 }
 
 /**
- * What an install of the standard would put next to its own copy rather than share with the checkout: the packages
- * the standard depends on that the checkout has not installed, or has installed at a version that does not satisfy what
- * the standard asks for.
+ * What an install of the standard would put next to its own copy rather than share with the checkout. These are the
+ * packages the standard depends on that the checkout has not installed, or has installed at a version that does not
+ * satisfy what the standard asks for.
  * @param {string} standard - the standard's checkout.
  * @param {string} consumer - the consumer's checkout.
  * @returns {{ name: string, wanted: string, installed: string | undefined }[]}

@@ -1,10 +1,10 @@
-// Hand-authored type declarations for classify-complexity.mjs -- this
+// Hand-authored type declarations for classify-complexity.mjs. This
 // package's own `Typecheck` check (`tsc --noEmit -p tsconfig.self.json`,
 // see repo-contract.config.ts) requires every `.ts` file it type-checks
 // (including test/**/*.test.ts, which imports this module directly for
-// thorough unit coverage) to resolve a declaration for every import; without
-// `allowJs` enabled repo-wide, a sibling `.d.mts` is the narrowly-scoped fix
-// -- NodeNext module resolution matches a `.mjs` source file to a `.d.mts`
+// thorough unit coverage) to resolve a declaration for every import. Without
+// `allowJs` enabled repo-wide, a sibling `.d.mts` is the narrowly-scoped fix:
+// NodeNext module resolution matches a `.mjs` source file to a `.d.mts`
 // declaration of the exact same basename.
 
 export interface SizeSeriesPoint {

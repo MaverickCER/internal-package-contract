@@ -4,7 +4,7 @@ import { dependencyRegion } from "../scripts/generate/dependencies.mjs"
 /**
  * The "dependencies" region states what installing the package adds, from `package.json` itself, so a
  * document can no longer say "zero dependencies" or "bundles a compiler" when `package.json` says otherwise.
- * What only a person can say -- why each one is there -- lives once, in `docs/surface.json`.
+ * What only a person can say (why each one is there) lives once, in `docs/surface.json`.
  */
 describe("dependencyRegion", () => {
   it("says the package installs nothing else when it declares no dependencies of any kind", () => {

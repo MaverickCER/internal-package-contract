@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { run, runCommand } from "../scripts/upgrade/run.mjs"
+import { keepsSkill, run, runCommand } from "../scripts/upgrade/run.mjs"
 
 const SHA = "a".repeat(40)
 let dir: string
@@ -86,6 +86,8 @@ describe("upgrade", () => {
     project()
     mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })
     write("docs/site.json", "{}")
+    write("docs/skill.json", "{}")
+    write("ci/env.schema.ts", "export {}\n")
     mkdirSync(path.join(dir, "benchmarks"))
     const h = harness()
     expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(0)
@@ -94,6 +96,9 @@ describe("upgrade", () => {
         "[upgrade] install internal-package-contract v0.12.0",
         "[upgrade] re-pin the workflows that call its reusable workflows",
         "[upgrade] bring the managed files up to date",
+        "[upgrade] regenerate the generated regions",
+        "[upgrade] regenerate the agent skill",
+        "[upgrade] regenerate docs/ENVIRONMENT.md",
         "[upgrade] regenerate the landing page",
         "[upgrade] copy the benchmark guides",
         "[upgrade] done. Review the changes, add a changeset, run the contract, and commit.",
@@ -125,9 +130,14 @@ describe("upgrade", () => {
     project()
     mkdirSync(path.join(dir, ".github"))
     mkdirSync(path.join(dir, "docs"))
+    mkdirSync(path.join(dir, "ci"))
     const h = harness()
     expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(0)
-    expect(h.calls.map((call) => call[1])).toEqual(["install", bin])
+    expect(h.calls.map((call) => call.slice(1, 3))).toEqual([
+      ["install", "--save-dev"],
+      [bin, "sync"],
+      [bin, "generate"],
+    ])
   })
   it("reads a github: dependency only from the start of the spec, and a lockfile that lacks the entry", () => {
     project("npm:github:O/r#v1.0.0")
@@ -142,7 +152,7 @@ describe("upgrade", () => {
       write("package-lock.json", JSON.stringify(lock))
       const quiet = harness()
       expect(run(["v0.12.0"], dir, quiet.io, { spawn: quiet.spawn })).toBe(0)
-      expect(quiet.calls.map((call) => call[1])).toEqual(["install", bin])
+      expect(quiet.calls.map((call) => call[1])).toEqual(["install", bin, bin])
     }
   })
   it("refuses a dependency that is not a github: one", () => {
@@ -184,15 +194,18 @@ describe("upgrade", () => {
         "internal-package-contract@github:MaverickCER/internal-package-contract#v0.12.0",
       ],
       ["node", bin, "sync", "--apply", "--update"],
+      ["node", bin, "generate"],
     ])
     expect(h.out.join("")).toBe(
-      "[upgrade] install internal-package-contract v0.12.0\n[upgrade] bring the managed files up to date\n[upgrade] done. Review the changes, add a changeset, run the contract, and commit.\n",
+      "[upgrade] install internal-package-contract v0.12.0\n[upgrade] bring the managed files up to date\n[upgrade] regenerate the generated regions\n[upgrade] done. Review the changes, add a changeset, run the contract, and commit.\n",
     )
   })
-  it("also re-pins workflows, regenerates the site and copies the guides when the package has them", () => {
+  it("also re-pins workflows, regenerates the skill, the environment catalog and the site, and copies the guides when the package has them", () => {
     project()
     mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })
     write("docs/site.json", "{}")
+    write("docs/skill.json", "{}")
+    write("ci/env.schema.ts", "export {}\n")
     mkdirSync(path.join(dir, "benchmarks"))
     const h = harness()
     expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(0)
@@ -205,6 +218,9 @@ describe("upgrade", () => {
         "v0.12.0",
       ],
       ["node", bin, "sync", "--apply", "--update"],
+      ["node", bin, "generate"],
+      ["node", bin, "skill"],
+      ["node", bin, "env"],
       ["node", bin, "site"],
       ["node", bin, "sync-benchmark-guides"],
     ])
@@ -215,7 +231,39 @@ describe("upgrade", () => {
     mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })
     const h = harness()
     expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(0)
-    expect(h.calls.map((call) => call[1])).toEqual(["install", bin])
+    expect(h.calls.map((call) => call[1])).toEqual(["install", bin, bin])
+  })
+  it("regenerates the agent skill when package.json turns on AgentSkill, even without docs/skill.json", () => {
+    project()
+    write(
+      "package.json",
+      JSON.stringify({
+        devDependencies: {
+          "internal-package-contract": "github:MaverickCER/internal-package-contract#v0.11.0",
+        },
+        "internal-package-contract": { checks: ["AmbientCapabilities", "AgentSkill"] },
+      }),
+    )
+    const h = harness()
+    expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(0)
+    expect(h.calls.slice(1).map((call) => call[2])).toEqual(["sync", "generate", "skill"])
+  })
+  it("never refreshes the API or surface baselines: they follow the package's own releases", () => {
+    project()
+    mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })
+    write("docs/skill.json", "{}")
+    write("ci/env.schema.ts", "export {}\n")
+    const h = harness()
+    run(["v0.12.0"], dir, h.io, { spawn: h.spawn })
+    expect(h.calls.flat()).not.toContain("update-baseline")
+  })
+  it("stops at a failing regeneration like any other step", () => {
+    project()
+    write("ci/env.schema.ts", "export {}\n")
+    const h = harness(0, "generate")
+    expect(run(["v0.12.0"], dir, h.io, { spawn: h.spawn })).toBe(1)
+    expect(h.calls.slice(1).map((call) => call[2])).toEqual(["sync", "generate"])
+    expect(h.err.join("")).toContain('"regenerate the generated regions" failed')
   })
   it("stops at the first step that fails and says how to undo it", () => {
     project()
@@ -280,5 +328,27 @@ describe("runCommand", () => {
     ).toBeNull()
     expect(runCommand("x", [], dir, () => ({ status: 1, error: null }))).toBe(1)
     expect(runCommand("x", [], dir, () => ({ status: 3 }))).toBe(3)
+  })
+})
+
+describe("keepsSkill", () => {
+  it("is true for docs/skill.json or an AgentSkill entry, and false otherwise", () => {
+    write("package.json", JSON.stringify({ name: "demo" }))
+    expect(keepsSkill(dir)).toBe(false)
+    write("package.json", JSON.stringify({ "internal-package-contract": { checks: "AgentSkill" } }))
+    expect(keepsSkill(dir)).toBe(false)
+    write(
+      "package.json",
+      JSON.stringify({ "internal-package-contract": { checks: ["AmbientCapabilities"] } }),
+    )
+    expect(keepsSkill(dir)).toBe(false)
+    write(
+      "package.json",
+      JSON.stringify({ "internal-package-contract": { checks: ["AgentSkill"] } }),
+    )
+    expect(keepsSkill(dir)).toBe(true)
+    write("package.json", JSON.stringify({ name: "demo" }))
+    write("docs/skill.json", "{}")
+    expect(keepsSkill(dir)).toBe(true)
   })
 })

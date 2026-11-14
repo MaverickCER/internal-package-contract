@@ -186,7 +186,7 @@ describe("securityDevDeps()", () => {
     expect(onlyCritical).toEqual({
       outcome: "fail",
       rationale: [
-        "Dev dependency audit: 2 critical advisory(ies) in development tooling that runs in CI -- update the dependency or pin a fixed version with an `overrides` entry:",
+        "Dev dependency audit: 2 critical advisory(ies) in development tooling that runs in CI; update the dependency or pin a fixed version with an `overrides` entry:",
         "- a [critical] *",
         "- b [critical] <3",
       ].join("\n"),
@@ -200,7 +200,7 @@ describe("securityDevDeps()", () => {
     )
     expect(mixed.outcome).toBe("fail")
     expect(mixed.rationale?.split("\n")).toEqual([
-      "Dev dependency audit: 1 critical advisory(ies) in development tooling that runs in CI -- update the dependency or pin a fixed version with an `overrides` entry:",
+      "Dev dependency audit: 1 critical advisory(ies) in development tooling that runs in CI; update the dependency or pin a fixed version with an `overrides` entry:",
       "- a [critical] *",
       "Plus 2 lower-severity advisory(ies).",
     ])

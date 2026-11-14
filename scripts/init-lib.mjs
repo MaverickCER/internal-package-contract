@@ -8,7 +8,7 @@ import path from "node:path"
 /**
  * Placeholders a template may use: `{{name}}`, `{{repo}}`, `{{owner}}`, `{{description}}`, `{{year}}`,
  * and the two pins of this package: `{{ipcRef}}` (the release tag, e.g. `v0.8.1`) and `{{ipcSha}}`
- * (the commit that tag points at -- what a workflow `uses:` line is pinned to).
+ * (the commit that tag points at: what a workflow `uses:` line is pinned to).
  */
 const PLACEHOLDER = /\{\{(name|repo|owner|ownerLower|description|year|ipcRef|ipcSha)\}\}/g
 

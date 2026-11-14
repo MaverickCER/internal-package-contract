@@ -4,27 +4,24 @@ import * as ts from "typescript"
 import path from "node:path"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/type-assignability.ts` -- this engine now
- * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
- * devDependency rather than hosting a copy.
+ * Ported from repo-contract's `scripts/api-contract/type-assignability.ts`. The engine now lives
+ * only here (see the note in `checks/api-contract.ts`). repo-contract consumes it as a
+ * devDependency instead of hosting a copy.
  *
- * The TypeChecker probe engine. Builds an in-memory `ts.Program` (a custom `ts.CompilerHost`
- * layered over the default one only for lib-file resolution, no disk I/O for the baseline/current
- * declaration text itself) with two virtual declaration files -- baseline's integrity-checked
- * `.d.ts` rollup, current's freshly generated one -- and a synthetic probe file containing exactly
- * one assignment statement in the position-appropriate direction, then inspects the real compiler's
- * `getSemanticDiagnostics()` for a "not assignable" error. This is deliberately real TypeChecker
- * assignability, not a hand-rolled structural approximator or a type-string comparison.
+ * The TypeChecker probe engine. It builds an in-memory `ts.Program`. A custom `ts.CompilerHost`
+ * wraps the default one for lib files only; the declaration text never touches the disk. The
+ * program holds two virtual declaration files and a synthetic probe file. The two files are the
+ * baseline's integrity-checked `.d.ts` rollup and the current, freshly generated one. The probe
+ * file holds one assignment in the direction the position needs. The engine then reads the
+ * compiler's `getSemanticDiagnostics()` for a "not assignable" error. This is the real
+ * TypeChecker's assignability, not a structural approximation or a comparison of type strings.
  *
- * Because this reconstructs type text from excerpt tokens and re-checks it with a real compiler
- * rather than hand-parsing TypeScript syntax, it already correctly handles unions, intersections,
- * conditional types, mapped types, indexed-access types, function types, `keyof`, `typeof`, and
- * `infer` -- these are just `Content`-token syntax around zero or more `Reference` tokens, and the
- * real compiler understands all of them natively once reconstructed; no per-construct
- * special-casing is needed here. The genuinely hard part is never "can TypeScript check this," it's
- * faithfully reconstructing the exact contextual type expression from API Extractor's excerpt
- * tokens and resolving every one of its references -- when that can't be established, this module
- * returns `"unknown"` rather than guessing.
+ * The engine rebuilds type text from excerpt tokens and lets the compiler check it. It never parses
+ * TypeScript syntax itself. So unions, intersections, conditional, mapped and indexed-access types,
+ * function types, `keyof`, `typeof` and `infer` all work without special cases. Each is `Content`
+ * token syntax around zero or more `Reference` tokens. The hard part is rebuilding the exact
+ * contextual type expression from API Extractor's excerpt tokens and resolving every reference.
+ * When that fails, this module returns `"unknown"` instead of guessing.
  */
 
 export type AssignabilityDirection = "contravariant" | "covariant" | "invariant"
@@ -37,18 +34,20 @@ export interface AssignabilityContext {
   readonly currentRefIndex: ReadonlyMap<string, string>
   readonly oldExcerpt: Excerpt
   readonly newExcerpt: Excerpt
-  /** Type-parameter names in scope at this position (own + every ancestor container's) -- any excerpt referencing one of these is conservatively forced to "unknown" rather than unsoundly instantiated. */
+  /**
+   * Type-parameter names in scope at this position: its own and every ancestor container's. An
+   * excerpt that names one is forced to "unknown" rather than instantiated unsoundly.
+   */
   readonly freeTypeParameterNames: ReadonlySet<string>
 }
 
 /**
  * Maps every `ApiItem`'s canonical reference to the name it's exported under at the top level of
- * the package's rolled-up declarations -- built by walking the whole `ApiPackage` tree (not
- * filtered by release tag; a probe still needs to resolve a reference even if the containing
- * schema-version-consistency/classifier pass would otherwise trim it). Not
- * `ApiModel.resolveDeclarationReference()`, which resolves a parsed TSDoc link tag against a
- * contextual item -- the wrong input shape for "I already have an `ExcerptToken.canonicalReference`,
- * resolve it to a locally-importable name."
+ * the package's rolled-up declarations. It walks the whole `ApiPackage` tree, unfiltered by release
+ * tag: a probe must resolve a reference even when the classifier pass would trim its container.
+ * `ApiModel.resolveDeclarationReference()` does not fit: it resolves a parsed TSDoc link tag against
+ * a contextual item. Here the input is an `ExcerptToken.canonicalReference`, and the output is a
+ * locally importable name.
  * @param pkg - The API package (baseline's or current's) to walk.
  * @returns A map from every item's canonical reference string to the name it's imported under at the top level of that package's rolled-up declarations.
  */
@@ -72,9 +71,9 @@ export function buildReferenceIndex(pkg: ApiPackage): Map<string, string> {
 }
 
 /**
- * Maps every `ApiItem`'s canonical reference to the item itself -- used by check.ts's real
- * `resolveAssignability` bridge to look up the concrete `Excerpt`/type-parameter context a
- * `compatibility-classifier.ts` query refers to by canonical reference alone.
+ * Maps every `ApiItem`'s canonical reference to the item itself. The `resolveAssignability` bridge
+ * in check.ts uses it to find the `Excerpt` and type-parameter context behind a
+ * `compatibility-classifier.ts` query, which names only a canonical reference.
  * @param pkg - The API package (baseline's or current's) to walk.
  * @returns A map from every item's canonical reference string to the item itself.
  */
@@ -94,7 +93,7 @@ export function buildItemIndex(pkg: ApiPackage): Map<string, ApiItem> {
 }
 
 /**
- * Every type-parameter name visible at `item`'s position -- its own plus every ancestor container's.
+ * Every type-parameter name visible at `item`'s position: its own plus every ancestor container's.
  * @param item - The API item whose enclosing type-parameter scope is being computed.
  * @returns The set of type-parameter names in scope at `item`'s position.
  */
@@ -123,7 +122,7 @@ interface Reconstruction {
 
 /**
  * @param char - One character (or `""`, past either end of a string) to classify.
- * @returns Whether `char` is a "word" character (`[A-Za-z0-9_]`) -- the same class regex `\b` boundaries are defined against.
+ * @returns Whether `char` is a "word" character (`[A-Za-z0-9_]`): the same class regex `\b` boundaries are defined against.
  */
 /** @internal Exported for direct unit coverage. */
 export function isWordChar(char: string): boolean {
@@ -131,9 +130,9 @@ export function isWordChar(char: string): boolean {
 }
 
 /**
- * Whole-word substring search -- equivalent to testing `new RegExp(\`\\b${word}\\b\`)`, but as plain
- * string scanning rather than a dynamically constructed `RegExp`, which
- * `security/detect-non-literal-regexp` flags regardless of how thoroughly `word` is escaped first.
+ * Whole-word substring search, equivalent to `new RegExp(\`\\b${word}\\b\`)`. It scans the string
+ * instead because `security/detect-non-literal-regexp` flags a built `RegExp`, however well `word`
+ * is escaped.
  * @param haystack - The text to search.
  * @param word - The exact word to search for, matched only where it isn't adjacent to another word character.
  * @returns Whether `word` occurs in `haystack` as a whole word.
@@ -152,10 +151,10 @@ export function containsWholeWord(haystack: string, word: string): boolean {
 
 /**
  * Walks an excerpt's spanned tokens, copying `Content` tokens verbatim and substituting `Reference`
- * tokens with a synthesized locally-aliased import. Returns `undefined` -- the module's uniform
- * "can't safely probe" signal -- when a content token whole-word-matches a free type-parameter
- * name, or a reference token can't be resolved to an importable name (external package, or trimmed
- * by the release-tag threshold).
+ * tokens with a synthesized locally-aliased import. Returns `undefined`, the module's "can't safely
+ * probe" signal, in two cases. A content token whole-word-matches a free type-parameter name. Or a
+ * reference token has no importable name: it is in an external package, or the release-tag
+ * threshold trimmed it.
  * @param excerpt - The excerpt (a parameter type, return type, etc.) to reconstruct as standalone source text.
  * @param refIndex - The reference index (baseline's or current's, matching `snapshot`) used to resolve `Reference` tokens to importable names.
  * @param snapshot - Which side of the comparison `excerpt` came from; recorded on each generated import so the probe imports from the right virtual `.d.ts` file.
@@ -204,9 +203,9 @@ function normalizeVirtualPath(fileName: string): string {
 }
 
 /**
- * @param files - The in-memory virtual file map (path to source text) for the baseline `.d.ts`, current `.d.ts`, and synthetic probe file. A live reference -- later mutations (e.g. swapping in a new probe file's text) are visible to the returned host without rebuilding it.
+ * @param files - The in-memory virtual file map (path to source text) for the baseline `.d.ts`, current `.d.ts`, and synthetic probe file. A live reference: later mutations (e.g. swapping in a new probe file's text) are visible to the returned host without rebuilding it.
  * @param compilerOptions - The compiler options the resulting host's default (disk-backed) behavior falls back to for everything not in `files`, e.g. lib files.
- * @returns A `ts.CompilerHost` that resolves paths present in `files` from memory and delegates everything else to a standard disk-backed host. Reuses a previously parsed `ts.SourceFile` whenever a path is requested again with unchanged content -- letting `ts.createProgram`'s own `oldProgram` reuse skip re-parsing/re-binding the baseline/current `.d.ts` rollups on every probe, since only the synthetic probe file's content actually changes between probes.
+ * @returns A `ts.CompilerHost` that resolves paths present in `files` from memory and delegates everything else to a standard disk-backed host. Reuses a previously parsed `ts.SourceFile` whenever a path is requested again with unchanged content: letting `ts.createProgram`'s own `oldProgram` reuse skip re-parsing/re-binding the baseline/current `.d.ts` rollups on every probe, since only the synthetic probe file's content actually changes between probes.
  */
 function createVirtualCompilerHost(
   files: ReadonlyMap<string, string>,
@@ -240,17 +239,14 @@ function createVirtualCompilerHost(
 }
 
 /**
- * `probeAssignability` invokes the real TypeScript compiler once per assignability direction
- * checked (up to twice per `checkAssignability` call, itself called once per compared API item),
- * and every invocation shares the identical `compilerOptions` plus, within one `runApiContractCheck`
- * run, the identical `baselineDts`/`currentDts` text -- only the synthetic probe file's content
- * differs between calls. Rebuilding a `ts.CompilerHost` (which resolves and reads every lib file
- * from disk) and reparsing/rebinding both multi-file `.d.ts` rollups from scratch on every single
- * probe is the dominant cost of this module's hot path. This module-level cache -- keyed on the
- * `baselineDts`/`currentDts` pair actually passed in -- lets every probe within a run reuse the same
- * host (and, via `oldProgram`, the same already-bound baseline/current source files), rebuilding
- * only when a different `baselineDts`/`currentDts` pair is seen (a different run, or a test calling
- * this module against different fixtures in the same process).
+ * `probeAssignability` runs the TypeScript compiler once per direction checked. That is up to
+ * twice per `checkAssignability` call, and there is one call per compared API item. Every call
+ * shares `compilerOptions` and, within one `runApiContractCheck` run, the same `baselineDts` and
+ * `currentDts` text. Only the synthetic probe file changes. The hot path's main cost would be
+ * rebuilding the host, which reads every lib file from disk, and re-binding both rollups per probe.
+ * This module-level cache, keyed on the `baselineDts`/`currentDts` pair, lets every probe in a run
+ * reuse one host. Through `oldProgram` it also reuses the already-bound rollups. A different pair
+ * rebuilds it: a new run, or a test that switches fixtures in the same process.
  */
 interface ProbeHostCache {
   readonly baselineDts: string
@@ -260,11 +256,9 @@ interface ProbeHostCache {
   program: ts.Program | undefined
 }
 
-// A `const`-bound mutable ref, not a top-level `let` -- `.current` is still genuinely reassigned on
-// a cache miss, same mutable module-scoped state either way. Kept module-scoped rather than
-// threaded as an explicit parameter through checkAssignability/probeAssignability because both are
-// already-public, already-tested entry points that would all need a new required argument for a
-// purely internal perf optimization with no behavioral difference to any caller.
+// Module-scoped so `checkAssignability` and `probeAssignability`, both public and tested, keep
+// their signatures. The cache only saves time; no caller sees a difference. `.current` is
+// reassigned on a cache miss.
 const probeHostCacheRef: { current: ProbeHostCache | undefined } = { current: undefined }
 
 const PROBE_PATH = "/__probe__.ts"
@@ -340,22 +334,17 @@ function probeAssignability(input: {
   probeCache.program = program
   if (program.getSyntacticDiagnostics().length > 0) return "unknown"
 
-  // TypeScript reports an assignability failure under several different codes depending on the
-  // exact shape of the mismatch (2322 "not assignable", 2741/2739 "missing propert(y/ies)", etc.)
-  // -- there is no single fixed code to filter on. Instead, every diagnostic is classified by
-  // *position*: the assignment line (always the probe's last line, by construction) is exactly
-  // where a real assignability failure is reported; anywhere else (an unresolved import, a syntax
-  // problem in a reconstructed type alias) means the probe itself couldn't be trusted, not that
-  // the assignment specifically failed.
+  // TypeScript reports an assignability failure under several codes, by the shape of the mismatch
+  // (2322 "not assignable", 2741 and 2739 "missing property"). No single code can be filtered on.
+  // So every diagnostic is classified by *position*. A real assignability failure is reported on
+  // the assignment line, which is the probe's last line by construction. A diagnostic anywhere
+  // else, such as an unresolved import or a syntax problem in a rebuilt alias, means the probe
+  // cannot be trusted. It does not mean the assignment failed.
   //
-  // Counted from the actual probe text, not `preambleLines.length`: a
-  // reconstructed `fromText`/`toText` can itself span several physical lines
-  // (an inline object-literal type, a wrapped long union), which
-  // `preambleLines.length` (an element count) does not account for -- and a
-  // real "not assignable" diagnostic on the assignment line would then be
-  // misfiled as "elsewhere", downgrading a genuine breaking change to
-  // "unknown". `assignmentLine` has no newline of its own, so it is always
-  // the last physical line.
+  // Counted from the probe text, not `preambleLines.length`. A rebuilt `fromText` or `toText` can
+  // span several lines (an inline object type, a wrapped union), and an element count misses them.
+  // A real "not assignable" on the assignment line would then read as "elsewhere", turning a
+  // breaking change into "unknown". `assignmentLine` has no newline, so it is always the last line.
   const assignmentLineIndex = probeSource.split("\n").length - 1
   const semanticDiagnostics = program.getSemanticDiagnostics()
 
@@ -371,7 +360,7 @@ function probeAssignability(input: {
 
 /**
  * @param context - The baseline/current `.d.ts` rollups, their reference indexes, the old and new excerpts being compared, and the type-parameter names in scope.
- * @param direction - Which direction(s) assignability must hold for the position being checked -- `"contravariant"` (old must accept new, e.g. a parameter type), `"covariant"` (new must accept old, e.g. a return type), or `"invariant"` (both directions, e.g. an invariant generic position).
+ * @param direction - Which direction(s) assignability must hold for the position being checked: `"contravariant"` (old must accept new, e.g. a parameter type), `"covariant"` (new must accept old, e.g. a return type), or `"invariant"` (both directions, e.g. an invariant generic position).
  * @returns `"compatible"` if every required direction is assignable, the first non-`"compatible"` result (`"breaking"` or `"unknown"`) otherwise, and `"unknown"` if either excerpt couldn't be reconstructed.
  */
 export function checkAssignability(

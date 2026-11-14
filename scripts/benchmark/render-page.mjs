@@ -30,13 +30,13 @@ const copy = JSON.parse(readFileSync(new URL("./page-copy.json", import.meta.url
 const DEFAULT_MAX_ENTRIES = 200
 
 // The skill's reference categorical palette (references/palette.md), fixed
-// slot order -- never reordered or regenerated per page. Only the first 4-5
+// slot order: never reordered or regenerated per page. Only the first 4-5
 // slots are ever realistically needed (env-cap's/data-cap's own tier ladders
-// top out at 4 tier names), which keeps every chart inside the
-// all-pairs-safe zone the palette doc calls out for small multiples (its
+// top out at 4 tier names). That keeps every chart inside the
+// all-pairs-safe zone the palette doc calls out for small multiples. Its
 // first 3 slots validate all-pairs cleanly in both modes; a realistic 4th
 // tier name like "enterprise"/"fixed" uses slot 4 with that documented
-// caveat).
+// caveat.
 const CATEGORICAL_SLOTS = [
   { light: "#2a78d6", dark: "#3987e5" }, // 1 blue
   { light: "#eb6834", dark: "#d95926" }, // 2 orange
@@ -49,7 +49,7 @@ const CATEGORICAL_SLOTS = [
 ]
 
 // Tier names seen across env-cap and data-cap's own tier ladders, in a
-// preferred display order -- purely cosmetic (first-seen order would work
+// preferred display order: purely cosmetic (first-seen order would work
 // too), keeps baseline/stress/extreme first and consistent on every page
 // regardless of which group happens to declare them first.
 const PREFERRED_TIER_ORDER = ["baseline", "stress", "extreme", "enterprise", "fixed"]
@@ -105,12 +105,11 @@ function discoverGroups(entries) {
 }
 
 /**
- * Builds one group's chart data: an index-aligned series per tier (using
- * entry position, not wall-clock spacing, as the x-axis -- CI runs aren't
- * evenly time-spaced, and "run N of the most recent window" reads cleanly
- * without implying a timing precision the data doesn't have), plus the
+ * Builds one group's chart data: an index-aligned series per tier, plus the
  * currently-inferred complexity class from the LATEST entry that has this
- * group at all.
+ * group at all. The x-axis is entry position, not wall-clock spacing. CI runs
+ * aren't evenly time-spaced, and "run N of the most recent window" reads
+ * cleanly without implying a timing precision the data doesn't have.
  */
 function buildGroupData(group, entries, tierOrder) {
   const series = tierOrder.map((tier) => ({

@@ -54,14 +54,14 @@ type ToolResult<T> =
     }
   | { readonly ok: false; readonly error: string }
 
-/** @returns A single-line `page -- selector [code]: message` summary. */
+/** @returns A single-line `page at selector [code]: message` summary. */
 function formatFinding(finding: Pa11yFinding): string {
-  return `${finding.page} -- ${finding.selector} [${finding.code}]: ${finding.message}`
+  return `${finding.page} at ${finding.selector} [${finding.code}]: ${finding.message}`
 }
 
 // "error"-type findings fail; "warning" surfaces as warn (never blocks);
 // "notice" is too noisy relative to its actionability to gate on and is
-// dropped from the rationale entirely -- matches repo-contract's own
+// dropped from the rationale entirely: matches repo-contract's own
 // accessibility check exactly.
 export const accessibility: CheckDefinitionConfig = {
   run: ["node", accessibilityScript],
@@ -90,7 +90,7 @@ export const accessibility: CheckDefinitionConfig = {
     }
 
     // A genuinely absent built docs site (neither docs/index.html nor docs/api/index.html
-    // exists) is not the same thing as a clean scan -- pa11y never ran against anything, so
+    // exists) is not the same thing as a clean scan: pa11y never ran against anything, so
     // "0 issues" here would be false confidence, not a real pass. Distinct from the 0-pages
     // case, a real scan that finds 0 issues across N pages still reports `pass` below.
     if (evidence.pagesScanned === 0) {

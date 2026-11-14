@@ -125,7 +125,7 @@ function glance(results) {
   lines.push(
     `For a typical workload of **${String(typicalN)} ${unit}s** per operation, routing the work through \`${metadata.package.name}\` adds ${measurable(typical) ? `**${formatMs(typical.overheadMs)}**` : "**no overhead this run could measure** (its median was at or below the baseline's, which is run-to-run noise, not a speed-up)"} per operation compared with a bare-minimum baseline (**${againstBaseline(typical.overheadPercent)}**). Overall, ${growthSentence(overheadComplexity)}. At list prices that is on the order of **${orderOfMagnitudeUsd(typical.cost.lowUsdPerMillion, typical.cost.highUsdPerMillion)} per million operations** of compute.`,
     "",
-    "> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.",
+    "> The relative figure and the growth class are the steadier ones. Both come from the same run, so they depend far less on the machine than a time does. Runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below). They show scale, not a budget.",
     "",
   )
   const bundle = Object.values(metadata.bundleSizes ?? {}).reduce(
@@ -186,7 +186,7 @@ function endToEndSection(results, suite) {
   lines.push(`- **Baseline (no package):** ${suite.endToEnd.baseline.description}`)
   lines.push(`- **With the package:** ${suite.endToEnd.withPackage.description}`, "")
   lines.push(
-    "Both sides use empty or minimal functions on purpose, so the difference is the package's own cost -- not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.",
+    "Both sides use empty or minimal functions on purpose. The difference is then the package's own cost, not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.",
     "",
   )
   // defineSuite requires at least one variable, so this table is always present.
@@ -204,7 +204,7 @@ function endToEndSection(results, suite) {
     "",
   )
   lines.push(
-    "The baseline is an empty or minimal function, so it costs almost nothing and the _relative_ overhead can look enormous (shown as a multiple of the baseline). Read the absolute columns -- time, CPU and dollars added -- they are what a bill and a latency budget are made of.",
+    "The baseline is an empty or minimal function, so it costs almost nothing. The _relative_ overhead can then look enormous (shown as a multiple of the baseline). Read the absolute columns (time, CPU and dollars added): they are what a bill and a latency budget are made of.",
     "",
     ...table(
       [
@@ -284,7 +284,7 @@ function functionsSection(results, suite) {
   const unit = metadata.workload.unit
   const lines = ["## 2. Function by function", ""]
   lines.push(
-    "Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.",
+    "Every function the package exposes is measured on its own across the full size ladder. Its measured growth rate is then compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report. Either the documentation or the code is wrong.",
     "",
   )
 
@@ -342,7 +342,7 @@ function functionsSection(results, suite) {
   )
   if (differing.length > 0) {
     lines.push(
-      "> **Needs attention.** These functions grow at a different rate than documented. Either the code regressed or the documentation is wrong -- decide which, then fix it:",
+      "> **Needs attention.** These functions grow at a different rate than documented. Either the code regressed or the documentation is wrong. Decide which, then fix it:",
       ">",
       ...differing.map(
         ([group, value]) =>
@@ -393,7 +393,7 @@ function functionsSection(results, suite) {
       lines.push(
         "**Deliberately not covered**",
         "",
-        ...fn.notCovered.map((item) => `- **${item.name}** -- ${item.reason}`),
+        ...fn.notCovered.map((item) => `- **${item.name}**: ${item.reason}`),
         "",
       )
     }
@@ -425,7 +425,7 @@ function functionsSection(results, suite) {
         }
         if (measured?.class) {
           lines.push(
-            `**Measured: ${measured.notation}** (exponent ${measured.exponent.toFixed(2)}, ${String(measured.points)} sizes) -- ${AGREEMENT_LABEL[measured.agreement]}.`,
+            `**Measured: ${measured.notation}** (exponent ${measured.exponent.toFixed(2)}, ${String(measured.points)} sizes): ${AGREEMENT_LABEL[measured.agreement]}.`,
             "",
           )
         }
@@ -448,7 +448,7 @@ function contributionSection(results) {
     return lines
   }
   lines.push(
-    "Each function's measured cost is multiplied by how many times one end-to-end operation calls it. A function measured on its own includes everything it calls, so where one attributed function calls another, the nested time is subtracted from the caller (its _exclusive_ time): every moment of the operation belongs to at most one row. Shares are measured against the whole operation with the package, a figure measured directly -- not against the _added_ time, which is the small difference of two noisy medians. They are estimates (each function was measured separately); the remainder is shown as _unattributed_.",
+    "Each function's measured cost is multiplied by how many times one end-to-end operation calls it. A function measured on its own includes everything it calls. So where one attributed function calls another, the nested time is subtracted from the caller (its _exclusive_ time). Every moment of the operation then belongs to at most one row. Shares are measured against the whole operation with the package, a figure measured directly. They are not measured against the _added_ time, which is the small difference of two noisy medians. They are estimates (each function was measured separately); the remainder is shown as _unattributed_.",
     "",
   )
   for (const n of [analysis.cost.typicalN, metadata.tiers[metadata.tiers.length - 1]]) {
@@ -516,16 +516,16 @@ function footer(results, docs) {
   return [
     "## Cost model",
     "",
-    `Estimates use two bracketing price shapes: **low** = CPU-priced compute (${formatUsd(rates.vCpuHourUsd)} per vCPU-hour, billed on CPU time) and **high** = duration-and-memory-priced functions (${formatUsd(rates.gbSecondUsd)} per GB-second, billed on wall time, at least ${String(rates.minMemoryMb)} MB reserved). Both are rounded list prices and change over time; override them in \`benchmark.config.json\` → \`costRates\` to match your platform and negotiated pricing.`,
+    `Estimates use two bracketing price shapes. **Low** is CPU-priced compute (${formatUsd(rates.vCpuHourUsd)} per vCPU-hour, billed on CPU time). **High** is duration-and-memory-priced functions (${formatUsd(rates.gbSecondUsd)} per GB-second, billed on wall time, at least ${String(rates.minMemoryMb)} MB reserved). Both are rounded list prices and change over time; override them in \`benchmark.config.json\` → \`costRates\` to match your platform and negotiated pricing.`,
     "",
     "## Environment and method",
     "",
     `- Run: \`${metadata.timing.startedAtUtc}\` → \`${metadata.timing.finishedAtUtc}\` (${String(Math.round(metadata.timing.totalSuiteDurationMs / 1000))} s), ${metadata.generatedBy}`,
     `- Machine: ${e.cpuModel ?? "unknown CPU"}, ${String(e.logicalCores)} logical core(s)${e.physicalCores ? ` (${String(e.physicalCores)} physical)` : ""}, ${String(e.totalMemoryMb)} MB RAM, ${e.platform}/${e.processArch}, Node ${e.nodeVersion}, ${e.runner}`,
     `- Git: \`${metadata.git.gitCommit ?? "unknown"}\` on \`${metadata.git.gitBranch ?? "unknown"}\`${metadata.git.gitDirty ? " (uncommitted changes)" : ""}`,
-    `- Sizes: ${metadata.tiers.join(", ")} ${metadata.workload.unit}s -- ${metadata.workload.description}`,
+    `- Sizes: ${metadata.tiers.join(", ")} ${metadata.workload.unit}s: ${metadata.workload.description}`,
     "",
-    `**Do not compare these numbers with another machine's, another day's, or another package's.** They exist to show how _this_ package's cost changes between runs on comparable hardware and how it scales with size. See [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md).`,
+    `**Do not compare these numbers with another machine's, another day's, or another package's.** They show how _this_ package's cost changes between runs on comparable hardware, and how it scales with size. See [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md).`,
     "",
   ]
 }
@@ -542,7 +542,7 @@ export function renderReport(results, suite, options = {}) {
   return [
     `# ${name}: performance and cost report`,
     "",
-    `What does adopting this package add to latency, CPU, memory and compute spend -- and how does that grow with workload? Three views, from the whole to the part: **(1)** the end-to-end total, **(2)** every function on its own, **(3)** which functions make up the total. New to benchmarks? Read [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md) first.`,
+    `What does adopting this package add to latency, CPU, memory and compute spend, and how does that grow with workload? Three views, from the whole to the part: **(1)** the end-to-end total, **(2)** every function on its own, **(3)** which functions make up the total. New to benchmarks? Read [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md) first.`,
     "",
     ...glance(results),
     ...endToEndSection(results, suite),

@@ -263,7 +263,7 @@ function parseMarkdownDirective(body) {
 }
 
 /**
- * What a multi-line comment says on the lines after the one that holds its directive -- where a reason
+ * What a multi-line comment says on the lines after the one that holds its directive: where a reason
  * continued below the directive is written.
  * @param {string} body - the comment text, delimiters removed.
  * @returns {string}
@@ -327,7 +327,7 @@ export function scanSource(file, text, ts) {
       })
     }
   }
-  // Every token, punctuation included (`getChildren`, unlike `forEachChild`): a comment on the same
+  // Every token, punctuation included (`getChildren`, unlike `forEachChild`). A comment on the same
   // line as the token before it is that token's TRAILING comment, and a token such as the `{` of a JSX
   // expression is not a node of its own.
   const visit = (node) => {

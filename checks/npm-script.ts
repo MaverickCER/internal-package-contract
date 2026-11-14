@@ -37,13 +37,13 @@ export interface NpmScriptCheckOptions {
   readonly label: string
   /**
    * When the consumer has no such script: `"skip"` passes with a note (the
-   * default -- not every package generates schemas or API docs); `"fail"`
+   * default; not every package generates schemas or API docs); `"fail"`
    * blocks (the package is expected to have this script).
    */
   readonly whenMissing?: "skip" | "fail"
   /**
    * Paths (repo-relative dirs/files) whose contents must be byte-identical
-   * before and after the script runs -- i.e. the script only verified
+   * before and after the script runs: i.e. the script only verified
    * already-committed generated output. Setting this switches execution to the
    * hash-diff wrapper.
    */
@@ -72,7 +72,7 @@ export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionC
 
   // Stryker disable ArrayDeclaration: unreachable, not just unobservable -- `watchesArtifacts` is
   // only ever `true` when `mustNotChange` is itself truthy with `length > 0` (see above), so by
-  // the time this ternary's true branch runs, `mustNotChange` can never be nullish -- the `?? []`
+  // the time this ternary's true branch runs, `mustNotChange` can never be nullish: the `?? []`
   // fallback exists only to satisfy the parameter's own `readonly string[] | undefined` type, and
   // no call can ever reach it at runtime.
   const run = watchesArtifacts
@@ -91,7 +91,7 @@ export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionC
             }
           : {
               outcome: "pass",
-              rationale: `${label}: no \`${script}\` npm script -- not applicable to this package.`,
+              rationale: `${label}: no \`${script}\` npm script, so it does not apply to this package.`,
             }
       }
 
@@ -135,7 +135,7 @@ export function npmScriptCheck(options: NpmScriptCheckOptions): CheckDefinitionC
         return {
           outcome: "fail",
           rationale: [
-            `${label}: \`npm run ${script}\` regenerated ${String(parsed.changed.length)} file(s) -- the committed output is stale. Run it locally and commit:`,
+            `${label}: \`npm run ${script}\` regenerated ${String(parsed.changed.length)} file(s): the committed output is stale. Run it locally and commit:`,
             ...parsed.changed.map((p) => `- ${p}`),
           ].join("\n"),
         }

@@ -6,18 +6,18 @@ import { maxLevel } from "./levels.js"
 
 /**
  * Derives the SemVer bump a package's pending Changesets declare, by reading `.changeset/*.md`
- * directly off disk -- the same files `changeset version` itself consumes. Replaces repo-contract's
- * own `conventional-commits.ts`: that reader inferred the declared bump from Conventional Commit
+ * directly off disk: the same files `changeset version` itself consumes. Replaces repo-contract's
+ * own `conventional-commits.ts`. That reader inferred the declared bump from Conventional Commit
  * headers, which matched repo-contract's release-please-driven history but not this fleet's actual
- * release mechanism -- every consumer (including repo-contract, since its own migration off
- * release-please) versions via Changesets, so the declared bump this check compares against must
+ * release mechanism. Every consumer (including repo-contract, since its own migration off
+ * release-please) versions via Changesets. So the declared bump this check compares against must
  * come from the same changeset files Changesets itself reads, not from commit message parsing.
  */
 
 const FRONTMATTER_DELIMITER = "---"
 
 // A changeset frontmatter bump line: `"<package-name>": <bump>` or `'<package-name>': <bump>` or
-// an unquoted package name. Hand-parsed per line rather than a YAML dependency -- the shape
+// an unquoted package name. Hand-parsed per line rather than a YAML dependency: the shape
 // Changesets itself writes is fixed and small (one `name: level` mapping per line).
 const BUMP_LINE_PATTERN = /^\s*["']?([^"':]+)["']?\s*:\s*(major|minor|patch)\s*$/
 
@@ -70,7 +70,7 @@ export async function declaredLevelFromChangesets(
       (name) => name.endsWith(".md") && name !== "README.md",
     )
   } catch {
-    // No `.changeset/` directory at all -- treated the same as "no pending changesets", not an
+    // No `.changeset/` directory at all: treated the same as "no pending changesets", not an
     // error: a fresh checkout between releases legitimately has none.
     return { changesetCount: 0, declaredLevel: "none" }
   }

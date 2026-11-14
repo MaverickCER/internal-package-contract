@@ -1,8 +1,8 @@
 # Exceptions
 
 A finding is excused only by a committed record that the owning check reads back every run. The run's exit
-code is pass or fail; three checks warn by design and never fail (`GitHooks`, `EnvContract`, and `CodeRabbit`
-except on broken evidence). Nothing is allowed by a comment, a flag or a dismissed alert alone
+code is pass or fail. Two checks warn by design and never fail (`GitHooks`, and `CodeRabbit` except on broken
+evidence). `EnvContract` warns on credential dates and fails only on a stale generated document. Nothing is allowed by a comment, a flag or a dismissed alert alone
 (`checks/exception-record.ts`; `test/exception-record.test.ts`).
 
 Three kinds of thing end up in a registry:
@@ -15,9 +15,9 @@ Three kinds of thing end up in a registry:
 
 ## The record
 
-Every record is an object with an `id` (derived from what it covers, so it survives unrelated edits and goes
-stale when the covered code changes), a `version`, and a `justification`. A `version: 2` record, the shape
-every new record takes, also carries the elements that make an exception auditable:
+Every record is an object with an `id`, a `version` and a `justification`. The `id` is derived from what the
+record covers, so it survives unrelated edits and goes stale when the covered code changes. A `version: 2`
+record, the shape every new record takes, also carries the elements that make an exception auditable:
 
 | Field           | Answers                                                                                                                           |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,12 +41,15 @@ The security-family registries add `alternatives`, `remediation`, `method` and `
   `scheduled-remediation`, `platform-or-vendor-constraint`, `required-for-package-to-exist`,
   `dev-only-not-shipped`. Each registry accepts the subset that can be true for it; `SecuritySocket` never
   accepts a waiver for a critical or high alert (`test/security-socket.test.ts`).
-- `method`: `mechanical-reverification` (a tool re-run confirms it; the only method that can back
-  `validated-false-positive`), `independent-human-review`, or `policy-rule` (no individual reviewed it: a
-  standing rule of the standard decided, as when `CodeScanning` rejects an alert in test code by location).
+- `method`: one of three.
+  - `mechanical-reverification`: a tool re-run confirms it. It is the only method that can back
+    `validated-false-positive`.
+  - `independent-human-review`.
+  - `policy-rule`: no individual reviewed it; a standing rule of the standard decided. For example,
+    `CodeScanning` rejects an alert in test code by location.
 
 An exception is not a place to park unfinished work. If the honest `revisitWhen` is "when someone gets round to
-it", fix the thing; `scheduled-remediation` is for a fix that is planned and tracked, with an `expires` date.
+it", fix the thing. `scheduled-remediation` is for a fix that is planned and tracked, with an `expires` date.
 
 ## The registries
 
@@ -69,11 +72,14 @@ record shape with a complete example.
 
 Staleness is checked both ways: a finding with no complete record fails, and a record whose finding is gone
 fails as stale (`test/security-socket.test.ts`; `test/dist-no-urls.test.ts`; `checks/mutation.ts`). Two
-limits. `skipped-tests.json`: a suite that skips only on Windows has no skip on Linux, so an unused record there
-is not an error. `mutation.json` under a narrowed or sharded run: a record for a mutant in a file that run did
-not mutate is not called stale, since only the full report can say so.
+limits:
 
-A `// Stryker disable` comment with a reason passes `Suppressions`, and the mutants it hides are left out of the
+- `skipped-tests.json`: a suite that skips only on Windows has no skip on Linux, so an unused record there is
+  not an error.
+- `mutation.json` under a narrowed or sharded run: a record for a mutant in a file that run did not mutate is
+  not called stale. Only the full report can say so.
+
+A `// Stryker disable` comment with a reason passes `Suppressions`. The mutants it hides are left out of the
 score: counted in the `Mutation` rationale, not excused by a record. The bundled Stryker baseline also sets
 `ignoreStatic: true`, so static mutants are never counted.
 
@@ -86,15 +92,21 @@ for a private package, since nothing is published to score. The check records th
 
 - **locally** it is a `warn`, so a laptop without Chrome can still run the rest;
 - **in CI** (`--strict`, the default when `CI` or `GITHUB_ACTIONS` is set) it **fails**, unless
-  `environment.json` holds a complete record `environment:<Check>:<code>` saying why that is acceptable there
-  (`checks/environment-exceptions.ts`; `scripts/contract-run.mjs`).
+  `environment.json` excuses it. The excuse is a complete record `environment:<Check>:<code>` saying why that is
+  acceptable there (`checks/environment-exceptions.ts`; `scripts/contract-run.mjs`).
 
-The codes in use are `Accessibility:no-chrome`, `Accessibility:no-site`, `BranchProtection:gh-unavailable`,
-`Commits:no-base`, `Commits:pre-adoption`, `CodeRabbit:not-applicable` (CI), `CodeRabbit:unavailable` (no CLI),
-`PackedConsumer:install` (the packed tarball could not be installed into a scratch project),
-`SecuritySocket:no-key` (no Socket API token; `init` writes this record with a 90-day expiry),
-`CodeScanning:not-enabled` and `CodeScanning:no-remote`, and `DocsLinks:<url>` for each external link that could
-not be reached. The warn names the exact id to add. This list is prose: no test checks that every `degraded()`
+The codes in use:
+
+- `Accessibility:no-chrome`, `Accessibility:no-site`
+- `BranchProtection:gh-unavailable`
+- `Commits:no-base`, `Commits:pre-adoption`
+- `CodeRabbit:not-applicable` (CI), `CodeRabbit:unavailable` (no CLI)
+- `PackedConsumer:install` (the packed tarball could not be installed into a scratch project)
+- `SecuritySocket:no-key` (no Socket API token; `init` writes this record with a 90-day expiry)
+- `CodeScanning:not-enabled` and `CodeScanning:no-remote`
+- `DocsLinks:<url>` for each external link that could not be reached
+
+The warn names the exact id to add. This list is prose: no test checks that every `degraded()`
 call site uses a code listed here.
 
 ## Who approves, and how

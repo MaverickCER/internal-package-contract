@@ -7,29 +7,29 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 
 /**
- * Adapted from repo-contract's own `scripts/api-contract/baseline-store.ts` -- namespaced per
+ * Adapted from repo-contract's own `scripts/api-contract/baseline-store.ts`: namespaced per
  * target (a consumer may have several public entry points, each with its own independent
  * baseline) under `.repo-contract/api-contract/<target>/`, instead of one fixed directory.
  *
  * The only file that touches `.repo-contract/api-contract/` on disk. The committed baseline is
  * authoritative: `readBaseline` reads it from git `HEAD` via `git show`, never the working tree,
  * so an uncommitted local edit (accidental or deliberate) never affects the historical comparison.
- * `writeBaselineFiles` is the single implementation that ever writes a baseline -- shared by
+ * `writeBaselineFiles` is the single implementation that ever writes a baseline: shared by
  * check.ts's initial-baseline bootstrap (the only situation the check itself may write one) and
  * the separate, human-invoked update-baseline.ts.
  */
 
 interface BaselineMeta {
   readonly packageName: string
-  /** Provenance metadata about this snapshot -- the package version it was captured at -- not a property of the TypeScript contract itself. */
+  /** Provenance metadata about this snapshot (the package version it was captured at) not a property of the TypeScript contract itself. */
   readonly packageVersion: string
   readonly apiExtractorVersion: string
   readonly apiJsonSchemaVersion: number
   /** Identity of the historical public contract itself. */
   readonly apiJsonHash: string
-  /** Integrity of the compiler artifact used to analyze it -- baseline.d.ts is a derived supporting artifact, never independently authoritative. */
+  /** Integrity of the compiler artifact used to analyze it: baseline.d.ts is a derived supporting artifact, never independently authoritative. */
   readonly dtsHash: string
-  /** Metadata only -- never part of a hash or the semantic comparison. */
+  /** Metadata only: never part of a hash or the semantic comparison. */
   readonly generatedAt: string
 }
 
@@ -43,7 +43,7 @@ interface Baseline {
  * @param target - This target's name (see targets.ts).
  * @returns The repository-relative directory this target's baseline files live under.
  */
-function baselineDir(target: string): string {
+export function baselineDir(target: string): string {
   return path.posix.join(".repo-contract", "api-contract", target)
 }
 
@@ -110,7 +110,7 @@ export function readSchemaVersion(apiJsonText: string): number {
 }
 
 /**
- * Reads and parses `<root>/package.json` for the `name`/`version` fields this feature needs --
+ * Reads and parses `<root>/package.json` for the `name`/`version` fields this feature needs:
  * shared by `check.ts` and `update-baseline.ts`, which both previously duplicated this read.
  * @param root - Absolute path to the package's project folder.
  * @returns The package's `name` and `version`.
@@ -121,13 +121,13 @@ export async function readPackageJson(root: string): Promise<{ name: string; ver
     return JSON.parse(raw) as { name: string; version: string }
   } catch {
     throw new Error(
-      `${path.join(root, "package.json")} is not valid JSON -- fix it before running the api-contract check.`,
+      `${path.join(root, "package.json")} is not valid JSON; fix it before running the api-contract check.`,
     )
   }
 }
 
 /**
- * Throws if `root` is not inside a git working tree at all -- the one case that must fail loudly rather than silently proceeding as "no baseline yet".
+ * Throws if `root` is not inside a git working tree at all: the one case that must fail loudly rather than silently proceeding as "no baseline yet".
  * @param root - Path to the working tree to check.
  */
 async function assertInsideGitWorkTree(root: string): Promise<void> {
@@ -135,7 +135,7 @@ async function assertInsideGitWorkTree(root: string): Promise<void> {
     await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: root })
   } catch (error) {
     throw new Error(
-      `"${root}" is not inside a git working tree -- the committed baseline can only be read from git, ` +
+      `"${root}" is not inside a git working tree: the committed baseline can only be read from git, ` +
         "and this check refuses to fall back to an untrusted working-tree copy.",
       { cause: error },
     )
@@ -144,14 +144,17 @@ async function assertInsideGitWorkTree(root: string): Promise<void> {
 
 /**
  * Reads one file from git `HEAD`. Returns `undefined` for any reason the read couldn't complete
- * once we already know this is a real git repository -- an unborn `HEAD` (no commits yet, e.g. a
+ * once we already know this is a real git repository. An unborn `HEAD` (no commits yet, e.g. a
  * brand-new repository) and a `HEAD` that exists but doesn't contain this path both mean the same
  * thing here: no baseline is committed yet.
  * @param root - Path to the git working tree.
  * @param relativePath - Path of the file to read, relative to `root`.
  * @returns The file's content at `HEAD`, or `undefined` if it couldn't be read.
  */
-async function readFileAtHead(root: string, relativePath: string): Promise<string | undefined> {
+export async function readFileAtHead(
+  root: string,
+  relativePath: string,
+): Promise<string | undefined> {
   const shown = await execFileAsync("git", ["show", `HEAD:${relativePath}`], {
     cwd: root,
     maxBuffer: 1024 * 1024 * 64,
@@ -161,7 +164,7 @@ async function readFileAtHead(root: string, relativePath: string): Promise<strin
 
 /**
  * Reads this target's committed baseline from git `HEAD` and verifies its integrity. Returns
- * `undefined` only when no baseline is committed yet (the initial-baseline case) -- any other
+ * `undefined` only when no baseline is committed yet (the initial-baseline case): any other
  * failure (not a git repository, a hash mismatch between `baseline.meta.json` and its content
  * files) throws explicitly rather than silently falling back to an untrusted state.
  * @param root - Path to the git working tree containing the committed baseline.
@@ -188,18 +191,18 @@ export async function readBaseline(root: string, target: string): Promise<Baseli
   const dtsText = await readFileAtHead(root, path.posix.join(dir, "baseline.d.ts"))
   if (apiJsonText === undefined || dtsText === undefined) {
     throw new Error(
-      `${dir}/baseline.meta.json exists at HEAD but baseline.api.json/baseline.d.ts do not -- the committed baseline is incomplete.`,
+      `${dir}/baseline.meta.json exists at HEAD but baseline.api.json/baseline.d.ts do not: the committed baseline is incomplete.`,
     )
   }
 
   if (sha256(apiJsonText) !== meta.apiJsonHash) {
     throw new Error(
-      `${dir}/baseline.api.json's content does not match the hash recorded in baseline.meta.json -- the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
+      `${dir}/baseline.api.json's content does not match the hash recorded in baseline.meta.json: the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
     )
   }
   if (sha256(dtsText) !== meta.dtsHash) {
     throw new Error(
-      `${dir}/baseline.d.ts's content does not match the hash recorded in baseline.meta.json -- the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
+      `${dir}/baseline.d.ts's content does not match the hash recorded in baseline.meta.json: the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
     )
   }
 

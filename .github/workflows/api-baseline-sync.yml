@@ -1,14 +1,10 @@
-# Reusable "regenerate the committed ApiContract baseline on the release PR branch"
-# workflow -- the internal-package-contract-owned counterpart to the bespoke
-# api-baseline.yml every consumer used to hand-roll around its own now-deleted
-# contract:baseline script. Any consumer whose typedoc.json makes it an ApiContract
-# target needs this: a release bumps package.json's version, and the committed
-# baseline.meta.json must track that same version once the release actually lands
-# (see scripts/api-contract/update-baseline.ts's own module comment for the full
-# outcome matrix) -- otherwise the very next PR's ApiContract check sees a
-# baseline one version behind reality.
+# Reusable workflow that regenerates the committed API and surface baselines on the release pull request
+# branch and pushes them there. The usual route is the `version` script, which runs `update-baseline` after
+# the build so the release commit carries the baselines (README, "Release"). This workflow is for a
+# package whose `version` script cannot build. A baseline that records another version than package.json
+# fails ApiContract and SurfaceContract, so a release that skipped both routes fails its own pull request.
 #
-# `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
+# `on: workflow_call` only: see release-npm-changesets.yml's own identical note.
 name: API baseline sync (reusable)
 
 on:
@@ -16,9 +12,9 @@ on:
 
 concurrency:
   # Serialize runs for the same Release PR branch: this job pushes a commit back
-  # onto that branch, and two overlapping runs (a fast `synchronize` after the
-  # push, say) would race to regenerate and push the baseline. `cancel-in-progress`
-  # is deliberately false -- a run must not be interrupted mid-`git push`.
+  # onto that branch. Two overlapping runs (a fast `synchronize` after the push,
+  # say) would race to regenerate and push the baseline. `cancel-in-progress`
+  # is deliberately false: a run must not be interrupted mid-`git push`.
   group: api-baseline-sync-${{ github.head_ref || github.ref }}
   cancel-in-progress: false
 
@@ -49,8 +45,8 @@ jobs:
       - name: Commit the regenerated baseline
         env:
           # Passed through the environment rather than interpolated straight into
-          # `run` -- a branch ref is attacker-influenced input and must never be
-          # spliced into the shell command text.
+          # `run`. A branch ref is attacker-influenced input, so it must never be
+          # part of the shell command text.
           HEAD_REF: ${{ github.head_ref }}
         run: |
           git config user.name "github-actions[bot]"

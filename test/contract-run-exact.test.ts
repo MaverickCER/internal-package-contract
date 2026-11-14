@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest"
 import { selectChecks } from "../scripts/contract-args.mjs"
-import { cleanUp, isCi, isStrict, runContract } from "../scripts/contract-run.mjs"
+import { cleanUp, isCi, isStrict, resultText, runContract } from "../scripts/contract-run.mjs"
 
 const roots: string[] = []
 afterAll(() => {
@@ -300,6 +300,39 @@ describe("runContract()", () => {
     expect(output.text().endsWith("\nFAIL\n")).toBe(true)
   })
 
+  it("prints a check id once when the rationale already starts with it, and keeps the rationale in the report", async () => {
+    const root = repo()
+    const output = capture()
+    await runContract({
+      runRepoContract: fake([
+        {
+          passed: false,
+          checks: {
+            Lint: { outcome: "fail", rationale: "Lint: broken\nsecond line" },
+            Docs: pass("Docs:no space"),
+          },
+        },
+      ]),
+      config: config("Lint", "Docs"),
+      cwd: root,
+      title: "T",
+      argv: [],
+      env: {},
+      out: output.out,
+    })
+    expect(output.text()).toContain("[FAIL] Lint: broken\nsecond line\n")
+    expect(output.text()).not.toContain("Lint: Lint:")
+    expect(output.text()).toContain("[PASS] Docs: Docs:no space\n")
+    const report = JSON.parse(
+      readFileSync(path.join(root, "reports/contract/report.json"), "utf8"),
+    ) as {
+      checks: { id: string; rationale: string }[]
+    }
+    expect(report.checks.find((check) => check.id === "Lint")?.rationale).toBe(
+      "Lint: broken\nsecond line",
+    )
+  })
+
   it("does not list a skipped Socket scan when it is not part of the run", async () => {
     const output = capture()
     await runContract({
@@ -484,5 +517,16 @@ describe("selectChecks() unknown ids", () => {
     expect(() => selectChecks(["--skip", "Nope"], ["A", "B"])).toThrow(
       'Unknown check "Nope". Declared checks: A, B.',
     )
+  })
+})
+
+describe("resultText()", () => {
+  it("prefixes the id unless the rationale already starts with exactly `<id>: `", () => {
+    expect(resultText("Lint", "Lint: broken")).toBe("Lint: broken")
+    expect(resultText("Lint", "broken")).toBe("Lint: broken")
+    expect(resultText("Lint", "Lint:broken")).toBe("Lint: Lint:broken")
+    expect(resultText("Lint", "LintX: broken")).toBe("Lint: LintX: broken")
+    expect(resultText("Lint", " Lint: broken")).toBe("Lint:  Lint: broken")
+    expect(resultText("Lint", "")).toBe("Lint: ")
   })
 })

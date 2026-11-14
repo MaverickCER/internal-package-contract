@@ -29,6 +29,7 @@ import { deadCode } from "./dead-code.js"
 import { distNoUrlsCheck } from "./dist-no-urls.js"
 import { duplication } from "./duplication.js"
 import { docsFragments } from "./docs-fragments.js"
+import { proseCheck } from "./prose.js"
 import { docsLinks } from "./docs-links.js"
 import { docsMarkdown } from "./docs-markdown.js"
 import { engineMatrixCheck } from "./engine-matrix.js"
@@ -61,20 +62,17 @@ import { tests } from "./tests.js"
 
 export function standardChecks() {
   return withErrorHeadline({
-    // -- Writers --
+    // (Writers)
     ApiDocs: npmScriptCheck({ script: "docs:api", label: "API docs" }),
-    // The committed `docs/api-report/*` Markdown must already match what `docs:api:report`
-    // (TypeDoc + typedoc-plugin-markdown) produces right now -- `mustNotChange` reruns the
-    // consumer's own regeneration script and fails if it touches the watched path, exactly what
-    // each consumer's own now-deleted `scripts/check-api-report.mjs` did by hand. See ADR/notes on
-    // the api-docs-report dedup for why this replaced two near-identical per-consumer scripts.
+    // The committed `docs/api-report/*` Markdown must match what `docs:api:report` produces now.
+    // `mustNotChange` reruns the consumer's own script and fails if it touches the watched path.
     ApiDocsReport: npmScriptCheck({
       script: "docs:api:report",
       label: "API docs report",
       mustNotChange: ["docs/api-report"],
     }),
     // Package-specific: extracts named sections from a consumer's own example CLI output and
-    // diffs them against README prose unique to that package -- too bespoke to centralize the way
+    // diffs them against README prose unique to that package. That is too bespoke to centralize the way
     // Schema/Docs are, so this just gates whatever the consumer's own script already does (the
     // fallback the maintainer chose over relocating that logic here).
     ReadmeExample: npmScriptCheck({
@@ -86,31 +84,28 @@ export function standardChecks() {
     Format: { ...format, run: ["prettier", "--check", "."] },
     Schema: npmScriptCheck({ script: "schema", label: "Schema", mustNotChange: ["schemas"] }),
 
-    // -- Build barrier --
+    // (Build barrier)
     Build: {
       ...npmScriptCheck({ script: "build", label: "Build", whenMissing: "fail" }),
       isolated: true,
     },
 
-    // -- Readers --
-    // Needs `dist/.dts/` (unlike the TypeDoc-based checks above, which read source directly) --
-    // declaration-order phasing (writers, then the Build barrier) already guarantees a fresh build
-    // before this runs, so no explicit `dependsOn` is needed. Diffs every target's real,
-    // current public surface (see scripts/api-contract/targets.ts) against its committed baseline
-    // and fails when the branch's changesets under-declare the resulting bump -- see
-    // checks/api-contract.ts's own module comment.
+    // (Readers)
+    // Needs `dist/.dts/`, unlike the TypeDoc-based checks above, which read source directly.
+    // Declaration order (writers, then the Build barrier) guarantees a fresh build, so no
+    // `dependsOn` is needed. See checks/api-contract.ts for what the diff decides.
     ApiContract: apiContract,
     // The same semver gate for the rest of the public surface: CLI help, exported schemas, the Action.
     SurfaceContract: surfaceContract(),
     Typecheck: typecheck,
     // The same type check on only what git tracks: a file hidden by .gitignore passes everything else.
     CleanCheckout: cleanCheckoutCheck(),
-    // `isolated` -- Vitest with V8 coverage instrumentation is the single
+    // `isolated`: Vitest with V8 coverage instrumentation is the single
     // heaviest check, and a consumer's own subprocess-spawning integration tests
     // (a real `npm pack`, a spawned CLI, a full `ts-json-schema-generator`
     // program) flake under CPU contention from a concurrent jscpd / knip /
     // depcruise. Running it alone trades ~40s of wall time for a trustworthy
-    // signal -- the whole point of the check.
+    // signal: the whole point of the check.
     Tests: { ...tests(), isolated: true },
     Architecture: architecture(),
     GithubActions: githubActions,
@@ -137,7 +132,7 @@ export function standardChecks() {
     DistNoUrls: distNoUrlsCheck(),
     Duplication: duplication,
     Packaging: publint,
-    // `dependsOn: ["Tests"] as const` -- this packs a tarball, and a consumer's own
+    // `dependsOn: ["Tests"] as const`: this packs a tarball, and a consumer's own
     // install-and-run integration tests can pack too; keep the two off each
     // other's back rather than racing under load.
     TypeResolution: { ...arethetypeswrong, dependsOn: ["Tests"] as const },
@@ -149,9 +144,10 @@ export function standardChecks() {
     BenchmarkCoverage: benchmarkCoverageCheck(),
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
+    Prose: proseCheck(),
     // No explicit dependsOn needed: declaration-order phasing (writers,
     // including ApiDocs, then the Build barrier, then readers) already
-    // guarantees docs/api/ is freshly generated before this reader runs --
+    // guarantees docs/api/ is freshly generated before this reader runs;
     // matches repo-contract's own plain `accessibility,` registration.
     Accessibility: accessibility,
     SecurityDeps: securityDeps(),
@@ -166,14 +162,14 @@ export function standardChecks() {
     DeadCode: deadCode(),
     Commits: commits(),
     // Declared late among the readers (only `Mutation`'s own barrier follows):
-    // the slowest reader by far on a real reviewed run -- a network round trip
-    // to a remote AI review, minutes long -- so every fast, deterministic
+    // the slowest reader by far on a real reviewed run (a network round trip
+    // to a remote AI review, minutes long) so every fast, deterministic
     // check's verdict surfaces before it. NOT `isolated`, unlike
     // `Tests`/`Mutation`: it waits on a network response rather than
-    // saturating cores, so it contends with nothing -- matching
+    // saturating cores, so it contends with nothing; matching
     // repo-contract's own plain `coderabbitai,` registration. Its own
     // non-execution (CI, no CLI installed, a detached checkout) is a visible
-    // `warn` on every run, by design -- see checks/coderabbitai.ts.
+    // `warn` on every run, by design: see checks/coderabbitai.ts.
     CodeRabbit: coderabbitai(),
     Mutation: { ...mutation(), isolated: true },
   })

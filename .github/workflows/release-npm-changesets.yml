@@ -1,24 +1,23 @@
 # Reusable release workflow for internal-package-contract consumers using Changesets +
-# npm OIDC trusted publishing. Centralizes the release logic previously duplicated
-# verbatim across every consumer's own .github/workflows/release.yml (env-cap,
-# data-cap, ...) -- see template/release.yml for the thin per-repo caller this
-# expects `internal-package-contract init` to scaffold. A change here reaches a consumer
-# when it bumps the commit SHA it pins this workflow at (dependency-pin-sync.yml does that
-# together with the devDependency pin), never silently.
+# npm OIDC trusted publishing. It replaces the release logic each consumer's own
+# .github/workflows/release.yml (env-cap, data-cap, ...) once copied verbatim.
+# template/release.yml is the thin per-repo caller `internal-package-contract init` scaffolds.
+# A change here reaches a consumer only when it bumps the commit SHA it pins this workflow at.
+# dependency-pin-sync.yml moves that SHA together with the devDependency pin.
 #
-# `on: workflow_call` (not `workflow_dispatch`/`push`) is what makes this reusable --
-# it has no trigger of its own and only ever runs invoked from a caller's own `uses:`
-# job, per https://docs.github.com/actions/using-workflows/reusing-workflows.
+# `on: workflow_call` (not `workflow_dispatch`/`push`) is what makes this reusable. It has no
+# trigger of its own: it runs only from a caller's own `uses:` job
+# (https://docs.github.com/actions/using-workflows/reusing-workflows).
 #
 # THREE JOBS, so that nothing holding the npm publishing identity ever runs repository code:
 #
 #   version  contents/pull-requests/actions write, NO id-token. Generates changesets, opens or
 #            updates the "chore: version packages" PR and dispatches CI on it. A person merges it;
 #            nothing here does (a PR that crosses a major version is also flagged on the run).
-#   build    contents read only. Installs with `--ignore-scripts` (no dependency install script runs),
-#            runs the package's own `verify` gate, and packs the tarball that will be published.
-#   publish  id-token + contents write, but checks out nothing and installs nothing: it downloads the
-#            tarball `build` made, publishes exactly that file with provenance, and creates the git
+#   build    contents read only. Installs with `--ignore-scripts`, so no dependency install script
+#            runs. Runs the package's own `verify` gate and packs the tarball that will be published.
+#   publish  id-token + contents write, but checks out nothing and installs nothing. It downloads the
+#            tarball `build` made and publishes exactly that file with provenance. It creates the git
 #            tags through the API. The only code it runs is a version-pinned npm.
 name: Release (reusable)
 
@@ -58,8 +57,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      # Dispatches the consumer's own ci.yml on the release PR's branch below -- see that
-      # step's own comment for why this is needed at all.
+      # Dispatches the consumer's own ci.yml on the release PR's branch below. That step's
+      # comment says why.
       actions: write
     outputs:
       has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
@@ -78,12 +77,12 @@ jobs:
       # No dependency install script runs in a job that can write to the repository.
       - run: npm ci --ignore-scripts
 
-      # Guarantees every user-visible change since the last release carries a changeset -- either
-      # the hand-written one its own PR already added, or one generated here from its
-      # Conventional Commit subject (feat/fix/perf/breaking only; chore, ci, docs, test and bot
-      # commits never become a release). Self-skips when HEAD is itself the release commit.
-      # Invoked from the consumer's own installed devDependency -- one implementation shared by
-      # every consumer, no per-repo copy.
+      # Gives every feat, fix, perf or breaking commit since the last release a changeset. That is
+      # either the hand-written one its own PR already added, or one generated here from its
+      # Conventional Commit subject. Chore, ci, docs, test and bot commits never become a release,
+      # even when they change what a user sees. Self-skips when HEAD is itself the
+      # release commit. It runs from the consumer's own installed devDependency, so every consumer
+      # shares one implementation.
       - name: Auto-generate changesets for any commit missing one
         run: node node_modules/internal-package-contract/scripts/generate-changeset-from-commits.mjs
 
@@ -93,22 +92,20 @@ jobs:
         with:
           version: npm run version
           # changesets/action's own default commit/PR-title ("Version Packages") is not a
-          # Conventional Commit -- every consumer's own `commits` check (bundled from
-          # internal-package-contract) fails the resulting bot commit on `origin/main..HEAD`,
-          # confirmed directly against a real Release PR. `chore:` satisfies that check and is
-          # itself accurate: a version bump is exactly a chore, not a feature or fix.
+          # Conventional Commit. Every consumer's own `commits` check (bundled from
+          # internal-package-contract) fails that bot commit on `origin/main..HEAD`; a real Release
+          # PR confirmed it. `chore:` satisfies that check and is accurate: a version bump is a
+          # chore, not a feature or fix.
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # changesets/action pushes the release-PR branch using the default
-      # GITHUB_TOKEN, which GitHub deliberately never lets trigger `push`/
-      # `pull_request`-based workflows (anti-recursion guard) -- so without this,
-      # the release PR sits with zero CI checks until a human pushes a real
-      # commit to it. `gh workflow run` is explicitly exempted from that restriction, and its
-      # run's checks attach to the given ref's head SHA exactly as a normal `pull_request` run's
-      # would, so the release PR shows its checks before a person merges it.
+      # changesets/action pushes the release-PR branch using the default GITHUB_TOKEN. GitHub never
+      # lets that token trigger `push` or `pull_request` workflows, to prevent recursion. Without
+      # this step the release PR sits with zero CI checks until a human pushes a real commit to it.
+      # `gh workflow run` is exempt from that restriction. Its run's checks attach to the ref's head
+      # SHA as a `pull_request` run's would. The release PR then shows its checks before a person merges it.
       - name: Dispatch the consumer's CI on the release PR's branch
         id: dispatch
         if: steps.changesets.outputs.pullRequestNumber
@@ -145,8 +142,8 @@ jobs:
 
   build:
     needs: version
-    # Nothing left to version: HEAD is a release commit (or an ordinary push with no releasable
-    # change), so the version in package.json is either already on npm or about to be.
+    # Nothing left to version: HEAD is a release commit, or an ordinary push with no releasable
+    # change. The version in package.json is either already on npm or about to be.
     if: needs.version.outputs.has-changesets != 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -175,9 +172,9 @@ jobs:
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
           PRIVATE=$(node -p "require('./package.json').private === true")
-          # bump-type comes from `.changeset/.release-bump.json`, written by the auto-generation
-          # step during the VERSION run that produced this exact version bump -- not by diffing
-          # version strings, which is ambiguous pre-1.0. It rides along in the release commit.
+          # bump-type comes from `.changeset/.release-bump.json`. The auto-generation step wrote it
+          # during the VERSION run that produced this exact version bump. Diffing version strings
+          # would be ambiguous pre-1.0. The file rides along in the release commit.
           BUMP=$(node -p "require('./.changeset/.release-bump.json').bump" 2>/dev/null || echo "")
           {
             echo "name=$NAME"
@@ -205,17 +202,20 @@ jobs:
             npm run build --if-present
           fi
 
-      # The contract is the gate, and it ran on the pull request: the repository's ruleset requires the
-      # `contract` job before a merge and keeps the branch up to date, so the merged tree is the tree
-      # that passed. This job does not run the contract again (minutes to hours, and a sharded
-      # mutation run cannot run in one job); it proves that a workflow run on a commit with exactly
-      # this tree -- the release commit itself, one of its parents, or the pull request it merged --
-      # finished its `contract` job with success. A commit that reached the default branch past the
-      # ruleset (an administrator's bypass) without that evidence is not published.
+      # The contract is the gate, and it ran on the pull request. The repository's ruleset requires the
+      # `contract` job before a merge and keeps the branch up to date. So the merged tree is the tree
+      # that passed. This job does not run the contract again: it takes minutes to hours, and a sharded
+      # mutation run cannot run in one job. Instead it proves that a workflow run finished its `contract`
+      # job with success on a commit with exactly this tree. That commit is the release commit itself,
+      # one of its parents, or the pull request it merged. A commit that reached the default branch past
+      # the ruleset (an administrator's bypass) without that evidence is not published.
       - name: Require a passing contract run on this tree
         if: steps.info.outputs.should-publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          # Passes when `contract` succeeded and `required` either succeeded or is not in the run.
+          GATES_JQ: >-
+            [.jobs[] | select(.name == "contract" or .name == "required")] as $gates | ($gates | map(select(.name == "contract" and .conclusion == "success")) | length) as $c | ($gates | map(select(.name == "required")) | length) as $r | ($gates | map(select(.name == "required" and .conclusion == "success")) | length) as $ok | if $c > 0 and ($r == 0 or $ok > 0) then "pass" else "no" end
         run: |
           set -eu
           repo="$GITHUB_REPOSITORY"
@@ -227,14 +227,17 @@ jobs:
             [ -n "$sha" ] || continue
             [ "$(gh api "repos/$repo/commits/$sha" --jq '.commit.tree.sha')" = "$tree" ] || continue
             for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&per_page=50" --jq '.workflow_runs[].id'); do
-              if gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" \
-                   --jq '.jobs[] | select(.name == "contract" and .conclusion == "success") | .id' | grep -q .; then
-                echo "contract passed in run $run on $sha (same tree as $GITHUB_SHA)"
+              # `contract` must have passed, and so must `required` when the run has one. `required`
+              # aggregates every other gate job (runtime, TypeScript, examples), so a merge past a red one
+              # is not released.
+              verdict=$(gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" --jq "$GATES_JQ")
+              if [ "$verdict" = "pass" ]; then
+                echo "contract (and required, where the run has it) passed in run $run on $sha (same tree as $GITHUB_SHA)"
                 exit 0
               fi
             done
           done
-          echo "::error title=No passing contract run::No workflow run on a commit with this tree finished its \`contract\` job with success. The release commit never passed its own contract; merge it through a pull request whose contract check is green."
+          echo "::error title=No passing contract run::No workflow run on a commit with this tree finished its \`contract\` job (and its \`required\` job, where it has one) with success. The release commit never passed its own contract; merge it through a pull request whose contract check is green."
           exit 1
 
       # A released package must not ship a document that still asks its author a question. The same check
@@ -252,8 +255,8 @@ jobs:
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/release"
           ls -l "$RUNNER_TEMP/release"
 
-      # Source-level tests run the source; this installs the exact tarball that is about to be published
-      # into an empty project and imports every entry point, the way a consumer would. It runs before the
+      # Source-level tests run the source. This step installs the exact tarball about to be published
+      # into an empty project and imports every entry point, as a consumer would. It runs before the
       # upload, so nothing that fails here can reach the publish job.
       - name: Install the tarball into a clean project and import it
         if: steps.info.outputs.should-publish == 'true'
@@ -273,16 +276,16 @@ jobs:
 
   publish:
     needs: build
-    # Only the default branch publishes. The caller triggers on pushes to it, so this holds already; it
-    # is stated here so a caller that is edited to run on another branch cannot publish from it.
+    # Only the default branch publishes. The caller triggers on pushes to it, so this holds already.
+    # It is stated here so a caller edited to run on another branch cannot publish from it.
     if: needs.build.outputs.should-publish == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     permissions:
-      # Enables npm's OIDC trusted publishing (GA since July 2025) -- no NPM_TOKEN
-      # secret exists or is needed. npm verifies this exact workflow/repo against a
-      # trusted-publisher registration made once, manually, on npmjs.com. The caller workflow's
-      # own job must grant this same permission -- GitHub caps a called workflow's effective
-      # permissions at the intersection of what the caller grants and what this file declares.
+      # Enables npm's OIDC trusted publishing (GA since July 2025): no NPM_TOKEN
+      # secret exists or is needed. npm checks this exact workflow and repository against a
+      # trusted-publisher registration made once, by hand, on npmjs.com. The caller workflow's
+      # own job must grant this same permission. GitHub caps a called workflow's permissions at
+      # what both the caller and this file grant.
       id-token: write
       # Creates the release tag, moves the floating major tag through the API, and creates the GitHub Release.
       contents: write
@@ -322,9 +325,9 @@ jobs:
           gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
             -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA" > /dev/null
           if [ "$ROLL" = "true" ]; then
-            # Named for the major of the version just published: a 2.0.0 release creates `v2` and
-            # never moves `v1`, and while the package is 0.x the tag is `v0` -- `@v1` only ever
-            # points at a 1.x release.
+            # Named for the major of the version just published. A 2.0.0 release creates `v2` and
+            # never moves `v1`. While the package is 0.x the tag is `v0`. `@v1` only ever points at a
+            # 1.x release.
             MAJOR_TAG="v${VERSION%%.*}"
             if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$MAJOR_TAG" > /dev/null 2>&1; then
               gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR_TAG" \
@@ -337,8 +340,8 @@ jobs:
 
       # The GitHub Releases page is the first place many people look for what shipped, so each version
       # gets a Release for the tag just created. The notes are that version's section of the CHANGELOG in
-      # the published tarball: data read out of the tarball, never code run from it, because this job holds
-      # the publishing identity. A package that ships no CHANGELOG gets GitHub's generated notes instead.
+      # the published tarball. This job holds the publishing identity, so the tarball is read as data and
+      # no code from it runs. A package that ships no CHANGELOG gets GitHub's generated notes instead.
       # Safe to re-run: a Release that already exists is left alone. A failure here is shown on the step but
       # must not skip the npm verification that follows, which stays the last thing this job does.
       - name: Create the GitHub Release
@@ -369,18 +372,18 @@ jobs:
           fi
 
       # Publishing succeeded as far as npm's client knows; this asks the registry what it now serves. A
-      # failure cannot unpublish anything, it makes the run red so a person looks at it: the version must
-      # be there, and it must carry the provenance attestation that proves this repository's CI built it.
+      # failure cannot unpublish anything; it makes the run red so a person looks. The version must be
+      # there, with the provenance attestation that proves this repository's CI built it.
       - name: Verify what npm now serves
         env:
           NAME: ${{ needs.build.outputs.name }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -eu
-          # --prefer-online: `npm view` otherwise answers from npm's own cache, which can hold the package
-          # document from before the publish and report the new version missing for minutes. Each query is
-          # bounded (20 s, no retries; npm's own default waits five minutes) and the loop stops at a ten-minute
-          # deadline, so a registry that hangs cannot hold the job past it.
+          # --prefer-online: `npm view` otherwise answers from npm's own cache. That cache can hold the
+          # package document from before the publish and report the new version missing for minutes. Each
+          # query is bounded (20 s, no retries; npm's own default waits five minutes). The loop stops at a
+          # ten-minute deadline, so a registry that hangs cannot hold the job past it.
           served=""
           deadline=$((SECONDS + 600))
           while [ "$SECONDS" -lt "$deadline" ]; do

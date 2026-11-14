@@ -129,7 +129,7 @@ export function gitState(root, exec) {
 }
 
 /**
- * Raw and gzip size of each shipped entry file -- context for the cost report (bytes shipped are bytes
+ * Raw and gzip size of each shipped entry file: context for the cost report (bytes shipped are bytes
  * parsed at every cold start), not a benchmark in itself.
  * @param {string} root - the repository root.
  * @param {readonly string[]} files - repo-relative files to measure.

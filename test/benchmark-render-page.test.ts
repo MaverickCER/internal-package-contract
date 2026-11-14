@@ -122,7 +122,7 @@ describe("buildPageModel", () => {
     // 10x (1 -> 10), which is exactly linear (exponent 1).
     const historyPath = writeHistory("runtime.json", [
       entry({ baseline: 1, stress: 10 }),
-      entry({ baseline: 1, stress: 10 }), // still linear -- this is the "latest" one used for the badge
+      entry({ baseline: 1, stress: 10 }), // still linear; this is the "latest" one used for the badge
     ])
     const model = await buildPageModel({ histories: [`Runtime|${historyPath}`], maxEntries: 200 })
     const group = model.categories[0]!.groups.find((g) => g.group === "cold-start")!

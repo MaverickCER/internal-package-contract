@@ -2,11 +2,11 @@ import type { ApiContractChange, ChangeKind, ContractImpact } from "./evidence-t
 import type { NormalizedMember, NormalizedParameter, ReleaseTagLevel } from "./model-normalizer.js"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/compatibility-classifier.ts` -- this engine
+ * Ported from repo-contract's own `scripts/api-contract/compatibility-classifier.ts`: this engine
  * now lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
  * devDependency rather than hosting a copy.
  *
- * Pure diff over two normalized maps -- zero API-Extractor/TypeScript imports, so this module is
+ * Pure diff over two normalized maps: zero API-Extractor/TypeScript imports, so this module is
  * testable with a fake `resolveAssignability` (fast, synchronous unit tests) while check.ts wires
  * in the real TypeChecker-backed resolver from type-assignability.ts. Implements every
  * deterministic rule from the compatibility-analysis requirements directly from normalized-map
@@ -196,18 +196,17 @@ function compareMetadata(
       currentMember,
       "generic-parameter-changed",
       "unknown",
-      `${currentMember.scopedName}'s type parameters changed from [${oldTypeParams.join(", ")}] to [${newTypeParams.join(", ")}] -- generic parameter changes are not safely classified automatically.`,
+      `${currentMember.scopedName}'s type parameters changed from [${oldTypeParams.join(", ")}] to [${newTypeParams.join(", ")}]; generic parameter changes are not safely classified automatically.`,
     )
   }
 
-  // `extends` and `implements` are compared as two separate ordered lists,
-  // not merged-and-sorted into one: relocating a type between the two
-  // clauses (`class C extends A implements B` -> `class C extends B
-  // implements A`) leaves the merged set identical while genuinely changing
-  // the inheritance relationship. `extends` order is kept (a class has at
-  // most one, an interface's `extends` order is not semantically meaningful
-  // but a reorder is still worth surfacing as `unknown`); `implements` is
-  // sorted because its order carries no meaning.
+  // `extends` and `implements` are compared as two ordered lists, never
+  // merged into one. Moving a type between the two clauses keeps the merged
+  // set but changes the inheritance:
+  // `class C extends A implements B` -> `class C extends B implements A`.
+  // `extends` order is kept: a class has at most one, and an interface's
+  // reorder means nothing but is still worth surfacing as `unknown`.
+  // `implements` is sorted because its order carries no meaning.
   const oldExtends = baselineMember.extendsExcerptTexts ?? []
   const newExtends = currentMember.extendsExcerptTexts ?? []
   const oldImplements = [...(baselineMember.implementsExcerptTexts ?? [])].sort()
@@ -218,7 +217,7 @@ function compareMetadata(
       currentMember,
       "heritage-changed",
       "unknown",
-      `${currentMember.scopedName}'s extends/implements clause changed -- inheritance changes are not safely classified automatically.`,
+      `${currentMember.scopedName}'s extends/implements clause changed; inheritance changes are not safely classified automatically.`,
     )
   }
 }
@@ -504,7 +503,7 @@ function compareOverloadSets(
       continue
     }
     // A signature-matched overload is compared with the full per-member comparison, not only its
-    // return type: a release-tag narrowing (@public -> @internal), a new @deprecated, or a
+    // return type. A release-tag narrowing (@public -> @internal), a new @deprecated, or a
     // type-parameter change on a single overload of a multi-overload set is just as breaking as it
     // is on a non-overloaded function.
     compareMatchedMember(oldMember, newMember, resolve, changes)
@@ -536,7 +535,7 @@ function classifyOverloadSet(
   changes: ApiContractChange[],
 ): void {
   // An entirely-new (or entirely-removed) overload set is reported once, for the whole
-  // function/method, regardless of how many overloads it has -- not as N bare `overload-added`
+  // function/method, regardless of how many overloads it has: not as N bare `overload-added`
   // entries with no `export-added` among them.
   const [removed, ...moreRemoved] = baselineGroup
   const [first, ...moreAdded] = currentGroup
@@ -556,8 +555,8 @@ function classifyOverloadSet(
 }
 
 /**
- * Handles every member with `overloadIndex !== undefined`. The overwhelmingly common case -- a
- * single (non-overloaded) function/method on each side -- is compared directly by position, so an
+ * Handles every member with `overloadIndex !== undefined`. The common case, a single
+ * non-overloaded function or method on each side, is compared directly by position, so an
  * ordinary parameter/return-type change is reported with the normal, specific change kinds rather
  * than as a coarse overload add+remove. Genuine multi-overload sets are matched *within* their
  * group by exact parameter-list signature text rather than positional `overloadIndex` (inserting a
@@ -627,14 +626,14 @@ export function classifyContractChanges(
         )
       } else if (currentMember.propertyTypeExcerptText !== undefined) {
         // A required property added to a container (interface/class/namespace member, etc.)
-        // that itself has no baseline counterpart cannot break an existing consumer -- nobody
+        // that itself has no baseline counterpart cannot break an existing consumer: nobody
         // could have implemented or matched against a shape that did not exist in the baseline
         // contract at all. Only a required property added to an *already-existing* container is
         // a real breaking change (an existing consumer's own conforming object literal/class no
         // longer satisfies the type). Without this check, every new interface/namespace with two
         // or more required members would be misclassified as breaking on its very first release,
-        // even though the whole container -- reported separately as its own compatible
-        // `export-added` -- is new.
+        // even though the whole container (reported separately as its own compatible
+        // `export-added`) is new.
         const parentIsAlsoNew =
           currentMember.parentCanonicalReference !== undefined &&
           !baseline.has(currentMember.parentCanonicalReference)

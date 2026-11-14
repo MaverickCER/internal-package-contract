@@ -1138,7 +1138,7 @@ describe("evaluateFinalVerdict()", () => {
       rationale: [
         "2 Socket alert(s) or stale record(s) need attention:",
         "- socket:left-pad@1.0.0:unmaintained [critical]: forbidden by policy (above medium severity)",
-        '- Stale exception in .repo-contract/exceptions/socket.json: "socket:old@1.0.0:unmaintained" -- Socket no longer raises this alert; delete this entry.',
+        '- Stale exception in .repo-contract/exceptions/socket.json: "socket:old@1.0.0:unmaintained"; Socket no longer raises this alert; delete this entry.',
       ].join("\n"),
     })
   })

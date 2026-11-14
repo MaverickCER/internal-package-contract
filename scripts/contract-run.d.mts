@@ -23,3 +23,4 @@ export function runContract(input: {
   }) => Promise<import("./affected-scope.mjs").ScopeDocument>
 }): Promise<{ passed: boolean }>
 export function processTrouble(evidence: { status: string; exitCode: number | null }): string
+export function resultText(id: string, rationale: string): string

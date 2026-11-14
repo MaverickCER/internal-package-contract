@@ -120,7 +120,7 @@ describe("suppressions() policy", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("1 problem(s)")
     expect(result.rationale).toContain(
-      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given -- id suppression:eslint:no-console:src/a.ts:0123456789ab",
+      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given (id suppression:eslint:no-console:src/a.ts:0123456789ab)",
     )
   })
 

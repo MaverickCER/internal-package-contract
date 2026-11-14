@@ -1,5 +1,5 @@
 /**
- * Baseline commitlint config -- Conventional Commits, as the default the
+ * Baseline commitlint config: Conventional Commits, as the default the
  * `Commits` check uses when a consumer has no commitlint config of its own.
  * `@commitlint/config-conventional` ships with internal-package-contract.
  *

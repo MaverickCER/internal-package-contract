@@ -40,7 +40,7 @@ export function resolveConfig(
     : { path: bundledConfig(bundledRelPath), isBundled: true }
 }
 
-/** stdout + stderr, trimmed and joined -- for surfacing a tool's own error text in a rationale. */
+/** stdout + stderr, trimmed and joined: for surfacing a tool's own error text in a rationale. */
 export function combinedOutput(result: CheckEvidence): string {
   return [result.stdout.trim(), result.stderr.trim()].filter((s) => s.length > 0).join("\n")
 }
@@ -96,7 +96,7 @@ export function withErrorHeadline<T extends Record<string, CheckDefinitionConfig
 
 /**
  * Why a check that should have printed one JSON document did not. A script that throws before it prints
- * leaves a stack trace on stderr and nothing on stdout; calling that "output could not be parsed as JSON" sends
+ * leaves a stack trace on stderr and nothing on stdout. Calling that "output could not be parsed as JSON" sends
  * the reader to the wrong place, so the first line of the error leads when there is one.
  * @param prefix - everything before the reason, for example `"ApiContract:"`.
  * @param result - the check's raw execution evidence.
@@ -112,7 +112,7 @@ export function unparseableRationale(prefix: string, result: CheckEvidence): str
   return `${head}${printed ? `\n${printed}` : ""}`
 }
 
-/** A non-`completed` terminal status (timeout, signal, spawn error) -- the process never ran to its own exit, so its exit code means nothing. */
+/** A non-`completed` terminal status (timeout, signal, spawn error): the process never ran to its own exit, so its exit code means nothing. */
 export function abnormalTermination(result: CheckEvidence, tool: string): string | undefined {
   if (result.status === "completed") return undefined
   if (result.status === "spawn_error") {
@@ -149,8 +149,8 @@ export function firstExisting(candidates: readonly string[]): string | undefined
 
 /**
  * Interprets a check's raw evidence as a `{ ok: boolean, ... }`-shaped JSON envelope emitted by
- * its own small wrapper script (`docsLinks`'s and `docsFragments`'s shared shape) -- fails closed
- * on abnormal termination or unparseable output before the caller ever sees a value, so both
+ * its own small wrapper script (`docsLinks`'s and `docsFragments`'s shared shape). It fails closed
+ * on abnormal termination or unparseable output before the caller ever sees a value. So both
  * checks' own `policy` reduces to interpreting an already-well-formed envelope.
  * @param result - the check's raw execution evidence.
  * @param tool - the underlying tool name, for `abnormalTermination`'s own "is it installed?" rationale.

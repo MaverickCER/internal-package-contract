@@ -29,7 +29,7 @@ Measured against \`origin/main\` at \`abc1234\`, version 1.0.0.
 
 ## Exceptions
 
-- **added** in \`mutation\`: \`m:1\` — Equivalent.
+- **added** in \`mutation\`: \`m:1\`: Equivalent.
 - **removed** in \`mutation\`: \`m:2\`
 
 ## Dependencies

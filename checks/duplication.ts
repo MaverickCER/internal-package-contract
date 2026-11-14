@@ -63,7 +63,7 @@ export const duplication: CheckDefinitionConfig = {
     // Stryker disable next-line ConditionalExpression: an equivalent mutant -- forcing
     // `typeof pct !== "number"` to `false` leaves just `!Number.isFinite(pct)`, which is already
     // logically equivalent to the full expression: `Number.isFinite` (unlike the global
-    // `isFinite`) never coerces, so for any non-number `pct` it already returns `false` --
+    // `isFinite`) never coerces, so for any non-number `pct` it already returns `false`;
     // `typeof pct !== "number"` never adds a case `!Number.isFinite(pct)` didn't already cover.
     // Hand-verified: forcing this to `false` leaves every test in duplication.test.ts passing
     // unchanged.
@@ -77,7 +77,7 @@ export const duplication: CheckDefinitionConfig = {
       // `: ""` fallback whenever `duplicates` really is empty (`["", ...[].map(...)].join("\n")`
       // is `""`, same as the fallback), and produces the SAME "build the list" output as the
       // unmutated code whenever `duplicates` is genuinely non-empty (the real condition already
-      // takes this same branch then) -- there is no `duplicates` array this can ever diverge on.
+      // takes this same branch then): there is no `duplicates` array this can ever diverge on.
       // Hand-verified: forcing this to `true` leaves every test in duplication.test.ts passing
       // unchanged.
       const detail =

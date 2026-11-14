@@ -121,7 +121,7 @@ describe("size", () => {
     ])
     const s = sink()
     expect(await size.run([], dir, s.io)).toBe(1)
-    expect(s.err[0]).toBe("[size] dist/gone.js does not exist -- build the package first.\n")
+    expect(s.err[0]).toBe("[size] dist/gone.js does not exist; build the package first.\n")
     expect(s.out.join("")).toContain("dist/a.js")
   })
   it("says how to supply budgets when there are none or they are not a list", async () => {
@@ -303,7 +303,7 @@ describe("badges", () => {
     mkdirSync(path.join(dir, "docs"))
     const s = sink()
     expect(badges.run(["--coverage", "nowhere.json", "--no-size"], dir, s.io)).toBe(1)
-    expect(s.err).toEqual(["[badges] nowhere.json missing -- run the tests with coverage first.\n"])
+    expect(s.err).toEqual(["[badges] nowhere.json missing; run the tests with coverage first.\n"])
   })
   it("refuses an argument it does not know, with the usage line", () => {
     const s = sink()
@@ -327,8 +327,8 @@ describe("badges", () => {
     const none = sink()
     expect(badges.run([], dir, none.io)).toBe(1)
     expect(none.err).toEqual([
-      "[badges] coverage/coverage-summary.json missing -- run the tests with coverage first.\n",
-      "[badges] size summary missing -- run `size --json coverage/size-summary.json` first.\n",
+      "[badges] coverage/coverage-summary.json missing; run the tests with coverage first.\n",
+      "[badges] size summary missing; run `size --json coverage/size-summary.json` first.\n",
     ])
     coverage([90, 90, 90, 90])
     const noSize = sink()
@@ -383,7 +383,7 @@ describe("cjs-interop", () => {
     const s = sink()
     expect(cjs.run([], dir, s.io)).toBe(1)
     expect(s.err.join("")).toBe(
-      "[cjs-interop] dist/eslint-plugin/index.cjs does not exist -- build the package first.\n",
+      "[cjs-interop] dist/eslint-plugin/index.cjs does not exist; build the package first.\n",
     )
     put("dist/eslint-plugin/index.cjs", "exports.rule = r;\n")
     const t = sink()
@@ -559,7 +559,7 @@ describe("compiler-isolation", () => {
     built({})
     expect(result()).toEqual({
       code: 0,
-      out: "compiler-isolation: OK -- 3 client entry file(s) cannot reach the bundled compiler; the build entry does\n",
+      out: "compiler-isolation: OK: 3 client entry file(s) cannot reach the bundled compiler; the build entry does\n",
       err: "",
     })
   })
@@ -571,7 +571,7 @@ describe("compiler-isolation", () => {
     const { code, err } = result()
     expect(code).toBe(1)
     expect(err).toContain(
-      '. (dist/index.js) can reach "node:module" via dist/chunk.js -- the compiler may only be used by the build entry',
+      '. (dist/index.js) can reach "node:module" via dist/chunk.js; the compiler may only be used by the build entry',
     )
     expect(err.startsWith("compiler-isolation: FAIL\n  ")).toBe(true)
     built({ "dist/index.js": 'const t = require("@typescript/old")\n' })
@@ -580,7 +580,7 @@ describe("compiler-isolation", () => {
   it("fails a client entry that imports typescript, except the ESLint plugin", () => {
     built({ "dist/index.js": 'import ts from "typescript"\n' })
     expect(result().err).toContain(
-      '. (dist/index.js) imports "typescript" -- only the build entry may',
+      '. (dist/index.js) imports "typescript"; only the build entry may',
     )
     built({ "dist/plugin.js": 'import ts from "typescript"\n' })
     expect(result().code).toBe(0)
@@ -598,7 +598,7 @@ describe("compiler-isolation", () => {
     manifest()
     const { code, err } = result()
     expect(code).toBe(1)
-    expect(err).toContain("./build: dist/build.js is missing -- build the package first")
+    expect(err).toContain("./build: dist/build.js is missing; build the package first")
     expect(err).toContain("bin: dist/cli.js is missing")
     expect(err).toContain("  .: dist/index.js is missing")
   })

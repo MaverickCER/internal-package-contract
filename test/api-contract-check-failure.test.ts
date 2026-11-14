@@ -24,7 +24,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 describe("runApiContractCheck() when API Extractor fails", () => {
   it("names the target and the error count instead of comparing anything", async () => {
     await expect(runApiContractCheck(root, "public")).rejects.toThrow(
-      'API Extractor reported 3 error(s) for target "index" -- see stderr above for details.',
+      'API Extractor reported 3 error(s) for target "index"; see stderr above for details.',
     )
   })
 })

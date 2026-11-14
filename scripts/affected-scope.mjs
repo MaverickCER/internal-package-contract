@@ -37,7 +37,7 @@ export function capabilities(cwd) {
   return {
     git: async (args) => {
       const result = spawnSync("git", [...args], { cwd, encoding: "utf8", maxBuffer: MAX_BUFFER })
-      // git missing, or output too large: not "git said no" -- the analysis cannot run.
+      // git missing, or output too large: not "git said no"; the analysis cannot run.
       if (result.error) throw result.error
       return result.status === 0 ? result.stdout : undefined
     },
@@ -82,7 +82,7 @@ export async function computeFromGit(cwd, base, loadTypeScript = projectTypeScri
  * @returns {string} that as one line.
  */
 const becauseText = ({ reason, file, detail }) =>
-  `${reason}: ${file}${detail === undefined ? "" : ` -- ${detail}`}`
+  `${reason}: ${file}${detail === undefined ? "" : ` (${detail})`}`
 
 /**
  * @param {string} reason - why everything runs.
@@ -180,7 +180,7 @@ export function describeScope(doc) {
   const head = `scope: ${doc.scope} (${doc.reason})`
   return doc.scope === "full"
     ? head
-    : `${head} -- ${counted(doc.changedFiles.length, "changed file")}, ${counted(doc.tests.length, "test file")}, ${counted(doc.mutate.length, "mutation target")}`
+    : `${head}; ${counted(doc.changedFiles.length, "changed file")}, ${counted(doc.tests.length, "test file")}, ${counted(doc.mutate.length, "mutation target")}`
 }
 
 /** The check that runs the package's tests, whose command is narrowed to the affected test files. */

@@ -11,7 +11,7 @@
 // "internal-package-contract"."copies" (see `sync --add`); only the enrolled ones are written and compared.
 //
 // Drift is judged on what a file means, not on its bytes. For a workflow, comments, blank lines and the
-// commit an action is pinned to are ignored (the pin is moved by the pin-sync workflow, not by hand), so a
+// commit an action is pinned to are ignored (the pin is moved by the pin-sync workflow, not by hand). So a
 // wording change in the template does not read as drift in every consumer. JSON is compared after
 // parsing. A copy, a document or a plain file is code or canon, and is compared byte for byte.
 

@@ -3,9 +3,9 @@
 //
 // TypeDoc's own bundled default theme renders the search box as
 // `<input id="tsd-search-input" role="combobox" ...>` with no `aria-label`, `title`,
-// or associated `<label>` (a `placeholder` is not a valid accessible name -- WCAG
+// or associated `<label>` (a `placeholder` is not a valid accessible name: WCAG
 // 2.1 SC 1.3.1 / 4.1.2). pa11y's WCAG2AA ruleset flags that as two errors (H91,
-// F68) on every generated docs/api/index.html -- markup TypeDoc itself generates,
+// F68) on every generated docs/api/index.html: markup TypeDoc itself generates,
 // not anything hand-authored in a consuming package.
 //
 // docs/api/ is regenerated from scratch on every docs build (never committed), so
@@ -18,17 +18,17 @@
 // Chromium page via puppeteer, so it evaluates the live DOM after this script runs,
 // not the static markup TypeDoc emitted.
 //
-// Dependency-free (only the `typedoc` peer this plugin runs inside) -- dev tooling,
+// Dependency-free (only the `typedoc` peer this plugin runs inside): dev tooling,
 // never shipped. Resolves against whichever consuming repo's own installed
 // `typedoc` is running this plugin (standard Node module resolution walks up from
 // this file's location under the consumer's node_modules/internal-package-contract/,
-// finding the consumer's own node_modules/typedoc) -- this package deliberately
+// finding the consumer's own node_modules/typedoc): this package deliberately
 // does not declare `typedoc` as its own dependency.
 import { JSX } from "typedoc"
 
 // Also turns the permalink icons inside an accordion `<summary>` into inert spans: a link nested in the
-// summary (itself a control) is axe's `nested-interactive` violation -- and a negative `tabindex` does
-// not cure it, axe says so explicitly -- and TypeDoc's default theme renders one in every section
+// summary (itself a control) is axe's `nested-interactive` violation (and a negative `tabindex` does
+// not cure it, axe says so explicitly) and TypeDoc's default theme renders one in every section
 // heading. The heading keeps its `id`, so `#section` URLs still work; only the little permalink icon
 // inside the collapsible header stops being a link.
 const LABEL_SCRIPT = [
@@ -55,7 +55,7 @@ const LABEL_SCRIPT = [
 export function load(app) {
   app.renderer.hooks.on("body.end", () =>
     // A plain string child would come back through TypeDoc's JSX renderer HTML-escaped
-    // (`"` -> `&quot;`) -- fine for normal text nodes, but inside `<script>` those
+    // (`"` -> `&quot;`): fine for normal text nodes, but inside `<script>` those
     // entities are never decoded by the browser, which breaks the script outright.
     // `JSX.Raw` (the same primitive TypeDoc's own theme uses for its inline
     // theme/search bootstrap scripts) inserts the string verbatim instead.

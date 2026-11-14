@@ -404,6 +404,23 @@ describe("runContract: progress, logs, --changed and --json", () => {
     expect(text).not.toContain("[contract] FAIL Lint")
     expect(text.indexOf("[contract] FAIL Tests")).toBeLessThan(text.indexOf("[FAIL] Tests"))
   })
+  it("names the check once in that early line when the rationale already starts with its id", async () => {
+    const run = async (_config: unknown, options?: Hooks) => {
+      options?.onEvidence?.("Tests", evidenceFor(["Tests"]).checks["Tests"])
+      options?.onVerdict?.("Tests", { outcome: "fail", rationale: "Tests: broken\nmore" })
+      return Promise.resolve({
+        evidence: evidenceFor(["Tests"]),
+        verdict: {
+          passed: false,
+          checks: { Tests: { outcome: "fail", rationale: "Tests: broken\nmore" } },
+        },
+      })
+    }
+    const { text } = await go({ Tests: "fail" }, { runRepoContract: run })
+    expect(text).toContain("[contract] FAIL Tests: broken\n")
+    expect(text).toContain("[FAIL] Tests: broken\nmore\n")
+    expect(text).not.toContain("Tests: Tests:")
+  })
   it("writes each log as its evidence arrives and leads it with the verdict as that arrives, before the run ends", async () => {
     const seen: string[] = []
     await go({ Lint: "pass", Tests: "fail" }, {}, true, async () => {
@@ -527,7 +544,7 @@ describe("runContract: progress, logs, --changed and --json", () => {
 describe("processTrouble", () => {
   it("adds nothing for a process that ended normally, and says how a trouble one ended", () => {
     expect(processTrouble({ status: "completed", exitCode: 0 })).toBe("")
-    expect(processTrouble({ status: "completed", exitCode: 2 })).toBe(" -- exit code 2")
-    expect(processTrouble({ status: "timed_out", exitCode: null })).toBe(" -- timed_out")
+    expect(processTrouble({ status: "completed", exitCode: 2 })).toBe(" (exit code 2)")
+    expect(processTrouble({ status: "timed_out", exitCode: null })).toBe(" (timed_out)")
   })
 })

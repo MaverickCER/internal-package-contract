@@ -2,17 +2,17 @@ import type { ApiContractChange } from "./evidence-types.js"
 import type { NormalizedMember } from "./model-normalizer.js"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/schema-version-consistency.ts` -- this
+ * Ported from repo-contract's own `scripts/api-contract/schema-version-consistency.ts`: this
  * engine now lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it
  * as a devDependency rather than hosting a copy.
  *
- * A separate, deliberately narrow pass run in addition to the main compatibility classifier. For
- * every exported interface present in both baseline and current that has a member literally named
- * `version` with a numeric or string literal type: if any *other* member of that interface changed
- * (added/removed/type-changed) but the `version` member's own literal value did *not* change, this
- * is a genuine internal defect -- a schema-versioning literal that should have been bumped to
+ * A separate, deliberately narrow pass run in addition to the main compatibility classifier. It
+ * looks at every exported interface present in both baseline and current that has a member literally
+ * named `version` with a numeric or string literal type. Suppose any *other* member of that interface
+ * changed (added/removed/type-changed) but the `version` member's own literal value did *not* change.
+ * That is a genuine internal defect: a schema-versioning literal that should have been bumped to
  * reflect the shape change and wasn't. This is the one category of finding that can make the policy
- * fail even though it's otherwise advisory (see checks/api-contract.ts) -- it represents forgetting
+ * fail even though it's otherwise advisory (see checks/api-contract.ts): it represents forgetting
  * to update a schema-version literal, not a "not released yet" false positive.
  *
  * Purely structural (an exported interface + a literal-typed `version` field), not a hardcoded
@@ -46,7 +46,7 @@ function childrenOf(
 
 /**
  * @param member - The normalized member to reduce to its semantic identity.
- * @returns `member` without `fileUrlPath`, which records where the declaration lives, not what it declares -- a pure file move must not read as a shape change here.
+ * @returns `member` without `fileUrlPath`, which records where the declaration lives, not what it declares: a pure file move must not read as a shape change here.
  */
 function semanticIdentity(member: NormalizedMember): Record<string, unknown> {
   const rest: Record<string, unknown> = { ...member }
@@ -120,7 +120,7 @@ export function detectSchemaVersionDrift(
         `${currentInterface.scopedName}${location} changed shape (${String(
           added.length + removed.length + changed.length,
         )} member(s) added/removed/changed) but its \`version\` literal is still ` +
-        `${currentVersionMember.propertyTypeExcerptText} -- bump it to reflect the new schema shape.`,
+        `${currentVersionMember.propertyTypeExcerptText}; bump it to reflect the new schema shape.`,
     })
   }
 

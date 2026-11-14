@@ -28,7 +28,7 @@ const RECORD_SEP = "\x1e"
 const FIELD_SEP = "\x1f"
 
 // Commits that touch ONLY these path prefixes never ship in the published
-// package -- kept deliberately short (per the plan's own "can't become a
+// package: kept deliberately short (per the plan's own "can't become a
 // loophole" instruction) so it can never quietly swallow a real behavior change.
 const EXEMPT_PATH_PREFIXES = [".github/", ".vscode/"]
 
@@ -46,7 +46,7 @@ function readPackage() {
 }
 
 // A squash merge (this workflow's own auto-merge step uses `gh pr merge --squash`)
-// appends " (#123)" to the PR title when it becomes the commit subject on main --
+// appends " (#123)" to the PR title when it becomes the commit subject on main:
 // matching by prefix, not exact equality, is what actually finds these commits.
 function isReleaseCommitSubject(subject) {
   return subject === "chore: version packages" || subject.startsWith("chore: version packages (#")
@@ -56,7 +56,7 @@ function isReleaseCommitSubject(subject) {
  * Finds the commit range to scan: everything since the last "chore: version
  * packages" release commit, excluding HEAD itself. When HEAD IS that commit
  * (a publish-triggered run, immediately after the Version Packages PR merged),
- * returns `{ skip: true }` -- there is nothing new to generate, and generating
+ * returns `{ skip: true }`: there is nothing new to generate. Generating
  * anyway would reintroduce pending changesets that would wrongly turn this
  * publish run back into another version-bump run.
  */
@@ -77,7 +77,7 @@ function findRange() {
     }
   }
 
-  // No prior release commit exists at all -- the first cycle since Changesets
+  // No prior release commit exists at all: the first cycle since Changesets
   // was adopted here. Anchor on whichever commit added .changeset/config.json
   // so history predating this mechanism (already versioned some other way,
   // e.g. release-please) is never retroactively re-bumped.
@@ -117,8 +117,8 @@ function parseSubject(subject) {
 /**
  * The bump a commit asks for, or `null` when it is not releasable.
  *
- * While the package is below 1.0.0 the bump is DEFLATED one level -- a breaking change is `minor`,
- * a `feat` is `patch` -- the usual 0.x convention, and the reason a stray `feat!:` can never
+ * While the package is below 1.0.0 the bump is DEFLATED one level (a breaking change is `minor`,
+ * a `feat` is `patch`) the usual 0.x convention, and the reason a stray `feat!:` can never
  * publish 1.0.0 by itself. Crossing to 1.0.0 is a decision: it takes a human-authored `major`
  * changeset (or a `Changeset: major` trailer), and the release workflow then refuses to auto-merge
  * the version PR.
@@ -208,7 +208,7 @@ export function generateChangesets(cwd = process.cwd(), log = console.log) {
 function main(log) {
   const range = findRange()
   if (range.skip) {
-    log("HEAD is the release commit itself -- nothing to generate.")
+    log("HEAD is the release commit itself; nothing to generate.")
     return { generated: 0, files: [] }
   }
 

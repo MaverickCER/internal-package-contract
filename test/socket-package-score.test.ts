@@ -120,7 +120,7 @@ describe.skipIf(process.platform === "win32")("socket-package-score.mjs", () => 
       { name: "data-cap", version: "0.4.0" },
       { socket: { "npm/data-cap@0.4.0": fixture } },
     )
-    // spawn argv: [node-script] package score npm data-cap@0.4.0 -- key is argv[5]
+    // spawn argv: [node-script] package score npm data-cap@0.4.0; key is argv[5]
     expect(out.ok).toBe(true)
     expect(out.data).toMatchObject({
       purl: "pkg:npm/data-cap@0.4.0",

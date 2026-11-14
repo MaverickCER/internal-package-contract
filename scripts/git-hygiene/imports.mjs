@@ -1,6 +1,6 @@
 // The imports of a package's tracked source that resolve only to a file git does not track. Everything a
-// local gate reads comes from the working tree, so a file hidden by a .gitignore pattern that is too wide,
-// or never added, passes every check on the machine that has it and is missing from every clean checkout,
+// local gate reads comes from the working tree. So a file hidden by a .gitignore pattern that is too wide,
+// or never added, passes every check on the machine that has it. It is missing from every clean checkout,
 // which is what CI and a consumer get. The `GitHygiene` check fails on each one found.
 //
 // Only relative specifiers are followed, with the extensions TypeScript and Node may resolve, and an

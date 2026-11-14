@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs"
 /**
  * Finds the first `medianMs`-bearing field on a raw results.json tier entry.
  * Not every benchmark shape has one under the same key (`totalMs` vs a
- * generic `durationMs`) -- ported unchanged from env-cap's/data-cap's own
+ * generic `durationMs`): ported unchanged from env-cap's/data-cap's own
  * render-benchmark-summary.mjs, which both independently arrived at this
  * exact two-field fallback.
  */
@@ -49,7 +49,7 @@ export function tryReadJson(filePath) {
   }
 }
 
-/** Reads and JSON-parses a file, throwing a clear error on failure -- for a path the caller has already decided is required (unlike `tryReadJson`'s "missing is fine"). */
+/** Reads and JSON-parses a file, throwing a clear error on failure: for a path the caller has already decided is required (unlike `tryReadJson`'s "missing is fine"). */
 export function readJson(filePath) {
   return JSON.parse(readFileSync(filePath).toString())
 }
@@ -70,10 +70,10 @@ export function collectEntries(results) {
  * Normalizes a raw results.json into the compact `{ group: { tier: {
  * medianMs, inputs? } } }` shape shared with a history entry's own
  * `measurements`. Only `status: "completed"` tiers with a resolvable
- * `medianMs` are included -- a failed/skipped tier contributes nothing to
+ * `medianMs` are included: a failed/skipped tier contributes nothing to
  * either the timing chart or complexity classification, same as today's
  * append-benchmark-history.mjs behavior. `inputs` is carried through
- * verbatim (schema v2's whole point -- see append-history.mjs) when the raw
+ * verbatim (schema v2's whole point: see append-history.mjs) when the raw
  * entry has one; omitted otherwise, so a caller can tell "no inputs
  * recorded" apart from "inputs was an empty object."
  */

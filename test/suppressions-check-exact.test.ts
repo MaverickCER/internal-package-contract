@@ -116,8 +116,8 @@ describe("suppressions()", () => {
       outcome: "fail",
       rationale: [
         "Suppressions: 2 problem(s). Give each suppression a reason where it is written (`-- why`), or record it in .repo-contract/exceptions/suppressions.json:",
-        "- src/a.ts:3 eslint-disable-next-line no-console: no reason given -- id suppression:eslint:no-console:src/a.ts:0123456789ab",
-        "- src/b.ts:9 eslint-disable: blanket (names no rule, or a form that never says what it excuses) -- id suppression:eslint:*:src/b.ts:aaaaaaaaaaaa",
+        "- src/a.ts:3 eslint-disable-next-line no-console: no reason given (id suppression:eslint:no-console:src/a.ts:0123456789ab)",
+        "- src/b.ts:9 eslint-disable: blanket (names no rule, or a form that never says what it excuses) (id suppression:eslint:*:src/b.ts:aaaaaaaaaaaa)",
       ].join("\n"),
     })
   })
@@ -130,7 +130,7 @@ describe("suppressions()", () => {
     const result = await run([s])
     expect(result.outcome).toBe("fail")
     expect(result.rationale.split("\n")[1]).toBe(
-      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given; its record is incomplete (missing: constraint) -- id suppression:eslint:no-console:src/a.ts:0123456789ab",
+      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given; its record is incomplete (missing: constraint) (id suppression:eslint:no-console:src/a.ts:0123456789ab)",
     )
     writeRegistry(JSON.stringify({ exceptions: [record(s, { constraint: "", residualRisk: "" })] }))
     expect((await run([s])).rationale.split("\n")[1]).toContain(
@@ -149,8 +149,8 @@ describe("suppressions()", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale.split("\n")).toEqual([
       "Suppressions: 2 problem(s). Give each suppression a reason where it is written (`-- why`), or record it in .repo-contract/exceptions/suppressions.json:",
-      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given -- id suppression:eslint:no-console:src/a.ts:0123456789ab",
-      `- Stale record in ${REGISTRY}: "${gone.id}" -- that suppression is gone or now gives its reason; delete this entry.`,
+      "- src/a.ts:3 eslint-disable-next-line no-console: no reason given (id suppression:eslint:no-console:src/a.ts:0123456789ab)",
+      `- Stale record in ${REGISTRY}: "${gone.id}"; that suppression is gone or now gives its reason; delete this entry.`,
     ])
     const onlyStale = await run([make({ documented: true, reason: "because" })])
     expect(onlyStale.rationale).toContain("Suppressions: 1 problem(s).")

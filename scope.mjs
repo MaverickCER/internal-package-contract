@@ -1,6 +1,6 @@
 // What this repository's own gates cover, in one place (coverage, CRAP, duplication, mutation).
 //
-// The gates apply to everything this package ships and runs -- `checks/`, `scripts/` and `bin/` --
+// The gates apply to everything this package ships and runs (`checks/`, `scripts/` and `bin/`)
 // not just `checks/`. The only things left out are process entry points: a few lines that read argv
 // or the environment, call a function that IS covered, and print. Their tests spawn them as a child
 // process, which V8 coverage cannot attribute, so the logic they would hold lives in importable

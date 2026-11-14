@@ -114,7 +114,7 @@ describe("arethetypeswrong", () => {
     const result = await arethetypeswrong.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
     // The preset's own evaluator then drops the null/primitive entries when
-    // counting reportable problems -- only the one real object remains.
+    // counting reportable problems: only the one real object remains.
     expect(result.rationale).toContain("found 1 packaged type-resolution problem(s)")
   })
 

@@ -1,11 +1,11 @@
 # Benchmarks
 
-This folder is the performance and cost record of the package: what adopting it costs in time and
-money, how each function scales, and where the cost comes from. It is built entirely by
-[`internal-package-contract`](https://github.com/MaverickCER/internal-package-contract): the package
-supplies **what to run** (an input), the contract **stresses it through a ladder of doubling sizes (ten by default), measures it, checks
-the big-O and prices it**, and writes a **report** and a machine-readable **result** (the output).
-Nothing in this folder implements timing, statistics or reporting.
+This folder is the performance and cost record of the package. It shows what adopting the package costs
+in time and money, how each function scales, and where the cost comes from. It is built entirely by
+[`internal-package-contract`](https://github.com/MaverickCER/internal-package-contract). The package
+supplies **what to run** (an input). The contract **stresses it through a ladder of doubling sizes (ten by
+default), measures it, checks the big-O and prices it**. It then writes a **report** and a machine-readable
+**result** (the output). Nothing in this folder implements timing, statistics or reporting.
 
 ## Read first
 
@@ -86,9 +86,8 @@ export default defineSuite({
 | `inEndToEnd`                                                            | no       | How often one end-to-end operation calls the function, for the attribution section.           |
 
 `expectedComplexity` is one of `constant`, `logarithmic`, `linear`, `linearithmic`, `quadratic`,
-`cubic-or-worse`. Return a value that depends on the work (the contract keeps it alive so
-nothing is optimized away); return `timed(ms)` only when an operation is timed elsewhere, such as a
-child process.
+`cubic-or-worse`. Return a value that depends on the work: the contract keeps it alive so nothing is
+optimized away. Return `timed(ms)` only when an operation is timed elsewhere, such as a child process.
 
 ## The output: `results.json`
 
@@ -111,6 +110,6 @@ analysis   complexity      measured class, exponent and notation per group, with
            cost            the typical and largest sizes used for the headline numbers
 ```
 
-Because results are not comparable between machines or runs, history and pull-request summaries look at
-**change over time on comparable hardware** and at **changes in growth class**, never at one absolute
-number. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).
+History and pull-request summaries look at **change over time on comparable hardware** and at **changes in
+growth class**, never at one absolute number. They do so because results are not comparable between
+machines or runs. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).

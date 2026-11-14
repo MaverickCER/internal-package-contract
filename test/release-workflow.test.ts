@@ -150,6 +150,9 @@ describe("release workflows", () => {
     // Same tree, not same commit: the release commit's own CI is still running when this job starts.
     expect(step).toContain(".commit.tree.sha")
     expect(step).toContain('select(.name == "contract" and .conclusion == "success")')
+    // `required` aggregates every other gate job; a run that has it must have passed it too.
+    expect(step).toContain('select(.name == "required" and .conclusion == "success")')
+    expect(step).toContain('if $c > 0 and ($r == 0 or $ok > 0) then "pass" else "no" end')
     expect(step).toContain("exit 1")
     expect(step).not.toMatch(/npm run contract/)
     // Reading workflow runs needs actions: read on the build job, and nothing more.

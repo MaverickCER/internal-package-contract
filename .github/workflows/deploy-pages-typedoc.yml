@@ -1,10 +1,8 @@
-# Reusable GitHub Pages deploy for internal-package-contract consumers, modeled on
-# data-cap/env-cap's own inline `badges`/`deploy` jobs (their ci.yml, pre-migration).
-# Modern artifact-based flow (actions/deploy-pages): everything is built fresh on
-# every push to main and nothing is ever committed back to the repo, unlike the
-# legacy "deploy from a branch" setting repo-contract used before this plan.
+# Reusable GitHub Pages deploy for internal-package-contract consumers. It uses the
+# artifact-based flow (actions/deploy-pages): everything is built fresh on every push
+# to main, and nothing is committed back to the repository.
 #
-# `on: workflow_call` only -- see release-npm-changesets.yml's own identical note for
+# `on: workflow_call` only: see release-npm-changesets.yml's own identical note for
 # why.
 name: Deploy Pages (reusable)
 
@@ -15,7 +13,7 @@ on:
         description: >-
           npm script that (re)generates the browsable HTML API reference into
           docs/api (e.g. `docs:api` for data-cap/env-cap, `api-docs:html` for
-          repo-contract). Run fresh on every deploy -- never committed.
+          repo-contract). Run fresh on every deploy and never committed.
         required: true
         type: string
       badges-script:
@@ -24,9 +22,9 @@ on:
           JSON directly into docs/ (e.g. data-cap/env-cap's own coverage/size run
           plus `node scripts/generate-badges.mjs`). Leave empty when the caller's
           own workflow already generated this content and hands it over via
-          content-artifact-name instead -- repo-contract's case, whose badge JSON
-          depends on the same mutation report its own `contract` job already paid
-          for, which this job must never re-run just to produce a badge.
+          content-artifact-name instead. That is repo-contract's case: its badge
+          JSON depends on the mutation report its own `contract` job already paid
+          for, and this job must never re-run mutation just to produce a badge.
         required: false
         type: string
         default: ""
@@ -80,9 +78,9 @@ jobs:
           name: ${{ inputs.content-artifact-name }}
           path: docs
 
-      # docs/api/ is generated fresh here, every run, never committed -- the
-      # Markdown report drift check in each consumer's own `contract`/`lint` job is
-      # what guards the API surface's freshness on every PR regardless.
+      # docs/api/ is generated fresh here on every run and never committed. On every PR,
+      # the Markdown API report drift check in each consumer's `contract` or `lint` job
+      # guards the API surface instead.
       - name: Regenerate the HTML API reference
         run: npm run ${{ inputs.docs-script }}
 

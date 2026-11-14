@@ -31,7 +31,9 @@ import {
 } from "@microsoft/api-extractor-model"
 
 import {
+  baselineDir,
   readBaseline,
+  readFileAtHead,
   readPackageJson,
   readSchemaVersion,
   sha256,
@@ -56,10 +58,11 @@ import {
 import type { ReleaseTagLevel } from "./model-normalizer.js"
 import { normalizeApiPackage } from "./model-normalizer.js"
 import { detectSchemaVersionDrift } from "./schema-version-consistency.js"
-import { compareVersions, computeMinimumRequiredVersion, parseVersion } from "./semver.js"
+import { computeMinimumRequiredVersion, parseVersion } from "./semver.js"
 import { summarizeChanges, summarizeInitialBaseline } from "./summarize-changes.js"
 import type { ApiContractTarget } from "./targets.js"
 import { readTargets } from "./targets.js"
+import { baselinesEditedWithoutRelease } from "../baseline-guard.mjs"
 import {
   buildItemIndex,
   buildReferenceIndex,
@@ -106,7 +109,7 @@ function getExcerptForPosition(
 }
 
 /**
- * `ApiModel.loadPackage` only accepts a file path -- the committed baseline text (read from git
+ * `ApiModel.loadPackage` only accepts a file path: the committed baseline text (read from git
  * HEAD, never the working tree) is written to a scratch temp file outside the repo, loaded, then
  * removed.
  * @param text - The baseline's raw API JSON text, as read from git `HEAD`.
@@ -136,7 +139,7 @@ export interface AssignabilityResolverContext {
 }
 
 /**
- * Answers one classifier question -- is the old type assignable to the new one, or the reverse --
+ * Answers one classifier question (is the old type assignable to the new one, or the reverse)
  * by locating both sides' type excerpts and handing them to the TypeChecker probe.
  * @param context - Both sides' declaration text and reference/item indexes.
  * @param query - The classifier's question: which two items, which type position, which direction.
@@ -171,7 +174,7 @@ export function resolveAssignabilityQuery(
 
 /**
  * Runs the full comparison for one target: extracts the current contract, reads (or bootstraps)
- * its committed baseline, and -- unless this is the initial baseline -- classifies every change.
+ * its committed baseline, and (unless this is the initial baseline) classifies every change.
  * @param root - Absolute path to the consumer's project root; must contain a built `dist/` and `tsconfig.json`.
  * @param releaseTag - The minimum release tag (`public`/`beta`/`alpha`) to include in the comparison.
  * @param target - The entry point being compared (see targets.ts).
@@ -188,7 +191,7 @@ async function runSingleTargetCheck(
 
   if (!extractResult.succeeded) {
     throw new Error(
-      `API Extractor reported ${String(extractResult.errorCount)} error(s) for target "${target.name}" -- see stderr above for details.`,
+      `API Extractor reported ${String(extractResult.errorCount)} error(s) for target "${target.name}"; see stderr above for details.`,
     )
   }
 
@@ -267,7 +270,7 @@ async function runSingleTargetCheck(
 
   // Informational-only pass at the lowest threshold (admits every release tier), so changes below
   // this target's own --release-tag floor aren't silently invisible. Never affects
-  // impact/requiredLevel/minimumRequiredVersion below -- those are derived from `diff` alone.
+  // impact/requiredLevel/minimumRequiredVersion below: those are derived from `diff` alone.
   const { changes: allTierChanges } = classifyContractChanges(
     normalizeApiPackage(baselinePkg, "internal"),
     normalizeApiPackage(currentPkg, "internal"),
@@ -279,11 +282,11 @@ async function runSingleTargetCheck(
   const impact: ContractImpact = schemaVersionChanges.length > 0 ? "breaking" : classifierImpact
   const baselineVersion = parseVersion(baseline.meta.packageVersion)
 
-  // Below 1.0.0 the required level is deflated -- see `requiredLevelFor`.
+  // Below 1.0.0 the required level is deflated: see `requiredLevelFor`.
   const preOne = parseVersion(packageJson.version)?.major === 0
 
   // A compatible change widens the public surface when it adds an export/member/overload/enum-member
-  // (`*-added`), and also on a `release-tag-changed` -- which, being compatible rather than breaking,
+  // (`*-added`), and also on a `release-tag-changed`: which, being compatible rather than breaking,
   // can only mean a tag was widened (e.g. `@beta` -> `@public`), newly exposing API.
   const widensSurface = diff.some(
     (change) => change.kind.endsWith("-added") || change.kind === "release-tag-changed",
@@ -323,7 +326,7 @@ async function runSingleTargetCheck(
  * comparison -> evidence) in-process against a scratch fixture repository.
  * @param root - Path to the consumer's project folder; must contain `dist/` (already built), `tsconfig.json`, and `typedoc.json` (targets.ts's source of entry points).
  * @param releaseTag - The minimum release tag (`public`/`beta`/`alpha`) to include in the comparison.
- * @returns The complete evidence for this run -- every target's snapshot/diff/impact/required level, the aggregate required level, and what the branch's changesets declare vs. that requirement.
+ * @returns The complete evidence for this run: every target's snapshot/diff/impact/required level, the aggregate required level, and what the branch's changesets declare vs. that requirement.
  */
 export async function runApiContractCheck(
   root: string,
@@ -335,14 +338,14 @@ export async function runApiContractCheck(
   const targetResults: ApiContractTargetResult[] = []
   // Sequential, not `Promise.all`: each target invokes API Extractor's own programmatic API, which
   // is not safe to run concurrently against the same process (it mutates shared compiler-host
-  // state) -- the same reason repo-contract's own report-targets.ts looped its (analogous)
+  // state); the same reason repo-contract's own report-targets.ts looped its (analogous)
   // multi-target extraction sequentially.
   for (const target of targets) {
     targetResults.push(await runSingleTargetCheck(root, releaseTag, target, packageJson))
   }
 
   // The aggregate required level across every target, folding in "unknown" targets via the same
-  // worst-case reasoning a single target's own impact ranking already uses -- see
+  // worst-case reasoning a single target's own impact ranking already uses: see
   // evidence-types.ts's own doc comment on `ApiContractEvidence.requiredLevel`.
   const knownTargets = targetResults.filter((result) => result.impact !== "unknown")
   let requiredLevel = knownTargets
@@ -375,16 +378,30 @@ export async function runApiContractCheck(
 
   const summary = targetResults.map((result) => `[${result.target}] ${result.summary}`).join("\n\n")
 
-  // A release pull request has already consumed its changesets and bumped `package.json`, so no
-  // changeset is left to declare the level; the bump itself is the declaration. It counts once the
-  // version has reached the minimum the API diff requires over the released baseline.
-  const currentVersion = parseVersion(packageJson.version)
-  const minimumVersion =
-    minimumRequiredVersion === undefined ? undefined : parseVersion(minimumRequiredVersion)
-  const versionAlreadyBumped =
-    currentVersion !== undefined &&
-    minimumVersion !== undefined &&
-    compareVersions(currentVersion, minimumVersion) >= 0
+  // A version bump never declares a level on its own. Measured from a baseline the last release did
+  // not refresh, any version past the minimum would excuse every later break, so a baseline that
+  // records another version than package.json is reported and the policy fails on it.
+  const staleBaselines = targetResults
+    .filter((result) => !result.initialBaseline && result.baselineVersion !== packageJson.version)
+    .map((result) => `${result.target}@${String(result.baselineVersion)}`)
+
+  // A baseline moves with a release. One this branch rewrote while keeping the base branch's version would
+  // hide the branch's own API change; scripts/baseline-guard.mjs says which, against the merge base.
+  const guarded = await Promise.all(
+    targets.map(async (target) => {
+      const file = path.posix.join(baselineDir(target.name), "baseline.api.json")
+      return {
+        path: file,
+        versionFile: path.posix.join(baselineDir(target.name), "baseline.meta.json"),
+        current: await readFileAtHead(root, file),
+      }
+    }),
+  )
+  const editedBaselines = baselinesEditedWithoutRelease({
+    cwd: root,
+    version: packageJson.version,
+    baselines: guarded,
+  }).edited
 
   return {
     currentVersion: packageJson.version,
@@ -392,19 +409,18 @@ export async function runApiContractCheck(
     requiredLevel,
     minimumRequiredVersion,
     summary,
+    staleBaselines,
+    editedBaselines,
     changesets: {
       changesetCount,
       declaredLevel,
-      satisfied:
-        requiredLevel === undefined
-          ? null
-          : rankAtLeast(declaredLevel, requiredLevel) || versionAlreadyBumped,
+      satisfied: requiredLevel === undefined ? null : rankAtLeast(declaredLevel, requiredLevel),
     },
   }
 }
 
 /**
- * The script body: runs the check against `cwd` and writes its JSON evidence -- and nothing else.
+ * The script body: runs the check against `cwd` and writes its JSON evidence; and nothing else.
  * @param argv - The command-line arguments (`--release-tag=` is the only one read).
  * @param cwd - The consumer's project root.
  * @param write - Where the JSON evidence goes (stdout, when run as a script).

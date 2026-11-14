@@ -94,7 +94,7 @@ describe("docsFragments (policy)", () => {
       outcome: "fail",
       rationale: [
         "Docs (fragments): 1 broken heading link(s):",
-        "- CONTRIBUTING.md:26 -- #expected--golden-regression-fixtures does not match any heading in examples/README.md. Available: golden-regression-testing, looking-for-something-specific",
+        "- CONTRIBUTING.md:26: #expected--golden-regression-fixtures does not match any heading in examples/README.md. Available: golden-regression-testing, looking-for-something-specific",
       ].join("\n"),
     })
   })

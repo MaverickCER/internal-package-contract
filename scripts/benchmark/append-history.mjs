@@ -22,17 +22,15 @@ import { readJson, resultsToMeasurements } from "./lib/results.mjs"
 
 /**
  * History schema v2: each tier measurement in `entries[].measurements.<group>.<tier>`
- * gains an `inputs: Record<string, number>` alongside `medianMs` (schema v1
- * had only `medianMs`, or env-cap's `medianMs` + a hardcoded
- * `variablesPerSecond`). Old v1 entries remain valid as-is -- nothing here
- * back-fills or migrates them; they simply lack `inputs` and are excluded
- * from complexity classification by classify-complexity.mjs's own filtering
- * (never from the timing chart, which only ever needed `medianMs`).
+ * gains an `inputs: Record<string, number>` alongside `medianMs`. Schema v1 had only
+ * `medianMs`, or env-cap's `medianMs` plus a hardcoded `variablesPerSecond`. Old v1 entries
+ * stay valid and are never migrated. Without `inputs`, classify-complexity.mjs leaves them out
+ * of complexity classification; the timing chart still shows them, since it needs only `medianMs`.
  *
  * `unitsPerSecond` is a schema-v2 generalization of env-cap's own
- * `variablesPerSecond`: instead of a hardcoded "divide `inputs.variables` by
- * time" (meaningless for a group whose `inputs` has no `variables` key --
- * e.g. every one of data-cap's own groups), it divides the SAME generic
+ * `variablesPerSecond`. It replaces a hardcoded "divide `inputs.variables` by
+ * time", which is meaningless for a group whose `inputs` has no `variables` key
+ * (e.g. every one of data-cap's own groups). Instead it divides the SAME generic
  * `inputTotal` this file's own complexity classifier uses by elapsed
  * seconds. One consistent "how much size, how fast" figure per tier,
  * computed the same way regardless of what a consumer's `inputs` object
@@ -122,8 +120,8 @@ export function buildEntry(results, { commit, pullRequest }) {
 
 /**
  * A file that already exists (schema v1, or a v2 file from an earlier append) keeps its own
- * `entries`; only the version marker is bumped to reflect what THIS (newest) entry's shape actually
- * is -- a reader already has to tolerate older entries lacking `inputs` (see above), so the
+ * `entries`. Only the version marker is bumped, to reflect what THIS (newest) entry's shape actually
+ * is. A reader already has to tolerate older entries lacking `inputs` (see above). So the
  * top-level marker tracking "the newest writer's schema" rather than "the oldest entry's schema" is
  * the more useful signal.
  * @param {any} history - the parsed history file, or a fresh one.

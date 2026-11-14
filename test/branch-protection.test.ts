@@ -31,7 +31,7 @@ describe("branch-protection", () => {
       makeContext(
         makeJsonResult({
           ok: false,
-          error: "gh CLI not found -- install it to check GitHub branch protection.",
+          error: "gh CLI not found; install it to check GitHub branch protection.",
         }),
       ),
     )
@@ -39,7 +39,7 @@ describe("branch-protection", () => {
       outcome: "warn",
       rationale: unexcepted(
         "environment:BranchProtection:gh-unavailable",
-        "Branch protection: gh CLI not found -- install it to check GitHub branch protection.",
+        "Branch protection: gh CLI not found; install it to check GitHub branch protection.",
       ),
     })
   })
@@ -50,7 +50,7 @@ describe("branch-protection", () => {
         makeJsonResult({
           ok: false,
           error:
-            "gh CLI is not authenticated -- run `gh auth login` to check GitHub branch protection.",
+            "gh CLI is not authenticated; run `gh auth login` to check GitHub branch protection.",
         }),
       ),
     )
@@ -203,6 +203,36 @@ describe("branch-protection", () => {
     )
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("required review-thread resolution")
+  })
+
+  it("requires the aggregate `required` check only where the package's CI defines that job", async () => {
+    const withAggregate = { ...protectedStatus, aggregateWorkflow: ".github/workflows/ci.yml" }
+    const missing = await branchProtection.policy(makeContext(makeJsonResult(withAggregate)))
+    expect(missing).toEqual({
+      outcome: "fail",
+      rationale:
+        'Branch protection: MaverickCER/data-cap\'s default branch (main) is missing the "required" check among its required status checks (.github/workflows/ci.yml defines that job). Run `internal-package-contract init` to configure it.',
+    })
+    const both = await branchProtection.policy(
+      makeContext(makeJsonResult({ ...withAggregate, requiredChecks: ["contract", "required"] })),
+    )
+    expect(both).toEqual({
+      outcome: "pass",
+      rationale:
+        'Branch protection: MaverickCER/data-cap\'s default branch (main) blocks deletion, force-pushes, and merging without a PR, and requires the "contract" and "required" checks (strict) and resolved review threads.',
+    })
+    // Without such a job, `contract` alone passes, whether the field is null or absent (an older script).
+    for (const status of [{ ...protectedStatus, aggregateWorkflow: null }, protectedStatus])
+      expect((await branchProtection.policy(makeContext(makeJsonResult(status)))).outcome).toBe(
+        "pass",
+      )
+    // With no required-status-checks rule at all, that rule is what is named missing.
+    const noRule = await branchProtection.policy(
+      makeContext(
+        makeJsonResult({ ...withAggregate, hasRequiredStatusChecks: false, requiredChecks: [] }),
+      ),
+    )
+    expect(noRule.rationale).not.toContain('"required" check')
   })
 
   it("accepts a repository's own differently-named CI job when configured", async () => {

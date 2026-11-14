@@ -47,7 +47,7 @@ beforeAll(async () => {
   })
   await writeFile("default-autodetect/src/env.schema.ts", "export const a = 1;\n")
 
-  // Scenario: no tsconfig.json at all -- default auto-detection must be silent.
+  // Scenario: no tsconfig.json at all; default auto-detection must be silent.
   await fs.mkdir(path.join(fixtureRoot, "no-tsconfig"), { recursive: true })
 
   // Scenario: explicit override path.
@@ -58,7 +58,7 @@ beforeAll(async () => {
   // Scenario: malformed JSON. NOTE: a truncated-but-tolerated fixture like
   // `{ "compilerOptions": ` is silently accepted by `ts.readConfigFile()`
   // (parsed as if the dangling key were absent) and hits the "no paths"
-  // path instead of `readResult.error` -- the same gotcha data-cap's
+  // path instead of `readResult.error`; the same gotcha data-cap's
   // identical file already documented. This needs to be genuinely
   // unparseable JSON.
   await writeFile("malformed/tsconfig.json", "}}}} not json {{{{")
@@ -71,11 +71,11 @@ beforeAll(async () => {
   await writeJson("injected/tsconfig.json", { compilerOptions: { target: "ES2020" } })
 
   // Scenario: `paths` is present but declares zero entries (distinct from
-  // `paths` being entirely absent -- `paths !== undefined` alone doesn't
+  // `paths` being entirely absent; `paths !== undefined` alone doesn't
   // short-circuit here, `Object.keys(paths).length > 0` genuinely has to run).
   await writeJson("empty-paths/tsconfig.json", { compilerOptions: { paths: {} } })
 
-  // Scenario: `paths` is genuinely non-empty, with NO `baseUrl` at all --
+  // Scenario: `paths` is genuinely non-empty, with NO `baseUrl` at all;
   // distinguishes `hasPaths` actually being computed `true` from a
   // (wrongly) hardcoded `false`: with no `baseUrl` to fall back on, only a
   // correctly-computed `hasPaths` makes `loadTsconfigPaths("demo-pkg", )` build a
@@ -88,20 +88,20 @@ beforeAll(async () => {
   await writeJson("baseurl-only/tsconfig.json", { compilerOptions: { baseUrl: "." } })
   await writeFile("baseurl-only/src/env/schema.ts", "export const b = 1;\n")
 
-  // Scenario: `extends` chain -- `paths` declared only in the base config.
+  // Scenario: `extends` chain; `paths` declared only in the base config.
   await writeJson("extends-chain/base.tsconfig.json", {
     compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } },
   })
   await writeJson("extends-chain/tsconfig.json", { extends: "./base.tsconfig.json" })
   await writeFile("extends-chain/src/env.schema.ts", "export const c = 1;\n")
 
-  // Scenario: multiple fallback targets for one alias -- only the second exists.
+  // Scenario: multiple fallback targets for one alias; only the second exists.
   await writeJson("multi-fallback/tsconfig.json", {
     compilerOptions: { baseUrl: ".", paths: { "@env/*": ["generated/*", "src/*"] } },
   })
   await writeFile("multi-fallback/src/foo.ts", "export const d = 1;\n")
 
-  // Scenario: a contrived alias resolving into node_modules -- must be discarded.
+  // Scenario: a contrived alias resolving into node_modules; must be discarded.
   await writeJson("node-modules-boundary/tsconfig.json", {
     compilerOptions: { baseUrl: ".", paths: { "@pkg/*": ["node_modules/@pkg/*"] } },
   })
@@ -121,7 +121,7 @@ beforeAll(async () => {
   await writeFile("cache-survives-deletion/src/foo.ts", "export const h = 1;\n")
 
   // Scenario: the resolved file's normalized path contains ".tsx" as a
-  // DIRECTORY segment (`src.tsx/`), but its own real extension is ".js" --
+  // DIRECTORY segment (`src.tsx/`), but its own real extension is ".js";
   // distinguishes the anchored `/\.tsx?$/` from an anchor-less `/\.tsx?/`,
   // which would wrongly match the mid-path substring.
   await writeJson("tsx-anchor/tsconfig.json", {
@@ -344,7 +344,7 @@ describe("resolveAliasImport", () => {
     const cache = createAliasResolutionCache()
     const importingFile = path.join(root("multi-fallback"), "consumer.ts")
     const resolved = resolveAliasImport("@env/foo.js", importingFile, resolution!, cache)
-    // "generated/foo.ts" doesn't exist; "src/foo.ts" does -- ts.resolveModuleName()
+    // "generated/foo.ts" doesn't exist; "src/foo.ts" does: ts.resolveModuleName()
     // must fall through to the second target, exactly like tsc itself would.
     expect(resolved).toBe(path.join(root("multi-fallback"), "src/foo.ts"))
   })
@@ -389,7 +389,7 @@ describe("resolveAliasImport", () => {
     expect(cache.resolutions.size).toBe(1)
 
     const second = resolveAliasImport("@/foo.js", importingFile, resolution!, cache)
-    // Same (importingFile, specifier) pair -- served from cache, no new entry.
+    // Same (importingFile, specifier) pair: served from cache, no new entry.
     expect(cache.resolutions.size).toBe(1)
     expect(first).toBe(second)
 

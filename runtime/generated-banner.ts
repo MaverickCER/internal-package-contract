@@ -51,9 +51,9 @@ export interface GeneratedBanner {
 }
 
 /**
- * The literal marker. A function, not a module-level `const`: a `const` string's mutants are evaluated once
+ * The literal marker. A function, not a module-level `const`. A `const` string's mutants are evaluated once
  * at module load and cannot be attributed to the test that covers them under mutation testing's per-test
- * coverage (a false survivor); a function's literal is evaluated per call, like any other code.
+ * coverage (a false survivor). A function's literal is evaluated per call, like any other code.
  */
 function marker(): string {
   return "GENERATED FILE -- do not edit by hand"
@@ -82,8 +82,8 @@ export function createGeneratedBanner(describe: () => GeneratedBannerOptions): G
     },
 
     // Not a bare `startsWith`: a shebang, a `"use strict"` pragma or a license header pushes a real marker
-    // off line one, and a stricter check would read a genuinely generated file as hand-written, which a
-    // dependency scan would take as "a real consumer imports this" and so permanently mask an abandoned
+    // off line one. A stricter check would read a genuinely generated file as hand-written. A dependency
+    // scan would take that as "a real consumer imports this", and so permanently mask an abandoned
     // contract. The first 20 non-empty lines clear every realistic preamble without scanning a whole file.
     // A line counts only when the marker opens a comment, as `generatedBanner` writes it, so code or prose that
     // merely quotes the marker is not mistaken for a generated file.

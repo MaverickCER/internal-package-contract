@@ -1,11 +1,12 @@
 // Evidence gatherer for the `GitHygiene` check (see checks/git-hygiene.ts). Prints one JSON object and
 // always exits 0; the policy decides the verdict.
 //
-// What is read, from the working directory: whether it is a git repository, every tracked path, tracked
-// text files holding a merge-conflict marker (through `git grep`, which skips binary files), the imports of
-// tracked source that resolve only to a file git does not track (scripts/git-hygiene/imports.mjs), the
-// text of .gitignore, whether .gitattributes, .editorconfig and .nvmrc exist, and which of `private`,
-// `files`, `license`, `repository`, `engines.node`, `type` and `packageManager` package.json carries.
+// What is read, from the working directory: whether it is a git repository, every tracked path, and the
+// tracked text files holding a merge-conflict marker (through `git grep`, which skips binary files). Also
+// the imports of tracked source that resolve only to a file git does not track
+// (scripts/git-hygiene/imports.mjs), and the text of .gitignore. Last, whether .gitattributes, .editorconfig
+// and .nvmrc exist, and which of `private`, `files`, `license`, `repository`, `engines.node`, `type` and
+// `packageManager` package.json carries.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync, statSync } from "node:fs"
@@ -36,7 +37,7 @@ const tracked = isRepo
       .filter(Boolean)
   : []
 
-// Conflict markers in tracked files (text only -- git grep skips binary).
+// Conflict markers in tracked files (text only: git grep skips binary).
 const conflict = git(["grep", "-lE", "^(<{7}|={7}|>{7})( |$)", "--", "."])
 const conflictFiles = conflict.ok
   ? conflict.stdout

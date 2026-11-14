@@ -121,12 +121,12 @@ const DIST_URL_POLICY: ExceptionPolicyConfig = {
 // Anything outside the one classification above is never waivable.
 const DIST_URL_GLOBAL_DEFAULT: ExceptionPolicy = { mode: "forbidden" }
 
-/** `dist-url:<url>` -- stable while the URL is unchanged. */
+/** `dist-url:<url>`: stable while the URL is unchanged. */
 export function deriveDistUrlId(url: string): string {
   return `dist-url:${url}`
 }
 
-/** A blank record for a URL with none yet -- valid registry data, only policy-insufficient. */
+/** A blank record for a URL with none yet: valid registry data, only policy-insufficient. */
 export function createDistUrlStub(shipped: ShippedUrl, id: string): DistUrlRecord {
   return {
     id,
@@ -228,7 +228,7 @@ export function evaluateDistUrls(
     .filter((determinant) => determinant.verdict !== "permitted")
   const staleLines = registry.staleRecords.map(
     (record) =>
-      `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- this URL no longer ships; delete this entry.`,
+      `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)}; this URL no longer ships; delete this entry.`,
   )
 
   if (offenders.length === 0 && staleLines.length === 0) {
@@ -260,7 +260,7 @@ export function evaluateDistUrls(
   return {
     outcome: "fail",
     rationale: [
-      `${String(offenders.length + registry.staleRecords.length)} shipped URL(s) or stale record(s) need attention -- Socket.dev flags every URL in a published package; remove it from the source (comments, JSDoc, string literals, sourcemap content) or explain it in ${REGISTRY_RELATIVE_PATH}:`,
+      `${String(offenders.length + registry.staleRecords.length)} shipped URL(s) or stale record(s) need attention: Socket.dev flags every URL in a published package; remove it from the source (comments, JSDoc, string literals, sourcemap content) or explain it in ${REGISTRY_RELATIVE_PATH}:`,
       ...offenderLines,
       ...more,
       ...staleLines,
@@ -286,7 +286,7 @@ export function distNoUrlsCheck(dir = "dist"): CheckDefinitionConfig {
       if (!value.dirExists) {
         return {
           outcome: "fail",
-          rationale: `Build output directory "${dir}" does not exist -- build before running this check.`,
+          rationale: `Build output directory "${dir}" does not exist; build before running this check.`,
         }
       }
 

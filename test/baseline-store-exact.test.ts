@@ -83,7 +83,7 @@ describe("readPackageJson()", () => {
     const root = scratch(false)
     writeFileSync(path.join(root, "package.json"), "{ nope")
     await expect(readPackageJson(root)).rejects.toThrow(
-      `${path.join(root, "package.json")} is not valid JSON -- fix it before running the api-contract check.`,
+      `${path.join(root, "package.json")} is not valid JSON; fix it before running the api-contract check.`,
     )
   })
 })
@@ -131,7 +131,7 @@ describe("readBaseline()", () => {
     const error = await readBaseline(root, "index").catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(Error)
     expect((error as Error).message).toBe(
-      `"${root}" is not inside a git working tree -- the committed baseline can only be read from git, and this check refuses to fall back to an untrusted working-tree copy.`,
+      `"${root}" is not inside a git working tree: the committed baseline can only be read from git, and this check refuses to fall back to an untrusted working-tree copy.`,
     )
     expect((error as Error).cause).toBeInstanceOf(Error)
   })
@@ -223,7 +223,7 @@ describe("readBaseline()", () => {
   })
 
   it("refuses a baseline missing either content file", async () => {
-    const incomplete = `${prefix}/baseline.meta.json exists at HEAD but baseline.api.json/baseline.d.ts do not -- the committed baseline is incomplete.`
+    const incomplete = `${prefix}/baseline.meta.json exists at HEAD but baseline.api.json/baseline.d.ts do not: the committed baseline is incomplete.`
     for (const file of ["baseline.api.json", "baseline.d.ts"]) {
       const error = await corrupt((root) => rmSync(path.join(dirOf(root), file)))
       expect((error as Error).message).toBe(incomplete)
@@ -240,13 +240,13 @@ describe("readBaseline()", () => {
       writeFileSync(path.join(dirOf(root), "baseline.api.json"), "{}\n"),
     )
     expect((api as Error).message).toBe(
-      `${prefix}/baseline.api.json's content does not match the hash recorded in baseline.meta.json -- the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
+      `${prefix}/baseline.api.json's content does not match the hash recorded in baseline.meta.json: the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
     )
     const dts = await corrupt((root) =>
       writeFileSync(path.join(dirOf(root), "baseline.d.ts"), "export {}\n"),
     )
     expect((dts as Error).message).toBe(
-      `${prefix}/baseline.d.ts's content does not match the hash recorded in baseline.meta.json -- the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
+      `${prefix}/baseline.d.ts's content does not match the hash recorded in baseline.meta.json: the committed baseline is corrupted or was manually edited. Regenerate it with the update-baseline command.`,
     )
   })
 

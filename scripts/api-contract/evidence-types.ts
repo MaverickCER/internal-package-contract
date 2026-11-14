@@ -7,12 +7,12 @@
  * `requiredLevel` and no `minimumRequiredVersion`, so the policy warns instead of inventing a level.
  */
 
-/** Aggregate fact about the public contract delta between baseline and current. "unknown" means the delta could not be safely classified -- never silently downgraded to "compatible" or "unchanged". */
+/** Aggregate fact about the public contract delta between baseline and current. "unknown" means the delta could not be safely classified: never silently downgraded to "compatible" or "unchanged". */
 export type ContractImpact = "unchanged" | "compatible" | "breaking" | "unknown"
 
 /**
  * The SemVer release level required by a classified contract delta. Deliberately excludes
- * "unknown" -- a release level is a prescriptive SemVer magnitude, and "we couldn't determine it"
+ * "unknown": a release level is a prescriptive SemVer magnitude, and "we couldn't determine it"
  * is not one. An `impact: "unknown"` result therefore carries no `requiredLevel` at all rather than
  * a synthetic placeholder value.
  */
@@ -54,7 +54,7 @@ export type ChangeKind =
 
 /** One classified public-contract change: a stable identity, what kind of change it was, its compatibility, and why. */
 export interface ApiContractChange {
-  /** Stable, canonical-reference-derived identity for this change -- deterministic across runs for the same contract delta. */
+  /** Stable, canonical-reference-derived identity for this change: deterministic across runs for the same contract delta. */
   readonly id: string
   /** Human-readable scoped path, e.g. "MyClass.myMethod" or "getUsers". */
   readonly path: string
@@ -68,19 +68,19 @@ export interface ApiContractSnapshot {
   readonly packageName: string
   readonly apiExtractorVersion: string
   readonly apiJsonSchemaVersion: number
-  /** sha256 of the normalized, deterministic model -- the identity of this snapshot's public contract. */
+  /** sha256 of the normalized, deterministic model: the identity of this snapshot's public contract. */
   readonly apiJsonHash: string
-  /** Present only for "current" -- a baseline read from git HEAD has no working-tree file path. */
+  /** Present only for "current": a baseline read from git HEAD has no working-tree file path. */
   readonly apiReportPath?: string | undefined
 }
 
 /**
- * One target's (see targets.ts) complete comparison result -- a consumer package may declare
+ * One target's (see targets.ts) complete comparison result: a consumer package may declare
  * several public entry points (e.g. `src/runtime/index.ts`, `src/build/index.ts`), each with its
  * own independent baseline under `.repo-contract/api-contract/<target>/`.
  */
 export interface ApiContractTargetResult {
-  /** This target's name, derived from its entry point -- see targets.ts. */
+  /** This target's name, derived from its entry point: see targets.ts. */
   readonly target: string
   readonly initialBaseline: boolean
   /** Absent iff `initialBaseline`. */
@@ -89,7 +89,7 @@ export interface ApiContractTargetResult {
   /** Always sorted by `id` for determinism. Empty when `initialBaseline` or when nothing changed. */
   readonly diff: readonly ApiContractChange[]
   /**
-   * Changes visible only below this check's own `--release-tag` threshold -- included for
+   * Changes visible only below this check's own `--release-tag` threshold: included for
    * visibility only. Never affects `impact`/`requiredLevel`/`minimumRequiredVersion`.
    */
   readonly lowerTierDiff: readonly ApiContractChange[]
@@ -98,9 +98,9 @@ export interface ApiContractTargetResult {
   readonly requiredLevel?: RequiredReleaseLevel | undefined
   /** Absent iff `impact === "unknown"`. `"0.1.0"` when `initialBaseline`. */
   readonly minimumRequiredVersion?: string | undefined
-  /** Absent iff `initialBaseline` -- provenance metadata about the historical snapshot, not a property of the TypeScript contract itself. */
+  /** Absent iff `initialBaseline`: provenance metadata about the historical snapshot, not a property of the TypeScript contract itself. */
   readonly baselineVersion?: string | undefined
-  /** Deterministic, generated from `diff`/`impact`/`initialBaseline` -- never hand-authored per scenario. */
+  /** Deterministic, generated from `diff`/`impact`/`initialBaseline`: never hand-authored per scenario. */
   readonly summary: string
 }
 
@@ -122,25 +122,35 @@ export interface ChangesetAnalysisEvidence {
 
 /**
  * The complete evidence this check produces for a consumer package with one or more public entry
- * points. `requiredLevel` is absent if and only if `minimumRequiredVersion` is absent -- the check
+ * points. `requiredLevel` is absent if and only if `minimumRequiredVersion` is absent: the check
  * never invents a release level or version for an indeterminate contract delta.
  */
 export interface ApiContractEvidence {
-  /** Observational only -- the check's own record of package.json's current version. */
+  /** Observational only: the check's own record of package.json's current version. */
   readonly currentVersion: string
-  /** One entry per public entry point declared in the consumer's `typedoc.json` -- see targets.ts. */
+  /** One entry per public entry point declared in the consumer's `typedoc.json`: see targets.ts. */
   readonly targets: readonly ApiContractTargetResult[]
   /**
    * The worst-case bump required across every target. `"unknown"`-impact targets are folded in via
-   * the same worst-case reasoning the per-target `impact` already uses: an aggregate is only
+   * the same worst-case reasoning the per-target `impact` already uses. An aggregate is only
    * `undefined` when at least one target is `"unknown"` AND no other target already requires
-   * `"major"` (a declared `"major"` bump always satisfies whatever an unknown target might have
-   * required, so the ambiguity stops mattering once major is already the floor).
+   * `"major"`. A declared `"major"` bump always satisfies whatever an unknown target might have
+   * required, so the ambiguity stops mattering once major is already the floor.
    */
   readonly requiredLevel?: RequiredReleaseLevel | undefined
   /** Absent iff `requiredLevel` is absent. Derived from `requiredLevel` and the package's own current baseline version (all targets share one package.json version). */
   readonly minimumRequiredVersion?: string | undefined
   /** Deterministic, generated by joining every target's own `summary`, prefixed by target name. */
   readonly summary: string
+  /**
+   * `<target>@<baseline version>` for every target whose committed baseline records another version
+   * than package.json. Empty when every baseline was refreshed by the last release.
+   */
+  readonly staleBaselines: readonly string[]
+  /**
+   * Each baseline file this branch changed while package.json keeps the base branch's version (see
+   * scripts/baseline-guard.mjs). A baseline moves only with a release; empty otherwise.
+   */
+  readonly editedBaselines: readonly string[]
   readonly changesets: ChangesetAnalysisEvidence
 }

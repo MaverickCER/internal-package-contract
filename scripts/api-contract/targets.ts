@@ -3,15 +3,15 @@ import path from "node:path"
 
 /**
  * Derives this feature's per-entry-point target list from the consumer's own `typedoc.json`
- * `entryPoints` -- the same field TypeDoc itself uses to document the public surface (see
- * `config/typedoc.json`) -- rather than a second, hand-maintained list. A consumer with several
+ * `entryPoints` (the same field TypeDoc itself uses to document the public surface (see
+ * `config/typedoc.json`)) rather than a second, hand-maintained list. A consumer with several
  * public entry points (e.g. `src/runtime/index.ts`, `src/build/index.ts`) gets one independent
  * api-contract target per entry point, each with its own baseline under
  * `.repo-contract/api-contract/<target>/`.
  */
 
 /**
- * Every public subpath of the package -- the keys of `package.json` `exports` that expose a type
+ * Every public subpath of the package: the keys of `package.json` `exports` that expose a type
  * declaration (`types` under any condition). A key whose value is a plain path (`./schema` pointing at
  * a JSON file, `./package.json`) exposes no TypeScript API and is not a subpath here.
  * @param exportsField - The parsed `package.json` `exports`.
@@ -99,7 +99,7 @@ function mainEntryPointFilePathFor(entryPoint: string): string {
 
 /**
  * Reads the consumer's own `typedoc.json` (never a `typedoc.markdown.json`/other config that only
- * `extends` it -- `entryPoints` is always declared directly, not inherited) and derives one
+ * `extends` it: `entryPoints` is always declared directly, not inherited) and derives one
  * `ApiContractTarget` per entry point.
  * @param root - Absolute path to the consumer's project root; must contain `typedoc.json`.
  * @returns Every public entry point this consumer documents, as an api-contract target.
@@ -113,7 +113,7 @@ export async function readTargets(root: string): Promise<readonly ApiContractTar
     raw = (await readFile(typedocConfigPath)).toString()
   } catch (error) {
     throw new Error(
-      `Could not read ${typedocConfigPath} -- the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
+      `Could not read ${typedocConfigPath}: the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
       { cause: error },
     )
   }

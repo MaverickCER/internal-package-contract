@@ -93,9 +93,9 @@ import type { SocketProblem } from "./socket-guidance.js"
 const SCRIPT_PATH = path.join(packageRoot, "scripts", "socket-package-score.mjs")
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/socket.json"
 
-/** Socket's own recognized severity tiers -- what a *raw alert* may report. Anything else normalizes to `"unknown"` (never a value Socket itself sends). */
+/** Socket's own recognized severity tiers: what a *raw alert* may report. Anything else normalizes to `"unknown"` (never a value Socket itself sends). */
 const RAW_SEVERITY_VALUES = new Set(["critical", "high", "middle", "low"])
-/** Every value a *stored record*'s severity field may hold -- includes `"unknown"`, since a record mirrors whatever `normalizeAlert` assigned. */
+/** Every value a *stored record*'s severity field may hold: includes `"unknown"`, since a record mirrors whatever `normalizeAlert` assigned. */
 const RECORD_SEVERITY_VALUES = new Set(["critical", "high", "middle", "low", "unknown"])
 
 /** One Socket.dev alert, normalized from the CLI's own report shape. */
@@ -125,8 +125,8 @@ interface SocketExceptionRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * `socket:<package>@<version>:<type>` -- injective over a run (Socket does not emit the same package@version:type twice), stable across runs while the dependency and alert type are unchanged.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * `socket:<package>@<version>:<type>`: injective over a run (Socket does not emit the same package@version:type twice), stable across runs while the dependency and alert type are unchanged.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function deriveSocketExceptionId(alert: {
   readonly package: string
@@ -137,8 +137,8 @@ export function deriveSocketExceptionId(alert: {
 }
 
 /**
- * A fresh, blank exception record for an alert with no matching record yet -- every authoring field starts empty (valid registry data, only policy-insufficient).
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * A fresh, blank exception record for an alert with no matching record yet: every authoring field starts empty (valid registry data, only policy-insufficient).
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function createSocketStub(alert: NormalizedSocketAlert, id: string): SocketExceptionRecord {
   return {
@@ -158,8 +158,8 @@ export function createSocketStub(alert: NormalizedSocketAlert, id: string): Sock
 }
 
 /**
- * `value` is `""` or one of `allowed` -- pushes a descriptive message onto `errors` otherwise.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * `value` is `""` or one of `allowed`: pushes a descriptive message onto `errors` otherwise.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function isValidOptionalEnumField(
   value: unknown,
@@ -168,7 +168,7 @@ export function isValidOptionalEnumField(
   errors: string[],
 ): boolean {
   // Stryker disable next-line ConditionalExpression: replacing `typeof value === "string"` with
-  // `true` is behaviorally equivalent here -- `allowed` is typed `readonly string[]`, so
+  // `true` is behaviorally equivalent here: `allowed` is typed `readonly string[]`, so
   // `allowed.includes(value)` is already `false` for any non-string `value` via plain strict
   // equality (no coercion), with or without the type guard. The guard exists purely to satisfy
   // TypeScript's narrowing for `.includes(value)`, not to change runtime behavior. Hand-verified
@@ -182,7 +182,7 @@ export function isValidOptionalEnumField(
   return valid
 }
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export const SOCKET_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SocketExceptionRecord> = {
   namespace: "socket:",
   metadataKeys: [...SECURITY_EXCEPTION_FIELD_KEYS, "package", "packageVersion", "type", "severity"],
@@ -235,7 +235,7 @@ const AUTHORING_REQUIREMENTS_FULL = [
 ]
 
 /**
- * Critical and high alerts are never waivable; every other alert -- supply-chain risks included --
+ * Critical and high alerts are never waivable; every other alert (supply-chain risks included)
  * needs a complete, finding-specific exception.
  */
 const SOCKET_POLICY: ExceptionPolicyConfig = {
@@ -262,18 +262,18 @@ const VALID_SOCKET_REQUIREMENTS = [
   ...EXCEPTION_V2_FIELD_KEYS,
 ] as const
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export function safeString(value: unknown): string {
   return typeof value === "string" ? value : ""
 }
 
 /**
  * Recognizes Socket's own "not authenticated" JSON envelope: `{ "ok": false, "message": "Auth Error", ... }`.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function isAuthError(parsed: unknown): boolean {
   return (
@@ -292,7 +292,7 @@ function failureCode(parsed: unknown): unknown {
 
 /**
  * Maps a failed `socket package score` envelope (or raw stderr) to the problem a contributor can act on.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function classifyProblem(stderr: string, parsed: unknown): SocketProblem | undefined {
   const code = failureCode(parsed)
@@ -316,7 +316,7 @@ const SELF_VERSION = "self"
 
 /**
  * Splits a Socket alert example such as `npm/@scope/pkg@1.2.3` into package and version.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function parseExample(
   example: string,
@@ -330,7 +330,7 @@ export function parseExample(
 
 /**
  * Normalizes one flattened `socket-package-score` alert (`{ name, severity, category, example }`).
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function normalizeAlert(
   raw: unknown,
@@ -363,7 +363,7 @@ export function normalizeAlert(
   }
 }
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export function evaluateAlert(
   alert: NormalizedSocketAlert,
   record: SocketExceptionRecord | undefined,
@@ -422,13 +422,13 @@ function parseEnvelope(stdout: string): unknown {
 }
 
 /**
- * Interprets the score script's single JSON envelope -- a missing API key warns, every other
+ * Interprets the score script's single JSON envelope. A missing API key warns, and every other
  * recognized "Socket could not run" state fails, each with environment-specific steps (see
- * `./socket-guidance.ts`); only a genuine,
- * well-formed alert list (or a package with nothing published to score) gets past this point.
+ * `./socket-guidance.ts`). Only a genuine, well-formed alert list (or a package with nothing
+ * published to score) gets past this point.
  * @param result - the script's raw evidence.
  * @param env - the environment to inspect for CI (`process.env` in production).
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOutcome {
   const terminated = abnormalTermination(result, "socket-package-score")
@@ -455,8 +455,8 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
     const problem = classifyProblem(result.stderr, parsed)
     if (problem === "not-authenticated") {
       // No API key, here or in CI: the scan did not run, so this is a degradation, not a finding. Locally
-      // it is a warning with the steps to get a key; in CI (--strict) it fails unless
-      // `.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key` -- `init`
+      // it is a warning with the steps to get a key. In CI (--strict) it fails unless
+      // `.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key`. `init`
       // writes that record with a 90-day expiry, so a new package is green on day one and decides later.
       // A key that is present and refused still fails outright.
       return {
@@ -517,7 +517,7 @@ export function interpretSocketRun(result: CheckEvidence, env: Env): SocketRunOu
 
 /**
  * The final pass/fail composition, once every alert has a reconciled (possibly freshly-scaffolded) record to evaluate against.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function evaluateFinalVerdict(
   alerts: readonly NormalizedSocketAlert[],
@@ -542,7 +542,7 @@ export function evaluateFinalVerdict(
   const activeById = new Map(registry.activeRecords.map((r) => [r.id, r]))
   const staleLines = registry.staleRecords.map(
     (record) =>
-      `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- Socket no longer raises this alert; delete this entry.`,
+      `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)}; Socket no longer raises this alert; delete this entry.`,
   )
   const determinants = alerts.map((alert) => ({
     alert,

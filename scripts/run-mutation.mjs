@@ -1,9 +1,10 @@
 // The script behind the `Mutation` check: it runs Stryker and leaves the report the policy judges.
 //
 // It reads the package's own `stryker.config.*` when there is one, else the bundled baseline passed as
-// `--fallback-config`; the scope document of the run (`reports/contract/scope.json`); `IPC_MUTATION_REPORT`,
-// `IPC_MUTATION_SHARD`, `IPC_MUTATION_MEMO` and `CI` from the environment; and every file git does not ignore,
-// hashed as the inputs of the run. It writes `reports/mutation/mutation.json` and the memo beside it.
+// `--fallback-config`. It also reads the scope document of the run (`reports/contract/scope.json`), and
+// `IPC_MUTATION_REPORT`, `IPC_MUTATION_SHARD`, `IPC_MUTATION_MEMO` and `CI` from the environment. Every file git
+// does not ignore is hashed as the inputs of the run. It writes `reports/mutation/mutation.json` and the memo
+// beside it.
 //
 // Every mutant is run (`--force`), whatever an incremental file says: a result carried over from a loaded machine
 // could pass a local gate that CI, starting cold, then fails. A narrowed run (`--scope affected`) mutates only the
@@ -65,9 +66,9 @@ const fallbackConfig = fallbackIdx === -1 ? undefined : process.argv[fallbackIdx
 const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd(), c)))
 
 // Always every mutant, whatever an incremental file says. A package may keep `incremental` on for a developer
-// iterating by hand, but the check's evidence must be a full analysis: a result carried over from a run made under other
-// conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in for
-// a run that would not have said the same, and CI, starting cold, would then fail what a local gate passed.
+// iterating by hand, but the check's evidence must be a full analysis. A result carried over from a run made under
+// other conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in
+// for a run that would not have said the same. CI, starting cold, would then fail what a local gate passed.
 // A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
 const scope = readScope(process.cwd())
 let narrowed = narrowMutation(scope)
@@ -138,7 +139,7 @@ if (adopted !== undefined) {
   try {
     rmSync(path.join(process.cwd(), ".stryker-tmp"), { recursive: true, force: true })
   } catch {
-    // best effort -- bin/contract.mjs cleans it too
+    // best effort; bin/contract.mjs cleans it too
   }
 
   if (result.error) throw result.error

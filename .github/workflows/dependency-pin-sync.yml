@@ -1,18 +1,18 @@
-# Reusable "check for a newer pin -> bump it -> open a PR -> merge conditionally"
-# workflow, shared between:
-#   - sync-repo-contract-version.yml: repo-contract -> internal-package-contract, always adds a
-#     changeset (a real functional/engine coupling) whose severity follows the version change.
-#   - each consumer's own sync-internal-package-contract.yml: internal-package-contract -> its
-#     dependents, never adds a changeset (a devDependency/tooling bump alone doesn't mean the
-#     consumer's own published behavior changed).
+# Reusable workflow: check for a newer pin, bump it, open a PR, and merge it if CI is green.
+# Two kinds of caller share it:
+#   - sync-repo-contract-version.yml (repo-contract -> internal-package-contract) always adds a
+#     changeset whose severity follows the version change, because the engine coupling is real.
+#   - each consumer's sync-internal-package-contract.yml (internal-package-contract -> a dependent)
+#     never adds one: a tooling devDependency bump alone does not change what the consumer publishes.
 #
-# PULL, not push: each caller runs this on its own daily schedule (and on demand) with its OWN
-# `GITHUB_TOKEN`, so no cross-repository token exists to expire. It opens nothing when the pin is
-# already current, and does not open a second PR for a bump that already has one. A git dependency
-# is moved to the newest release tag, and every workflow in the calling repository that pins one of
-# its reusable workflows by commit SHA is re-pinned in the same pull request.
+# PULL, not push: each caller runs this daily (and on demand) in its own repository. Reading the
+# dependency's newest release needs no token, so no token for another repository exists to expire.
+# The optional PIN_SYNC_TOKEN is the caller's own token, for pushing workflow files in its own repository.
+# It opens nothing when the pin is already current, and no second PR for a bump that already has one.
+# A git dependency moves to the newest release tag. Every workflow in the calling repository that pins one
+# of the dependency's reusable workflows by commit SHA is re-pinned in the same pull request.
 #
-# `on: workflow_call` only -- see release-npm-changesets.yml's own identical note.
+# `on: workflow_call` only: see release-npm-changesets.yml's own identical note.
 name: Dependency pin sync (reusable)
 
 on:
@@ -47,10 +47,10 @@ on:
     secrets:
       PIN_SYNC_TOKEN:
         description: >-
-          Optional. A token allowed to push workflow files, such as a fine-grained personal access token with
-          "Contents", "Pull requests" and "Workflows" write access. Without it the run uses GITHUB_TOKEN, which
-          GitHub does not allow to change `.github/workflows/*` -- so a release that changes a pinned workflow
-          cannot be pushed -- and whose pushes do not start CI on the pull request.
+          Optional. A token that can push workflow files and start CI on the pull request. Its permissions
+          and refresh steps are in
+          https://github.com/MaverickCER/internal-package-contract/blob/main/docs/ENVIRONMENT.md#ci-secrets-pin_sync_token.
+          Without it the run uses GITHUB_TOKEN, which cannot change `.github/workflows/*` or start CI.
         required: false
 
 jobs:
@@ -80,9 +80,9 @@ jobs:
           export CURRENT
           OLD=$(node -p "((require('./package-lock.json').packages||{})['node_modules/' + process.env.DEP]||{}).version||''")
           case "$CURRENT" in
-            # A git dependency (internal-package-contract is consumed as `github:owner/repo#<tag>` and
-            # is not on npm, so `name@version` cannot resolve): move it to the newest release TAG
-            # (`vX.Y.Z`), never to a branch head -- an unreleased commit is not a version.
+            # A git dependency: internal-package-contract is consumed as `github:owner/repo#<tag>` and
+            # is not on npm, so `name@version` cannot resolve. Move it to the newest release TAG
+            # (`vX.Y.Z`), never to a branch head; an unreleased commit is not a version.
             github:*)
               REPO_SLUG="${CURRENT#github:}"
               REPO_SLUG="${REPO_SLUG%%#*}"
@@ -93,8 +93,9 @@ jobs:
               fi
               npm ci --ignore-scripts
               if [ -f "node_modules/${DEP}/scripts/upgrade/run.mjs" ]; then
-                # The installed release knows how to bring everything the new one owns up to date: the pin, the
-                # workflows, the managed files, the landing page and the benchmark guides.
+                # The installed release updates everything the new one owns: the pin, the
+                # workflows, the managed files and the generated documents. `git add -A` below
+                # commits all of it.
                 node "node_modules/${DEP}/bin/contract.mjs" upgrade "${LATEST_TAG}"
               else
                 npm install --save-dev --ignore-scripts "${DEP}@github:${REPO_SLUG}#${LATEST_TAG}"
@@ -168,7 +169,7 @@ jobs:
           TARGET: ${{ steps.bump.outputs.target }}
         run: |
           BRANCH="chore/bump-${DEP}-${TARGET}"
-          # "Already open" means an OPEN pull request, not merely that the branch still exists: a pull
+          # "Already open" means an OPEN pull request, not merely that the branch still exists. A pull
           # request closed without merging leaves its branch behind.
           OPEN=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length')
           if [ "$OPEN" != "0" ]; then
@@ -180,21 +181,18 @@ jobs:
           git add -A
           git checkout -b "$BRANCH"
           git commit -m "chore(deps): bump ${DEP} to ${TARGET}"
-          # --force: the branch is this bot's own, and a stale one left behind by a pull request that
-          # was closed without merging must not block every later bump to the same target.
+          # --force: the branch is this bot's own. A stale one, left by a pull request closed without
+          # merging, must not block every later bump to the same target.
           git push --force origin "$BRANCH"
           gh pr create --base main --head "$BRANCH" \
             --title "chore(deps): bump ${DEP} to ${TARGET}" \
             --body "Automated dependency-pin sync: ${DEP} is now ${TARGET}."
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      # Same dispatch-and-poll shape as release-npm-changesets.yml's own merge step
-      # (part C), with one deliberate difference: a red run here leaves the PR open
-      # for a human instead of erroring the job -- bumping a real dependency (unlike
-      # a purely-generated version/changelog bump) can genuinely surface a failure
-      # that should be looked at, not silently forced through (part F's explicit
-      # safety valve; harmless when add-changeset is true too, since E's coupling
-      # can break the same way).
+      # Same dispatch-and-poll shape as release-npm-changesets.yml's merge step, with one difference.
+      # A red run here leaves the PR open for a human instead of failing the job. A real dependency
+      # bump, unlike a generated version bump, can surface a failure that a person should look at.
+      # That holds when add-changeset is true too, since the engine coupling can break the same way.
       - name: Dispatch CI, then merge only if it comes back green
         if: steps.pr.outputs.branch
         env:

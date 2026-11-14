@@ -41,7 +41,7 @@
 import { RESULTS_SCHEMA_VERSION } from "./run.mjs"
 
 /**
- * Reads `key` off `value`, tolerating a missing value -- a results file under validation may be
+ * Reads `key` off `value`, tolerating a missing value: a results file under validation may be
  * anything, and every departure from the contract must be reported, not crash the validator.
  * @param {any} value - what to read from.
  * @param {string} key - the property to read.

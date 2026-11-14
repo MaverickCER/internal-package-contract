@@ -242,14 +242,14 @@ export function suppressions(): CheckDefinitionConfig {
           .slice(0, MAX_LISTED)
           .map(
             ({ suppression, problem }) =>
-              `- ${suppression.file}:${String(suppression.line)} ${suppression.directive}${suppression.rule === "*" ? "" : ` ${suppression.rule}`}: ${problem} -- id ${suppression.id}`,
+              `- ${suppression.file}:${String(suppression.line)} ${suppression.directive}${suppression.rule === "*" ? "" : ` ${suppression.rule}`}: ${problem} (id ${suppression.id})`,
           ),
         ...(offenders.length > MAX_LISTED
           ? [`...and ${String(offenders.length - MAX_LISTED)} more.`]
           : []),
         ...stale.map(
           (record) =>
-            `- Stale record in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- that suppression is gone or now gives its reason; delete this entry.`,
+            `- Stale record in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)}; that suppression is gone or now gives its reason; delete this entry.`,
         ),
       ]
       return {

@@ -46,7 +46,7 @@ function stripFencedCodeBlocks(content) {
     .join("\n")
 }
 
-/** Converts inline link/image markdown to plain text (keeping a link's own visible text, dropping an image entirely) -- `github-slugger` strips punctuation character-by-character and has no notion of markdown syntax, so `[Link text](url)` must become `Link text` *before* slugging or the URL's own characters pollute the slug. */
+/** Converts inline link/image markdown to plain text, keeping a link's own visible text and dropping an image entirely. `github-slugger` strips punctuation character-by-character and has no notion of markdown syntax. So `[Link text](url)` must become `Link text` *before* slugging, or the URL's own characters pollute the slug. */
 function toPlainHeadingText(raw) {
   const text = raw.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
   // One pass can leave a tag behind (`<<b>b>` -> `<b>`), so strip until nothing changes.
@@ -70,7 +70,7 @@ function extractHtmlAnchors(content) {
   return ids
 }
 
-/** Every heading in `content`, as `{ line, slug }`, in document order -- duplicate heading text gets GitHub's own `-1`/`-2`/... suffix, via one `GithubSlugger` instance per file (its dedup state is intentionally per-document). */
+/** Every heading in `content`, as `{ line, slug }`, in document order: duplicate heading text gets GitHub's own `-1`/`-2`/... suffix, via one `GithubSlugger` instance per file (its dedup state is intentionally per-document). */
 function extractHeadingSlugs(content) {
   const slugger = new GithubSlugger()
   const slugs = new Set()
@@ -87,7 +87,7 @@ function extractHeadingSlugs(content) {
   return slugs
 }
 
-/** Every local `#fragment` link in `content`, as `{ line, target, fragment }` -- `target` is `""` for a bare same-file `#fragment` link. External (`http(s)://`, `mailto:`, etc.) and fragment-less links are not returned. */
+/** Every local `#fragment` link in `content`, as `{ line, target, fragment }`: `target` is `""` for a bare same-file `#fragment` link. External (`http(s)://`, `mailto:`, etc.) and fragment-less links are not returned. */
 function extractFragmentLinks(content) {
   const stripped = stripFencedCodeBlocks(content)
   const lines = stripped.split("\n")
@@ -154,7 +154,7 @@ async function main() {
       const targetRelPath =
         link.target.length === 0 ? relPath : path.normalize(path.join(sourceDir, link.target))
       const slugs = await slugsFor(targetRelPath)
-      if (slugs === undefined) continue // target file doesn't exist -- DocsLinks' job, not this check's.
+      if (slugs === undefined) continue // target file doesn't exist: DocsLinks' job, not this check's.
       if (slugs.has(link.fragment.toLowerCase())) continue
 
       broken.push({

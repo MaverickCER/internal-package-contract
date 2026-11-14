@@ -1,5 +1,5 @@
-# Opens (and closes) one issue when a credential described in ci/env.schema.ts is expiring or has expired, so a token
-# is rotated before the workflow that uses it stops working. A package with no ci/env.schema.ts has nothing to
+# Opens (and closes) one issue when a credential described in ci/env.schema.ts is expiring or has expired.
+# That way a token is rotated before the workflow that uses it stops working. A package with no ci/env.schema.ts has nothing to
 # report and this does nothing. Nothing about it is required.
 name: Credential rotation
 

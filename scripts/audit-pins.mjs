@@ -1,8 +1,8 @@
 // Entry point for the remote pin audit (see pin-audit.mjs). Reads package-lock.json and every
 // `.github/workflows/*.yml` of the working directory and asks GitHub about each full-SHA pin through `gh`.
 // Needs the network and a logged-in `gh`; a call that fails for any other reason than a 404 is "blocked",
-// which is not a pass. Only the `status` and `sha` fields of each reply are read, because a compare of a
-// diverged commit can exceed the default output buffer and turn the very defect this looks for into
+// which is not a pass. Only the `status` and `sha` fields of each reply are read. A compare of a diverged
+// commit can exceed the default output buffer, which would turn the very defect this looks for into
 // "blocked".
 //
 //   node node_modules/internal-package-contract/scripts/audit-pins.mjs

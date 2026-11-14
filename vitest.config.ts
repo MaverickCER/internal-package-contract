@@ -11,7 +11,7 @@ export default defineConfig({
     testTimeout: 20_000,
     coverage: {
       provider: "v8",
-      // Everything this package ships and runs -- see scope.mjs for the one exclusion (process entry
+      // Everything this package ships and runs: see scope.mjs for the one exclusion (process entry
       // points) and why.
       include: ["checks/**/*.ts", "runtime/**/*.ts", "scripts/**/*.{ts,mjs}", "bin/**/*.mjs"],
       exclude: [...NON_RUNTIME, ...ENTRY_SHELLS],

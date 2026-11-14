@@ -1,18 +1,33 @@
 /**
- * How a change to a package's non-TypeScript surface is judged for SemVer: the `--help` text and exit
- * code of each CLI, the JSON Schemas it exports, and the inputs and outputs of its GitHub Action.
- * `ApiContract` covers the types; `SurfaceContract` (checks/surface-contract.ts) covers this.
+ * How a change to a package's non-TypeScript surface is judged for SemVer. That surface is the `--help`
+ * text and exit code of each CLI and of each command it lists, and the JSON Schemas it exports. It is
+ * also the inputs and outputs of its GitHub Action and of each reusable workflow it hosts, and the
+ * Markdown headings its generators write. `ApiContract` covers the types; `SurfaceContract`
+ * (checks/surface-contract.ts) covers this.
  *
- * The classification errs toward `breaking`. A change is `compatible` only when it cannot break
- * someone who relied on the old surface: an optional addition, a documentation keyword, a constraint
- * relaxed so that it accepts more. Everything else is `breaking`. A wrong guess therefore costs a
- * larger bump than needed, never a breaking change released as a patch.
+ * Breaking: a removed CLI, command, flag, schema, reusable workflow, generated-document heading, or
+ * action or workflow input, secret or output, a changed exit code, a
+ * new required input or a changed input default, and any schema constraint that accepts less. Compatible: an addition, a schema
+ * constraint relaxed to accept more, a documentation keyword, and a change to help prose that leaves
+ * every command and flag in place. A rename reads as a removal plus an addition, so it is breaking.
+ *
+ * Limit: help prose is read for commands and flags only. A behaviour change behind unchanged help,
+ * such as a flag that now means something else, is invisible here.
  */
 
-/** A CLI as a user sees it: what `--help` printed and how the process exited. */
-export interface CliSurface {
+/** One command's help as a user sees it: what `--help` printed and how the process exited. */
+export interface CommandSurface {
   readonly exitCode: number | null
   readonly help: string
+}
+
+/**
+ * A CLI as a user sees it: its top-level help, and the help of each command that help lists.
+ * `commands` is absent in a baseline taken before commands were collected; such a baseline is
+ * compared on the top-level help only, until `update-baseline` records the commands.
+ */
+export interface CliSurface extends CommandSurface {
+  readonly commands?: Readonly<Record<string, CommandSurface>>
 }
 
 /** A composite or JavaScript GitHub Action's public interface. */
@@ -29,6 +44,18 @@ export interface Surface {
   /** Parsed JSON Schema documents, keyed by the `package.json` `exports` subpath they are served at. */
   readonly schemas: Readonly<Record<string, unknown>>
   readonly action: ActionSurface | null
+  /**
+   * The `on.workflow_call` interface of each reusable workflow under `.github/workflows/`, keyed by file
+   * name. A workflow's secrets are inputs named `secrets.<name>`. Absent in a baseline taken before
+   * reusable workflows were collected.
+   */
+  readonly workflows?: Readonly<Record<string, ActionSurface>>
+  /**
+   * The Markdown headings the package's generators write (package.json
+   * `internal-package-contract.surfaceRenderers`). Absent when the package lists none, or in a baseline
+   * taken before headings were collected.
+   */
+  readonly documents?: readonly string[]
 }
 
 /** One difference between the released surface and the current one. */
@@ -93,7 +120,11 @@ export function flattenSchema(schema: unknown): {
 const FLAG = /(?<![\w-])--[A-Za-z][A-Za-z0-9-]*/g
 const flagsOf = (help: string): Set<string> => new Set([...help.matchAll(FLAG)].map((m) => m[0]))
 
-function classifyCli(name: string, before: CliSurface, after: CliSurface): SurfaceChange[] {
+function classifyCommand(
+  name: string,
+  before: CommandSurface,
+  after: CommandSurface,
+): SurfaceChange[] {
   const changes: SurfaceChange[] = []
   const id = `cli:${name}`
   if (before.exitCode !== after.exitCode) {
@@ -134,6 +165,33 @@ function classifyCli(name: string, before: CliSurface, after: CliSurface): Surfa
       widens: false,
       explanation: `The \`${name} --help\` text changed.`,
     })
+  }
+  return changes
+}
+
+function classifyCli(name: string, before: CliSurface, after: CliSurface): SurfaceChange[] {
+  const changes = classifyCommand(name, before, after)
+  // A baseline from before commands were collected has nothing to compare them with.
+  if (before.commands === undefined) return changes
+  const was = before.commands
+  const now = after.commands ?? {}
+  // `classifySurface` sorts every change by id, so the command order here never shows.
+  for (const command of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    const full = `${name} ${command}`
+    const old = was[command]
+    const current = now[command]
+    if (old !== undefined && current !== undefined)
+      changes.push(...classifyCommand(full, old, current))
+    else {
+      const added = current !== undefined
+      changes.push({
+        id: `cli:${full}`,
+        kind: added ? "cli-command-added" : "cli-command-removed",
+        impact: added ? "compatible" : "breaking",
+        widens: added,
+        explanation: `\`${full}\` was ${added ? "added" : "removed"}.`,
+      })
+    }
   }
   return changes
 }
@@ -244,7 +302,19 @@ function classifySchema(key: string, before: unknown, after: unknown): SurfaceCh
   return changes
 }
 
-function classifyAction(before: ActionSurface, after: ActionSurface): SurfaceChange[] {
+/** How a change to an Action or to a reusable workflow is named: its id prefix, kind prefix and noun. */
+interface InterfaceLabel {
+  readonly id: string
+  readonly kind: string
+  readonly noun: string
+}
+const ACTION_LABEL: InterfaceLabel = { id: "action", kind: "action", noun: "Action" }
+
+function classifyAction(
+  before: ActionSurface,
+  after: ActionSurface,
+  label: InterfaceLabel = ACTION_LABEL,
+): SurfaceChange[] {
   const changes: SurfaceChange[] = []
   const push = (
     id: string,
@@ -258,65 +328,134 @@ function classifyAction(before: ActionSurface, after: ActionSurface): SurfaceCha
   for (const name of Object.keys(before.inputs)) {
     const was = before.inputs[name]!
     const now = after.inputs[name]
-    const id = `action:input:${name}`
+    const id = `${label.id}:input:${name}`
     if (now === undefined)
-      push(id, "action-input-removed", "breaking", false, `Action input ${name} was removed.`)
+      push(
+        id,
+        `${label.kind}-input-removed`,
+        "breaking",
+        false,
+        `${label.noun} input ${name} was removed.`,
+      )
     else {
       if (!was.required && now.required)
         push(
           id,
-          "action-input-required",
+          `${label.kind}-input-required`,
           "breaking",
           false,
-          `Action input ${name} is now required.`,
+          `${label.noun} input ${name} is now required.`,
         )
       if (was.required && !now.required)
         push(
           id,
-          "action-input-optional",
+          `${label.kind}-input-optional`,
           "compatible",
           false,
-          `Action input ${name} is now optional.`,
+          `${label.noun} input ${name} is now optional.`,
         )
       if (was.default !== now.default)
         push(
           id,
-          "action-input-default-changed",
+          `${label.kind}-input-default-changed`,
           "breaking",
           false,
-          `Action input ${name} has a different default.`,
+          `${label.noun} input ${name} has a different default.`,
         )
     }
   }
   for (const name of Object.keys(after.inputs).filter((n) => !(n in before.inputs))) {
     const required = after.inputs[name]!.required
     push(
-      `action:input:${name}`,
-      "action-input-added",
+      `${label.id}:input:${name}`,
+      `${label.kind}-input-added`,
       required ? "breaking" : "compatible",
       !required,
-      `Action input ${name} was added${required ? " and is required" : ""}.`,
+      `${label.noun} input ${name} was added${required ? " and is required" : ""}.`,
     )
   }
   for (const name of before.outputs.filter((n) => !after.outputs.includes(n))) {
     push(
-      `action:output:${name}`,
-      "action-output-removed",
+      `${label.id}:output:${name}`,
+      `${label.kind}-output-removed`,
       "breaking",
       false,
-      `Action output ${name} was removed.`,
+      `${label.noun} output ${name} was removed.`,
     )
   }
   for (const name of after.outputs.filter((n) => !before.outputs.includes(n))) {
     push(
-      `action:output:${name}`,
-      "action-output-added",
+      `${label.id}:output:${name}`,
+      `${label.kind}-output-added`,
       "compatible",
       true,
-      `Action output ${name} was added.`,
+      `${label.noun} output ${name} was added.`,
     )
   }
   return changes
+}
+
+/** Reusable workflows, judged like an Action. A baseline taken before they were collected compares nothing. */
+function classifyWorkflows(baseline: Surface, current: Surface): SurfaceChange[] {
+  if (baseline.workflows === undefined) return []
+  const changes: SurfaceChange[] = []
+  const now = current.workflows ?? {}
+  for (const file of new Set([...Object.keys(baseline.workflows), ...Object.keys(now)])) {
+    const was = baseline.workflows[file]
+    const is = now[file]
+    if (was !== undefined && is !== undefined) {
+      changes.push(
+        ...classifyAction(was, is, {
+          id: `workflow:${file}`,
+          kind: "workflow",
+          noun: `Workflow ${file}`,
+        }),
+      )
+    } else {
+      const added = is !== undefined
+      changes.push({
+        id: `workflow:${file}`,
+        kind: added ? "workflow-added" : "workflow-removed",
+        impact: added ? "compatible" : "breaking",
+        widens: added,
+        explanation: `The reusable workflow ${file} was ${added ? "added" : "removed"}.`,
+      })
+    }
+  }
+  return changes
+}
+
+/**
+ * Generated-document headings. A heading readers navigate by, or a tool parses, is part of the output
+ * format. A baseline taken before headings were collected compares nothing. A package that stops listing
+ * renderers reads as removing every heading.
+ */
+function classifyDocuments(baseline: Surface, current: Surface): SurfaceChange[] {
+  const was = baseline.documents
+  // Dropping `surfaceRenderers` stops collecting headings; that reads as every heading removed, so it
+  // cannot switch the diff off quietly.
+  const now = current.documents ?? []
+  if (was === undefined) return []
+  return [
+    ...was
+      .filter((heading) => !now.includes(heading))
+      .map((heading) => ({
+        id: `document:${heading}`,
+        kind: "document-heading-removed",
+        impact: "breaking" as const,
+        widens: false,
+        explanation: `Generated documents no longer contain the heading "${heading}".`,
+      })),
+    ...now
+      .filter((heading) => !was.includes(heading))
+      .map((heading) => ({
+        id: `document:${heading}`,
+        kind: "document-heading-added",
+        impact: "compatible" as const,
+        widens: true,
+        explanation: `Generated documents gained the heading "${heading}".`,
+      })),
+  ]
 }
 
 /**
@@ -368,5 +507,6 @@ export function classifySurface(baseline: Surface, current: Surface): SurfaceCha
       current.action !== null,
       "The GitHub Action",
     )
+  changes.push(...classifyWorkflows(baseline, current), ...classifyDocuments(baseline, current))
   return changes.sort((x, y) => x.id.localeCompare(y.id))
 }

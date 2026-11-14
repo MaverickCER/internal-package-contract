@@ -1,13 +1,14 @@
 # Reusable "after a merge: measure the merge commit and record it" workflow, the counterpart of
 # benchmark-pr.yml (which only measures and comments on a pull request).
 #
-# Committed results and history used to be written INTO each pull request by a bot. That left the PR's
-# head without a CI run (a GITHUB_TOKEN push starts none), made "previous" whatever the last PR measured,
-# and recorded a pull-request-branch commit that a squash merge deletes. Recording after the merge fixes
-# all three: the entry carries the MERGE commit and its pull request number, and the bot's own change
-# arrives as a normal pull request that CI is dispatched on and that merges only when green.
+# Results are recorded after the merge, never pushed into the pull request, for three reasons:
+#   1. a GITHUB_TOKEN push starts no CI run, so the PR's head would go untested;
+#   2. "previous" would be whatever the last PR measured, not main;
+#   3. a squash merge deletes the pull-request-branch commit the entry would name.
+# The entry carries the MERGE commit and its pull request number. The bot's own change arrives as a
+# normal pull request that CI is dispatched on and that merges only when green.
 #
-# `on: workflow_call` only. Call it from the push-to-main trigger of the package's CI; it does nothing
+# `on: workflow_call` only. Call it from the push-to-main trigger of the package's CI. It does nothing
 # for a bot's own commit, which is what ends the loop.
 #
 #   benchmark-record:
@@ -91,8 +92,8 @@ jobs:
           BENCHMARK_COMMAND: ${{ inputs.benchmark-command }}
         run: bash -c "$BENCHMARK_COMMAND"
 
-      # Only a change that touches benchmarked code is recorded (a docs-only merge would add a history
-      # entry saying nothing changed).
+      # Only a change that touches benchmarked code is recorded. A docs-only merge would add a history
+      # entry saying nothing changed.
       - name: Append history entries, naming the merge commit and its pull request
         id: record
         env:
@@ -113,7 +114,7 @@ jobs:
           for dir in "${dirs[@]}"; do pattern="${pattern}|^${dir}/"; done
           RELEVANT=$(echo "$CHANGED" | grep -E "$pattern" | grep -vE "/(results\.json|BENCHMARKS\.md)$" | grep -vE "history/" || true)
           if [ -z "$RELEVANT" ]; then
-            echo "This merge does not touch benchmarked code -- nothing to record."
+            echo "This merge does not touch benchmarked code, so there is nothing to record."
             echo "record=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -143,7 +144,7 @@ jobs:
             git add "${dir}/results.json" "${dir}/BENCHMARKS.md" "${history}"
           done <<< "$SUITES"
           if git diff --cached --quiet; then
-            echo "Nothing changed -- nothing to record."
+            echo "Nothing changed, so there is nothing to record."
             exit 0
           fi
           git commit -m "chore(benchmarks): record results for ${SHA:0:7}"

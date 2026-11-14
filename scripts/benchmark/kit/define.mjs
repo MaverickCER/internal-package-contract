@@ -86,7 +86,7 @@ const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const isKebab = (value) => typeof value === "string" && KEBAB.test(value)
 
 /**
- * Reads `key` off `value`, tolerating a missing value -- a definition under validation may be
+ * Reads `key` off `value`, tolerating a missing value: a definition under validation may be
  * anything, and every gap in it must be reported, not crash the validator.
  * @param {any} value - what to read from.
  * @param {string} key - the property to read.
@@ -121,7 +121,7 @@ function validateVariables(variables, at, problems) {
       )
     }
     if (how === "fixed" && get(variable, "value") === undefined) {
-      problems.push(`${here}.value is required for a "fixed" variable -- say what it was held at.`)
+      problems.push(`${here}.value is required for a "fixed" variable; say what it was held at.`)
     }
   })
 }

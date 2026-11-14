@@ -115,14 +115,14 @@ if (args.name !== undefined) {
     // A workflow that calls one of this repository's reusable workflows is pinned by commit SHA; with
     // no SHA to pin it to, writing it would only produce a workflow that cannot run.
     if (pins.ipcSha === "" && rel.endsWith("sync-internal-package-contract.yml")) {
-      skipped.push(`${rel} (no commit of internal-package-contract to pin it to -- see below)`)
+      skipped.push(`${rel} (no commit of internal-package-contract to pin it to; see below)`)
       continue
     }
     scaffoldPackageFile(rel, vars)
   }
   // The scaffold's own documents carry generated regions; fill them now so the first `GeneratedRegions` run
   // finds them current. The package's Prettier configuration imports this package, which is not installed yet,
-  // so the defaults format them -- the same text, since a table is aligned the same way under any setting here.
+  // so the defaults format them: the same text, since a table is aligned the same way under any setting here.
   const generated = []
   const code = await runGenerate(
     [],
@@ -194,7 +194,7 @@ scaffold("benchmarks/README.md", "benchmarks/README.md")
 scaffold("benchmarks/WRITING-BENCHMARKS.md", "benchmarks/WRITING-BENCHMARKS.md")
 scaffold("benchmarks/READING-BENCHMARKS.md", "benchmarks/READING-BENCHMARKS.md")
 
-// .nvmrc -- mirror this package's own supported Node.
+// .nvmrc: mirror this package's own supported Node.
 const nvmrcDest = path.join(cwd, ".nvmrc")
 if (!existsSync(nvmrcDest) || force) {
   let node = "24\n"
@@ -209,7 +209,7 @@ if (!existsSync(nvmrcDest) || force) {
   skipped.push(".nvmrc (exists)")
 }
 
-// .repo-contract/exceptions/environment.json -- a new package has no Socket API token yet, and in CI the
+// .repo-contract/exceptions/environment.json: a new package has no Socket API token yet, and in CI the
 // contract runs --strict, where a check that could not run fails unless this registry says why. This
 // record keeps day one green and expires in 90 days, so the token decision is forced, not forgotten.
 // A package that already has the registry keeps it as it is.
@@ -256,7 +256,7 @@ if (!existsSync(environmentRegistry) || force) {
   skipped.push(".repo-contract/exceptions/environment.json (exists)")
 }
 
-// package.json -- ensure the `contract` script.
+// package.json: ensure the `contract` script.
 const pkgPath = path.join(cwd, "package.json")
 try {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"))
@@ -269,10 +269,10 @@ try {
     skipped.push("package.json scripts.contract (already set)")
   }
 } catch {
-  skipped.push("package.json (could not read/update -- add the `contract` script manually)")
+  skipped.push("package.json (could not read/update; add the `contract` script manually)")
 }
 
-// git wiring -- hooks + commit template. Prefer the in-repo install path
+// git wiring: hooks + commit template. Prefer the in-repo install path
 // (git resolves core.hooksPath relative to the repo root); fall back to the
 // package's absolute hooks dir when it is not installed under the consumer yet.
 const inRepo = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd }).status === 0
@@ -285,15 +285,14 @@ if (inRepo) {
   spawnSync("git", ["config", "commit.template", ".gitmessage"], { cwd })
   done.push(`git core.hooksPath -> ${hooksPath}`, "git commit.template -> .gitmessage")
 } else {
-  skipped.push("git config (not a git repo -- run `git init` then re-run)")
+  skipped.push("git config (not a git repo; run `git init` then re-run)")
 }
 
-// GitHub branch protection -- idempotently ensure the default branch blocks
-// deletion, blocks force-pushes, and cannot be merged into without a PR
-// (`required_approving_review_count: 0` -- still forces every change through
-// a PR, without requiring a second reviewer on a solo-maintained repo), requires
-// the `contract` status check (strict) before a merge, and requires review
-// threads to be resolved (so CodeRabbit's and humans' findings block until answered).
+// GitHub branch protection. Idempotently ensure the default branch blocks deletion and force-pushes,
+// cannot be merged into without a PR, requires the `contract` status check (strict) before a merge,
+// and requires review threads to be resolved (so CodeRabbit's and humans' findings block until
+// answered). `required_approving_review_count: 0` still forces every change through a PR, without
+// requiring a second reviewer on a solo-maintained repo.
 // Best-effort, like everything else here: skipped with a warning, never a
 // hard failure, when `gh` isn't installed/authenticated or the remote isn't
 // a recognizable GitHub repo. `checks/branch-protection.ts` verifies this
@@ -310,7 +309,7 @@ function upsertBranchProtection() {
     return
   }
   if (spawnSync("gh", ["auth", "status"], { cwd }).status !== 0) {
-    skipped.push("GitHub branch protection (gh CLI not authenticated -- run `gh auth login`)")
+    skipped.push("GitHub branch protection (gh CLI not authenticated; run `gh auth login`)")
     return
   }
   const ownerRepo = resolveOwnerRepo(cwd)
@@ -334,10 +333,10 @@ function upsertBranchProtection() {
     skipped.push(`GitHub branch protection (could not list rulesets: ${listResult.stderr.trim()})`)
     return
   }
-  // Any enforcement state, not just "active" -- a disabled ruleset already
+  // Any enforcement state, not just "active". A disabled ruleset already
   // targeting the branch (left over from an earlier, half-finished setup)
-  // should be reactivated in place, not shadowed by a second, duplicate
-  // ruleset that would leave the disabled one sitting there unenforced.
+  // should be reactivated in place. A second, duplicate ruleset would shadow
+  // it and leave the disabled one sitting there unenforced.
   const summaries = JSON.parse(listResult.stdout || "[]")
   const branchRulesetIds = summaries.filter((r) => r.target === "branch").map((r) => r.id)
 
@@ -362,7 +361,7 @@ function upsertBranchProtection() {
   }
 
   if (existing) {
-    // GitHub's ruleset-update endpoint is PUT, not PATCH -- it also replaces the
+    // GitHub's ruleset-update endpoint is PUT, not PATCH: it also replaces the
     // whole `rules` array wholesale, which is exactly why `mergedRules` above
     // starts from the existing rules rather than sending only what's new.
     // `enforcement: "active"` reactivates a disabled leftover ruleset in

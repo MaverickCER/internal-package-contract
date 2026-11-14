@@ -123,7 +123,7 @@ describe("gitHygiene", () => {
     expect(result).toEqual({
       outcome: "fail",
       rationale:
-        "Git hygiene: blocking issue(s):\n- no .gitignore -- run `internal-package-contract init`",
+        "Git hygiene: blocking issue(s):\n- no .gitignore; run `internal-package-contract init`",
     })
   })
 

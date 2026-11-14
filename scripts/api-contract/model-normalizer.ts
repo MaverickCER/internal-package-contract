@@ -21,7 +21,7 @@ import {
 import type { ApiItem, ApiPackage, Excerpt } from "@microsoft/api-extractor-model"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/model-normalizer.ts` -- this engine now
+ * Ported from repo-contract's own `scripts/api-contract/model-normalizer.ts`: this engine now
  * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
  * devDependency rather than hosting a copy.
  *
@@ -32,7 +32,7 @@ import type { ApiItem, ApiPackage, Excerpt } from "@microsoft/api-extractor-mode
  * exclusively.
  *
  * Walks an `ApiPackage` into a flat, deterministic `ReadonlyMap<string, NormalizedMember>` keyed by
- * `ApiItem.canonicalReference.toString()` -- the only file in the feature where `canonicalReference`
+ * `ApiItem.canonicalReference.toString()`: the only file in the feature where `canonicalReference`
  * (an upstream-`@beta` API) is used as an identity mechanism; `compatibility-classifier.ts`
  * downstream only ever sees the resulting string keys.
  */
@@ -54,7 +54,7 @@ export interface NormalizedMember {
   readonly parentCanonicalReference?: string | undefined
   /** True for an item exported directly from the package's entry point (a top-level export); false for a nested member (a class's property, an enum's member, ...). */
   readonly isTopLevelExport: boolean
-  /** Relative to the project folder, e.g. "src/types.ts" -- present only for declared items. Used only for human-readable explanations; never part of identity or the semantic diff. */
+  /** Relative to the project folder, e.g. "src/types.ts": present only for declared items. Used only for human-readable explanations; never part of identity or the semantic diff. */
   readonly fileUrlPath?: string | undefined
   readonly releaseTag: ReleaseTagLevel
   readonly isDeprecated: boolean
@@ -121,9 +121,9 @@ function excerptText(excerpt: Excerpt | undefined): string | undefined {
 
 /**
  * `ApiDeclaredItem.fileUrlPath` is `undefined` in two genuinely different cases upstream doesn't
- * distinguish: the file is unknown, or -- per that getter's own doc comment -- "the path is the
+ * distinguish: the file is unknown, or (per that getter's own doc comment) "the path is the
  * same as the parent API item's". The second case is the overwhelmingly common one (any member
- * declared in the same file as its containing class/interface, e.g. a method), so using `item`'s
+ * declared in the same file as its containing class/interface, e.g. a method). So using `item`'s
  * own `fileUrlPath` directly would leave `NormalizedMember.fileUrlPath` empty for most nested
  * members even though the file is perfectly knowable by walking up to the nearest ancestor that
  * does carry it.
@@ -216,7 +216,7 @@ function buildMember(item: ApiItem, parent: ApiItem): NormalizedMember {
 }
 
 /**
- * Kinds with no meaningful contract signature of their own -- pure structural containers that
+ * Kinds with no meaningful contract signature of their own: pure structural containers that
  * exist to hold other items, not declarations a consumer could depend on directly.
  */
 const CONTAINER_ONLY_KINDS = new Set<ApiItemKind>([

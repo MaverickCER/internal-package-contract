@@ -1,6 +1,6 @@
 /**
  * Self-hosting override of the bundled Stryker baseline
- * (config/stryker.config.mjs) -- resolved by `scripts/run-mutation.mjs`, which
+ * (config/stryker.config.mjs): resolved by `scripts/run-mutation.mjs`, which
  * prefers a consumer's own `stryker.config.*` over the bundled default. This
  * package IS such a consumer of itself for `npm run contract` (see
  * repo-contract.config.ts): this repo has no `src/` (its real code lives in
@@ -15,7 +15,7 @@ import { ENTRY_SHELLS, NON_RUNTIME, SCOPE_DIRS } from "./scope.mjs"
 
 export default {
   ...baseline,
-  // Everything this package ships and runs, not only `checks/` -- minus the process entry points
+  // Everything this package ships and runs, not only `checks/`: minus the process entry points
   // (see scope.mjs), whose logic lives in modules this does cover.
   mutate: [
     ...SCOPE_DIRS.map((dir) => `${dir}/**/*.{ts,mjs}`),

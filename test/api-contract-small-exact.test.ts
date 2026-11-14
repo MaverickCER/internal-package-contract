@@ -91,7 +91,7 @@ describe("summaries", () => {
   it("labels changes below the release tag as informational, or says nothing", () => {
     expect(summarizeLowerTierChanges([])).toBeUndefined()
     expect(summarizeLowerTierChanges([change("x"), change("y")])).toBe(
-      "2 non-public contract change(s) also detected (informational only -- does not affect the required release level):\n- x\n- y",
+      "2 non-public contract change(s) also detected (informational only; it does not affect the required release level):\n- x\n- y",
     )
   })
 })

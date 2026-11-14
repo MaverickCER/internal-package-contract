@@ -16,26 +16,26 @@
 import type { ExceptionV2Fields, SecurityExceptionFields } from "../../checks/exception-record.js"
 
 export interface NormalizedFinding {
-  /** `coderabbit:<file>:<severity>:<hash>` -- see `deriveCoderabbitExceptionId`. */
+  /** `coderabbit:<file>:<severity>:<hash>`: see `deriveCoderabbitExceptionId`. */
   readonly id: string
   readonly file: string
   /** A recognized event carrying a severity value this wrapper doesn't recognize -> `"unknown"` (still evaluated). A structurally malformed event is `status: "error"` instead. */
   readonly severity: "critical" | "major" | "minor" | "unknown"
-  /** The finding's own descriptive text, verbatim from `codegenInstructions` -- untrusted, AI-generated content; never executed or templated, only ever displayed. */
+  /** The finding's own descriptive text, verbatim from `codegenInstructions`: untrusted, AI-generated content; never executed or templated, only ever displayed. */
   readonly summary: string
 }
 
-/** One `.repo-contract/exceptions/coderabbit.json` record -- the on-disk exception record shape. */
+/** One `.repo-contract/exceptions/coderabbit.json` record: the on-disk exception record shape. */
 export interface CoderabbitExceptionRecord
   extends SecurityExceptionFields, Partial<ExceptionV2Fields> {
-  /** `coderabbit:<file>:<severity>:<hash of summary>` -- must equal `deriveCoderabbitExceptionId(record)`. */
+  /** `coderabbit:<file>:<severity>:<hash of summary>`: must equal `deriveCoderabbitExceptionId(record)`. */
   readonly id: string
   readonly version: 1 | 2
   /** Why this CodeRabbit finding is deliberately not acted on, and confirmation it was actually examined (not dismissed unread). */
   readonly justification: string
   readonly file: string
   readonly severity: NormalizedFinding["severity"]
-  /** The finding's descriptive text at the time the waiver was written -- what the human read and judged. If CodeRabbit's wording changes, the finding id changes and this record goes stale (re-review). */
+  /** The finding's descriptive text at the time the waiver was written: what the human read and judged. If CodeRabbit's wording changes, the finding id changes and this record goes stale (re-review). */
   readonly summary: string
 }
 

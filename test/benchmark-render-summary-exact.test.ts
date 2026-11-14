@@ -221,7 +221,7 @@ describe("summarize -- exact output", () => {
     expect(failures).toEqual([])
     expect(markdown).toContain("## ⚠️ Gates passed, 1 warning\n")
     expect(markdown).toContain(
-      "- ⚠️ **R** — `fn:alpha` (varying item): the big-O could not be determined: only 1 item size gave a usable measurement and a growth rate needs at least 2. It is not checked against the documented O(n).",
+      "- ⚠️ **R**: `fn:alpha` (varying item): the big-O could not be determined: only 1 item size gave a usable measurement and a growth rate needs at least 2. It is not checked against the documented O(n).",
     )
     expect(markdown).toContain("A function whose big-O could not be determined is a warning")
     expect(markdown).toMatch(/documented O\(n\)\.\n\n## R\n/)

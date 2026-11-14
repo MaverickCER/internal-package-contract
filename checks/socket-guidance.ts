@@ -98,7 +98,7 @@ export function socketGuidance(
         "Check your network connection, proxy and VPN, then re-run the contract.",
         ci
           ? "If this repeats in CI, check Socket's status page and that the runner may reach api.socket.dev."
-          : "If you are offline, run the contract again once you are back online -- this check has no offline mode.",
+          : "If you are offline, run the contract again once you are back online: this check has no offline mode.",
       ]
       break
     case "rate-limited":

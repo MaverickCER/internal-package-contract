@@ -1,8 +1,9 @@
+import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { format } from "prettier"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Surface } from "../scripts/surface-contract/classify.js"
 import {
   BASELINE_PATH,
@@ -45,9 +46,10 @@ const baseline = (version: string, surface: Surface): void =>
     stableStringify({ packageName: "@o/demo", packageVersion: version, surface }),
   )
 const surfaceWith = (help: string): Surface => ({
-  cli: { demo: { exitCode: 0, help } },
+  cli: { demo: { exitCode: 0, help, commands: {} } },
   schemas: {},
   action: null,
+  workflows: {},
 })
 
 describe("stableStringify", () => {
@@ -135,12 +137,22 @@ describe("runSurfaceCheck: against a baseline", () => {
       false,
     )
   })
-  it("treats a version already bumped to the minimum as the declaration (the release pull request)", async () => {
+  it("never treats a version bump as the declaration, and reports a baseline left behind by a release", async () => {
     project("0.4.0", "Usage")
     baseline("0.3.0", surfaceWith("Usage --a"))
-    expect((await runSurfaceCheck(root, { runBin: runBin("Usage") })).changesets.satisfied).toBe(
-      true,
-    )
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage") })
+    expect(e.changesets.satisfied).toBe(false)
+    expect(e.baselineStale).toBe(true)
+    expect(e.minimumRequiredVersion).toBe("0.4.0")
+  })
+  it("reports a stale baseline even when the surface is unchanged, and a current one as not stale", async () => {
+    project("0.4.0", "Usage")
+    baseline("0.3.0", surfaceWith("Usage"))
+    expect((await runSurfaceCheck(root, { runBin: runBin("Usage") })).baselineStale).toBe(true)
+    baseline("0.4.0", surfaceWith("Usage"))
+    expect((await runSurfaceCheck(root, { runBin: runBin("Usage") })).baselineStale).toBe(false)
+    baseline("0.5.0", surfaceWith("Usage"))
+    expect((await runSurfaceCheck(root, { runBin: runBin("Usage") })).baselineStale).toBe(true)
   })
   it("asks for only a patch when a flag is added below 1.0.0, a minor from 1.0.0, a major for a break", async () => {
     project("0.3.0", "Usage --a --b")
@@ -168,6 +180,44 @@ describe("runSurfaceCheck: against a baseline", () => {
     project("0.3.0", null)
     write(BASELINE_PATH, "{ nope")
     await expect(runSurfaceCheck(root)).rejects.toThrow(/baseline\.json is not valid JSON/)
+  })
+})
+
+describe("runSurfaceCheck: a baseline the branch edited without a release", () => {
+  const git = (...args: string[]): string =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim()
+  const commit = (message: string): void => {
+    git("add", "-A")
+    git("commit", "-q", "-m", message, "--no-verify")
+  }
+  beforeEach(() => {
+    // The guard reads the base and head branch names from the environment; CI sets them.
+    vi.stubEnv("GITHUB_BASE_REF", "")
+    vi.stubEnv("GITHUB_HEAD_REF", "")
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    git("config", "commit.gpgsign", "false")
+    project("0.3.0", "Usage")
+    baseline("0.3.0", surfaceWith("Usage"))
+    commit("base")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("checkout", "-q", "-b", "feature")
+    write("x.txt", "work")
+    commit("work")
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it("reports a baseline the branch left as the base had it as not edited", async () => {
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage") })
+    expect(e.status).toBe("compared")
+    expect(e.baselineEdited).toBe(false)
+  })
+  it("reports a baseline rewritten at the base's version as edited", async () => {
+    baseline("0.3.0", surfaceWith("Usage --a"))
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage") })
+    expect(e.status).toBe("compared")
+    expect(e.baselineEdited).toBe(true)
   })
 })
 
@@ -250,6 +300,8 @@ describe("runSurfaceCheck (exact evidence)", () => {
       requiredLevel: "none",
       minimumRequiredVersion: undefined,
       baselineVersion: undefined,
+      baselineStale: false,
+      baselineEdited: false,
       changesets: { changesetCount: 1, declaredLevel: "minor", satisfied: true },
     })
   })
@@ -273,6 +325,7 @@ describe("runSurfaceCheck (exact evidence)", () => {
     const e = await runSurfaceCheck(root, { runBin: runBin("Usage") })
     expect(e.requiredLevel).toBe("major")
     expect(e.changesets.satisfied).toBe(false)
+    expect(e.baselineStale).toBe(true)
   })
 })
 

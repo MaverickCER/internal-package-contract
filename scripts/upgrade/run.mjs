@@ -2,10 +2,14 @@
 // that release owns up to date, in one command.
 //
 // Moving the pin is the easy half. The release also changes files the package carries: the workflows that call
-// its reusable workflows (pinned by commit), the managed copies and documents, the generated landing page and
-// the benchmark guides. Done by hand that is several commands in the right order, and a package that misses one
-// fails its own contract on the next run. This runs them, stops at the first that fails, and leaves the result
-// as uncommitted changes for a person to review. It refuses to start while package.json, the lockfile or the
+// its reusable workflows (pinned by commit), the managed copies and documents, the generated regions, the agent
+// skill, docs/ENVIRONMENT.md, the landing page and the benchmark guides. Done by hand that is several commands in
+// the right order, and a package that misses one fails its own contract on the next run. This runs them, stops at
+// the first that fails, and leaves the result as uncommitted changes for a person to review. The API and surface
+// baselines are left alone: they follow the package's own releases, not this one's.
+//
+// Every step after the install runs the installed release's `bin/contract.mjs`, never this file's own commands.
+// The code running here is the release being replaced, and each file must come out as the new release writes it. It refuses to start while package.json, the lockfile or the
 // workflows have uncommitted changes. It needs a `github:` dependency on this package to know where the release
 // is.
 
@@ -57,6 +61,18 @@ function lockedSha(cwd) {
   return (
     lock.packages?.[`node_modules/${DEPENDENCY}`]?.resolved?.match(/#([0-9a-f]{40})$/)?.[1] ?? ""
   )
+}
+
+/**
+ * @param {string} cwd
+ * @returns {boolean} whether the package keeps an agent skill: it has `docs/skill.json`, or package.json turns
+ *   on the `AgentSkill` check.
+ */
+export function keepsSkill(cwd) {
+  if (existsSync(path.join(cwd, "docs", "skill.json"))) return true
+  const manifest = JSON.parse(readFileSync(path.join(cwd, "package.json")).toString())
+  const checks = manifest[DEPENDENCY]?.checks
+  return Array.isArray(checks) && checks.includes("AgentSkill")
 }
 
 /**
@@ -146,6 +162,12 @@ export function run(argv, cwd, io, hooks = {}) {
     ])
   }
   contract("bring the managed files up to date", ["sync", "--apply", "--update"])
+  // `generate` changes nothing when every region is current, so it always runs.
+  contract("regenerate the generated regions", ["generate"])
+  if (keepsSkill(cwd)) contract("regenerate the agent skill", ["skill"])
+  if (existsSync(path.join(cwd, "ci", "env.schema.ts"))) {
+    contract("regenerate docs/ENVIRONMENT.md", ["env"])
+  }
   if (existsSync(path.join(cwd, "docs", "site.json"))) {
     contract("regenerate the landing page", ["site"])
   }

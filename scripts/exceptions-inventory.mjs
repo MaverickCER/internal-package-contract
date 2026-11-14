@@ -3,9 +3,9 @@
 //
 //   internal-package-contract exceptions [--json]
 //
-// It reads every `.repo-contract/exceptions/*.json` and reports, per registry, how many records it holds, how they
-// break down by `exceptionType`, how many are still the legacy `version: 1` shape (which cannot say what rule is
-// broken or when to revisit it), how many have expired, and how many are incomplete. A file that cannot be read is
+// It reads every `.repo-contract/exceptions/*.json` and reports, per registry, how many records it holds and how
+// they break down by `exceptionType`. It also counts the records still in the legacy `version: 1` shape (which
+// cannot say what rule is broken or when to revisit it), the expired ones and the incomplete ones. A file that cannot be read is
 // listed as unreadable, never thrown: the check that owns that registry fails on it. The inventory decides nothing.
 // The same inventory is attached to the contract's `report.json` and shown in its step summary.
 
@@ -129,7 +129,7 @@ export function renderInventory(inventory) {
     )
   }
   for (const failure of inventory.errors ?? [])
-    lines.push(`- ${failure.name}: UNREADABLE -- ${failure.error}`)
+    lines.push(`- ${failure.name}: UNREADABLE: ${failure.error}`)
   return `${lines.join("\n")}\n`
 }
 

@@ -1,12 +1,12 @@
 # demo: performance and cost report
 
-What does adopting this package add to latency, CPU, memory and compute spend -- and how does that grow with workload? Three views, from the whole to the part: **(1)** the end-to-end total, **(2)** every function on its own, **(3)** which functions make up the total. New to benchmarks? Read [READING-BENCHMARKS.md](READING-BENCHMARKS.md) first.
+What does adopting this package add to latency, CPU, memory and compute spend, and how does that grow with workload? Three views, from the whole to the part: **(1)** the end-to-end total, **(2)** every function on its own, **(3)** which functions make up the total. New to benchmarks? Read [READING-BENCHMARKS.md](READING-BENCHMARKS.md) first.
 
 ## What adopting this package costs
 
 For a typical workload of **80 items** per operation, routing the work through `demo` adds **1.00 ms** per operation compared with a bare-minimum baseline (**100% of the baseline**). Overall, it grows O(1) with workload size (measured exponent 0.00). At list prices that is on the order of **~$0.001 – $0.01 per million operations** of compute.
 
-> The relative figure and the growth class are the steadier ones: both come from the same run, so they depend far less on the machine than a time does, though runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below) -- good for comparing one package with another, not for budgeting.
+> The relative figure and the growth class are the steadier ones. Both come from the same run, so they depend far less on the machine than a time does. Runtime behaviour and contention on the runner still move them. The growth class is an empirical fit to the sizes tested, not a proof of asymptotic complexity. Dollar figures are **order-of-magnitude** estimates from published list prices on shared hardware (see _Cost model_ below). They show scale, not a budget.
 
 | Cost | Typical (80 items) | Largest (320 items) |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Measures what routing the workload through the package adds.
 - **Baseline (no package):** Process items directly.
 - **With the package:** Process items via the package.
 
-Both sides use empty or minimal functions on purpose, so the difference is the package's own cost -- not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.
+Both sides use empty or minimal functions on purpose. The difference is then the package's own cost, not the cost of the work an application would plug into it. Real applications add their own work on top; this is the floor the package imposes.
 
 **Variables that could change this result**
 
@@ -33,7 +33,7 @@ Both sides use empty or minimal functions on purpose, so the difference is the p
 | items | swept | The tier axis. |
 | mode | fixed at "strict" | Validation mode. |
 
-The baseline is an empty or minimal function, so it costs almost nothing and the _relative_ overhead can look enormous (shown as a multiple of the baseline). Read the absolute columns -- time, CPU and dollars added -- they are what a bill and a latency budget are made of.
+The baseline is an empty or minimal function, so it costs almost nothing. The _relative_ overhead can then look enormous (shown as a multiple of the baseline). Read the absolute columns (time, CPU and dollars added): they are what a bill and a latency budget are made of.
 
 | items | Baseline | With package | Added | Added vs baseline | Added CPU | Est. $ / 1M ops |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -47,7 +47,7 @@ The baseline is an empty or minimal function, so it costs almost nothing and the
 
 ## 2. Function by function
 
-Every function the package exposes is measured on its own across the full size ladder, then its measured growth rate is compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report: either the documentation or the code is wrong.
+Every function the package exposes is measured on its own across the full size ladder. Its measured growth rate is then compared with the big-O we documented for it. A function whose measured class **differs** from its documented one is the most useful thing in this report. Either the documentation or the code is wrong.
 
 | Function | Varies | Documented | Measured | Agreement | At 80 | At 320 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -77,13 +77,13 @@ Every function the package exposes is measured on its own across the full size l
 
 **Deliberately not covered**
 
-- **disk cache** -- Needs a real filesystem.
+- **disk cache**: Needs a real filesystem.
 
 #### Variant `all`
 
 Everything is scanned.
 
-**Measured: O(n)** (exponent 1.00, 4 sizes) -- ✅ matches.
+**Measured: O(n)** (exponent 1.00, 4 sizes): ✅ matches.
 
 | items | Median | p95 | CPU (median) | Heap Δ | Ops/s |
 | --- | --- | --- | --- | --- | --- |
@@ -129,13 +129,13 @@ _No function declared how it is used in the end-to-end run (`inEndToEnd`), so th
 
 ## Cost model
 
-Estimates use two bracketing price shapes: **low** = CPU-priced compute ($0.040 per vCPU-hour, billed on CPU time) and **high** = duration-and-memory-priced functions ($0.000017 per GB-second, billed on wall time, at least 128 MB reserved). Both are rounded list prices and change over time; override them in `benchmark.config.json` → `costRates` to match your platform and negotiated pricing.
+Estimates use two bracketing price shapes. **Low** is CPU-priced compute ($0.040 per vCPU-hour, billed on CPU time). **High** is duration-and-memory-priced functions ($0.000017 per GB-second, billed on wall time, at least 128 MB reserved). Both are rounded list prices and change over time; override them in `benchmark.config.json` → `costRates` to match your platform and negotiated pricing.
 
 ## Environment and method
 
 - Run: `2026-01-01T00:00:00.000Z` → `2026-01-01T00:00:05.000Z` (5 s), test
 - Machine: unknown CPU, 2 logical core(s), 4096 MB RAM, darwin/arm64, Node v22.0.0, local
 - Git: `unknown` on `unknown` (uncommitted changes)
-- Sizes: 20, 40, 80, 160, 320 items -- One item processed per unit of n.
+- Sizes: 20, 40, 80, 160, 320 items: One item processed per unit of n.
 
-**Do not compare these numbers with another machine's, another day's, or another package's.** They exist to show how _this_ package's cost changes between runs on comparable hardware and how it scales with size. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).
+**Do not compare these numbers with another machine's, another day's, or another package's.** They show how _this_ package's cost changes between runs on comparable hardware, and how it scales with size. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).

@@ -1,16 +1,17 @@
 /**
  * `BranchProtection`: the default branch of the repository `origin` points at cannot be merged into
- * without a green `contract` job.
+ * without a green `contract` job, nor without a green `required` job where the package's CI has one.
  *
  * Reads: the repository's active GitHub rulesets through the `gh` CLI, by way of
  * `scripts/check-branch-protection.mjs`. Locally that is a person's `gh auth login`; in Actions it
- * is `GH_TOKEN` or `GITHUB_TOKEN`.
+ * is `GH_TOKEN` or `GITHUB_TOKEN`. Also the workflows under `.github/workflows`, for one that defines
+ * both a `contract` and a `required` job (the aggregate the scaffolded `contract.yml` has).
  *
  * Fails when the default branch lacks deletion protection, force-push protection, or a pull-request
  * rule. Fails when it lacks a required-status-checks rule, or that rule lacks the `contract`
- * context. Fails when that rule is not strict (the branch must be up to date before it merges).
- * Fails when review threads need not be resolved. It asks for `contract` only, never an aggregate
- * `required` context. Never warns on a finding.
+ * context. Fails when such a workflow exists and the rule lacks the `required` context. Fails when
+ * that rule is not strict (the branch must be up to date before it merges). Fails when review
+ * threads need not be resolved. Never warns on a finding.
  *
  * Exceptions: none for a finding; `internal-package-contract init --github` writes the ruleset. One
  * degradation, `BranchProtection:gh-unavailable`: `gh` missing or signed out, an `origin` that is
@@ -25,7 +26,10 @@
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import { REQUIRED_STATUS_CHECK_CONTEXT } from "../scripts/github-repo.mjs"
+import {
+  REQUIRED_AGGREGATE_CONTEXT,
+  REQUIRED_STATUS_CHECK_CONTEXT,
+} from "../scripts/github-repo.mjs"
 import { degraded } from "./environment-exceptions.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
@@ -43,6 +47,8 @@ interface BranchProtectionStatus {
   /** Whether a branch must be up to date with its base before it merges, so the checks ran on what is merged. */
   readonly strictStatusChecks: boolean
   readonly requiresThreadResolution: boolean
+  /** The workflow that defines both `contract` and the aggregate `required` job, or null when none does. */
+  readonly aggregateWorkflow?: string | null
 }
 
 type ToolResult =
@@ -82,6 +88,14 @@ export function createBranchProtection(
         if (!status.requiredChecks.includes(requiredCheck)) {
           missing.push(`the "${requiredCheck}" check among its required status checks`)
         }
+        if (
+          status.aggregateWorkflow &&
+          !status.requiredChecks.includes(REQUIRED_AGGREGATE_CONTEXT)
+        ) {
+          missing.push(
+            `the "${REQUIRED_AGGREGATE_CONTEXT}" check among its required status checks (${status.aggregateWorkflow} defines that job)`,
+          )
+        }
         if (!status.strictStatusChecks) {
           missing.push("strict status checks (a branch up to date with its base before it merges)")
         }
@@ -95,9 +109,12 @@ export function createBranchProtection(
         }
       }
 
+      const checks = status.aggregateWorkflow
+        ? `"${requiredCheck}" and "${REQUIRED_AGGREGATE_CONTEXT}" checks`
+        : `"${requiredCheck}" check`
       return {
         outcome: "pass",
-        rationale: `Branch protection: ${status.owner}/${status.repo}'s default branch (${status.defaultBranch}) blocks deletion, force-pushes, and merging without a PR, and requires the "${requiredCheck}" check (strict) and resolved review threads.`,
+        rationale: `Branch protection: ${status.owner}/${status.repo}'s default branch (${status.defaultBranch}) blocks deletion, force-pushes, and merging without a PR, and requires the ${checks} (strict) and resolved review threads.`,
       }
     },
   }

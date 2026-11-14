@@ -2,12 +2,12 @@
 
 <!-- Managed by internal-package-contract (template/standards/README.md). Change it there and run `internal-package-contract sync`. -->
 
-The official schemas a package's tests validate its standard-format output against, so a test proves the output is
-valid against the standard itself rather than against a shape written in this repository. They are used only by
-tests and are not shipped. Each file is byte for byte as published at the URL below, which names a release, not a
-moving branch; its SHA-256 is pinned so an edit or a reformat fails internal-package-contract's own tests and the
-`ManagedFiles` check. A package carries only the schemas it enrols (`internal-package-contract sync --add <name>`),
-so not every file below is present in every package. Keep `test/fixtures/standards/*.json` in `.prettierignore`.
+These are the official schemas a package's tests validate its standard-format output against. A test therefore
+proves the output is valid against the standard itself, rather than against a shape written in this repository.
+They are used only by tests and are not shipped. Each file is byte for byte as published at the URL below, which
+names a release, not a moving branch. Its SHA-256 is pinned, so an edit or a reformat fails
+internal-package-contract's own tests and the `ManagedFiles` check. A package carries only the schemas it enrols
+(`internal-package-contract sync --add <name>`), so not every file below is present in every package. Keep `test/fixtures/standards/*.json` in `.prettierignore`.
 
 | File                                         | Standard                                                         | Source                                                                                           | SHA-256                                                            |
 | -------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |

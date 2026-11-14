@@ -51,13 +51,13 @@ describe("gates -- complexity", () => {
         level: "fail",
         kind: "complexity",
         message:
-          "`fn:a`: documented O(n), measured O(n²) (exponent 2.00, R² 0.99). Either the code regressed or the documented big-O is wrong -- decide which and fix it.",
+          "`fn:a`: documented O(n), measured O(n²) (exponent 2.00, R² 0.99). Either the code regressed or the documented big-O is wrong; decide which and fix it.",
       },
       {
         level: "fail",
         kind: "complexity",
         message:
-          "`fn:b`: documented constant, measured linear (exponent n/a, R² n/a). Either the code regressed or the documented big-O is wrong -- decide which and fix it.",
+          "`fn:b`: documented constant, measured linear (exponent n/a, R² n/a). Either the code regressed or the documented big-O is wrong; decide which and fix it.",
       },
     ])
   })
@@ -163,7 +163,7 @@ describe("gates -- normalized overhead", () => {
         level: "fail",
         kind: "normalized-overhead",
         message:
-          "Overhead relative to the baseline grew from 100.0% (ref) to 300.0% -- up 200%, over the 50% allowed for work this fast, and the change (200.0 points) is outside the measurements' 95% intervals (no interval here, no interval then).",
+          "Overhead relative to the baseline grew from 100.0% (ref) to 300.0%, up 200%, over the 50% allowed for work this fast, and the change (200.0 points) is outside the measurements' 95% intervals (no interval here, no interval then).",
       },
     ])
     expect(
@@ -176,7 +176,7 @@ describe("gates -- normalized overhead", () => {
         level: "fail",
         kind: "normalized-overhead",
         message:
-          "Overhead relative to the baseline grew from 100.0% (ref) to 300.0% -- up 200%, over the 50% allowed for work this fast, and the change (200.0 points) is outside the measurements' 95% intervals (±20.0 points here, ±5.0 points then).",
+          "Overhead relative to the baseline grew from 100.0% (ref) to 300.0%, up 200%, over the 50% allowed for work this fast, and the change (200.0 points) is outside the measurements' 95% intervals (±20.0 points here, ±5.0 points then).",
       },
     ])
   })
@@ -214,7 +214,7 @@ describe("gates -- normalized overhead", () => {
         level: "note",
         kind: "normalized-overhead-within-interval",
         message:
-          "Overhead relative to the baseline grew from 1.1% (ref) to 9.9% -- up 800%, over the 50% allowed for work this fast, but the change (8.8 points) is inside the measurements' 95% intervals (±6.0 points here, ±4.0 points then): not a regression this run can see.",
+          "Overhead relative to the baseline grew from 1.1% (ref) to 9.9%, up 800%, over the 50% allowed for work this fast, but the change (8.8 points) is inside the measurements' 95% intervals (±6.0 points here, ±4.0 points then): not a regression this run can see.",
       },
     ])
     // One interval is enough to carry the change; an interval that falls short is not.

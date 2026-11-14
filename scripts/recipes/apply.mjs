@@ -5,8 +5,8 @@
 //   internal-package-contract add check <Name> [--dry-run] turn on an optional check, with its settings written out
 //
 // A recipe is safe to run and safe to abandon. It refuses to start when a file it would change has uncommitted
-// edits (git is the recovery journal: `git restore` undoes a run), prints every target before writing, computes
-// all new text before writing any, and puts the originals back if a write fails. What was written is formatted
+// edits (git is the recovery journal: `git restore` undoes a run). It prints every target before writing,
+// computes all new text before writing any, and puts the originals back if a write fails. What was written is formatted
 // with the package's own Prettier when it has one.
 
 import { spawnSync } from "node:child_process"

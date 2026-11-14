@@ -1,11 +1,11 @@
 // Runs a defined suite and produces the results object. It holds raw per-tier measurements for every group,
 // plus an `analysis` section that turns those measurements into what the checks and reports read:
-//   1. endToEnd     -- what adopting the package adds to one operation, at every size
-//   2. complexity   -- how each group scales, and whether that matches its documented big-O (`agreement`)
-//   3. contribution -- which functions make up the end-to-end operation, and how much time each is
+//   1. endToEnd: what adopting the package adds to one operation, at every size
+//   2. complexity: how each group scales, and whether that matches its documented big-O (`agreement`)
+//   3. contribution: which functions make up the end-to-end operation, and how much time each is
 //                      responsible for (nested calls counted once, against the operation's total)
-//   4. cost         -- the estimated price at the typical and the largest size
-//   5. coverage     -- what each benchmark covers of the public functions, which `BenchmarkCoverage` reads
+//   4. cost: the estimated price at the typical and the largest size
+//   5. coverage: what each benchmark covers of the public functions, which `BenchmarkCoverage` reads
 //
 // Every group varies one variable: the suite's unit, or one other variable with the rest held at base values.
 // So each group has one growth class. `agreement` calls neighbouring classes "close" and two or more apart
@@ -95,7 +95,7 @@ const TYPICAL_MIN_PAIRS = 10
 
 /**
  * Measures the end-to-end pair tier by tier with {@link samplePaired}: baseline and with-package
- * samples interleaved, so the per-pair difference -- the package's overhead -- carries the run's
+ * samples interleaved, so the per-pair difference (the package's overhead) carries the run's
  * drift on neither side, and comes with a confidence interval. The two groups keep the shape a
  * separately measured group has; the with-package tier also records the paired statistics.
  * @param {{ tiers: readonly number[], unit: string, suite: object, sampling: object, onProgress?: (line: string) => void }} input
@@ -477,10 +477,10 @@ export function analyze({ suite, results, tiers, rates }) {
   }
 
   // What each function costs per operation (its own measured time x how often one operation calls
-  // it). A function measured on its own includes everything it calls, so a function that calls
-  // another attributed one names it in `inEndToEnd.includes` and the nested time is subtracted from
-  // it: every moment of the operation is then attributed to at most one function, and the shares are
-  // measured against the operation's total -- a figure measured directly -- never against the
+  // it). A function measured on its own includes everything it calls. So a function that calls
+  // another attributed one names it in `inEndToEnd.includes`, and the nested time is subtracted from
+  // it. Every moment of the operation is then attributed to at most one function. The shares are
+  // measured against the operation's total (a figure measured directly), never against the
   // difference of two medians, which is noisy and can be zero or negative.
   const inclusive = new Map()
   for (const fn of suite.functions) {

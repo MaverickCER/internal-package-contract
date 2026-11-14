@@ -10,6 +10,8 @@ const evidence = (over: Partial<SurfaceEvidence> = {}): SurfaceEvidence => ({
   requiredLevel: "none",
   minimumRequiredVersion: "0.3.0",
   baselineVersion: "0.3.0",
+  baselineStale: false,
+  baselineEdited: false,
   changesets: { changesetCount: 0, declaredLevel: "none", satisfied: true },
   ...over,
 })
@@ -22,6 +24,24 @@ const breaking = {
 }
 
 describe("evaluateSurfacePolicy", () => {
+  it("fails when the branch rewrote the baseline without a release", () => {
+    expect(evaluateSurfacePolicy(evidence({ baselineEdited: true, baselineStale: true }))).toEqual({
+      outcome: "fail",
+      rationale:
+        "SurfaceContract: this branch changed .repo-contract/surface-contract/baseline.json while package.json stays at 0.3.0, the base branch's version. A baseline moves only with a release, so editing it here would hide this branch's own surface change. Restore it from the base branch and declare the change with `npx changeset add`.",
+    })
+  })
+  it("fails on a baseline the last release did not refresh, before judging any change", () => {
+    expect(
+      evaluateSurfacePolicy(
+        evidence({ currentVersion: "0.7.5", baselineVersion: "0.6.0", baselineStale: true }),
+      ),
+    ).toEqual({
+      outcome: "fail",
+      rationale:
+        "SurfaceContract: .repo-contract/surface-contract/baseline.json records version 0.6.0 but package.json is 0.7.5, so the release that set this version did not refresh it. Run `npx internal-package-contract update-baseline` and commit the result, and add `internal-package-contract update-baseline` to the `version` script after the build so every release pull request refreshes it.",
+    })
+  })
   it("passes, saying there is nothing to guard, for a package with no CLI, schema or action", () => {
     expect(evaluateSurfacePolicy(evidence({ status: "no-surface" }))).toEqual({
       outcome: "pass",

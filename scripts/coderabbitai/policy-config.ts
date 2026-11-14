@@ -4,8 +4,8 @@ import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpe
 /**
  * The `CodeRabbit` check's own instantiation of `repo-contract/helpers`' classification-neutral
  * exception policy (see repo-contract's own
- * specs/decisions/0013-reusable-exception-policy-helper.md) -- a single `"coderabbit"` group. Every
- * CodeRabbit finding -- an AI opinion, not a deterministic tool result -- requires a complete
+ * specs/decisions/0013-reusable-exception-policy-helper.md): a single `"coderabbit"` group. Every
+ * CodeRabbit finding (an AI opinion, not a deterministic tool result) requires a complete
  * finding-specific exception regardless of severity, so one group-level `default` expresses "every
  * severity, same requirements". Required fields: `justification`, `remediation`, `method`,
  * `exceptionType` (all root fields on the reconciled record). `method` must not be
@@ -31,11 +31,11 @@ export const CODERABBIT_POLICY: ExceptionPolicyConfig = {
   },
 }
 
-/** Used only if a future refactor ever resolves a classification whose `group` isn't `"coderabbit"` -- never actually reached today. Kept maximally strict. */
+/** Used only if a future refactor ever resolves a classification whose `group` isn't `"coderabbit"`: never actually reached today. Kept maximally strict. */
 export const CODERABBIT_GLOBAL_DEFAULT_POLICY: ExceptionPolicy = {
   mode: "exception",
   requirements: [...ALL_REQUIREMENTS],
 }
 
-/** Every field name this check's own `"exception"` mode policy may require -- passed to `validateExceptionPolicyConfig` as `validRequirements`. */
+/** Every field name this check's own `"exception"` mode policy may require: passed to `validateExceptionPolicyConfig` as `validRequirements`. */
 export const VALID_CODERABBIT_REQUIREMENTS = ALL_REQUIREMENTS

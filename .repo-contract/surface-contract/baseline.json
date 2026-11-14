@@ -1,12 +1,90 @@
 {
   "packageName": "internal-package-contract",
-  "packageVersion": "0.16.0",
+  "packageVersion": "0.18.0",
   "surface": {
     "action": null,
     "cli": {
       "internal-package-contract": {
+        "commands": {
+          "add": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract add export <name> [--dry-run] | add check <Name> [--dry-run]\n\n`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check AmbientCapabilities` names the check in package.json, with its settings written out to change.\n\nOptions:\n  --dry-run                print what would be written and change nothing"
+          },
+          "doctor": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract doctor\n\nRead-only. Lists what is in place, the command that fixes each thing that is missing, and the steps that\ncannot be scripted (npm's trusted publisher, repository settings, review apps) with the exact values to enter.\nExits 1 while anything is left to run."
+          },
+          "env": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract env [--check | --rotation-issue]\n\nWrites docs/ENVIRONMENT.md from ci/env.schema.ts, with env-cap, which this package carries.\nNothing is required: no schema means nothing to document, and a missing owner or expiry date is a warning.\n\nOptions:\n  --check                  write nothing; fail and name what is stale\n  --rotation-issue         open, update or close the GitHub issue for credentials due for rotation"
+          },
+          "exceptions": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract exceptions\n\nRead-only inventory of the records in .repo-contract/exceptions."
+          },
+          "generate": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract generate [--check]\n\nRewrites only what is between the <!-- ipc:begin ... --> and <!-- ipc:end ... --> markers of the documents it\nreads, formatted with the package's own Prettier settings.\n\nOptions:\n  --check                  write nothing; fail and name what is stale"
+          },
+          "init": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract init [--name <package>] [options]\n\nIn an existing package: adds the pin and the scripts and tools the checks need, installs, writes every config,\nworkflow, document and template the package lacks (never overwriting one it has), drafts docs/surface.json,\nstarts adoption mode and generates the API map. With --name, in an empty directory: scaffolds a complete new\npackage. It refuses to start over uncommitted changes and ends with `doctor`. Running it again finishes what is\nmissing.\n\nOptions:\n  --name <package>         start a new package in this empty directory\n  --owner <owner>          the GitHub owner of the repository (default: its remote)\n  --description <text>     the new package's description\n  --tag vX.Y.Z             the release to pin (default: the latest)\n  --spec <spec>            pin exactly this dependency spec, for a fork or a local copy\n  --strict                 skip adoption mode: every check can fail the run from the start\n  --github                 also apply branch protection through the gh CLI\n  --docs                   replace a shared document the package has with the standard's\n  --force                  overwrite scaffolded files that already exist\n  --dry-run                print the plan and change nothing"
+          },
+          "install-hooks": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract install-hooks\n\nSets core.hooksPath to the standard's hooks. Never run by an install script."
+          },
+          "mutation": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract mutation [--base <ref>] [file...]\n\nRuns every mutant of the files the change touched, and of the source files the changed tests import, and nothing\nelse; always every mutant of those files, never an earlier result, under the package's own concurrency. It is advice,\nnot the gate: a mutant in a file nobody touched can be killed by a test that did, so only a full `Mutation` run says a\nchange is finished.\n\nOptions:\n  --base <ref>             what the change is measured against (default: origin/main, else main)\n  file...                  mutate exactly these files instead"
+          },
+          "new": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract new adr \"<title>\"\n\nWrites the next numbered record in specs/decisions (or docs/decisions, docs/adr) with each section's prompt.\nThe prompts fail a release until they are answered."
+          },
+          "promote": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract promote <Check>... | --all\n\nWhile a package is adopting the standard a failing check is reported but does not fail the run. Promoting a\ncheck makes its failure fail the run from then on. --all ends adoption mode."
+          },
+          "report": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract report [--base <ref>] [--out <file>]\n\nReads git, the pending changesets, the exception registries, the decision records, the manifest and the contract's\nlast report, and says what changed, what it means for a release, and what the checks said. Nothing is written by hand.\nRun the contract first so the report can say what the checks found.\n\nOptions:\n  --base <ref>             what to measure against (default: origin/main, else main)\n  --out <file>             write the report to a file instead of printing it"
+          },
+          "site": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract site [--check] [--content <file>] [--out <dir>]\n\nWrites index.html, brief.html, styles.css and script.js from docs/site.json.\n\nOptions:\n  --check                  write nothing; fail and name what is stale"
+          },
+          "skill": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract skill [--check]\n\nWrites skills/<name>/SKILL.md and skills/<name>/references/api.md from docs/skill.json (what only the author knows:\nwhen it applies, one example, the rules, the mistakes that matter) and what the package already holds (its entry points,\nits public API, its version). The manual has a word budget, so an agent can load it whole; everything longer is a link.\nPrints the address to give an agent.\n\nOptions:\n  --check                  write nothing; fail and name what is stale, over budget or broken"
+          },
+          "sync": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n\nCompares the files the standard owns here (workflows, the Changesets config, shared code and documents) with\nthe standard's, and shows what differs.\n\nOptions:\n  --apply                  write the files that are missing\n  --update                 with --apply, also replace the files that drifted\n  --add <copy>             start carrying a managed copy of shared code or a shared document"
+          },
+          "sync-benchmark-guides": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract sync-benchmark-guides\n\nWrites the shared guides that explain how to write and how to read the benchmarks."
+          },
+          "tool": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract tool <name> [args]\n\nThe helpers every package used to copy: `size` checks the gzip budgets in ci/size-budgets.mjs, `badges` writes the coverage and size badges,\n`api-report` fails when docs/api-report/ is out of date, `cjs-interop` makes require() of the ESLint plugin return the plugin,\nand `compiler-isolation` fails when a client entry can reach the bundled compiler. Run one from the package's root.\n\nOptions:\n  size --json <file>       also write the measured sizes, which `badges` reads"
+          },
+          "update-baseline": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract update-baseline\n\nRewrites the committed baselines the ApiContract and SurfaceContract checks compare against."
+          },
+          "upgrade": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract upgrade <vX.Y.Z>\n\nInstalls the release, re-pins the workflows that call its reusable workflows, brings the managed files up to\ndate, regenerates the landing page and copies the benchmark guides. It stops at the first step that fails."
+          },
+          "verify-consumers": {
+            "exitCode": 0,
+            "help": "Usage: internal-package-contract verify-consumers <checkout>... [--skip a,b] [--keep]\n\nFor each checkout, runs its contract's fast offline checks twice in throwaway copies, once with the standard it has\ninstalled and once with this one, and reports every check that got worse. A check that fails both ways was already failing\nand is not blamed on the change. The checkout itself is never touched.\n\nOptions:\n  --skip a,b               also leave these checks out\n  --keep                   keep the throwaway copies, to look at what ran"
+          }
+        },
         "exitCode": 0,
-        "help": "Usage: internal-package-contract [command] [options]\n\nStart:\n  init                       bring the package here under the standard, or start a new one with --name <package>\n  doctor                     what is set up, what to run next, and the steps only a person can take\n\nDaily:\n  (none)                     run the whole contract\n  generate                   write the generated regions of the documents from package.json and docs/surface.json\n  skill                      write the package's agent skill: a short manual an AI loads, and a reference of every public signature\n  mutation                   mutation-test what a change touched, as a fast loop (the full run is the check)\n  report                     what this change does to the package, as Markdown to paste into a pull request\n  env                        document the variables and secrets the package needs, from ci/env.schema.ts\n  tool                       run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation\n  add                        wire a new subpath export into every place that lists one, or turn on an optional check\n  new                        start a decision record with the next number, its sections and prompts\n  promote                    make a check fail the run; --all ends adoption mode\n\nMaintain:\n  verify-consumers           check that this version of the standard does not make a package that depends on it worse\n  upgrade                    move to a release and bring everything it owns up to date\n  sync                       report the files this package owns that are missing or drifted\n  site                       generate the landing page and one-page brief from docs/site.json\n  exceptions                 list every exception registry: counts by type, legacy, expired\n  update-baseline            regenerate the API and surface baselines after a release\n  sync-benchmark-guides      copy the canonical benchmark guides into benchmarks/\n  install-hooks              point git at the bundled hooks (once per clone)\n\nRun `internal-package-contract <command> --help` for a command's options.\n\nOptions (when running the contract):\n  --checks a,b               run only checks a and b (and what they depend on)\n  --skip a,b                 run every check except a and b\n  --changed                  run only the checks the changed files can affect\n  --json                     print the report as JSON on stdout and nothing else\n  --logs <mode>              write a log per check: all, failing or off (default: failing)\n  --strict                   also fail on a \"not evaluated\" result no exception covers (the default under CI)\n  --no-strict                turn --strict off under CI\n  -h, --help                 print this text and exit"
+        "help": "Usage: internal-package-contract [command] [options]\n\nStart:\n  init                       bring the package here under the standard, or start a new one with --name <package>\n  doctor                     what is set up, what to run next, and the steps only a person can take\n\nDaily:\n  (none)                     run the whole contract\n  generate                   write the generated regions of the documents from package.json and docs/surface.json\n  skill                      write the package's agent skill: a short manual an AI loads, and a reference of every public signature\n  mutation                   mutation-test what a change touched, as a fast loop (the full run is the check)\n  report                     what this change does to the package, as Markdown to paste into a pull request\n  env                        document the variables and secrets the package needs, from ci/env.schema.ts\n  tool                       run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation\n  add                        wire a new subpath export into every place that lists one, or turn on an optional check\n  new                        start a decision record with the next number, its sections and prompts\n  promote                    make a check fail the run; --all ends adoption mode\n\nMaintain:\n  verify-consumers           check that this version of the standard does not make a package that depends on it worse\n  upgrade                    move to a release and bring everything it owns up to date\n  sync                       report the files this package owns that are missing or drifted\n  site                       generate the landing page and one-page brief from docs/site.json\n  exceptions                 list every exception registry: counts by type, legacy, expired\n  update-baseline            regenerate the API and surface baselines after a release\n  sync-benchmark-guides      copy the canonical benchmark guides into benchmarks/\n  install-hooks              point git at the bundled hooks (once per clone)\n\nRun `internal-package-contract <command> --help` for a command's options.\n\nOptions (when running the contract):\n  --checks a,b               run only checks a and b (and what they depend on)\n  --skip a,b                 run every check except a and b\n  --changed                  run only the checks the changed files can affect\n  --scope <mode>             full, affected or auto: narrow tests, coverage and mutation to what the change can reach (default: full)\n  --base <ref>               the ref an affected or auto scope compares against\n  --json                     print the report as JSON on stdout and nothing else\n  --logs <mode>              write a log per check: all, failing or off (default: failing)\n  --strict                   also fail on a \"not evaluated\" result no exception covers (the default under CI)\n  --no-strict                turn --strict off under CI\n  -h, --help                 print this text and exit"
       }
     },
     "schemas": {
@@ -92,6 +170,129 @@
           "useUnknownInCatchVariables": true,
           "verbatimModuleSyntax": true
         }
+      }
+    },
+    "workflows": {
+      "api-baseline-sync.yml": {
+        "inputs": {},
+        "outputs": []
+      },
+      "benchmark-pr.yml": {
+        "inputs": {
+          "benchmark-command": {
+            "default": "npm run benchmark",
+            "required": false
+          },
+          "budgets-path": {
+            "default": null,
+            "required": true
+          },
+          "build-command": {
+            "default": "npm run build",
+            "required": false
+          },
+          "comment-marker": {
+            "default": null,
+            "required": true
+          },
+          "install-dirs": {
+            "default": "",
+            "required": false
+          },
+          "node-version": {
+            "default": "24.x",
+            "required": false
+          },
+          "suites": {
+            "default": null,
+            "required": true
+          }
+        },
+        "outputs": []
+      },
+      "benchmark-record.yml": {
+        "inputs": {
+          "benchmark-command": {
+            "default": "npm run benchmark",
+            "required": false
+          },
+          "build-command": {
+            "default": "npm run build",
+            "required": false
+          },
+          "install-dirs": {
+            "default": "",
+            "required": false
+          },
+          "node-version": {
+            "default": "24.x",
+            "required": false
+          },
+          "suites": {
+            "default": null,
+            "required": true
+          }
+        },
+        "outputs": []
+      },
+      "dependency-pin-sync.yml": {
+        "inputs": {
+          "add-changeset": {
+            "default": "false",
+            "required": false
+          },
+          "bump-type": {
+            "default": "",
+            "required": false
+          },
+          "dependency-name": {
+            "default": null,
+            "required": true
+          },
+          "new-version": {
+            "default": "",
+            "required": false
+          },
+          "secrets.PIN_SYNC_TOKEN": {
+            "default": null,
+            "required": false
+          }
+        },
+        "outputs": []
+      },
+      "deploy-pages-typedoc.yml": {
+        "inputs": {
+          "badges-script": {
+            "default": "",
+            "required": false
+          },
+          "content-artifact-name": {
+            "default": "",
+            "required": false
+          },
+          "docs-script": {
+            "default": null,
+            "required": true
+          },
+          "node-version": {
+            "default": "22",
+            "required": false
+          }
+        },
+        "outputs": []
+      },
+      "release-npm-changesets.yml": {
+        "inputs": {
+          "npm-version": {
+            "default": "11.21.0",
+            "required": false
+          },
+          "roll-floating-major-tag": {
+            "default": "true",
+            "required": false
+          }
+        },
+        "outputs": ["bump-type", "version"]
       }
     }
   }

@@ -59,6 +59,9 @@ describe("helpText", () => {
       expect(text).toContain(word)
     }
     expect(text.startsWith("Usage: internal-package-contract")).toBe(true)
+    expect(text).toContain(
+      "\n\nReusable CI checks, workflows and document generators shared by every MaverickCER package, added and kept current with one command.\nTogether they are the standard: `init` adds it, `upgrade` keeps it current. With no command, runs every check.\n\nStart:\n",
+    )
     expect(text.endsWith("\n")).toBe(true)
   })
 })

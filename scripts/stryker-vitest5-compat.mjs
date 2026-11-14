@@ -2,7 +2,7 @@
 //
 // Vitest 5 matches `testNamePattern` against the suite chain and the test name joined by ` > `
 // (https://vitest.dev/guide/migration/). The runner joins them with a single space, so on Vitest 5 the pattern
-// matches nothing: every mutant with per-test coverage runs zero tests and survives, and the `Mutation` check fails
+// matches nothing. Every mutant with per-test coverage runs zero tests and survives, and the `Mutation` check fails
 // with a report in which nothing is killed. Tracked upstream as stryker-mutator/stryker-js#6210.
 //
 // The fix is one expression in the two runner files that build and record test names:
@@ -41,7 +41,7 @@ export function tempPathFor(file, pid) {
 
 /**
  * Rewrites a file without ever leaving it half-written: the new text goes to a temporary file first and is
- * renamed over the target, so a crash mid-write cannot leave a truncated runner file that would no longer be
+ * renamed over the target. So a crash mid-write cannot leave a truncated runner file that would no longer be
  * recognised (and so never fixed again) until someone reinstalled it.
  * @param {string} file - the file to rewrite.
  * @param {string} text - its new contents.

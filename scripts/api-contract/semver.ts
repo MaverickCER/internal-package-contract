@@ -1,10 +1,10 @@
 import type { RequiredReleaseLevel } from "./evidence-types.js"
 
 /**
- * Hand-rolled `X.Y.Z` parsing rather than a new `semver` dependency -- the parsing this feature
+ * Hand-rolled `X.Y.Z` parsing rather than a new `semver` dependency: the parsing this feature
  * needs is trivial (no ranges, no prerelease negotiation). Ported from repo-contract's own
  * `scripts/api-contract/semver.ts`; this is the one and only version-comparison implementation in
- * the feature -- check.ts, checks/api-contract.ts, and update-baseline.ts all import from here.
+ * the feature: check.ts, checks/api-contract.ts, and update-baseline.ts all import from here.
  */
 interface Version {
   readonly major: number
@@ -13,7 +13,7 @@ interface Version {
 }
 
 // The trailing suffix is an alternation (`[-+].*` or empty) rather than a
-// `(?:...)?` group around it -- a `?` wrapping the already-quantified `.*`
+// `(?:...)?` group around it. A `?` wrapping the already-quantified `.*`
 // would nest one repetition inside another, which is what actually trips
 // eslint-plugin-security's detect-unsafe-regex heuristic (it flags nesting
 // depth, not whether the quantifiers are on disjoint tokens).
@@ -75,7 +75,7 @@ function bumpForLevel(base: Version, level: Exclude<RequiredReleaseLevel, "none"
 /**
  * Derives the minimum required package version from a baseline version and a required release
  * level. `baselineVersion === undefined` means no historical contract exists yet (the
- * initial-baseline case) -- this always returns `"0.1.0"` regardless of `requiredLevel`; the
+ * initial-baseline case): this always returns `"0.1.0"` regardless of `requiredLevel`. The
  * caller must never substitute the current package.json version here, and must never call this at
  * all when the level is indeterminate (`RequiredReleaseLevel` has no `"unknown"` member for
  * exactly this reason).

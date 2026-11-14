@@ -4,7 +4,7 @@
 
 ## ✅ Gates passed
 
-Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold -- beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model -- and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.
+Three things can fail a benchmark run. Only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does. They are: a function whose measured growth class differs from its documented big-O; the package's overhead relative to its bare baseline growing past a threshold (beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model); and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.
 
 ## Runtime
 

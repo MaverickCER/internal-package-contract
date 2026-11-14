@@ -5,19 +5,22 @@
 //
 // Only the documents in documents.mjs are read, and only the text between a region's markers is replaced. The
 // result is formatted with the package's own Prettier settings, so a rerun changes nothing and `Format` still
-// passes. The regions are `dependencies`, `entry-points` and `standards`; every one reads `package.json` and
-// `docs/surface.json`. A region that cannot be generated is reported as `file:line: message`, nothing is
-// written, and the exit code is 1. That covers bad markers, an unknown name, a missing or inconsistent source,
+// passes. The regions are `action-inputs` (from `action.yml`), `dependencies`, `entry-points`, `standards` and
+// `supported-versions` (from `package.json`). `dependencies`, `entry-points` and `standards` also read
+// `docs/surface.json`, for what only a person can say. A region that cannot be generated is reported as
+// `file:line: message`, nothing is written, and the exit code is 1. That covers bad markers, an unknown name, a missing or inconsistent source,
 // and a cited test outside the package. An unknown argument exits 2. With no region anywhere the command does
 // nothing and exits 0; the `GeneratedRegions` check, which runs `--check`, then passes as "absent".
 
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { format, resolveConfig } from "prettier"
+import { actionInputsRegion } from "./action-inputs.mjs"
 import { DOCUMENTS } from "./documents.mjs"
 import { dependencyRegion } from "./dependencies.mjs"
 import { entryPointRows, toTable } from "./entry-points.mjs"
 import { standardsRegion } from "./standards.mjs"
+import { supportedVersionsRegion } from "./supported-versions.mjs"
 import { findRegions, replaceRegions } from "./regions.mjs"
 
 export { DOCUMENTS }
@@ -25,12 +28,13 @@ const SURFACE = "docs/surface.json"
 const USAGE = "Usage: internal-package-contract generate [--check]\n"
 
 /**
- * The generator for each region name. Every one reads `package.json` and `docs/surface.json`; what only a person
- * can say lives once in the latter, and everything derivable comes from the package itself.
- * @type {Record<string, (sources: { pkg: any, surface: unknown }, exists: (file: string) => boolean) => { problems: string[], markdown: string }>}
+ * The generator for each region name. What only a person can say lives once in `docs/surface.json`; everything
+ * derivable comes from the package itself.
+ * @type {Record<string, (sources: { pkg: any, surface: unknown, action: string | undefined }, exists: (file: string) => boolean) => { problems: string[], markdown: string }>}
  */
 // Listed alphabetically: the order is the one an unknown-region problem names them in.
 const GENERATORS = {
+  "action-inputs": ({ action }) => actionInputsRegion(action),
   dependencies: ({ pkg, surface }) => dependencyRegion(pkg, surface),
   "entry-points": ({ pkg, surface }) => {
     const { problems, rows } = entryPointRows(pkg, surface)
@@ -38,12 +42,16 @@ const GENERATORS = {
     return { problems, markdown: toTable(rows) }
   },
   standards: ({ surface }, exists) => standardsRegion(surface, exists),
+  "supported-versions": ({ pkg }) => supportedVersionsRegion(pkg),
 }
+
+/** The regions that read only the package's own files, never `docs/surface.json`. */
+const SURFACE_FREE = new Set(["action-inputs", "supported-versions"])
 
 /**
  * @param {string} cwd - the package root.
  * @param {string[]} needs - the region names being generated, for the message when the sources are missing.
- * @returns {{ pkg: any, surface: unknown, problems: string[] }} the parsed sources, and what is wrong with them.
+ * @returns {{ pkg: any, surface: unknown, action: string | undefined, problems: string[] }} the parsed sources, and what is wrong with them.
  */
 function readSources(cwd, needs) {
   /** @type {string[]} */
@@ -58,11 +66,17 @@ function readSources(cwd, needs) {
     problems.push("package.json is not a JSON object.")
     pkg = undefined
   }
+  const actionFile = ["action.yml", "action.yaml"].find((file) => existsSync(path.join(cwd, file)))
+  const action =
+    actionFile === undefined ? undefined : readFileSync(path.join(cwd, actionFile)).toString()
   let surface
-  if (!existsSync(path.join(cwd, SURFACE))) {
-    const names = needs.map((name) => `"${name}"`).join(", ")
+  const surfaceNeeds = needs.filter((name) => !SURFACE_FREE.has(name))
+  if (surfaceNeeds.length === 0) {
+    surface = null
+  } else if (!existsSync(path.join(cwd, SURFACE))) {
+    const names = surfaceNeeds.map((name) => `"${name}"`).join(", ")
     problems.push(
-      `${SURFACE} not found; it holds what only a person can say for the ${names} region${needs.length === 1 ? "" : "s"}.`,
+      `${SURFACE} not found; it holds what only a person can say for the ${names} region${surfaceNeeds.length === 1 ? "" : "s"}.`,
     )
   } else {
     try {
@@ -71,7 +85,7 @@ function readSources(cwd, needs) {
       problems.push(`${SURFACE} is not valid JSON.`)
     }
   }
-  return { pkg, surface, problems }
+  return { pkg, surface, action, problems }
 }
 
 /**

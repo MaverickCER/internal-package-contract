@@ -1,9 +1,9 @@
 // Timing and memory sampling. Node builtins only; nothing under test is imported.
 //
 // Every sample records three things, because they answer three different cost questions:
-//   - wall time   -- what a caller waits (latency; what duration-priced platforms bill for)
-//   - CPU time    -- what the machine works (what CPU-priced platforms bill for)
-//   - heap delta  -- how much memory the operation leaves allocated
+//   - wall time; what a caller waits (latency; what duration-priced platforms bill for)
+//   - CPU time; what the machine works (what CPU-priced platforms bill for)
+//   - heap delta; how much memory the operation leaves allocated
 //
 // Operations too fast for the clock to resolve are repeated inside one sample and divided back out. A
 // sub-microsecond function still gets a usable figure that way. `global.gc()` runs before each counted sample
@@ -52,8 +52,8 @@ const TIMED = Symbol.for("internal-package-contract.benchmark.timed")
 
 /**
  * Lets an operation report its OWN duration (for work timed elsewhere, such as a child process whose
- * start-to-finish time the parent measures). Return `timed(ms)` from `run`; any other return value --
- * numbers included -- is just a result and never read as a time.
+ * start-to-finish time the parent measures). Return `timed(ms)` from `run`; any other return value (
+ * numbers included) is just a result and never read as a time.
  * @param {number} ms - the duration to record, in milliseconds.
  * @returns {object} a marker the sampler recognizes.
  */
@@ -224,8 +224,8 @@ export function computePairedStats(differences) {
  */
 
 /**
- * Samples two operations interleaved, A B then B A then A B ..., so a drift in the machine over the
- * run (a boost clock, a thermal limit, a neighbour on the runner) lands on both sides alike and the
+ * Samples two operations interleaved, A B then B A then A B .... A drift in the machine over the
+ * run (a boost clock, a thermal limit, a neighbour on the runner) then lands on both sides alike, and the
  * per-pair difference carries only what distinguishes them. The difference is the figure to judge
  * when the two sides are close: two separately sampled medians put their noise on top of each
  * other, a pair subtracts it. No batching: this is for operations long enough to time on their own.

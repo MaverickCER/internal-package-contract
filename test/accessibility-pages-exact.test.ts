@@ -89,7 +89,7 @@ describe("resolvePages() the API reference", () => {
   it("names the missing landing page exactly", async () => {
     write("api/classes/A.html")
     await expect(resolvePages(docs)).rejects.toThrow(
-      `docs/api/ exists but the expected landing page ${path.join(docs, "api", "index.html")} does not -- check the API-doc generator's own output configuration.`,
+      `docs/api/ exists but the expected landing page ${path.join(docs, "api", "index.html")} does not; check the API-doc generator's own output configuration.`,
     )
   })
 

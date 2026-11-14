@@ -1,5 +1,6 @@
 /**
- * `Mutation`: every Stryker mutant is detected. None survives, none is uncovered, none times out.
+ * `Mutation`: every Stryker mutant is detected, or a hand-verified record in
+ * `.repo-contract/exceptions/mutation.json` covers it. None times out.
  *
  * Reads: the package's own `stryker.config.*` when one exists, else the bundled
  * `config/stryker.config.mjs` (Vitest runner, `mutate: src/**`). Also the scope document of the
@@ -83,7 +84,7 @@ import { shardSpecOf } from "../scripts/mutation/shard.mjs"
 import { narrowedScope } from "./scope.js"
 import { abnormalTermination, bundledConfig, combinedOutput, packageRoot } from "./shared.js"
 
-/** Where a consumer's mutation exception registry lives -- the standard `.repo-contract/exceptions/*.json` location every repo-contract v0.4.0+ registry shares. */
+/** Where a consumer's mutation exception registry lives: the standard `.repo-contract/exceptions/*.json` location every repo-contract v0.4.0+ registry shares. */
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/mutation.json"
 
 const scriptPath = path.join(packageRoot, "scripts", "run-mutation.mjs")
@@ -120,13 +121,15 @@ export interface MutationExceptionRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * The exact source span Stryker's `location` (1-indexed line, 1-indexed,
- * end-exclusive column -- matching Stryker's own reported diffs) refers to,
- * read back out of that same file's own instrumented `source` the report
- * carries. Empty string if the location is missing or out of range, which
- * simply never matches any real registry record.
+ * The exact source span Stryker's `location` refers to, read back from the `source` the report
+ * carries for that file. Lines and columns are 1-indexed and the end column is exclusive, as in
+ * Stryker's own diffs. Empty when the location is missing or out of range; no real registry
+ * record matches an empty span.
  */
-/** @internal Exported for direct unit coverage -- its own edge cases (out-of-range line indices on either end of a multi-line span, single- vs. multi-line spans) are otherwise only reachable indirectly through a full mutation-report fixture. */
+/**
+ * @internal Exported for direct unit tests. Its edge cases are out-of-range lines at either end of a
+ * span, and single- against multi-line spans. Otherwise only a full mutation-report fixture reaches them.
+ */
 export function extractSpan(
   source: string | undefined,
   location: MutantLocation | undefined,
@@ -143,18 +146,25 @@ export function extractSpan(
   return [firstLine, ...middleLines, lastLine].join("\n")
 }
 
-/** A single, resolved mutant: its report status plus the identity fields a {@link MutationExceptionRecord} matches against. */
+/** One resolved mutant: its report status and the identity fields a {@link MutationExceptionRecord} matches. */
 export interface ResolvedMutant {
   readonly file: string
   readonly status: string
   readonly mutator: string
   readonly original: string
   readonly replacement: string
-  /** 1-indexed source line the mutant starts on, `0` if the report carried no location -- surfaced in a failing rationale so a developer (or an agent re-running this check) can jump straight to the offending mutant instead of re-deriving it from the raw JSON report. */
+  /**
+   * 1-indexed source line the mutant starts on, `0` when the report has no location. A failing
+   * rationale names it, so a reader goes straight to the mutant without opening the JSON report.
+   */
   readonly line: number
 }
 
-/** @internal Exported for direct unit coverage -- its `mutatorName`/`replacement` `?? ""` fallbacks (a real Stryker report always sets both, but the report schema itself marks them optional) are otherwise unreachable through any report fixture that sets every field. */
+/**
+ * @internal Exported for direct unit tests of its `mutatorName` and `replacement` `?? ""` fallbacks.
+ * A real Stryker report always sets both, though its schema marks them optional, so no full fixture
+ * reaches them.
+ */
 export function resolveMutants(report: MutationReport): readonly ResolvedMutant[] {
   const resolved: ResolvedMutant[] = []
   for (const [file, fileResult] of Object.entries(report.files ?? {})) {
@@ -182,16 +192,20 @@ function matchesRecord(mutant: ResolvedMutant, record: MutationExceptionRecord):
   )
 }
 
-/** @internal Exported for direct unit coverage -- its `: ""` fallback (a `requirement` naming a non-string field, e.g. the numeric `version`, or a key the record doesn't have at all) is otherwise unreachable through `evaluateExceptionRecord`/`hashRequirementFields`'s own real callers, which only ever request `file`/`mutator`/`original`/`replacement`. */
+/**
+ * @internal Exported for direct unit tests of its `: ""` fallback: a requirement that names a
+ * non-string field, such as `version`, or a missing key. The real callers only ask for `file`,
+ * `mutator`, `original` and `replacement`, so they never reach it.
+ */
 export function fieldValue(record: MutationExceptionRecord, requirement: string): string {
   return recordFieldValue(record, requirement)
 }
 
 /**
- * `mutation:<file>:<mutator>:<12-hex-char digest of original+replacement>` -- a stable,
- * human-legible id derived from the same content the record is matched by (not from location), so
- * two records with identical `mutator`/`original`/`replacement` in the same file would collide
- * (and are, deliberately, covered by a single record -- see this module's own doc comment).
+ * `mutation:<file>:<mutator>:<12-hex-char digest of original+replacement>`: a stable,
+ * human-legible id derived from the same content the record is matched by, not from location. Two
+ * mutants with identical `mutator`/`original`/`replacement` in the same file therefore collide and
+ * are, deliberately, covered by a single record (see this module's own doc comment).
  */
 function deriveMutationId(
   mutant: Pick<ResolvedMutant, "file" | "mutator" | "original" | "replacement">,
@@ -273,7 +287,7 @@ interface RecordOutcome {
 }
 
 /**
- * Resolves a single exception record against this run's mutants -- stale (matches nothing at all),
+ * Resolves a single exception record against this run's mutants: stale (matches nothing at all),
  * insufficient/forbidden per policy, or the `SURVIVED_LIKE` mutants it suppresses. See this module's
  * own doc comment for why staleness is "matches nothing," never "isn't currently Survived."
  */
@@ -284,13 +298,10 @@ function resolveRecordOutcome(
   const matches = mutants.filter((m) => matchesRecord(m, record))
   if (matches.length === 0) {
     return {
-      stale: `${record.id} -- ${record.file} [${record.mutator}] "${record.original}" -> "${record.replacement}" no longer matches any mutant in the report; the surrounding code likely changed.`,
-      // A genuinely equivalent mutant: `applyExceptionRegistry`'s own
-      // `for (const m of outcome.suppressed) suppressed.add(m)` would still
-      // add whatever placeholder Stryker substitutes here into the
-      // suppression Set, but nothing downstream (`summarizeMutationScore`'s
-      // `suppressed.has(mutant)`) can ever match a real `ResolvedMutant`
-      // against it -- unobservable through any real report. Hand-verified.
+      stale: `${record.id}: ${record.file} [${record.mutator}] "${record.original}" -> "${record.replacement}" no longer matches any mutant in the report; the surrounding code likely changed.`,
+      // An equivalent mutant. `applyExceptionRegistry` still adds Stryker's placeholder to the
+      // suppression set. But `summarizeMutationScore`'s `suppressed.has(mutant)` never matches a
+      // real `ResolvedMutant` against it, so no real report can observe it. Hand-verified.
       // Stryker disable next-line ArrayDeclaration
       suppressed: [],
     }
@@ -305,25 +316,22 @@ function resolveRecordOutcome(
   })
   if (determinant.verdict === "insufficient") {
     return {
-      insufficient: `${record.id} -- missing: ${determinant.missing.join(", ")}. Fill those fields in ${REGISTRY_RELATIVE_PATH}.`,
-      // Same genuinely equivalent mutant as the stale branch above --
+      insufficient: `${record.id} is missing ${determinant.missing.join(", ")}. Fill those fields in ${REGISTRY_RELATIVE_PATH}.`,
+      // Same genuinely equivalent mutant as the stale branch above:
       // hand-verified.
       // Stryker disable next-line ArrayDeclaration
       suppressed: [],
     }
   }
-  // `EXCEPTION_POLICY_CONFIG`/`GLOBAL_DEFAULT` above are always `{ mode:
-  // "exception", ... }` for mutation records -- `evaluateExceptionRecord`
-  // can structurally never return a "forbidden" verdict from this call
-  // site (that verdict exists for other exception types with a
-  // "forbidden" policy tier, e.g. CodeRabbit's `mechanical-reverification`
-  // exclusion, which this file's own policy never configures). Defensive
-  // dead code for a case this file's own config makes unreachable, not a
-  // real coverage gap.
+  // Unreachable today: this file's policy is always `mode: "exception"`, so
+  // `evaluateExceptionRecord` never says "forbidden" for a mutation record.
+  // The verdict exists for other record types, such as CodeRabbit's
+  // `mechanical-reverification`. If this policy ever gains a forbidden tier,
+  // this branch fails closed.
   // Stryker disable BlockStatement, ObjectLiteral, ConditionalExpression, StringLiteral, ArrayDeclaration
   if (determinant.verdict === "forbidden") {
     return {
-      insufficient: `${record.id} -- policy forbids waiving this mutant.`,
+      insufficient: `${record.id}: policy forbids waiving this mutant.`,
       suppressed: [],
     }
   }
@@ -353,9 +361,16 @@ function applyExceptionRegistry(
   return { stale, insufficient, suppressed }
 }
 
-/** Hard cap on how many offending mutants a failing rationale lists individually -- a real, large-scale regression (hundreds of mutants) would otherwise blow up the check's own output (and the CI step-summary size limit every check's combined output shares) with no added value past the first couple dozen. */
+/**
+ * How many offending mutants a failing rationale lists one by one. A regression of hundreds of
+ * mutants would otherwise flood the output and the CI step-summary limit all checks share. Past
+ * two dozen, more lines add nothing.
+ */
 const MAX_LISTED_OFFENDERS = 25
-/** Each offender's `original`/`replacement` snippet is collapsed to one line and capped -- a multi-line span (common for a `BlockStatement`/`ArrowFunction` mutant) would otherwise make a 25-line listing unreadable. */
+/**
+ * Each offender's `original` and `replacement` snippet is collapsed to one line and capped. A
+ * multi-line span, common for `BlockStatement` and `ArrowFunction` mutants, would make the listing unreadable.
+ */
 const MAX_SNIPPET_LENGTH = 80
 
 /** @internal Exported for direct unit coverage. */
@@ -367,14 +382,10 @@ export function truncateSnippet(text: string): string {
 }
 
 /**
- * Renders the exact non-suppressed Survived/NoCoverage/Timeout mutants a
- * failing run found -- file, line, mutator, and a short before/after
- * snippet each -- so a failing rationale is directly actionable (which
- * mutant, where) instead of only a bare count. See this module's own top
- * doc comment: this is what lets a developer or an agent re-running this
- * check go straight to hand-verifying the exact offender, the same
- * workflow this whole module's own disable-comment justifications already
- * document throughout.
+ * Lists the Survived, NoCoverage and Timeout mutants no record covers, each with file, line,
+ * mutator and a short before/after snippet. A failing rationale then says which mutant and where,
+ * not only how many. A reader can hand-verify that exact mutant next, as the module comment
+ * describes.
  * @internal Exported for direct unit coverage.
  */
 export function formatOffendingMutants(offenders: readonly ResolvedMutant[]): string {
@@ -395,9 +406,8 @@ const MAX_IGNORED_FILES = 5
 
 /**
  * The evidence for mutants Stryker did not test because a `// Stryker disable` comment (or
- * `ignoreStatic`) told it not to. They count neither for nor against the score, so without this note
- * a source file can quietly exclude most of itself from mutation testing and the verdict would still
- * read as a clean score.
+ * `ignoreStatic`) told it not to. They count neither for nor against the score. Without this note a
+ * file could exclude most of itself from mutation testing behind a clean score.
  * @param mutants - Every mutant in the report.
  * @returns A leading-space note naming the count and the files holding most of them, or `""` for none.
  * @internal Exported for direct unit coverage.
@@ -439,15 +449,14 @@ function summarizeMutationScore(
   const runtimeErrors = counts["RuntimeError"] ?? 0
   const compileErrors = counts["CompileError"] ?? 0
   // Timeout is deliberately excluded here, the same tier as Survived, never
-  // counted as detected -- see this module's own doc comment. A genuine
+  // counted as detected: see this module's own doc comment. A genuine
   // crash (RuntimeError/CompileError) is still a real, observed failure
   // signal, so it counts the same as an assertion-based kill.
   const detected = killed + runtimeErrors + compileErrors
   const valid = detected + survived + noCoverage + timeout
 
-  // Reachable only when every single mutant in the report was excluded by a
-  // registry record (`mutants.length > 0` was already confirmed by the
-  // caller) -- a genuinely empty Stryker report is caught there instead.
+  // Reachable only when a registry record excluded every mutant in the report. The caller already
+  // confirmed `mutants.length > 0`, so it catches an empty Stryker report instead.
   // `detected / 0` would be `NaN`; there is nothing left to score, and that
   // is success, not the "Stryker never even ran" failure above.
   if (valid === 0) {
@@ -465,7 +474,7 @@ function summarizeMutationScore(
   const summary = `score ${score.toFixed(2)}% (killed ${String(killed)}, timeout ${String(timeout)}, survived ${String(survived)}, no-coverage ${String(noCoverage)})${suppressedNote}${ignoredNote}`
 
   // Zero-tolerance: survived/noCoverage/timeout must all be exactly zero,
-  // not merely small relative to the total -- matching repo-contract's own
+  // not merely small relative to the total; matching repo-contract's own
   // real policy, not a score threshold.
   const passed = survived === 0 && noCoverage === 0 && timeout === 0
   if (passed) return { outcome: "pass", rationale: `Mutation: ${summary}.` }
@@ -478,7 +487,7 @@ function summarizeMutationScore(
   return {
     outcome: "fail",
     rationale: [
-      `Mutation: ${summary} -- ${String(survived)} survived, ${String(noCoverage)} no-coverage, ${String(timeout)} timeout must all be zero.`,
+      `Mutation: ${summary}; ${String(survived)} survived, ${String(noCoverage)} no-coverage, ${String(timeout)} timeout must all be zero.`,
       formatOffendingMutants(offenders),
     ].join("\n"),
   }
@@ -493,7 +502,7 @@ export function mutation(): CheckDefinitionConfig {
       // A narrowed run mutates only the sources a change affects; with none, there is nothing to judge.
       const narrowed = narrowedScope(ctx)
       if (narrowed?.mutate.length === 0) {
-        // A report supplied for a change that affects nothing cannot be judged against it, and must not pass as if it were.
+        // A supplied report has nothing to be judged against here, and must not pass as if it had.
         if (reportToAdopt(process.env, process.cwd()) !== undefined) {
           return {
             outcome: "fail",
@@ -519,11 +528,10 @@ export function mutation(): CheckDefinitionConfig {
         schema: {
           "~standard": {
             version: 1,
-            // repo-contract's own loadExceptionRegistry only ever does
-            // `typeof vendor !== "string"` -- the specific name here is
-            // purely descriptive metadata, never compared against a
-            // particular value, so any non-empty-vs-empty string content
-            // change here is unobservable. Hand-verified.
+            // repo-contract's `loadExceptionRegistry` only checks that
+            // `vendor` is a string. The name is descriptive and never
+            // compared, so a change to its content is unobservable.
+            // Hand-verified.
             // Stryker disable next-line StringLiteral
             vendor: "internal-package-contract",
             validate: (value: unknown) => {
@@ -550,18 +558,16 @@ export function mutation(): CheckDefinitionConfig {
         return { outcome: "fail", rationale: "Mutation: Stryker report contains 0 valid mutants." }
       }
 
-      // A record is stale -- and must be removed -- only when it matches
-      // NOTHING in the current report, meaning the surrounding code actually
-      // changed. It is deliberately NOT stale just because it currently
-      // matches only Killed/Timeout mutants -- see this module's own doc
-      // comment for why (Stryker's own non-determinism, not this check's).
+      // A record is stale, and must go, only when it matches nothing in the report: its code changed.
+      // A record that matches only Killed or Timeout mutants stays: Stryker can report the same
+      // mutant differently between runs, as the module comment explains.
       const {
         stale: unmatched,
         insufficient,
         suppressed,
       } = applyExceptionRegistry(mutants, loaded.records)
-      // A narrowed run, or one shard of a sharded one, mutates part of the package, so a record for a mutant
-      // elsewhere matches nothing in its report without being stale; only a full run can say a record is.
+      // A narrowed run, or one shard, mutates part of the package. A record for a mutant elsewhere
+      // matches nothing there without being stale. Only a full run can call a record stale.
       const stale = narrowed === undefined && shard === undefined ? unmatched : []
       if (stale.length > 0 || insufficient.length > 0) {
         return {

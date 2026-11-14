@@ -1,5 +1,5 @@
 /**
- * Baseline Stryker config for a publishable TypeScript package -- the default the
+ * Baseline Stryker config for a publishable TypeScript package: the default the
  * `Mutation` check uses when a consumer has no `stryker.config.*` of its own.
  *
  * A consumer extends it:
@@ -7,7 +7,7 @@
  *   import baseline from "internal-package-contract/config/stryker"
  *   export default { ...baseline, mutate: [...baseline.mutate, "!src/legacy/**"] }
  *
- * No score threshold is set here -- the `Mutation` check owns the policy
+ * No score threshold is set here; the `Mutation` check owns the policy
  * (checks/mutation.ts) and it isn't a numeric score gate at all: it's
  * zero-tolerance, requiring exactly 0 Survived/NoCoverage/Timeout mutants
  * (each waivable only via a documented exception record), so
@@ -32,8 +32,8 @@ export default {
   // exceed the test runner's own per-test timeout and fail, which reads as a killed mutant even when
   // the mutation changed nothing, while other mutants lose their attributed runs and survive. (This is
   // the test failing on its own timeout, not Stryker's `Timeout` status, which the Mutation check
-  // rejects.) The set of survivors then differs from run to run -- measured on a 6k-mutant package:
-  // 143 non-killed at four workers, 209 at one, only 93 in common -- and a full run was slower at four
+  // rejects.) The set of survivors then differs from run to run (measured on a 6k-mutant package:
+  // 143 non-killed at four workers, 209 at one, only 93 in common) and a full run was slower at four
   // workers than at one. A consumer whose suite is purely synchronous can raise it.
   concurrency: 1,
   disableTypeChecks: "{src,test}/**/*.{ts,tsx}",

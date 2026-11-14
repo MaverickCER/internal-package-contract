@@ -14,6 +14,7 @@ import {
   CODE_SCANNING_SCHEMA,
   codeScanning,
   createDevStub,
+  actionEntries,
   deriveCodeScanningId,
   isDevPath,
 } from "../checks/code-scanning.js"
@@ -61,6 +62,35 @@ describe("codeScanning() -- run", () => {
     expect(run[0]).toBe("node")
     expect(run[1]).toMatch(/scripts[\\/]code-scanning-alerts\.mjs$/)
     expect(codeScanning().output).toEqual({ format: "json" })
+  })
+})
+
+describe("actionEntries()", () => {
+  it("returns the directories of runs.main/pre/post and of every action-path reference", () => {
+    expect(
+      actionEntries(
+        [
+          "runs:",
+          "  using: node20",
+          '  main: "./dist/main.js"',
+          "  pre: setup.js # comment",
+          "  post: 'dist/post.js'",
+          "steps:",
+          '  - run: bash "$ACTION_PATH/scripts/github-action/run-cli.sh"',
+          "  - run: node ${ACTION_PATH}/tools/a.mjs",
+          "  - run: node ${{ github.action_path }}/scripts/github-action/report.mjs",
+          "  - run: node ${{github.action_path}}/x/y/z.mjs",
+          "  - run: echo $ACTION_PATHS/nope",
+        ].join("\n"),
+      ),
+    ).toEqual(["dist/", "scripts/github-action/", "setup.js", "tools/", "x/y/"])
+  })
+  it("strips only a leading ./, so a path into the parent directory never names a repository directory", () => {
+    expect(actionEntries('  - run: bash "$ACTION_PATH/../shared/run.sh"\n')).toEqual(["../shared/"])
+  })
+  it("returns nothing for an empty or action-free text", () => {
+    expect(actionEntries("")).toEqual([])
+    expect(actionEntries("name: x\nruns:\n  using: composite\n")).toEqual([])
   })
 })
 
@@ -274,6 +304,65 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
     expect((await policy(makeJsonResult({ ok: true }))).outcome).toBe("pass")
   })
 
+  it("leaves OpenSSF Scorecard findings out: they rate repository settings, not code", async () => {
+    const result = await policy(
+      alerts(
+        alert({
+          tool: "Scorecard",
+          rule: "MaintainedID",
+          path: "no file associated with this alert",
+        }),
+        alert({
+          tool: "Scorecard",
+          rule: "TokenPermissionsID",
+          path: ".github/workflows/release.yml",
+        }),
+      ),
+    )
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale:
+        "No open code-scanning alerts (2 OpenSSF Scorecard finding(s) left out: they rate repository settings and practices, not code).",
+    })
+    expect(readRegistry().exceptions).toEqual([])
+  })
+
+  it("counts only the Scorecard findings it left out when a development-only alert passes beside them", async () => {
+    const result = await policy(
+      alerts(
+        alert({
+          tool: "Scorecard",
+          rule: "MaintainedID",
+          path: "no file associated with this alert",
+        }),
+        alert({ path: "test/a.test.ts" }),
+      ),
+    )
+    expect(result.outcome).toBe("pass")
+    expect(result.rationale).toContain(
+      "1 open code-scanning alert(s), all in development-only code",
+    )
+    expect(result.rationale).toContain("(1 OpenSSF Scorecard finding(s) left out")
+    expect(readRegistry().exceptions.map((record) => record["rule"])).toEqual(["js/bad-tag-filter"])
+  })
+
+  it("still fails a code-analysis alert in shipped code when Scorecard findings sit beside it", async () => {
+    const result = await policy(
+      alerts(
+        alert({
+          tool: "Scorecard",
+          rule: "CodeReviewID",
+          path: "no file associated with this alert",
+        }),
+        alert({ path: "src/a.ts" }),
+      ),
+    )
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain("1 open code-scanning alert(s)")
+    expect(result.rationale).toContain("src/a.ts:7")
+    expect(result.rationale).not.toContain("CodeReviewID")
+  })
+
   it("fails an alert in code that ships, naming it, and writes nothing", async () => {
     const result = await policy(
       alerts(alert({ path: "src/build/docs.ts", rule: "js/incomplete-sanitization", line: 22 })),
@@ -306,6 +395,36 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
     expect(result.rationale).toContain("- ...and 3 more")
     const exactly = await policy(alerts(...many.slice(0, 20)))
     expect(exactly.rationale).not.toContain("more")
+  })
+
+  it("treats the code a root action.yml runs as shipped, though package.json leaves it out", async () => {
+    writePackage({ name: "x", files: ["dist"] })
+    writeFileSync(
+      path.join(cwd, "action.yml"),
+      'runs:\n  using: composite\n  steps:\n    - run: bash "$ACTION_PATH/scripts/github-action/run-cli.sh"\n',
+    )
+    const shipped = await policy(alerts(alert({ path: "scripts/github-action/report.mjs" })))
+    expect(shipped.outcome).toBe("fail")
+    expect(shipped.rationale).toContain("scripts/github-action/report.mjs:7")
+    const dev = await policy(alerts(alert({ path: "scripts/other.mjs" })))
+    expect(dev.outcome).toBe("pass")
+  })
+
+  it("reads action.yaml when there is no action.yml, and an unreadable package.json as no files", async () => {
+    writeFileSync(path.join(cwd, "package.json"), "{not json", "utf8")
+    writeFileSync(path.join(cwd, "action.yaml"), "runs:\n  using: node20\n  main: lib/index.js\n")
+    const result = await policy(alerts(alert({ path: "lib/index.js" })))
+    expect(result.outcome).toBe("fail")
+  })
+
+  it("reads action.yaml when there is no action.yml, so the development directory it runs from ships", async () => {
+    writeFileSync(
+      path.join(cwd, "action.yaml"),
+      "runs:\n  using: node20\n  main: scripts/github-action/main.mjs\n",
+    )
+    const shipped = await policy(alerts(alert({ path: "scripts/github-action/main.mjs" })))
+    expect(shipped.outcome).toBe("fail")
+    expect(shipped.rationale).toContain("scripts/github-action/main.mjs:7")
   })
 
   it("treats a published scripts directory as shipped", async () => {

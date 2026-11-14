@@ -2,11 +2,11 @@
 //
 // Scanning only the landing pages said nothing about the pages most likely to fail. Those are the generated
 // benchmark history, with its charts, and each kind of API reference page. So a clean run was not evidence of
-// a conforming site. This picks, from whatever a repository has built under `docs/`:
+// a conforming site. This picks two kinds of page from whatever a repository has built under `docs/`:
 //
-//   - every top-level `docs/*.html` and every `docs/<dir>/index.html` (the site, the API landing page,
-//     the benchmark history, any other section's landing page);
-//   - one representative page from each subdirectory of `docs/api/`: TypeDoc renders every symbol of a kind
+//   - Every top-level `docs/*.html` and every `docs/<dir>/index.html` (the site, the API landing page,
+//     the benchmark history, any other section's landing page).
+//   - One representative page from each subdirectory of `docs/api/`. TypeDoc renders every symbol of a kind
 //     with the same template, so one page of each kind covers the template without scanning them all.
 //
 // A `docs/api/` with no `index.html` is a broken generator run. It throws, which fails the check. The list is
@@ -53,7 +53,7 @@ export async function resolvePages(docsDir) {
   if (await isDirectory(apiDir)) {
     if (!pages.includes(join(apiDir, "index.html"))) {
       throw new Error(
-        `docs/api/ exists but the expected landing page ${join(apiDir, "index.html")} does not -- check the API-doc generator's own output configuration.`,
+        `docs/api/ exists but the expected landing page ${join(apiDir, "index.html")} does not; check the API-doc generator's own output configuration.`,
       )
     }
     for (const kind of await list(apiDir)) {
