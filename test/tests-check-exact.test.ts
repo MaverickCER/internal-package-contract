@@ -152,7 +152,7 @@ describe("tests() skips", () => {
     expect(result.rationale).toBe(
       [
         "Tests: 2 test(s) did not run in 1 file(s), and 1 file(s) have no complete record of why:",
-        "- test/a.test.ts: 1 skipped, 1 todo -- skipped-test:test/a.test.ts is incomplete (missing: constraint)",
+        "- test/a.test.ts: 1 skipped, 1 todo; skipped-test:test/a.test.ts is incomplete (missing: constraint)",
       ].join("\n"),
     )
   })

@@ -12,17 +12,17 @@
 // otherwise), the Version Packages pull request bumps `package.json`, the release publishes, this command runs,
 // the new baseline is committed.
 //
-// Per-target outcomes -- only `updated` and `current` exit 0:
-//   updated   no baseline yet for this target (bootstrap); or package.json's version is strictly
-//             greater than the committed baseline's; or the version is unchanged but the public
-//             API contents differ (an API-changing commit that merged while the Release
-//             PR was open) -> regenerates and writes.
-//   current   the baseline already carries package.json's version AND its contents match ->
-//             writes nothing. This is what every Release-PR `synchronize` after the first sync
-//             sees, so it must not fail.
-//   refused   package.json's version is unparseable; or it is older than the committed baseline's
-//             (regenerating would roll the baseline backwards); or the committed baseline itself
-//             records an unparseable version.
+// Per-target outcomes, of which only `updated` and `current` exit 0.
+//   updated   Regenerates and writes. Either there is no baseline yet for this target (bootstrap), or
+//             package.json's version is strictly greater than the committed baseline's. Or the version
+//             is unchanged but the public API contents differ (an API-changing commit that merged while
+//             the Release PR was open).
+//   current   Writes nothing. The baseline already carries package.json's version AND its contents
+//             match. This is what every Release-PR `synchronize` after the first sync sees, so it must
+//             not fail.
+//   refused   Either package.json's version is unparseable, or it is older than the committed baseline's
+//             (regenerating would roll the baseline backwards). Or the committed baseline itself records
+//             an unparseable version.
 //   failed    API Extractor reported errors for this target.
 //
 // The command's exit code is 1 when any target's outcome is `refused` or `failed`, else 0.
@@ -55,7 +55,7 @@ export interface TargetUpdateOutcome {
  * @param root - Absolute path to the consumer's project root.
  * @param target - The target to update (see targets.ts).
  * @param packageJson - The consumer's own `package.json` `name`/`version`.
- * @returns This target's outcome -- see the file header for the full matrix.
+ * @returns This target's outcome: see the file header for the full matrix.
  */
 async function updateOneTarget(
   root: string,
@@ -89,7 +89,7 @@ async function updateOneTarget(
       return {
         target: target.name,
         status: "refused",
-        message: `Refusing to update: package.json declares version ${packageJson.version}, older than the committed baseline's ${existingBaseline.meta.packageVersion} -- regenerating now would roll the baseline backwards. Bump package.json (normally via the Version Packages PR) first.`,
+        message: `Refusing to update: package.json declares version ${packageJson.version}, older than the committed baseline's ${existingBaseline.meta.packageVersion}; regenerating now would roll the baseline backwards. Bump package.json (normally via the Version Packages PR) first.`,
       }
     }
     sameVersion = versionDelta === 0
@@ -101,7 +101,7 @@ async function updateOneTarget(
     return {
       target: target.name,
       status: "failed",
-      message: `API Extractor reported ${String(extractResult.errorCount)} error(s) -- see stderr above for details.`,
+      message: `API Extractor reported ${String(extractResult.errorCount)} error(s); see stderr above for details.`,
     }
   }
 
@@ -137,7 +137,7 @@ async function updateOneTarget(
     target: target.name,
     status: "updated",
     message: sameVersion
-      ? `Baseline contents refreshed at version ${packageJson.version} -- the public API changed without a version bump. Review .repo-contract/api-contract/${target.name}/baseline.* and commit.`
+      ? `Baseline contents refreshed at version ${packageJson.version}: the public API changed without a version bump. Review .repo-contract/api-contract/${target.name}/baseline.* and commit.`
       : `Baseline updated to version ${packageJson.version}. Review .repo-contract/api-contract/${target.name}/baseline.* and commit.`,
   }
 }
@@ -157,7 +157,7 @@ async function apiTargets(root: string): Promise<readonly ApiContractTarget[]> {
  * Factored out of the bottom-of-file CLI invocation so a test can exercise the real guardrail
  * logic in-process against a scratch fixture repository.
  * @param root - Absolute path to the consumer's project root whose baselines are being updated.
- * @returns Every target's outcome -- see the file header for the full matrix.
+ * @returns Every target's outcome: see the file header for the full matrix.
  */
 export async function runUpdateBaseline(root: string): Promise<readonly TargetUpdateOutcome[]> {
   const [packageJson, targets] = await Promise.all([readPackageJson(root), apiTargets(root)])
@@ -173,7 +173,7 @@ export async function runUpdateBaseline(root: string): Promise<readonly TargetUp
 }
 
 /**
- * The command's body: updates every target and reports each outcome -- `updated`/`current` on
+ * The command's body: updates every target and reports each outcome; `updated`/`current` on
  * stdout, `refused`/`failed` on stderr.
  * @param root - Absolute path to the consumer's project root whose baselines are being updated.
  * @param io - Where the per-target lines go.

@@ -221,7 +221,7 @@ describe("securityDeps()", () => {
   it("treats a version-range change as a genuinely new finding, combining the exact offender/stale counts and text", async () => {
     writeRegistry([completeRecord()])
     const check = securityDeps()
-    // Same package, but a new advisory / different range -- the old record must not silently
+    // Same package, but a new advisory / different range: the old record must not silently
     // cover it.
     const result = await check.policy(
       makeContext(auditResult({ vitest: { severity: "moderate", range: "4.0.0" } })),
@@ -231,7 +231,7 @@ describe("securityDeps()", () => {
       rationale: [
         "2 npm audit finding(s) or stale record(s) need attention:",
         "- security-deps:vitest@4.0.0 [moderate]: exception incomplete (missing: justification, alternatives, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen)",
-        '- Stale exception in .repo-contract/exceptions/security-deps.json: "security-deps:vitest@3.0.0 - 3.2.7" -- npm audit no longer reports this vulnerability; delete this entry.',
+        '- Stale exception in .repo-contract/exceptions/security-deps.json: "security-deps:vitest@3.0.0 - 3.2.7"; npm audit no longer reports this vulnerability; delete this entry.',
       ].join("\n"),
     })
   })

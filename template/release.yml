@@ -1,18 +1,20 @@
-# internal-package-contract caller workflow. Runs the shared Changesets + npm OIDC
-# trusted-publishing release flow on every push to main. Do not inline the release
-# logic here: it lives in the reusable workflow this calls, pinned below by commit SHA.
-# A fix there reaches this repository when the SHA is moved, which `dependency-pin-sync`
-# does in a reviewed pull request; nothing changes here without that. See
+# internal-package-contract caller workflow. It runs the shared release flow on every push to main.
+# That flow uses Changesets and npm OIDC trusted publishing. Do not inline the release logic here.
+# It lives in the reusable workflow this calls, pinned below by commit SHA. A fix there reaches this
+# repository only when `dependency-pin-sync` moves the SHA. It does so in a reviewed pull request.
+# The reusable workflow:
 # https://github.com/MaverickCER/internal-package-contract/blob/main/.github/workflows/release-npm-changesets.yml
 #
-# Requires the `npm run version` and `npm run release` scripts and this repo's own npm trusted
-# publisher registered on npmjs.com. `internal-package-contract init` writes
-# `.changeset/config.json` but not those scripts, and never registers the publisher. See the reusable workflow's own `roll-floating-major-tag` input doc comment
-# (linked above) before your first release: it defaults to true (every consumer had a
-# composite GitHub Action to version when this default was chosen), which moves the
-# floating `v<major>` git tag (`v0` while the package is 0.x) on every successful publish.
-# A plain npm package with no action.yml doesn't want that tag -- uncomment the
-# `with:` block below for one.
+# It needs a `version` script (`changeset version` plus whatever regenerates), and runs `verify`
+# before packing when the package defines it, `build` otherwise. It also needs this repo's own npm
+# trusted publisher, registered on npmjs.com. `internal-package-contract init` writes
+# `.changeset/config.json`. In an existing package it does not write the `version` script, and it never
+# registers the publisher.
+#
+# Read the reusable workflow's `roll-floating-major-tag` input (linked above) before your first
+# release. It defaults to true. Then every successful publish moves the floating `v<major>` git tag
+# (`v0` while the package is 0.x). A plain npm package with no action.yml does not want that tag.
+# For one, uncomment the `with:` block below.
 name: Release
 
 on:
@@ -21,13 +23,16 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+# Each job grants only what it needs; nothing is granted workflow-wide.
+permissions: {}
+
 jobs:
   release:
     permissions:
       contents: write
       pull-requests: write
-      # Enables npm's OIDC trusted publishing -- see the called workflow's own
-      # comment. Required here too: GitHub caps the called workflow's effective
+      # Enables npm's OIDC trusted publishing (see the called workflow's own
+      # comment). Required here too: GitHub caps the called workflow's effective
       # permissions at the intersection of what this caller grants and what it
       # itself declares.
       id-token: write
@@ -38,7 +43,7 @@ jobs:
     # Pinned by commit SHA, never a branch: whoever can push to that branch could otherwise publish this
     # package. `dependency-pin-sync` moves the SHA together with the devDependency.
     uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@{{ipcSha}} # {{ipcRef}}
-    # An npm-only package (no composite GitHub Action / action.yml to version) --
-    # uncomment so a successful release doesn't push an unwanted floating major tag:
+    # An npm-only package (no action.yml to version) uncomments this, so a successful
+    # release does not push an unwanted floating major tag.
     # with:
     #   roll-floating-major-tag: false

@@ -1,22 +1,23 @@
-# internal-package-contract's own release: version bump + CHANGELOG only, via
-# Changesets -- never `npm publish`. This package is deliberately never
-# published to npm (see README/SECURITY.md), so it can't call the shared, reusable
-# release-npm-changesets.yml this repo hosts for its own consumers (that
-# workflow's whole job is an npm OIDC publish).
+# This repository's own release: a version bump, a CHANGELOG entry and a git tag. It never runs
+# `npm publish`, because this package is never published to npm (see README and SECURITY.md). That is
+# why it cannot call release-npm-changesets.yml, the shared release this repository hosts for consumers.
 #
-# On every push to main: changesets/action opens/updates the standing
-# "Version Packages" PR while changesets are pending (never publishes,
-# since no `publish` input is given). Once that PR is merged, this same
-# workflow runs again on the resulting push -- the "tag the release" step
-# below notices package.json's version has no matching git tag yet and
-# creates one, rolling the floating major tag forward too -- `v0` while this is
-# 0.x, `v1` from 1.0.0, never a major other than the one just released (same
-# convention release-npm-changesets.yml uses for its own consumers) -- so a
-# consumer can pin `#v0` instead of floating on `#main`.
+# On every push to main, changesets/action opens or updates the "Version Packages" PR while changesets
+# are pending. It never publishes, since no `publish` input is given. Merging that PR pushes to main
+# again. The tag step then sees a version with no git tag and creates one. It also moves the floating
+# major tag (`v0` while this is 0.x, `v1` from 1.0.0), as release-npm-changesets.yml does. A consumer
+# can then pin `#v0` instead of following `#main`.
 name: Release
 
 on:
   push:
+    branches: [main]
+  # The tag waits for a passing contract run on the same tree. On a push that run is often still going,
+  # since the full contract takes about two hours. So this workflow runs again when CI finishes on a push
+  # to main, and the tag step finds the run then. A version already tagged is left alone.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -25,63 +26,124 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # The contract-run attestation below reads this repository's workflow runs and their jobs.
+  actions: read
 
 jobs:
   release:
+    # `branches: [main]` above matches the head branch name, which a fork's pull request can also call
+    # `main`. Only a push to this repository's own main may version or tag.
+    if: >-
+      github.event_name == 'push' || (github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    env:
+      # The commit to version and tag: the pushed commit, or on a CI-finished retry the commit that CI ran
+      # on. On `workflow_run`, `github.sha` is the newest main commit. That may be a later merge.
+      TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
 
-      # The same rule this standard imposes on every consumer's release: nothing from node_modules runs
-      # while the job holds a write token. `npm run version` below runs only this repository's own scripts.
+      # Installs with lifecycle scripts off, so no dependency's install hook runs while the job holds a
+      # write token. `npm run version` below does run `changeset version` and this repository's own
+      # `update-baseline` script, both pinned by the lockfile.
       - run: npm ci --ignore-scripts
 
       - name: Version Packages PR
         id: changesets
+        # Only on a push: the CI-finished run exists to retry the tag, not to version again.
+        if: github.event_name == 'push'
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: npm run version
           # changesets/action's own default commit/PR-title ("Version Packages") is not a
-          # Conventional Commit -- this repo's own Commits check (commitlint) fails the
-          # resulting bot commit on origin/main..HEAD. Same fix as PR #7's identical one in
-          # release-npm-changesets.yml (the reusable workflow this repo hosts for consumers,
-          # which this repo's own release can't call -- see this file's own header comment).
+          # Conventional Commit: this repo's own Commits check (commitlint) fails the
+          # resulting bot commit on origin/main..HEAD. release-npm-changesets.yml sets the same
+          # title. This release cannot call that workflow (see the header).
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Only when there is nothing left to version. While changesets are pending the step above has
-      # just bumped package.json in this working tree and committed that bump to the release
-      # branch, so tagging here would tag a commit that is not on main and roll the floating major
-      # tag onto it (v0.9.1 and v0 did exactly that, before the release was merged).
-      - name: Tag the released version (no npm publish -- private package)
-        id: tag
+      # Only when there is nothing left to version. While changesets are pending, the step above has
+      # just bumped package.json in this working tree and committed that bump to the release branch.
+      # Tagging here would tag a commit that is not on main and roll the floating major tag onto it.
+      # That happened to v0.9.1 and v0 before the release was merged.
+      - name: Find the version to tag
+        id: version
         if: steps.changesets.outputs.hasChangesets != 'true'
         run: |
           VERSION="v$(node -p "require('./package.json').version")"
           if git rev-parse "$VERSION" >/dev/null 2>&1; then
             echo "$VERSION already tagged, nothing to do."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The same gate the consumers' shared release applies: a tag is a release, so the tagged tree must
+      # have passed its own contract. The ruleset requires `contract` before a merge, so the pull request
+      # that produced this commit carries that run. This step finds it by tree instead of re-running the
+      # contract, which takes about two hours. A commit that reached main past the ruleset is not tagged.
+      - name: Require a passing contract run on this tree
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passes when `contract` succeeded and `required` either succeeded or is not in the run.
+          GATES_JQ: >-
+            [.jobs[] | select(.name == "contract" or .name == "required")] as $gates | ($gates | map(select(.name == "contract" and .conclusion == "success")) | length) as $c | ($gates | map(select(.name == "required")) | length) as $r | ($gates | map(select(.name == "required" and .conclusion == "success")) | length) as $ok | if $c > 0 and ($r == 0 or $ok > 0) then "pass" else "no" end
+        run: |
+          set -eu
+          repo="$GITHUB_REPOSITORY"
+          tree=$(gh api "repos/$repo/commits/$TARGET_SHA" --jq '.commit.tree.sha')
+          candidates="$TARGET_SHA $(gh api "repos/$repo/commits/$TARGET_SHA" --jq '.parents[].sha' | tr '\n' ' ')"
+          pr=$(gh api "repos/$repo/commits/$TARGET_SHA/pulls" --jq '.[0].head.sha // empty' 2>/dev/null || true)
+          candidates="$candidates $pr"
+          for sha in $candidates; do
+            [ -n "$sha" ] || continue
+            [ "$(gh api "repos/$repo/commits/$sha" --jq '.commit.tree.sha')" = "$tree" ] || continue
+            for run in $(gh api "repos/$repo/actions/runs?head_sha=$sha&per_page=50" --jq '.workflow_runs[].id'); do
+              # `contract` must have passed, and so must `required` when the run has one. `required`
+              # aggregates every other gate job (runtime, TypeScript, examples), so a merge past a red one
+              # is not released.
+              verdict=$(gh api "repos/$repo/actions/runs/$run/jobs?per_page=100" --jq "$GATES_JQ")
+              if [ "$verdict" = "pass" ]; then
+                echo "contract (and required, where the run has it) passed in run $run on $sha (same tree as $TARGET_SHA)"
+                exit 0
+              fi
+            done
+          done
+          echo "::error title=No passing contract run::No workflow run on a commit with this tree finished its \`contract\` job (and its \`required\` job, where it has one) with success. Merge the release through a pull request whose contract check is green."
+          exit 1
+
+      - name: Tag the released version (no npm publish; private package)
+        id: tag
+        if: steps.version.outputs.tag != ''
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+        run: |
+          if [ -z "$VERSION" ]; then
             echo "new-tag=" >> "$GITHUB_OUTPUT"
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag "$VERSION" "$GITHUB_SHA"
+            git tag "$VERSION" "$TARGET_SHA"
             git push origin "$VERSION"
             MAJOR_TAG="v${VERSION#v}"
             MAJOR_TAG="${MAJOR_TAG%%.*}"
-            git tag -f "$MAJOR_TAG" "$GITHUB_SHA"
+            git tag -f "$MAJOR_TAG" "$TARGET_SHA"
             git push origin "$MAJOR_TAG" --force
             echo "new-tag=$VERSION" >> "$GITHUB_OUTPUT"
           fi
 
-      # The GitHub Releases page is the first place many people look for what shipped, and this private package
+      # The GitHub Releases page is the first place many people look for what shipped. This private package
       # is consumed by tag, so each new tag gets a Release. The notes are that version's section of CHANGELOG.md.
       # The consumers' shared release workflow does the same for what it publishes.
       - name: Create the GitHub Release

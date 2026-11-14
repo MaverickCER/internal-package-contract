@@ -4,7 +4,7 @@
  *
  * A record is invalid, and the `CodeRabbit` check fails, when its id does not match its own
  * `file`/`severity`/`summary`, when `severity` is not one the stream can report, or when `method` is
- * `mechanical-reverification`: no tool can re-run an AI finding to confirm it. `exceptionType` may be any
+ * `mechanical-reverification`. No tool can re-run an AI finding to confirm it. `exceptionType` may be any
  * shared type except `validated-false-positive`, for the same reason.
  */
 import { createHash } from "node:crypto"
@@ -18,11 +18,11 @@ import {
 import type { ExceptionRegistrySchema, ExceptionType } from "../../checks/exception-record.js"
 import type { CoderabbitExceptionRecord, NormalizedFinding } from "./evidence-types.js"
 
-/** Every value a stored record's `severity` may hold -- `"unknown"` included, since a record mirrors whatever `normalizeFinding` assigned. */
+/** Every value a stored record's `severity` may hold: `"unknown"` included, since a record mirrors whatever `normalizeFinding` assigned. */
 const SEVERITY_VALUES = new Set<unknown>(["critical", "major", "minor", "unknown"])
 
 /**
- * `"validated-false-positive"` is excluded from a CodeRabbit exception's allowed set -- unlike a
+ * `"validated-false-positive"` is excluded from a CodeRabbit exception's allowed set: unlike a
  * deterministic scanner, there is no more-authoritative tool to mechanically re-run against an
  * AI-generated finding to confirm it "doesn't actually apply". A CodeRabbit finding judged
  * incorrect is still only ever dismissed via `"accepted-risk"` / `"tooling-limitation"` / etc.,
@@ -53,7 +53,7 @@ export function deriveCoderabbitExceptionId(finding: {
 }
 
 /**
- * A fresh, blank exception record for a finding with no matching record yet -- every authoring field
+ * A fresh, blank exception record for a finding with no matching record yet: every authoring field
  * starts empty (valid registry data, only policy-insufficient).
  * @param finding - The unmatched finding.
  * @param id - The canonical id reconciliation computed (equals `finding.id`).
@@ -98,7 +98,7 @@ export const CODERABBIT_EXCEPTION_SCHEMA: ExceptionRegistrySchema<CoderabbitExce
     const security = validateSecurityExceptionFields(raw, index, CODERABBIT_EXCEPTION_TYPES, errors)
     if (security?.method === "mechanical-reverification") {
       errors.push(
-        `${at}.method must be "independent-human-review" for a CodeRabbit waiver -- there is no tool this check can mechanically re-run to substantiate dismissing an AI-generated finding (repo-contract ADR 0014).`,
+        `${at}.method must be "independent-human-review" for a CodeRabbit waiver: there is no tool this check can mechanically re-run to substantiate dismissing an AI-generated finding (repo-contract ADR 0014).`,
       )
       return undefined
     }

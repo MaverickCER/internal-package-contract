@@ -17,7 +17,7 @@ import type { MutantLocation, MutationExceptionRecord, ResolvedMutant } from "..
 import { validateExceptionRegistry } from "../checks/exception-record.js"
 import { BLANK_V2, makeContext, makeResult } from "./support.js"
 
-/** Mirrors mutation.ts's own private `deriveMutationId` exactly -- a registry record's `id` must match this, or the schema validator rejects it as an integrity failure before the policy ever gets to evaluate it. */
+/** Mirrors mutation.ts's own private `deriveMutationId` exactly: a registry record's `id` must match this, or the schema validator rejects it as an integrity failure before the policy ever gets to evaluate it. */
 function deriveMutationId(mutant: {
   readonly file: string
   readonly mutator: string
@@ -453,7 +453,7 @@ describe("mutation()", () => {
     expect(result.rationale).toContain('- a.ts:1 [Survived M] "c" -> "0"')
     expect(result.rationale).not.toContain("[Killed")
     // The offender listing must be newline-joined onto the summary line, not
-    // concatenated directly onto it -- hand-verified: Stryker's own perTest
+    // concatenated directly onto it: hand-verified: Stryker's own perTest
     // run flagged `.join("\n")` -> `.join("")` at the final `summarizeMutationScore`
     // fail-branch return as Survived even though this exact assertion fails
     // immediately when that mutation is applied by hand.
@@ -535,7 +535,7 @@ describe("mutation()", () => {
           end: { line: 1, column: 19 },
         },
         // An unrelated, genuinely-killed mutant so the report isn't
-        // suppressed down to nothing -- keeps this test's own assertions
+        // suppressed down to nothing: keeps this test's own assertions
         // about the score summary meaningful (see the dedicated
         // "every mutant ... excluded" test below for the all-suppressed case).
         {
@@ -589,7 +589,7 @@ describe("mutation()", () => {
               location: { start: { line: 1, column: 10 }, end: { line: 1, column: 15 } },
             },
             // An unrelated, genuinely-killed mutant so the report isn't
-            // suppressed down to nothing -- see this file's other comment
+            // suppressed down to nothing: see this file's other comment
             // making the same point.
             {
               status: "Killed",
@@ -622,7 +622,7 @@ describe("mutation()", () => {
     expect(result.outcome).toBe("pass")
     expect(result.rationale).toContain("survived 0")
     expect(result.rationale).toContain("no-coverage 0")
-    // Two distinct mutants suppressed by the one record -- the plural form.
+    // Two distinct mutants suppressed by the one record: the plural form.
     expect(result.rationale).toContain("2 known Stryker false positives excluded")
   })
 
@@ -657,7 +657,7 @@ describe("mutation()", () => {
     const check = mutation()
     const result = await check.policy(makeContext(makeResult()))
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("missing: justification")
+    expect(result.rationale).toContain("is missing justification")
   })
 
   it("fails as stale when a registry record matches nothing in the current report at all", async () => {
@@ -728,8 +728,8 @@ describe("mutation()", () => {
       outcome: "fail",
       rationale: [
         "Mutation: .repo-contract/exceptions/mutation.json has 2 problem(s):",
-        `- ${deriveMutationId(insufficientRecord)} -- missing: justification. Fill those fields in .repo-contract/exceptions/mutation.json.`,
-        `- ${deriveMutationId(staleRecord)} -- a.ts [NumberLiteral] "1" -> "2" no longer matches any mutant in the report; the surrounding code likely changed.`,
+        `- ${deriveMutationId(insufficientRecord)} is missing justification. Fill those fields in .repo-contract/exceptions/mutation.json.`,
+        `- ${deriveMutationId(staleRecord)}: a.ts [NumberLiteral] "1" -> "2" no longer matches any mutant in the report; the surrounding code likely changed.`,
       ].join("\n"),
     })
   })
@@ -1091,7 +1091,7 @@ describe("mutation()", () => {
     // excluded, unlike killed/runtimeError/compileError). valid = detected(5)
     // + survived(1) + noCoverage(1) + timeout(1) = 8. 5/8 = 62.50%. Including
     // timeout in detected would give 6/8 = 75.00%; excluding it from valid
-    // too would give 5/7 -- both distinct from the real 62.50%.
+    // too would give 5/7: both distinct from the real 62.50%.
     expect(result.rationale).toContain("score 62.50%")
     expect(result.rationale).toContain("killed 3, timeout 1, survived 1, no-coverage 1")
     expect(result.outcome).toBe("fail")
@@ -1309,7 +1309,7 @@ describe("mutation() -- an insufficient record", () => {
       outcome: "fail",
       rationale: [
         "Mutation: .repo-contract/exceptions/mutation.json has 1 problem(s):",
-        `- ${id} -- missing: justification. Fill those fields in .repo-contract/exceptions/mutation.json.`,
+        `- ${id} is missing justification. Fill those fields in .repo-contract/exceptions/mutation.json.`,
       ].join("\n"),
     })
   })
@@ -1339,7 +1339,7 @@ describe("mutation() -- a blank version 2 record", () => {
     writeRegistry([{ id, version: 2, justification: "", ...BLANK_V2, ...identity }])
     const result = await mutation().policy(makeContext(makeResult()))
     expect(result.rationale).toContain(
-      "missing: justification, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen. Fill those fields",
+      "is missing justification, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen. Fill those fields",
     )
   })
 })
@@ -1460,7 +1460,7 @@ describe("mutation() -- a narrowed run", () => {
       ...narrowed(["a.ts"]),
     } as never)
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("missing: justification")
+    expect(result.rationale).toContain("is missing justification")
   })
 })
 

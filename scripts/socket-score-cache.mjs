@@ -105,6 +105,6 @@ export function writeCached(dir, name, version, data, now) {
     writeFileSync(`${file}.tmp`, JSON.stringify({ savedAt: now, data }))
     renameSync(`${file}.tmp`, file)
   } catch {
-    // Read-only or full disk: the next run simply scans again.
+    // Read-only or full disk: the next run scans again.
   }
 }

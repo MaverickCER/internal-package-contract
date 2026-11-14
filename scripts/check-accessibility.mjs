@@ -30,7 +30,7 @@ const repoRoot = process.cwd()
 const docsDir = join(repoRoot, "docs")
 
 // Every well-known system Chrome/Chromium install location this check knows to look for, in
-// priority order, per platform -- checked only if `PUPPETEER_EXECUTABLE_PATH`/`CHROME_PATH`
+// priority order, per platform: checked only if `PUPPETEER_EXECUTABLE_PATH`/`CHROME_PATH`
 // (an explicit override) isn't already set. Covers GitHub Actions' own `ubuntu-latest` runner
 // image (ships Google Chrome preinstalled) and the common macOS/Linux developer-machine defaults.
 const CANDIDATE_EXECUTABLE_PATHS = {
@@ -50,7 +50,7 @@ const CANDIDATE_EXECUTABLE_PATHS = {
   ],
 }
 
-// A last-resort PATH lookup for a handful of common binary names -- covers a Chromium installed
+// A last-resort PATH lookup for a handful of common binary names: covers a Chromium installed
 // under a name/location this check's own candidate list doesn't happen to enumerate.
 const PATH_LOOKUP_NAMES = ["google-chrome-stable", "google-chrome", "chromium-browser", "chromium"]
 
@@ -64,7 +64,7 @@ async function pathExists(path) {
 }
 
 /**
- * Finds a real, usable Chrome/Chromium executable on this machine -- `puppeteer-core` (see this
+ * Finds a real, usable Chrome/Chromium executable on this machine: `puppeteer-core` (see this
  * module's own doc comment for why it's used in place of real `puppeteer`) bundles no browser of
  * its own and requires one to be supplied explicitly.
  * @returns The executable's absolute path, or `undefined` if none could be found.
@@ -110,7 +110,7 @@ function isTypedocNavNestedInteractive(issue) {
 
 /**
  * HTML_CodeSniffer's duplicate-id rule (F77) tracks ids in a plain object, so an element whose id is the
- * name of an `Object.prototype` member -- TypeDoc's `#constructor` section -- is reported as a duplicate of
+ * name of an `Object.prototype` member (TypeDoc's `#constructor` section) is reported as a duplicate of
  * itself. Verified by hand: the document has exactly one such id. Counted, not failed on.
  */
 function isHtmlcsPrototypeIdFalsePositive(issue) {
@@ -138,7 +138,7 @@ try {
     const chromeLaunchConfig = {
       executablePath,
       // Chromium's own sandbox needs kernel unprivileged-user-namespace support, which a GitHub
-      // Actions runner's AppArmor profile restricts -- without these flags Chrome exits
+      // Actions runner's AppArmor profile restricts: without these flags Chrome exits
       // immediately on launch and pa11y produces no report at all. Safe here: every page this
       // check ever loads is the consumer's own static, committed HTML over a file:// URL, never
       // untrusted content.
@@ -153,7 +153,7 @@ try {
           chromeLaunchConfig,
           runners: ["axe", "htmlcs"],
         })
-        // Attach the repo-relative page path to every issue -- with more than one page scanned,
+        // Attach the repo-relative page path to every issue: with more than one page scanned,
         // a finding's rationale has to say which page it is on to be actionable.
         const page = relative(repoRoot, path)
         return result.issues.map((issue) => ({ ...issue, page }))
@@ -161,11 +161,11 @@ try {
     )
 
     // `pagesScanned` lets the policy tell a genuine "0 issues across N pages" pass apart from
-    // "0 pages existed to scan" (no built docs site at all) -- both produce an empty `value`
+    // "0 pages existed to scan" (no built docs site at all): both produce an empty `value`
     // array otherwise, and only the first is actually a clean pass. See resolvePages() above.
     // axe marks a result `needsFurtherReview` when it cannot decide (typically a text colour whose background it
     // cannot read: text inside an `<svg>`, or partly covered by a sticky element). pa11y reports those as errors.
-    // They are set aside and counted instead -- by axe's own definition they are not failures -- while every
+    // They are set aside and counted instead (by axe's own definition they are not failures) while every
     // decided violation still fails. The colour pairs the benchmark charts use are checked numerically by this
     // package's own tests (benchmark-render-page.test.ts).
     const all = perPage.flat()

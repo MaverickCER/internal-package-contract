@@ -1,4 +1,4 @@
-// Hand-authored type declarations for lib/results.mjs -- see
+// Hand-authored type declarations for lib/results.mjs: see
 // ../classify-complexity.d.mts's own doc comment for why these exist.
 
 export interface DurationLike {

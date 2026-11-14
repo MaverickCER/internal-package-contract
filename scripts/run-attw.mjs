@@ -70,8 +70,8 @@ function parseNpmPackFilename(stdout, stderr) {
 
 // Every attw entrypoint name (without the leading "./") to skip. `schema` and
 // any `schema/*` subpath are bare `*.schema.json` assets, not code/types
-// entrypoints -- attw's legacy `node10` resolver flags a raw-JSON subpath
-// export, which is a limitation of that resolver, not a packaging defect.
+// entrypoints. The legacy `node10` resolver in attw flags a raw-JSON subpath
+// export; that is a limit of the resolver, not a packaging defect.
 const excludeArg = process.argv.slice(2).find((a) => a.startsWith("--exclude="))
 const excludeEntrypoints = (excludeArg ? excludeArg.slice("--exclude=".length) : "schema")
   .split(",")
@@ -106,8 +106,8 @@ try {
 
   if (result.error) throw result.error
 
-  // attw exits non-zero when it finds problems -- substantive evidence the
-  // policy interprets from the JSON report, passed through verbatim.
+  // The exit code is passed through as is. A non-zero one means attw found
+  // problems, and the policy reads them from the JSON report.
   process.exitCode = typeof result.status === "number" ? result.status : 1
 } finally {
   rmSync(packDir, { recursive: true, force: true })

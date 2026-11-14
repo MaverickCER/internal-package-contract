@@ -43,7 +43,7 @@
       navigator.clipboard.writeText(text).then(
         function () {
           button.textContent = "Copied"
-          // The button's own text change is silent to screen readers -- this
+          // The button's own text change is silent to screen readers: this
           // is the announcement assistive tech actually hears.
           if (copyStatus) {
             copyStatus.textContent = "Copied to clipboard."
@@ -53,7 +53,7 @@
           }, 2000)
         },
         function () {
-          // Permission denied or the write rejected -- announce the failure
+          // Permission denied or the write rejected: announce the failure
           // rather than leaving an unhandled rejection and a silent button.
           if (copyStatus) {
             copyStatus.textContent = "Couldn't copy to clipboard."
@@ -63,7 +63,7 @@
     })
   })
 
-  // Theme toggle -- persists an explicit choice in localStorage as
+  // Theme toggle: persists an explicit choice in localStorage as
   // [data-theme] on <html>; absent that, styles.css's
   // `@media (prefers-color-scheme: dark)` block governs.
   var THEME_STORAGE_KEY = document.documentElement.getAttribute("data-theme-key") || "theme"
@@ -80,7 +80,7 @@
     try {
       stored = window.localStorage.getItem(THEME_STORAGE_KEY)
     } catch (error) {
-      // Storage may be unavailable (private browsing, disabled cookies) --
+      // Storage may be unavailable (private browsing, disabled cookies):
       // fall back to the system preference below, never throw.
     }
     if (stored === "dark") return true
@@ -106,14 +106,14 @@
       try {
         window.localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light")
       } catch (error) {
-        // Non-fatal -- the toggle still works for this page view even if
+        // Non-fatal: the toggle still works for this page view even if
         // the preference can't be persisted.
       }
       applyTheme(next)
     })
   }
 
-  // Cmd+K / Ctrl+K search over this page's own headings and FAQ questions --
+  // Cmd+K / Ctrl+K search over this page's own headings and FAQ questions:
   // no backend, no external service, no build step: the index is built once
   // from the DOM already on the page.
   var searchOverlay = document.getElementById("search-overlay")

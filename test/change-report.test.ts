@@ -573,7 +573,7 @@ describe("render", () => {
       }),
     )
     expect(text).toContain("## Decisions recorded\n\n- [0050: x](specs/decisions/0050-x.md)\n")
-    expect(text).toContain("- **added** in `mutation`: `m:1` — Equivalent mutant.\n")
+    expect(text).toContain("- **added** in `mutation`: `m:1`: Equivalent mutant.\n")
     expect(text).toContain("- **removed** in `mutation`: `m:2`\n")
     expect(text).toContain("- `a` (dependencies): added `^1.0.0`\n")
     expect(text).toContain("- `b` (devDependencies): removed (was `^1.0.0`)\n")
@@ -751,17 +751,17 @@ describe("render, exactly", () => {
         .split("\n")
         .filter((row) => row.startsWith("- **added**"))
         .join("")
-    expect(line("One sentence only")).toBe("- **added** in `r`: `i` — One sentence only")
+    expect(line("One sentence only")).toBe("- **added** in `r`: `i`: One sentence only")
     expect(line("First part\nwrapped  across   lines. Second.")).toBe(
-      "- **added** in `r`: `i` — First part wrapped across lines.",
+      "- **added** in `r`: `i`: First part wrapped across lines.",
     )
-    expect(line("Is it? Yes.")).toBe("- **added** in `r`: `i` — Is it?")
-    expect(line("Stop! Then more.")).toBe("- **added** in `r`: `i` — Stop!")
-    expect(line("Ends here.")).toBe("- **added** in `r`: `i` — Ends here.")
+    expect(line("Is it? Yes.")).toBe("- **added** in `r`: `i`: Is it?")
+    expect(line("Stop! Then more.")).toBe("- **added** in `r`: `i`: Stop!")
+    expect(line("Ends here.")).toBe("- **added** in `r`: `i`: Ends here.")
     expect(line("Version 1.2 is not a sentence end. But this is.")).toBe(
-      "- **added** in `r`: `i` — Version 1.2 is not a sentence end.",
+      "- **added** in `r`: `i`: Version 1.2 is not a sentence end.",
     )
-    expect(line("  padded  ")).toBe("- **added** in `r`: `i` — padded")
+    expect(line("  padded  ")).toBe("- **added** in `r`: `i`: padded")
   })
 
   it("counts the checks in the singular and the plural", () => {

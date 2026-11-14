@@ -9,9 +9,13 @@
  * `.repo-contract/exceptions/code-scanning.json`. A ref with no analysis yet has no alerts, so a
  * fix branch is never blocked by the default branch's open alert.
  *
+ * OpenSSF Scorecard findings (tool `Scorecard`) are left out: they rate repository settings and
+ * practices, not code, and the Scorecard report already carries them.
+ *
  * Fails on any alert in code that builds, runs or ships. Development-only code is `test/`,
  * `tests/`, `examples/`, `benchmarks/`, `docs/`, `.github/`, `scripts/` and the test and config
- * file patterns, minus anything package.json `files` publishes. Fails when a development-only alert
+ * file patterns, minus anything package.json `files` publishes and minus the directories a root
+ * `action.yml` runs code from (`scripts/github-action/` in env-cap and data-cap). Fails when a development-only alert
  * has an incomplete record. Fails when the registry cannot be loaded or written. Fails when the
  * alerts could not be read: no token, `gh` missing, not signed in, no access, too many pages. Never
  * warns on a finding.
@@ -84,6 +88,9 @@ import { packageRoot, parseToolEnvelope } from "./shared.js"
 const scriptPath = path.join(packageRoot, "scripts", "code-scanning-alerts.mjs")
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/code-scanning.json"
 const MAX_LISTED = 20
+
+/** The tool name OpenSSF Scorecard uploads its findings under; they rate the repository, not code. */
+const SCORECARD_TOOL = "Scorecard"
 
 /** The one reason recorded for every development-only alert, so the standing decision reads identically. */
 const DEV_JUSTIFICATION =
@@ -158,7 +165,7 @@ interface CodeScanningRecord extends Partial<ExceptionV2Fields> {
   readonly path: string
 }
 
-/** `code-scanning:<rule>@<path>` -- stable while the rule and file are unchanged. */
+/** `code-scanning:<rule>@<path>`: stable while the rule and file are unchanged. */
 export function deriveCodeScanningId(rule: string, filePath: string): string {
   return `code-scanning:${rule}@${filePath}`
 }
@@ -304,17 +311,52 @@ function guidance(kind: string | undefined, message: string | undefined): string
   ].join("\n")
 }
 
-async function publishedEntries(): Promise<readonly string[]> {
+/**
+ * The directories a root `action.yml` runs code from: those of `runs.main`, `runs.pre` and `runs.post`,
+ * and of every path a step reaches through `$ACTION_PATH` or `${{ github.action_path }}`. Users run that
+ * code through the action's tag, so it ships even when package.json `files` leaves it out.
+ * @param actionYml - the text of `action.yml`.
+ * @returns repo-relative directories (`scripts/github-action/`), or the file itself when it sits at the root.
+ * @internal Exported for direct unit coverage.
+ */
+export function actionEntries(actionYml: string): string[] {
+  const referenced = [
+    ...[...actionYml.matchAll(/^\s*(?:main|pre|post):\s*["']?([^"'\s#]+)/gm)].map((m) => m[1]),
+    ...[
+      ...actionYml.matchAll(
+        /(?:\$\{?ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})\/([\w./-]+)/g,
+      ),
+    ].map((m) => m[1]),
+  ] as string[]
+  const entries = referenced.map((file) => {
+    const bare = file.replace(/^\.\//, "")
+    const slash = bare.lastIndexOf("/")
+    return slash === -1 ? bare : `${bare.slice(0, slash)}/`
+  })
+  return [...new Set(entries)].sort()
+}
+
+async function readOptional(file: string): Promise<string> {
   try {
-    // Stryker disable next-line StringLiteral: an equivalent mutant -- `readFile(path, "")` yields a Buffer, which `JSON.parse` coerces to the same text.
-    const text = await readFile(path.join(process.cwd(), "package.json"), "utf8")
-    const files = (JSON.parse(text) as { files?: unknown }).files
-    // Stryker disable next-line ArrayDeclaration: an equivalent mutant -- a placeholder entry matches no path, same as none.
-    return Array.isArray(files) ? files.filter((f): f is string => typeof f === "string") : []
+    return await readFile(path.join(process.cwd(), file), "utf8")
   } catch {
-    // Stryker disable next-line ArrayDeclaration: an equivalent mutant -- a placeholder entry matches no path, same as none.
-    return []
+    return ""
   }
+}
+
+async function publishedEntries(): Promise<readonly string[]> {
+  const action = (await readOptional("action.yml")) || (await readOptional("action.yaml"))
+  let files: unknown
+  try {
+    files = (JSON.parse(await readOptional("package.json")) as { files?: unknown }).files
+  } catch {
+    // A package.json that is missing or not JSON lists no files: `files` stays undefined.
+  }
+  return [
+    // Stryker disable next-line ArrayDeclaration: an equivalent mutant; its stand-in entry "Stryker was here" names no file an alert can carry.
+    ...(Array.isArray(files) ? files.filter((f): f is string => typeof f === "string") : []),
+    ...actionEntries(action),
+  ]
 }
 
 /** @returns the `CodeScanning` check. */
@@ -347,7 +389,17 @@ export function codeScanning(): CheckDefinitionConfig {
         })
       }
 
-      const alerts = report.data?.alerts ?? []
+      // OpenSSF Scorecard uploads its results as code-scanning alerts. Most rate the repository (maintenance,
+      // review, branch protection, dependency advisories), not code. The rest point at workflow lines under
+      // `.github/`, which is development-only. They are left to the Scorecard report; judged here, a new
+      // repository could never pass.
+      const all = report.data?.alerts ?? []
+      const alerts = all.filter((alert) => alert.tool !== SCORECARD_TOOL)
+      const leftOut = all.length - alerts.length
+      const leftOutNote =
+        leftOut === 0
+          ? ""
+          : ` (${String(leftOut)} OpenSSF Scorecard finding(s) left out: they rate repository settings and practices, not code)`
       const entries = await publishedEntries()
       const shipped = alerts.filter((alert) => !isDevPath(alert.path, entries))
       if (shipped.length > 0) {
@@ -418,8 +470,8 @@ export function codeScanning(): CheckDefinitionConfig {
         outcome: "pass",
         rationale:
           alerts.length === 0
-            ? "No open code-scanning alerts."
-            : `${String(alerts.length)} open code-scanning alert(s), all in development-only code and rejected by a record in ${REGISTRY_RELATIVE_PATH}.`,
+            ? `No open code-scanning alerts${leftOutNote}.`
+            : `${String(alerts.length)} open code-scanning alert(s), all in development-only code and rejected by a record in ${REGISTRY_RELATIVE_PATH}${leftOutNote}.`,
       }
     },
   }

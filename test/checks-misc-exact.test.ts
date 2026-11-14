@@ -215,7 +215,7 @@ describe("commits() with no base to lint against", () => {
     expect(result.outcome).toBe("warn")
     expect(result.rationale).toContain("environment:Commits:no-base (no record)")
     expect(result.rationale).toContain(
-      "Commits: could not resolve `origin/main..HEAD` -- nothing to lint",
+      "Commits: could not resolve `origin/main..HEAD`, so there is nothing to lint",
     )
     expect(result.rationale).toContain("Fetch `origin/main` in CI to enable this check.")
   })

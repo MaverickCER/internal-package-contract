@@ -4,14 +4,14 @@
 
 ## ❌ 3 gates failed
 
-Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold -- beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model -- and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.
+Three things can fail a benchmark run. Only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does. They are: a function whose measured growth class differs from its documented big-O; the package's overhead relative to its bare baseline growing past a threshold (beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model); and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.
 
-- ❌ **Runtime** — `fn:alpha`: documented O(n), measured O(n²) (exponent 2.04, R² 0.99). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
-- ❌ **Runtime** — `fn:beta`: documented constant, measured linear (exponent n/a, R² n/a). Either the code regressed or the documented big-O is wrong -- decide which and fix it.
-- ❌ **Runtime** — Overhead relative to the baseline grew from 100.0% (last release) to 400.0% -- up 300%, over the 50% allowed for work this fast, and the change (300.0 points) is outside the measurements' 95% intervals (no interval here, no interval then).
-- ℹ️ **Runtime** — Overhead relative to the baseline is 400.0% here and was 100.0% (last run on main), but that run was on CPU B and this one on CPU A: the ratio is not judged across machines.
-- ℹ️ **Runtime** — The previous run used Node v20.0.0 and this one Node v22.1.0: raw time deltas are not comparable (the engine differs), only the same-run gates are meaningful.
-- ℹ️ **Runtime** — The previous run was on CPU B and this one on CPU A: raw time deltas compare two different machines.
+- ❌ **Runtime**: `fn:alpha`: documented O(n), measured O(n²) (exponent 2.04, R² 0.99). Either the code regressed or the documented big-O is wrong; decide which and fix it.
+- ❌ **Runtime**: `fn:beta`: documented constant, measured linear (exponent n/a, R² n/a). Either the code regressed or the documented big-O is wrong; decide which and fix it.
+- ❌ **Runtime**: Overhead relative to the baseline grew from 100.0% (last release) to 400.0%, up 300%, over the 50% allowed for work this fast, and the change (300.0 points) is outside the measurements' 95% intervals (no interval here, no interval then).
+- ℹ️ **Runtime**: Overhead relative to the baseline is 400.0% here and was 100.0% (last run on main), but that run was on CPU B and this one on CPU A: the ratio is not judged across machines.
+- ℹ️ **Runtime**: The previous run used Node v20.0.0 and this one Node v22.1.0: raw time deltas are not comparable (the engine differs), only the same-run gates are meaningful.
+- ℹ️ **Runtime**: The previous run was on CPU B and this one on CPU A: raw time deltas compare two different machines.
 
 ## Runtime
 

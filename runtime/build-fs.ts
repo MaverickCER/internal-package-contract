@@ -30,7 +30,7 @@ export interface BuildFileSystem {
   readonly realpath: (path: string) => Promise<string>
 }
 
-/** One directory entry from {@link BuildFileSystem.readdir} -- the subset of Node's `Dirent` the build code reads. */
+/** One directory entry from {@link BuildFileSystem.readdir}: the subset of Node's `Dirent` the build code reads. */
 export interface BuildDirent {
   readonly name: string
   /** Same contract as Node's `Dirent.isDirectory()`. */
@@ -39,10 +39,10 @@ export interface BuildDirent {
   readonly isFile: () => boolean
 }
 
-/** A path's stat info from {@link BuildFileSystem.stat} -- the subset of Node's `Stats` the build code reads. */
+/** A path's stat info from {@link BuildFileSystem.stat}: the subset of Node's `Stats` the build code reads. */
 export interface BuildStats {
   /** Same contract as Node's `Stats.isFile()`. */
   readonly isFile: () => boolean
-  /** Size in bytes -- read by the package-schema resolver to enforce a size ceiling. */
+  /** Size in bytes: read by the package-schema resolver to enforce a size ceiling. */
   readonly size: number
 }

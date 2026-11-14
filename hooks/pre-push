@@ -23,7 +23,7 @@
 # `files` allowlist, so plan A ("never inside a consumer's installed
 # node_modules copy") holds for any consumer that gets a real, packed copy
 # (a git-range dependency, e.g. env-cap/data-cap's own
-# `internal-package-contract: "github:MaverickCER/internal-package-contract#main"`).
+# `internal-package-contract: "github:MaverickCER/internal-package-contract#v<version>"`).
 # It does NOT hold for the README's own documented local-dev alternative,
 # `file:../internal-package-contract` (or any other absolute-path `file:`
 # dependency): npm installs those as a live symlink straight into that

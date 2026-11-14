@@ -21,7 +21,7 @@ import { makeContext, makeResult } from "./support.js"
 
 describe("packageRoot", () => {
   it("resolves to this package's own root (one level up from checks/)", () => {
-    // Asserts structurally, not by directory name -- Stryker runs this same
+    // Asserts structurally, not by directory name: Stryker runs this same
     // test from a `.stryker-tmp/sandbox-<id>/` copy of the whole repo, so the
     // containing directory is never literally named
     // "internal-package-contract" there.
@@ -150,7 +150,7 @@ describe("firstExisting / resolveConfig", () => {
     const resolved = resolveConfig(["knip.json"], "knip.json")
     // `process.cwd()` (used both by resolveConfig and here) resolves any
     // symlinked tmp-dir prefix (e.g. macOS's /tmp -> /private/tmp) the same
-    // way on both sides -- comparing against the pre-chdir `cwd` value
+    // way on both sides: comparing against the pre-chdir `cwd` value
     // would spuriously fail on such a platform.
     expect(resolved).toEqual({ path: path.join(process.cwd(), "knip.json"), isBundled: false })
   })

@@ -168,7 +168,7 @@ describe("evaluateCoderabbitPolicy", () => {
     expect(evaluateCoderabbitPolicy({ evidence: NOT_APPLICABLE })).toEqual({
       outcome: "warn",
       rationale:
-        "CodeRabbit did not run (ci) -- findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app.",
+        "CodeRabbit did not run (ci), so findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app.",
     })
   })
 
@@ -178,7 +178,7 @@ describe("evaluateCoderabbitPolicy", () => {
     ).toEqual({
       outcome: "warn",
       rationale:
-        "CodeRabbit did not run (ci) -- findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app." +
+        "CodeRabbit did not run (ci), so findings were not evaluated. Expected in CI, where review is delegated to the coderabbit-github-app." +
         ` 1 exception record(s) in ${REGISTRY} were validated but not reconciled (no review ran).`,
     })
   })
@@ -196,7 +196,7 @@ describe("evaluateCoderabbitPolicy", () => {
     ).toEqual({
       outcome: "warn",
       rationale:
-        "CodeRabbit did not run (cli-not-installed) -- findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) to enable real enforcement.",
+        "CodeRabbit did not run (cli-not-installed), so findings were not evaluated. Install the CodeRabbit CLI (https://docs.coderabbit.ai/cli) to enable real enforcement.",
     })
   })
 
@@ -206,7 +206,7 @@ describe("evaluateCoderabbitPolicy", () => {
         evidence: { status: "unavailable", reason, registryPath: REGISTRY, existingRecordCount: 0 },
       }).rationale
     expect(hint("git-context-unavailable")).toBe(
-      "CodeRabbit did not run (git-context-unavailable) -- findings were not evaluated. Run it from a branch git can diff against its base (a checked-out branch with a remote) to enable real enforcement.",
+      "CodeRabbit did not run (git-context-unavailable), so findings were not evaluated. Run it from a branch git can diff against its base (a checked-out branch with a remote) to enable real enforcement.",
     )
     expect(hint("not-signed-in")).toContain(
       "Sign in with the CodeRabbit CLI to enable real enforcement.",
@@ -341,7 +341,7 @@ describe("evaluateCoderabbitPolicy", () => {
     const f = finding()
     const result = evaluateCoderabbitPolicy({
       evidence: reviewed([
-        // A record whose id no longer agrees with its own file/severity/summary -- exactly what an
+        // A record whose id no longer agrees with its own file/severity/summary: exactly what an
         // evidence value the wrapper script never actually produced would look like.
         { finding: f, record: { ...record(f, COMPLETE), summary: "tampered with" } },
       ]),
@@ -351,7 +351,7 @@ describe("evaluateCoderabbitPolicy", () => {
   })
 
   it("lists every independent-validation error on its own '- ' line, newline-joined", () => {
-    // Two records whose `severity` is a value the registry schema doesn't recognize -- one error
+    // Two records whose `severity` is a value the registry schema doesn't recognize: one error
     // each, so the "- " prefix and the "\n" join are both observable in the asserted output.
     const bad = "nope" as NormalizedFinding["severity"]
     const first = finding({ severity: bad, summary: "The first finding." })
@@ -407,8 +407,8 @@ describe("evaluateCoderabbitPolicy", () => {
       outcome: "warn",
       rationale: [
         "2 CodeRabbit suggestion(s) to consider (advisory: adopt one where it improves the code; a record only documents why one was not taken):",
-        "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen) -- Consider returning early.",
-        `- Stale exception in ${REGISTRY}: ${JSON.stringify(gone.id)} -- CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
+        "- src/resolve.ts [major]: exception incomplete (missing: justification, remediation, method, exceptionType, ruleBroken, attempted, constraint, whyPreferable, residualRisk, revisitWhen); Consider returning early.",
+        `- Stale exception in ${REGISTRY}: ${JSON.stringify(gone.id)}; CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
       ].join("\n"),
     })
   })

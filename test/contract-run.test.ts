@@ -10,7 +10,9 @@ beforeEach(() => {
   process.exitCode = undefined
 })
 afterEach(() => {
-  rmSync(cwd, { recursive: true, force: true })
+  // On Windows a just-written file can stay locked for a moment (a virus scan), and the removal then
+  // fails with ENOTEMPTY (CI run 43301396345). Retrying is what tests-check.test.ts does too.
+  rmSync(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   process.exitCode = undefined
 })
 
@@ -283,7 +285,7 @@ describe("runContract(): the scope of the run", () => {
       scope: (async () => narrow) as never,
     })
     expect(cap.text()).toContain(
-      "[contract] scope: affected (asked for) -- 1 changed file, 1 test file, 1 mutation target\n",
+      "[contract] scope: affected (asked for); 1 changed file, 1 test file, 1 mutation target\n",
     )
     expect(
       JSON.parse(readFileSync(path.join(cwd, "reports", "contract", "scope.json"), "utf8")),

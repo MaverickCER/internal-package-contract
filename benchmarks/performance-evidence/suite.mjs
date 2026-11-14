@@ -165,7 +165,7 @@ export default defineSuite({
     purpose:
       "Shows what the suppression evidence collector costs a repository: scanning every source file for suppression comments, against the floor of just reading every file. The difference is the parsing the check needs to tell a real directive from text that only looks like one.",
     baseline: {
-      description: "Read every file of the repository as text -- no package.",
+      description: "Read every file of the repository as text; no package.",
       sampling: SLOW,
       setup: (n) => ({ dir: path.join(fixture("repo", n, writeRepo), "src") }),
       run: ({ dir }) =>

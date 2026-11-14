@@ -6,19 +6,11 @@
  *   import baseline from "internal-package-contract/prettier"
  *   export default { ...baseline }
  *
- * A small, deliberate delta from Prettier's defaults so that "extend the
- * baseline" is a meaningful statement rather than a no-op. Matches the style the
- * existing @maverickcer/* packages already use.
+ * It differs from Prettier's defaults on purpose, so that extending it means something. The options match
+ * the style the existing @maverickcer/* packages already use.
  *
- * Plain JavaScript, not TypeScript -- see `./eslint.config.mjs`'s own doc
- * comment for why: a consumer's own config imports this file directly out of
- * `node_modules`, and Node's native TypeScript type-stripping refuses to
- * strip any file under `node_modules`, so a `.ts` file at this path is not
- * actually importable by a plain `import` once installed as a dependency,
- * confirmed directly. `@type` below recovers the same editor-hover/type-
- * checking value `import type { Config } from "prettier"` gave the `.ts`
- * version, without requiring a loader this file's own consumers would have
- * to configure.
+ * It is plain JavaScript because a consumer imports it from `node_modules`, where Node refuses to strip
+ * TypeScript types (see `./eslint.config.mjs`). The `@type` tag below gives editors the same type checking.
  */
 
 /** @type {import("prettier").Config} */

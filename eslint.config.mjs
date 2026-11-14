@@ -6,32 +6,21 @@
  *   import baseline from "internal-package-contract/eslint"
  *   export default [...baseline, { rules: { ... } }]
  *
- * Kept deliberately small: the two well-known recommended sets as a flat-config
- * array a package can append its own blocks to, the Node globals so plain
- * `.js`/`.mjs` config and script files do not trip `no-undef`, suppression hygiene
- * (every `eslint-disable` must be described, specific, paired and still needed), and one
- * rule of the standard's own: `src/` opens no network connection (`ipc/no-network`).
+ * It holds little on purpose:
+ * - the two well-known recommended sets, as a flat-config array a package appends its own blocks to;
+ * - the Node globals, so plain `.js`/`.mjs` config and script files pass `no-undef`;
+ * - suppression hygiene: every `eslint-disable` is described, specific, paired and still needed;
+ * - one rule of the standard's own: `src/` opens no network connection (`ipc/no-network`).
  *
- * Non-type-checked on purpose. `recommendedTypeChecked` would require every
- * consumer to wire `parserOptions.projectService` and a tsconfig, which defeats
- * "extend the baseline in one line."
+ * It is not type-checked. `recommendedTypeChecked` would make every consumer wire
+ * `parserOptions.projectService` and a tsconfig, so extending it would no longer be one line.
  *
- * Plain JavaScript, not TypeScript, despite every other module in this package
- * being `.ts`: this file is imported directly by a consumer's own
- * `eslint.config.js`/`.mjs` (`import baseline from "internal-package-contract/
- * eslint"`), and Node's native TypeScript type-stripping explicitly refuses to
- * strip a file that lives under `node_modules`
- * (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`) -- confirmed directly: a
- * plain `import()` of this path as a `.ts` file fails with exactly that error
- * once installed as a dependency, even though it works fine loaded from this
- * package's own source tree. `jiti` (already a dependency here, and used by
- * ESLint's own config loader to load a *consumer's own* `eslint.config.ts`)
- * does not help either -- it only intercepts the top-level config file
- * ESLint itself loads, not this file's nested `node_modules` import from
- * inside that config. Shipping this as plain `.js` sidesteps the whole
- * problem: no loader, no build step, no extra consumer dependency, just an
- * ordinary import that always works. See `./prettier.config.mjs` for the
- * same reasoning.
+ * It is plain JavaScript, unlike the rest of this package, because a consumer's `eslint.config.js` imports it
+ * from `node_modules`. Node refuses to strip TypeScript types there
+ * (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`). `jiti` does not help: ESLint uses it only for the
+ * consumer's own top-level config file, not for what that file imports. A plain `.js` file needs no loader,
+ * no build step and no extra consumer dependency. `./prettier.config.mjs` is plain JavaScript for the same
+ * reason.
  */
 import eslintComments from "@eslint-community/eslint-plugin-eslint-comments"
 import js from "@eslint/js"

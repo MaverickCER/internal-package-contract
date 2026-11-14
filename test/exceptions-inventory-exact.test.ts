@@ -236,7 +236,7 @@ describe("renderInventory()", () => {
         "1 exception(s) across 1 registry (0 legacy version 1, 0 expired, 0 incomplete).",
         "",
         "- r: 1 (x 1)",
-        "- bad: UNREADABLE -- boom",
+        "- bad: UNREADABLE: boom",
         "",
       ].join("\n"),
     )
@@ -244,7 +244,7 @@ describe("renderInventory()", () => {
       [
         "0 exception(s) across 0 registries (0 legacy version 1, 0 expired, 0 incomplete).",
         "",
-        "- bad: UNREADABLE -- boom",
+        "- bad: UNREADABLE: boom",
         "",
       ].join("\n"),
     )

@@ -93,7 +93,7 @@ interface NpmAuditReport {
   readonly vulnerabilities?: Record<string, NpmAuditVulnerability>
 }
 
-/** One normalized `npm audit` finding -- one per vulnerable top-level package name, exactly as npm audit's own report already groups them (a single entry can cover several distinct advisories at once). */
+/** One normalized `npm audit` finding: one per vulnerable top-level package name, exactly as npm audit's own report already groups them (a single entry can cover several distinct advisories at once). */
 interface NormalizedDepFinding {
   readonly id: string
   readonly package: string
@@ -116,8 +116,8 @@ interface SecurityDepsExceptionRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * `security-deps:<package>@<range>` -- stable while the same vulnerable range is reported; a version bump or a new/different advisory changes `range` and the id with it, so a stale record is never silently reused for an unrelated finding.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * `security-deps:<package>@<range>`: stable while the same vulnerable range is reported; a version bump or a new/different advisory changes `range` and the id with it, so a stale record is never silently reused for an unrelated finding.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function deriveSecurityDepsExceptionId(finding: {
   readonly package: string
@@ -128,7 +128,7 @@ export function deriveSecurityDepsExceptionId(finding: {
 
 /**
  * A fresh, blank exception record for a finding with no matching record yet.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function createSecurityDepsStub(
   finding: NormalizedDepFinding,
@@ -149,7 +149,7 @@ export function createSecurityDepsStub(
   }
 }
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDepsExceptionRecord> =
   {
     namespace: "security-deps:",
@@ -162,7 +162,7 @@ export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDep
       const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
       const rangeValid = isValidNonEmptyStringField(range, `${at}.range`, errors)
       // Stryker disable ConditionalExpression: replacing `typeof severity === "string"` with `true`
-      // is behaviorally equivalent here -- `SEVERITY_VALUES` is a `Set<string>`, and
+      // is behaviorally equivalent here: `SEVERITY_VALUES` is a `Set<string>`, and
       // `severity === "unknown"` is a strict-equality string comparison, so both disjuncts are
       // already `false` for any non-string `severity` (no coercion, no throw either way). The guard
       // exists purely to satisfy TypeScript's narrowing, not to change runtime behavior.
@@ -200,7 +200,7 @@ export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDep
   }
 
 /**
- * A critical runtime advisory is never waivable -- a vulnerability that bad in what users install is
+ * A critical runtime advisory is never waivable: a vulnerability that bad in what users install is
  * fixed or removed, not excused. Every lower severity (a `high` advisory with no patched release yet is
  * common in a required chain) needs a complete, finding-specific exception.
  */
@@ -231,7 +231,7 @@ const VALID_SECURITY_DEPS_REQUIREMENTS = [
   ...EXCEPTION_V2_FIELD_KEYS,
 ] as const
 
-/** @internal Exported for direct unit coverage -- see this module's own doc comment. */
+/** @internal Exported for direct unit coverage: see this module's own doc comment. */
 export function evaluateFinding(
   finding: NormalizedDepFinding,
   record: SecurityDepsExceptionRecord | undefined,
@@ -274,13 +274,13 @@ const registrySchema: StandardSchemaV1<unknown, readonly SecurityDepsExceptionRe
 
 /**
  * Normalizes `npm audit --json`'s own `vulnerabilities` object into one finding per package.
- * @internal Exported for direct unit coverage -- see this module's own doc comment.
+ * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function normalizeFindings(report: NpmAuditReport): readonly NormalizedDepFinding[] {
   return Object.entries(report.vulnerabilities ?? {}).map(([name, vulnerability]) => {
     const severityRaw = vulnerability.severity
     // Stryker disable ConditionalExpression: replacing `typeof severityRaw === "string"` with
-    // `true` is behaviorally equivalent here -- `SEVERITY_VALUES` is a `Set<string>`, so
+    // `true` is behaviorally equivalent here: `SEVERITY_VALUES` is a `Set<string>`, so
     // `SEVERITY_VALUES.has(severityRaw)` is already `false` for any non-string `severityRaw` (no
     // coercion, no throw either way). The guard exists purely to satisfy TypeScript's narrowing
     // for the `severityRaw as Severity` cast below, not to change runtime behavior. Hand-verified
@@ -358,7 +358,7 @@ export function securityDeps(): CheckDefinitionConfig {
       const activeById = new Map(activeRecords.map((r) => [r.id, r]))
       const staleLines = staleRecords.map(
         (record) =>
-          `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)} -- npm audit no longer reports this vulnerability; delete this entry.`,
+          `- Stale exception in ${REGISTRY_RELATIVE_PATH}: ${JSON.stringify(record.id)}; npm audit no longer reports this vulnerability; delete this entry.`,
       )
       const determinants = findings.map((finding) => ({
         finding,

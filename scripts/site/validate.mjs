@@ -2,14 +2,14 @@
 // mechanical on purpose. It cannot judge whether copy is good. It does refuse what makes a page useless to a
 // decision-maker:
 //
-//   - a missing section, field or list;
-//   - a hero outcome that is not one sentence, or a hero over its word limit;
-//   - a quick start that does not install the package;
-//   - a `guarantees` entry with no `scope` of its own;
-//   - a pre-1.0 package with no `maturity` note;
-//   - a brief sentence too long for a non-specialist;
-//   - a URL that is neither https nor relative;
-//   - placeholder text (TODO, TBD, FIXME, lorem ipsum).
+//   - A missing section, field or list.
+//   - A hero outcome that is not one sentence, or a hero over its word limit.
+//   - A quick start that does not install the package.
+//   - A `guarantees` entry with no `scope` of its own.
+//   - A pre-1.0 package with no `maturity` note.
+//   - A brief sentence too long for a non-specialist.
+//   - A URL that is neither https nor relative.
+//   - Placeholder text (TODO, TBD, FIXME, lorem ipsum).
 //
 // Every problem is returned, not only the first.
 

@@ -1,19 +1,20 @@
-# Reusable "measure benchmarks -> gate on same-run properties -> post/update a PR comment" workflow for
-# every package that benchmarks itself with the shared kit (`internal-package-contract/benchmark`, run
-# through `run-suite.mjs`). It makes no assumption about how many suites a package has or what they are
-# called: the caller lists them in `suites`, one `label|directory|history-file` per line.
+# Reusable workflow: measure benchmarks, gate on same-run properties, then post or update a PR comment.
+# It serves every package that benchmarks itself with the shared kit (`internal-package-contract/benchmark`,
+# run through `run-suite.mjs`). The caller lists its suites in `suites`, one `label|directory|history-file`
+# per line, so any number and naming of suites works.
 #
-# It never writes to the pull request: its token can comment and nothing else, so the PR's head is
+# It never writes to the pull request. Its token can comment and nothing else, so the PR's head is
 # exactly what its author pushed and CI ran on. Refreshing the committed results and history is a
 # separate job that runs AFTER a merge, on the merge commit (benchmark-record.yml).
 #
-# What can fail the run is deliberately narrow (scripts/benchmark/gates.mjs): a function whose measured
-# growth class differs from its documented big-O, and the package's overhead relative to its bare
-# baseline growing past a threshold against the last run on main and the last release. Both are
-# same-run quantities, so they survive the runner being a different machine than the one that produced
-# the reference. Raw millisecond deltas are comments only.
+# Only two things can fail the run (scripts/benchmark/gates.mjs):
+#   1. a function whose measured growth class differs from its documented big-O;
+#   2. the package's overhead over its bare baseline growing past a threshold, against the last run on
+#      main and the last release.
+# Both are same-run quantities, so they hold when the runner is a different machine from the one that
+# produced the reference. Raw millisecond deltas are comments only.
 #
-# `on: workflow_call` only -- a caller's own `ci.yml` job decides *when* this runs; this file only
+# `on: workflow_call` only: a caller's own `ci.yml` job decides *when* this runs; this file only
 # defines *what* runs (see release-npm-changesets.yml's identical note).
 #
 # Example caller (data-cap):
@@ -44,7 +45,7 @@ on:
         type: string
       install-dirs:
         description: >-
-          Directories (one per line) that need their own `npm install` first -- suites that are
+          Directories (one per line) that need their own `npm install` first: suites that are
           self-contained npm projects with a `file:` dependency on the package. Empty for none.
         required: false
         type: string
@@ -77,8 +78,8 @@ on:
 
 jobs:
   benchmark-pr:
-    # Same-repo pull requests only (a fork's code must not run with this job's token), and never a
-    # bot's own pull request -- the benchmark-record job's results PR needs no benchmark comment.
+    # Same-repo pull requests only, because a fork's code must not run with this job's token. Never a
+    # bot's own pull request: the benchmark-record job's results PR needs no comment.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -122,9 +123,9 @@ jobs:
       - name: Validate every suite's documentation
         run: npm run benchmark:check --if-present
 
-      # Two committed references: main's results (the previous run), and the results committed at the
-      # last release (a fixed point, so a series of small regressions cannot ratchet "previous" upward
-      # unnoticed). Their overhead ratios are judged only when they were measured on this CPU model.
+      # Two committed references: main's results (the previous run) and the results committed at the
+      # last release. The release is a fixed point, so small regressions cannot ratchet "previous"
+      # upward unnoticed. Their overhead ratios are judged only when measured on this CPU model.
       - name: Snapshot main's and the last release's committed results
         env:
           SUITES: ${{ inputs.suites }}
@@ -142,11 +143,11 @@ jobs:
             fi
           done
 
-      # The overhead ratio is machine-bound for fast work (how much of a bare baseline is process
-      # start-up differs by CPU), so the reference that is judged is main measured here, on this
-      # runner, minutes apart from the pull request: the same suite file at main's commit, run by this
-      # checkout's runner at the suite's typical size only. A suite main does not have yet has no
-      # reference, and the committed results of main and the last release stay as reported figures.
+      # The overhead ratio is machine-bound for fast work: how much of a bare baseline is process
+      # start-up differs by CPU. So the judged reference is main measured here, on this runner, minutes
+      # apart from the pull request. It is the same suite file at main's commit, run at the suite's
+      # typical size only. A suite main does not have yet has no reference. The committed results of
+      # main and the last release stay as reported figures.
       - name: Measure main's end-to-end pair on this runner
         env:
           SUITES: ${{ inputs.suites }}
@@ -241,5 +242,5 @@ jobs:
       - name: Fail the run if a gate failed
         if: steps.summary.outputs.gate-status != '0'
         run: |
-          echo "::error::A benchmark gate failed -- see the pull request comment for which, and why."
+          echo "::error::A benchmark gate failed. The pull request comment says which, and why."
           exit 1

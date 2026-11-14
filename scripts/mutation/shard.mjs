@@ -3,7 +3,7 @@
 //
 // `IPC_MUTATION_SHARD=i/n` selects slice `i` of `n`. The slices are cut from the files the Stryker config's `mutate`
 // patterns match (or the sources a narrowed run selected), heaviest first by file size so they finish at about the
-// same time; the same files always give the same slices, and every file is in exactly one. A selector that is not
+// same time. The same files always give the same slices, and every file is in exactly one. A selector that is not
 // `i/n`, or asks for more slices than there are files, throws, and the check fails. `run-merge-mutation-reports.mjs`
 // puts the slices' reports back together and refuses a missing or repeated one.
 

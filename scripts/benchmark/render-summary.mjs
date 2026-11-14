@@ -89,8 +89,8 @@ function renderExample(label, previous, current) {
   }
 
   // `previous` is `{}` (truthy, no real metadata) on a first-ever run (see
-  // CI's `git show ... || echo '{}'` fallback), never `null` -- guarded on
-  // `previous?.metadata` being present, not just `previous` being truthy, so
+  // CI's `git show ... || echo '{}'` fallback), never `null`. So this is guarded on
+  // `previous?.metadata` being present, not just `previous` being truthy, and
   // a first run reports "no prior data" instead of a confusing "previous run
   // used sundefined" mismatch warning.
   if (
@@ -177,14 +177,14 @@ export async function summarize({
   const lines = [marker, "", "# Benchmark summary", ""]
 
   // Complexity shifts lead, ahead of the ordinary per-example tables and
-  // their own tables -- a shift in a group's inferred
+  // their own tables. A shift in a group's inferred
   // algorithmic shape is a structurally different (and rarer, and more
-  // serious) signal than "this run was somewhat slower," so it's surfaced
+  // serious) signal than "this run was somewhat slower". So it's surfaced
   // first regardless of which example it came from.
   if (allShifts.length > 0) {
     lines.push("## ⚠️ Complexity shifts", "")
     lines.push(
-      "The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary slowdown below -- it means the shape of the cost curve changed, not just its slope.",
+      "The inferred algorithmic complexity class of at least one benchmark group changed since the last recorded history entry. This is a stronger signal than an ordinary slowdown below: it means the shape of the cost curve changed, not just its slope.",
       "",
     )
     for (const shift of allShifts) {
@@ -202,11 +202,11 @@ export async function summarize({
         ? `## ⚠️ Gates passed, ${String(warnings.length)} warning${warnings.length === 1 ? "" : "s"}`
         : "## ✅ Gates passed",
     "",
-    "Three things can fail a benchmark run, because only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does: a function whose measured growth class differs from its documented big-O, the package's overhead relative to its bare baseline growing past a threshold -- beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model -- and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.",
+    "Three things can fail a benchmark run. Only they are properties of a single run or ratios measured within it, or a decision a human must make, so they depend far less on the machine than a raw time does. They are: a function whose measured growth class differs from its documented big-O; the package's overhead relative to its bare baseline growing past a threshold (beyond the 95% intervals of the two runs, against main measured on this runner, and against the committed results of main and the last release when they came from this CPU model); and a function whose growth class got worse than at the last release without a recorded exception. A function whose big-O could not be determined is a warning, because nothing is known to be wrong. A raw time is never compared between runs, because runs on different machines are not comparable.",
     "",
-    ...failures.map((finding) => `- ❌ **${finding.label}** — ${finding.message}`),
-    ...warnings.map((finding) => `- ⚠️ **${finding.label}** — ${finding.message}`),
-    ...notes.map((finding) => `- ℹ️ **${finding.label}** — ${finding.message}`),
+    ...failures.map((finding) => `- ❌ **${finding.label}**: ${finding.message}`),
+    ...warnings.map((finding) => `- ⚠️ **${finding.label}**: ${finding.message}`),
+    ...notes.map((finding) => `- ℹ️ **${finding.label}**: ${finding.message}`),
     ...(failures.length + warnings.length + notes.length > 0 ? [""] : []),
     ...sections,
   )

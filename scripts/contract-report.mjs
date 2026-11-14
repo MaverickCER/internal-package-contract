@@ -29,10 +29,10 @@ export const NOT_EVALUATED_UNEXCEPTED = "Not evaluated (no exception recorded"
 
 /**
  * The class of one check's result.
- * - `pass` / `fail` -- as the policy said.
- * - `warn` -- a real finding that does not block.
- * - `not-evaluated` -- the check could not run here, and a recorded exception accepts that.
- * - `unexcepted` -- the check could not run here and nothing records why that is acceptable.
+ * - `pass` / `fail`: as the policy said.
+ * - `warn`: a real finding that does not block.
+ * - `not-evaluated`: the check could not run here, and a recorded exception accepts that.
+ * - `unexcepted`: the check could not run here and nothing records why that is acceptable.
  * @param {PolicyResultLike} result
  * @returns {ResultClass}
  */
@@ -185,7 +185,7 @@ export function renderMarkdown(report, options = {}) {
           "",
         )
       } else {
-        lines.push(`- **${check.id}** -- ${firstLine(check.rationale)}`)
+        lines.push(`- **${check.id}**: ${firstLine(check.rationale)}`)
       }
     }
     lines.push("")

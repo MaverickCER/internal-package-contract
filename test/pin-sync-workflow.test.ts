@@ -27,6 +27,33 @@ describe("the pin-sync workflow", () => {
     expect(text).toContain('if [ -z "$(git status --porcelain)" ]; then')
     expect(text).toMatch(/\n {10}git add -A\n/)
   })
+  it("names the same token permissions everywhere a person reads them", () => {
+    // ci/env.schema.ts is the source: docs/ENVIRONMENT.md is generated from it, and doctor repeats it offline.
+    const listed = (prose: string): string[] => {
+      const list =
+        /((?:"?[A-Z][a-z]+(?: [a-z]+)?"?, )+"?[A-Z][a-z]+(?: [a-z]+)?"? and "?[A-Z][a-z]+"?) write access/.exec(
+          prose.replace(/\s+/g, " "),
+        )?.[1]
+      return (list ?? "").split(/, | and /).map((name) => name.replaceAll('"', ""))
+    }
+    const permissions = listed(read("ci/env.schema.ts"))
+    expect(permissions).toEqual(["Contents", "Pull requests", "Workflows", "Actions"])
+    for (const file of ["docs/ENVIRONMENT.md", "scripts/doctor/run.mjs"])
+      expect(listed(read(file)), file).toEqual(permissions)
+  })
+  it("points the workflow's secret description at the generated catalog instead of listing permissions", () => {
+    const description = /PIN_SYNC_TOKEN:\n\s+description: >-\n([\s\S]*?)\n\s+required:/.exec(
+      text,
+    )?.[1]
+    expect(description).toContain("/docs/ENVIRONMENT.md#ci-secrets-pin_sync_token")
+    expect(description).not.toMatch(/write access/)
+  })
+  it("leaves the permission list out of the README and links to the generated catalog instead", () => {
+    const readme = read("README.md")
+    expect(readme).toContain("(docs/ENVIRONMENT.md#ci-secrets-pin_sync_token)")
+    expect(read("docs/ENVIRONMENT.md")).toContain('<a id="ci-secrets-pin_sync_token"></a>')
+    expect(readme).not.toMatch(/[A-Z][a-z]+(?: [a-z]+)?"?,? and "?[A-Z][a-z]+"? write access/)
+  })
   it("is called with the token by the scaffolded consumer workflow", () => {
     const consumer = read("template/package/.github/workflows/sync-internal-package-contract.yml")
     expect(consumer).toContain("PIN_SYNC_TOKEN: ${{ secrets.PIN_SYNC_TOKEN }}")

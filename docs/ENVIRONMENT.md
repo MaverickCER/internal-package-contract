@@ -8,7 +8,7 @@
 
 _Produced by `generateDocumentation()` from `@maverickcer/env-cap/build`._
 
-_Generated 2026-10-13T01:25:18.872Z_
+_Generated 2026-11-13T22:07:40.871Z_
 
 ## Changes since last report
 
@@ -45,13 +45,13 @@ Optional. Lets the pin-sync workflow change workflow files and start CI on its p
 - Processor: no
 - Validator: yes
 - Sensitivity: secret
-- Refresh instructions: Create a fine-grained personal access token for this repository with Contents, Pull requests and Workflows write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then give it an `expiresAt` here (the token's expiry), so a weekly check can warn before it lapses.
+- Refresh instructions: Create a fine-grained personal access token for this repository with Contents, Pull requests, Workflows and Actions write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then set its `expiresAt` in `ci/env.schema.ts` to the token's expiry, so a weekly check can warn before it lapses.
 
 <a id="ci-secrets-socket_security_api_key"></a>
 
 ### `SOCKET_SECURITY_API_KEY`
 
-Optional. Read by the `socket` CLI while the contract runs, for the SecuritySocket check; without it that check reports a warning and the rest of the contract runs.
+Optional. Read by the `socket` CLI while the contract runs, for the SecuritySocket check. Without it that check warns; under CI the warning fails unless `.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key`.
 
 - Default: yes
 - Processor: no
@@ -149,10 +149,10 @@ One row per unique variable name; more than one location means more than one fea
 
 <a id="lifecycle-report"></a>
 
-| Variable                                                         | Owner | Expires | Refresh instructions                                                                                                                                                                                                                                                                                                         |
-| ---------------------------------------------------------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`PIN_SYNC_TOKEN`](#ci-secrets-pin_sync_token)                   | --    | --      | Create a fine-grained personal access token for this repository with Contents, Pull requests and Workflows write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then give it an `expiresAt` here (the token's expiry), so a weekly check can warn before it lapses. |
-| [`SOCKET_SECURITY_API_KEY`](#ci-secrets-socket_security_api_key) | --    | --      | Create an API token at socket.dev (Settings > API Tokens) with the `packages:list` permission, then replace the repository secret SOCKET_SECURITY_API_KEY.                                                                                                                                                                   |
+| Variable                                                         | Owner | Expires | Refresh instructions                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`PIN_SYNC_TOKEN`](#ci-secrets-pin_sync_token)                   | --    | --      | Create a fine-grained personal access token for this repository with Contents, Pull requests, Workflows and Actions write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then set its `expiresAt` in `ci/env.schema.ts` to the token's expiry, so a weekly check can warn before it lapses. |
+| [`SOCKET_SECURITY_API_KEY`](#ci-secrets-socket_security_api_key) | --    | --      | Create an API token at socket.dev (Settings > API Tokens) with the `packages:list` permission, then replace the repository secret SOCKET_SECURITY_API_KEY.                                                                                                                                                                                           |
 
 ## Security review
 

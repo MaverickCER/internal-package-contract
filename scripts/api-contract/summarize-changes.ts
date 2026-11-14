@@ -9,11 +9,11 @@ export function summarizeInitialBaseline(): string {
 }
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/summarize-changes.ts` -- this engine now
+ * Ported from repo-contract's own `scripts/api-contract/summarize-changes.ts`: this engine now
  * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
  * devDependency rather than hosting a copy.
  *
- * Builds a target's summary deterministically from structured data -- never hand-authored per
+ * Builds a target's summary deterministically from structured data: never hand-authored per
  * scenario. `initialBaseline` and "no changes" both produce a fixed sentence; otherwise a
  * stable-ordered list built from each change's own `explanation`.
  * @param diff - The threshold-admitted, sorted list of classified contract changes.
@@ -42,7 +42,7 @@ export function summarizeChanges(
 
 /**
  * Formats changes visible only below the check's own `--release-tag` threshold (see
- * evidence-types.ts's `ApiContractTargetResult.lowerTierDiff`) -- informational only, deliberately
+ * evidence-types.ts's `ApiContractTargetResult.lowerTierDiff`): informational only, deliberately
  * labeled as non-blocking since it never affects the required release level.
  * @param diff - The changes visible only below the check's `--release-tag` threshold.
  * @returns A human-readable, non-blocking summary of `diff`, or `undefined` when `diff` is empty.
@@ -51,8 +51,8 @@ export function summarizeLowerTierChanges(diff: readonly ApiContractChange[]): s
   if (diff.length === 0) return undefined
 
   return [
-    `${String(diff.length)} non-public contract change(s) also detected (informational only -- ` +
-      "does not affect the required release level):",
+    `${String(diff.length)} non-public contract change(s) also detected (informational only; ` +
+      "it does not affect the required release level):",
     ...diff.map((change) => `- ${change.explanation}`),
   ].join("\n")
 }

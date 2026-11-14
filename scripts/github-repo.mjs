@@ -1,7 +1,7 @@
 // What this package knows about a consumer's GitHub repository, shared so every reader and writer of a
-// ruleset agrees: which `{ owner, repo }` the `origin` remote names (ssh or https), which ruleset covers
-// the default branch, which rules and status checks a default branch must require, and how to add what is
-// missing without loosening anything present.
+// ruleset agrees. It knows which `{ owner, repo }` the `origin` remote names (ssh or https) and which ruleset
+// covers the default branch. It knows which rules and status checks a default branch must require, and how
+// to add what is missing without loosening anything present.
 //
 // The owner/repo pair is read by scripts/check-branch-protection.mjs, scripts/code-scanning-alerts.mjs
 // and checks/socket-guidance.ts; checks/branch-protection.ts takes the required `contract` context from
@@ -94,10 +94,10 @@ export const REQUIRED_RULE_TYPES = [
 ]
 
 /**
- * Adds every missing required rule to `existing`, and tightens the two settings a rule can carry
- * while still being "present but useless": a `pull_request` rule that does not require review
- * threads to be resolved, and a `required_status_checks` rule that is not strict or that does not
- * require {@link REQUIRED_STATUS_CHECK_CONTEXT}. Never removes or loosens anything.
+ * Adds every missing required rule to `existing`. It also tightens the two settings a rule can carry
+ * while still being "present but useless". One is a `pull_request` rule that does not require review
+ * threads to be resolved. The other is a `required_status_checks` rule that is not strict or that does
+ * not require {@link REQUIRED_STATUS_CHECK_CONTEXT}. Never removes or loosens anything.
  * @param {readonly RulesetRule[]} existing
  * @returns {{ rules: RulesetRule[], changes: string[] }}
  */

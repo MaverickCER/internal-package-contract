@@ -1,13 +1,13 @@
 // The bundled TypeScript compiler (`bundleDependencies`) belongs to the build-time scanner and to nothing else.
 //
 // A consumer who only imports the runtime must never load, or pay for the bytes of, a compiler. This walks the
-// static import graph of every built entry point in `dist/` and fails if
+// static import graph of every built entry point in `dist/`. It fails in three cases.
 //
-//   - any client entry (every exported entry point except `./build`, and not the CLI) can reach the compiler
-//     loader, the bundled package, or `node:module` (the loader's `createRequire`), or
-//   - a client entry imports `typescript` itself (the ESLint plugin is exempt: it runs inside the consumer's
-//     own ESLint/typescript-eslint process and takes the consumer's `typescript` by design), or
-//   - the build entry does NOT reach the bundled compiler (which would make this check vacuous).
+//   - A client entry (every exported entry point except `./build`, and not the CLI) can reach the compiler
+//     loader, the bundled package, or `node:module` (the loader's `createRequire`).
+//   - A client entry imports `typescript` itself. The ESLint plugin is exempt: it runs inside the consumer's
+//     own ESLint/typescript-eslint process and takes the consumer's `typescript` by design.
+//   - The build entry does NOT reach the bundled compiler (which would make this check vacuous).
 //
 // Run after the build. It works on the built output, so it also covers whatever chunk-splitting the bundler
 // decides to share between entries. A built file that is missing fails with "build the package first".
@@ -96,7 +96,7 @@ export function inspectIsolation(root, pkg) {
 
   for (const { name, file } of [...buildEntries, ...clientEntries]) {
     if (!existsSync(file)) {
-      problems.push(`${name}: ${shown(root, file)} is missing -- build the package first`)
+      problems.push(`${name}: ${shown(root, file)} is missing; build the package first`)
     }
   }
   if (problems.length > 0) return { problems, clients: clientEntries.length }
@@ -110,7 +110,7 @@ export function inspectIsolation(root, pkg) {
     )
   if (!buildReachesCompiler) {
     problems.push(
-      "the ./build entry never reaches @typescript/typescript6, so this check proves nothing -- did the loader move?",
+      "the ./build entry never reaches @typescript/typescript6, so this check proves nothing. Did the loader move?",
     )
   }
 
@@ -120,14 +120,12 @@ export function inspectIsolation(root, pkg) {
       const hit = [...files.entries()].find(([, source]) => source.includes(marker))
       if (hit !== undefined) {
         problems.push(
-          `${name} (${shown(root, file)}) can reach "${marker}" via ${shown(root, hit[0])} -- the compiler may only be used by the build entry`,
+          `${name} (${shown(root, file)}) can reach "${marker}" via ${shown(root, hit[0])}; the compiler may only be used by the build entry`,
         )
       }
     }
     if (!MAY_IMPORT_TYPESCRIPT.has(name) && external.has("typescript")) {
-      problems.push(
-        `${name} (${shown(root, file)}) imports "typescript" -- only the build entry may`,
-      )
+      problems.push(`${name} (${shown(root, file)}) imports "typescript"; only the build entry may`)
     }
   }
   return { problems, clients: clientEntries.length }
@@ -147,7 +145,7 @@ export function run(_argv, cwd, io) {
     return 1
   }
   io.out(
-    `compiler-isolation: OK -- ${String(clients)} client entry file(s) cannot reach the bundled compiler; the build entry does\n`,
+    `compiler-isolation: OK: ${String(clients)} client entry file(s) cannot reach the bundled compiler; the build entry does\n`,
   )
   return 0
 }

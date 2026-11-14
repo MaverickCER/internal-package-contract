@@ -101,7 +101,7 @@ describe("readTargets in detail", () => {
     const missing = await readTargets(root).catch((e: Error) => e)
     expect((missing as Error).cause).toBeInstanceOf(Error)
     expect((missing as Error).message).toBe(
-      `Could not read ${path.join(root, "typedoc.json")} -- the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
+      `Could not read ${path.join(root, "typedoc.json")}: the api-contract check derives its target entry points from typedoc.json's own "entryPoints".`,
     )
     write("typedoc.json", "{ nope")
     const broken = await readTargets(root).catch((e: Error) => e)

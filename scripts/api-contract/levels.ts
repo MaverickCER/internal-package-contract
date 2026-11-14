@@ -32,7 +32,7 @@ export function maxLevel(
 }
 
 /**
- * Whether `declared` is at least as large a bump as `required` -- the api-contract gate's
+ * Whether `declared` is at least as large a bump as `required`: the api-contract gate's
  * core comparison. Anything satisfies a `"none"` requirement; `"none"` satisfies only `"none"`.
  * @param declared - the level the branch's changesets declare.
  * @param required - the minimum level the public-API diff requires.
@@ -48,8 +48,8 @@ export function rankAtLeast(
 /**
  * The release level one contract delta requires.
  *
- * Below 1.0.0 the level is deflated one step -- a breaking change needs `minor`, a change that
- * widens the surface needs only `patch` -- the usual 0.x convention, and the one the changeset
+ * Below 1.0.0 the level is deflated one step (a breaking change needs `minor`, a change that
+ * widens the surface needs only `patch`) the usual 0.x convention, and the one the changeset
  * generator applies. It is also what makes 1.0.0 a decision: no API diff, however breaking, can
  * require a `major` while the package is 0.x, so the version crosses to 1.0.0 only when a human
  * writes a `major` changeset (which satisfies every requirement).

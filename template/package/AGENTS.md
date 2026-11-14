@@ -1,34 +1,44 @@
 # AGENTS.md
 
-Rules for AI coding agents working in `{{name}}`. They are the same rules a human contributor follows;
+Rules for AI coding agents working in `{{name}}`. A human contributor follows the same rules;
 [CONTRIBUTING.md](CONTRIBUTING.md) has the reasons.
 
-## Before you change anything
+## Loop
 
-- Run `npm ci`, then `npm run verify`. It type-checks, lints, checks formatting, builds and runs the
-  tests with coverage. `npm run contract` runs the full standard and is what CI runs.
-- Write the test first and watch it fail for the reason you expect; then write the code. A bug fix
-  starts with a test that reproduces the bug.
+1. Run `npm ci` once per clone.
+2. Write the test first and run it. It fails, for the reason you expect. A bug fix starts with a test that
+   reproduces the bug.
+3. Write the code that makes it pass. `npm run verify` is the fast loop.
+4. Run `npm run contract`, the full gate CI runs. The change is done when it passes. Report any check you
+   could not run, with its cause.
 
-## Never
+`npx internal-package-contract --help` lists the commands. `npx internal-package-contract doctor` says what is
+set up and what is left.
 
-- Add a `Co-Authored-By:` trailer to a commit. The commit-msg hook and the `Commits` check reject it.
-- Skip a hook or a check (`--no-verify`, a disabled workflow, a lowered threshold). If a gate fails,
-  fix the cause; if you think the gate is wrong, say so in the pull request and leave it in place.
-- Edit generated files by hand: `docs/api-report/`, `docs/api/`, `dist/`. Change the source and
-  re-run `npm run docs:api:report` or `npm run build`.
-- Choose a version bump. Add a changeset (`npx changeset`) and leave the bump and the summary for the
-  maintainer to set.
-- Push to the default branch, tag a release, or publish. Releases are made by the release workflow
-  after a human merges the release pull request.
+## Hard rules
+
+- **Meet every gate as it stands.** Commit and push with the hooks running (never `--no-verify`), and keep
+  every workflow and threshold as it is. When a gate fails, fix the cause. When you think the gate is wrong,
+  say so in the pull request and leave the gate in place.
+- **Commit with Conventional Commits and no `Co-Authored-By:` trailer.** The commit-msg hook and the `Commits`
+  check reject a message that breaks either.
+- **Change a generated file through its source.** `dist/` comes from `src/` (`npm run build`).
+  `docs/api-report/` and `docs/api/` come from TSDoc (`npm run docs:api:report`, `npm run docs:api`). A region
+  between `<!-- ipc:begin -->` and `<!-- ipc:end -->` comes from `package.json` and `docs/surface.json`
+  (`npx internal-package-contract generate`). `docs/ENVIRONMENT.md` comes from `ci/env.schema.ts`
+  (`npm run docs:env`).
+- **Propose the version bump; the maintainer sets it.** Add a changeset (`.changeset/<name>.md`) at the level
+  [VERSIONING.md](VERSIONING.md) gives, and name that level in the pull request. `ApiContract` and
+  `SurfaceContract` fail a level smaller than the change.
+- **Land every change through a pull request.** The release workflow versions, tags and publishes after a
+  person merges the release pull request.
 
 ## Conventions
 
-- Commit messages are [Conventional Commits](https://www.conventionalcommits.org/), imperative and
-  lowercase, with a header and body lines of at most 100 characters.
+- Commit headers are imperative and lowercase. Keep header and body lines to 100 characters.
 - A suppression comment (`eslint-disable`, `@ts-expect-error`, `// Stryker disable`) says why, on the
   same line, in words a reviewer can check.
-- Public API is what `package.json` `exports` lists; everything else can change freely.
+- The public API is what `package.json` `exports` lists. Everything else can change in any release.
 
 ## Public API map
 

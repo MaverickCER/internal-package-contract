@@ -7,8 +7,11 @@
  * the first one is written and reported, except under `CI=true`, where the run reports
  * `missing-baseline` and fails; removing the file is not a way past the gate. Otherwise the difference
  * is classified (classify.ts), the required level follows `ApiContract`'s rules including the pre-1.0
- * deflation, and the branch fails unless its changesets declare at least that or the version is already
- * bumped. A baseline that is not JSON, or records an unparseable version, throws.
+ * deflation, and the branch fails unless its changesets declare at least that. A baseline whose version
+ * differs from package.json's is stale: the release that set the version did not refresh it, so every
+ * difference since would pass unjudged. It fails until `update-baseline` runs, which the `version`
+ * script does on the release pull request. A baseline that is not JSON, or records an unparseable
+ * version, throws.
  *
  * The update never moves the baseline backwards and writes nothing when it already matches.
  */
@@ -31,6 +34,7 @@ import type { Surface, SurfaceChange } from "./classify.js"
 import { classifySurface } from "./classify.js"
 import type { RunBin } from "./collect.js"
 import { collectSurface } from "./collect.js"
+import { baselinesEditedWithoutRelease } from "../baseline-guard.mjs"
 
 /** Forward slashes on every OS: it appears in messages and in the committed docs. */
 export const BASELINE_PATH = ".repo-contract/surface-contract/baseline.json"
@@ -52,6 +56,10 @@ export interface SurfaceEvidence {
   readonly requiredLevel: RequiredReleaseLevel
   readonly minimumRequiredVersion: string | undefined
   readonly baselineVersion: string | undefined
+  /** The baseline records another version than package.json, so the last release did not refresh it. */
+  readonly baselineStale: boolean
+  /** This branch rewrote the baseline while package.json keeps the base branch's version (baseline-guard.mjs). */
+  readonly baselineEdited: boolean
   readonly changesets: {
     readonly changesetCount: number
     readonly declaredLevel: RequiredReleaseLevel
@@ -77,7 +85,8 @@ export const stableStringify = (value: unknown): string =>
 const isEmpty = (surface: Surface): boolean =>
   Object.keys(surface.cli).length === 0 &&
   Object.keys(surface.schemas).length === 0 &&
-  surface.action === null
+  surface.action === null &&
+  Object.keys(surface.workflows ?? {}).length === 0
 
 /**
  * @param root - The package root.
@@ -137,6 +146,8 @@ export async function runSurfaceCheck(
     requiredLevel: "none",
     minimumRequiredVersion: undefined,
     baselineVersion: undefined,
+    baselineStale: false,
+    baselineEdited: false,
     changesets: { ...declared, satisfied: true },
     ...extra,
   })
@@ -169,21 +180,31 @@ export async function runSurfaceCheck(
       `${BASELINE_PATH} records an unparseable version ${JSON.stringify(baseline.packageVersion)}; restore it from git or regenerate it with \`internal-package-contract update-baseline\`.`,
     )
   }
-  const minimumRequiredVersion = computeMinimumRequiredVersion(baselineVersion, requiredLevel)
-  const minimum = parseVersion(minimumRequiredVersion) as NonNullable<
-    ReturnType<typeof parseVersion>
-  >
-  // A release pull request has consumed its changesets and bumped the version, so the bump itself
-  // is the declaration once it reaches the minimum.
-  const bumped = current !== undefined && compareVersions(current, minimum) >= 0
+  // A version bump is never a declaration on its own: measured from a baseline the release left
+  // behind, any version past the minimum would excuse every later break.
+  const baselineStale = current === undefined || compareVersions(current, baselineVersion) !== 0
+  const baselineEdited =
+    baselinesEditedWithoutRelease({
+      cwd: root,
+      version,
+      baselines: [
+        {
+          path: BASELINE_PATH,
+          versionFile: BASELINE_PATH,
+          current: await readFile(path.join(root, BASELINE_PATH), "utf8"),
+        },
+      ],
+    }).edited.length > 0
   return evidence("compared", {
     changes,
     requiredLevel,
-    minimumRequiredVersion,
+    minimumRequiredVersion: computeMinimumRequiredVersion(baselineVersion, requiredLevel),
     baselineVersion: baseline.packageVersion,
+    baselineStale,
+    baselineEdited,
     changesets: {
       ...declared,
-      satisfied: rankAtLeast(declared.declaredLevel, requiredLevel) || bumped,
+      satisfied: rankAtLeast(declared.declaredLevel, requiredLevel),
     },
   })
 }

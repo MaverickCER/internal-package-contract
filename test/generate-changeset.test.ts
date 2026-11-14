@@ -141,7 +141,7 @@ describe("generateChangesets() on a real repository", () => {
       "package.json": JSON.stringify({ name: "pkg", version: "0.5.0" }),
     })
     expect(run()).toEqual({ generated: 0, files: [] })
-    expect(lines).toEqual(["HEAD is the release commit itself -- nothing to generate."])
+    expect(lines).toEqual(["HEAD is the release commit itself; nothing to generate."])
   })
 
   it("scans only the commits since the last release commit", () => {

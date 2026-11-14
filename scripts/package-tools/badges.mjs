@@ -60,7 +60,7 @@ export function run(argv, cwd, io) {
 
   const summary = path.join(cwd, coverageFile)
   if (!existsSync(summary)) {
-    io.err(`[badges] ${coverageFile} missing -- run the tests with coverage first.\n`)
+    io.err(`[badges] ${coverageFile} missing; run the tests with coverage first.\n`)
     code = 1
   } else {
     const { total } = JSON.parse(readFileSync(summary).toString())
@@ -97,7 +97,7 @@ export function run(argv, cwd, io) {
   if (!withSize) return code
   const sizes = path.join(cwd, "coverage/size-summary.json")
   if (!existsSync(sizes)) {
-    io.err("[badges] size summary missing -- run `size --json coverage/size-summary.json` first.\n")
+    io.err("[badges] size summary missing; run `size --json coverage/size-summary.json` first.\n")
     return 1
   }
   const { entries } = JSON.parse(readFileSync(sizes).toString())

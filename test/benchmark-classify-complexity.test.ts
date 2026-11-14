@@ -109,7 +109,7 @@ describe("estimateGrowthExponent + snapExponentToClass (ground-truth synthetic s
     // classifier under test. Regression slope computed independently
     // (see the PR description) is ~0.2386, closer to the logarithmic
     // anchor (0.3, distance 0.061) than the constant anchor (0, distance
-    // 0.239) -- see the module's own documented "constant vs logarithmic
+    // 0.239): see the module's own documented "constant vs logarithmic
     // is the weakest distinction" limitation for why the margin here is
     // real but not huge.
     const sizes = [10, 100, 1000]
@@ -282,7 +282,7 @@ describe("detectComplexityShift", () => {
 
   it("never flags a shift when either side can't be classified (e.g. previous is pre-schema-v2 history with no inputs at all)", () => {
     const previousV1Shaped = {
-      baseline: { medianMs: 1 }, // no `inputs` -- a real pre-v2 history entry shape
+      baseline: { medianMs: 1 }, // no `inputs`: a real pre-v2 history entry shape
       stress: { medianMs: 2 },
     } as TierMeasurements
     const current = {

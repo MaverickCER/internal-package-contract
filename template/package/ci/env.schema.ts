@@ -1,10 +1,10 @@
-// What this package's own workflows and code read from the environment, written down once: what each is for, who
-// owns it, how to get a new one, and when it expires. `internal-package-contract env` reads this file (it never runs
-// it) and writes docs/ENVIRONMENT.md.
+// What this package's own workflows and code read from the environment, written down once. Each entry says what
+// it is for, who owns it, how to get a new one, and when it expires. `internal-package-contract env` reads this
+// file (it never runs it) and writes docs/ENVIRONMENT.md.
 //
 // What the standard itself needs (the tokens its checks and workflows use, and its tool settings) is described once,
-// by the standard, and is included in docs/ENVIRONMENT.md without being repeated here. Do not write those again: a
-// second copy is one that can disagree. Write only what is particular to this package, for example:
+// by the standard, and docs/ENVIRONMENT.md includes it. Write here only what is particular to this package, so no
+// fact has two copies that can disagree. For example:
 //
 //   import { createEnv, documentEnv } from "internal-package-contract/env-cap"
 //

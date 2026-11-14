@@ -166,7 +166,7 @@ export function renderSkill(facts, example) {
     "",
     "## Authority",
     "",
-    `Target \`${facts.name}@${facts.version}\`. The installed package's exports and type declarations are the API: do not invent exports, options or return values. Behaviour is established by its tests and examples. If this skill and the code disagree, say so rather than guessing.`,
+    `Target \`${facts.name}@${facts.version}\`. The installed package's exports and type declarations are the API: use only what they declare. Its tests and examples establish its behaviour. When this skill and the code disagree, report the disagreement before acting on either.`,
     "",
   )
   return lines.join("\n")

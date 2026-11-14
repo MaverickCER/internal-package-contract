@@ -12,8 +12,8 @@
  *
  * Exceptions: none. Run `internal-package-contract generate` and commit the result.
  *
- * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract leaves it out:
- * its documents mark no region.
+ * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract runs it too,
+ * on the `supported-versions` region in its README.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

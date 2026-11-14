@@ -1,5 +1,5 @@
 /**
- * Baseline dependency-cruiser rules for a publishable TypeScript package -- the
+ * Baseline dependency-cruiser rules for a publishable TypeScript package: the
  * default the `Architecture` check uses when a consumer has no
  * `.dependency-cruiser.cjs` of its own.
  *
@@ -12,7 +12,7 @@
  *   }
  *
  * Only `no-circular` is `error` (the `Architecture` policy blocks on
- * error-severity findings); everything else is `warn` -- surfaced, not blocking,
+ * error-severity findings); everything else is `warn`: surfaced, not blocking,
  * until a consumer promotes it.
  *
  * @type {import('dependency-cruiser').IConfiguration}
@@ -23,8 +23,8 @@ module.exports = {
       name: "no-circular",
       severity: "error",
       comment:
-        "This dependency is part of a circular RUNTIME relationship (`import type` edges are " +
-        "excluded -- they are erased at compile time and cannot cause an initialization cycle). " +
+        "This dependency is part of a circular RUNTIME relationship. `import type` edges are " +
+        "excluded: they are erased at compile time and cannot cause an initialization cycle. " +
         "Use dependency inversion, or move the shared code into a leaf module both sides import.",
       from: {},
       to: { circular: true, viaOnly: { dependencyTypesNot: ["type-only"] } },

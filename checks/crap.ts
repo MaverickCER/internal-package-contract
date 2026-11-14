@@ -35,7 +35,7 @@ function repoRelative(file: string): string {
 
 /** CRAP ceiling. Above this a function is too risky for its coverage. */
 export const CRAP_THRESHOLD = 30
-/** Raw cyclomatic-complexity ceiling -- CRAP collapses toward plain complexity as coverage approaches 100%, so this keeps pressure on a fully-covered but deeply-branchy function. */
+/** Raw cyclomatic-complexity ceiling: CRAP collapses toward plain complexity as coverage approaches 100%, so this keeps pressure on a fully-covered but deeply-branchy function. */
 export const MAX_COMPLEXITY = 20
 
 interface CrapFunction {
@@ -93,7 +93,7 @@ export const crap: CheckDefinitionConfig = {
         return {
           outcome: "warn",
           rationale:
-            "CRAP: not evaluated -- the `Tests` run did not pass, so there is no coverage to weight complexity against (see `Tests`).",
+            "CRAP: not evaluated, because the `Tests` run did not pass, so there is no coverage to weight complexity against (see `Tests`).",
         }
       }
       const printed = combinedOutput(result)
@@ -144,7 +144,7 @@ export const crap: CheckDefinitionConfig = {
       sections.push(
         `CRAP threshold (${String(CRAP_THRESHOLD)}) exceeded by ${String(crapOffenders.length)} function(s):`,
         ...crapOffenders.map(
-          (fn) => `- ${fn.file}:${String(fn.startLine)} ${fn.name} — CRAP ${String(fn.crap)}`,
+          (fn) => `- ${fn.file}:${String(fn.startLine)} ${fn.name}: CRAP ${String(fn.crap)}`,
         ),
       )
     }
@@ -153,7 +153,7 @@ export const crap: CheckDefinitionConfig = {
         `Complexity ceiling (${String(MAX_COMPLEXITY)}) exceeded by ${String(complexityOffenders.length)} function(s):`,
         ...complexityOffenders.map(
           (fn) =>
-            `- ${fn.file}:${String(fn.startLine)} ${fn.name} — complexity ${String(fn.complexity)}`,
+            `- ${fn.file}:${String(fn.startLine)} ${fn.name}: complexity ${String(fn.complexity)}`,
         ),
       )
     }

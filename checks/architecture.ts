@@ -91,7 +91,7 @@ export function architecture(): CheckDefinitionConfig {
       // Stryker disable next-line OptionalChaining: unreachable, not just unobservable -- reaching
       // this line already required `(value as DepcruiseReport).summary?.violations` (above) to be
       // a real array, which is only possible when `summary` itself is a defined object (optional
-      // chaining returns `undefined`, never an array, through a nullish `summary`) -- so `summary`
+      // chaining returns `undefined`, never an array, through a nullish `summary`). So `summary`
       // can never be nullish here.
       const cruised = (value as DepcruiseReport).summary?.totalCruised ?? 0
       const via = config.isBundled ? " (bundled baseline config)" : ""

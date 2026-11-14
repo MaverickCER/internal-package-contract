@@ -11,7 +11,7 @@ import type {
 } from "../scripts/api-contract/evidence-types.js"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
-/** A minimal, otherwise-unchanged target result -- each test overrides only what it needs. */
+/** A minimal, otherwise-unchanged target result: each test overrides only what it needs. */
 function baseTarget(overrides: Partial<ApiContractTargetResult> = {}): ApiContractTargetResult {
   return {
     target: "index",
@@ -40,6 +40,8 @@ function baseEvidence(overrides: Partial<ApiContractEvidence> = {}): ApiContract
     requiredLevel: "none",
     minimumRequiredVersion: "1.0.0",
     summary: "[index] No public API changes detected.",
+    staleBaselines: [],
+    editedBaselines: [],
     changesets: { changesetCount: 0, declaredLevel: "none", satisfied: true },
     ...overrides,
   }
@@ -49,6 +51,63 @@ describe("evaluateApiContractPolicy", () => {
   it("passes when nothing changed and the branch declares no changeset", () => {
     const result = evaluateApiContractPolicy({ evidence: baseEvidence() })
     expect(result.outcome).toBe("pass")
+  })
+
+  it("fails when the branch rewrote a baseline without a release, naming it", () => {
+    const result = evaluateApiContractPolicy({
+      evidence: baseEvidence({
+        currentVersion: "1.0.0",
+        editedBaselines: [".repo-contract/api-contract/index/baseline.api.json"],
+      }),
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "ApiContract: this branch changed .repo-contract/api-contract/index/baseline.api.json while package.json stays at 1.0.0, the base branch's version.",
+        "A baseline moves only with a release, so editing it here would hide this branch's own API change.",
+        "Restore the baseline from the base branch and declare the change with `npx changeset add`.",
+      ].join("\n"),
+    })
+  })
+
+  it("names every rewritten baseline, separated by a comma", () => {
+    const result = evaluateApiContractPolicy({
+      evidence: baseEvidence({
+        editedBaselines: [
+          ".repo-contract/api-contract/index/baseline.api.json",
+          ".repo-contract/api-contract/extra/baseline.api.json",
+        ],
+      }),
+    })
+    expect(result.rationale.split("\n")[0]).toBe(
+      "ApiContract: this branch changed .repo-contract/api-contract/index/baseline.api.json, .repo-contract/api-contract/extra/baseline.api.json while package.json stays at 1.0.0, the base branch's version.",
+    )
+  })
+
+  it("fails on a baseline the last release did not refresh, even when nothing changed", () => {
+    const result = evaluateApiContractPolicy({
+      evidence: baseEvidence({ currentVersion: "0.7.5", staleBaselines: ["index@0.6.0"] }),
+    })
+    expect(result).toEqual({
+      outcome: "fail",
+      rationale: [
+        "ApiContract: package.json is 0.7.5, but these baselines record another version: index@0.6.0.",
+        "The release that set this version did not refresh them, so later API changes would pass unjudged.",
+        "Run `npx internal-package-contract update-baseline` and commit the result, and add `internal-package-contract update-baseline` to the `version` script after the build so every release pull request refreshes them.",
+      ].join("\n"),
+    })
+  })
+
+  it("names every stale baseline, separated by a comma", () => {
+    const result = evaluateApiContractPolicy({
+      evidence: baseEvidence({
+        currentVersion: "0.7.5",
+        staleBaselines: ["index@0.6.0", "extra@0.5.0"],
+      }),
+    })
+    expect(result.rationale.split("\n")[0]).toBe(
+      "ApiContract: package.json is 0.7.5, but these baselines record another version: index@0.6.0, extra@0.5.0.",
+    )
   })
 
   it("passes on the initial baseline run", () => {
@@ -567,12 +626,12 @@ describe("evaluateApiContractPolicy", () => {
 })
 
 /**
- * This package's own `scripts/api-contract/check.ts` -- the same absolute path
+ * This package's own `scripts/api-contract/check.ts` (the same absolute path
  * `checks/api-contract.ts`'s own `checkScript` constant resolves to (computed there from
  * `import.meta.url` one level up, in `checks/`; computed here from this test file's own
- * `import.meta.url` one level up, in `test/` -- both siblings of the repo root). Asserted as an
- * exact value (not a suffix match) so a mutant that drops the `".."` segment -- which would
- * resolve to a nonexistent `checks/scripts/api-contract/check.ts` instead -- still fails: a suffix
+ * `import.meta.url` one level up, in `test/`) both siblings of the repo root). Asserted as an
+ * exact value (not a suffix match) so a mutant that drops the `".."` segment (which would
+ * resolve to a nonexistent `checks/scripts/api-contract/check.ts` instead) still fails: a suffix
  * match alone can't tell the two apart.
  */
 const expectedCheckScript = fileURLToPath(
@@ -592,7 +651,7 @@ describe("apiContract (module export -- checks/api-contract.ts's `hasTypedocConf
   })
 
   /**
-   * Imports a fresh module instance with `process.cwd()` mocked to `cwd` -- `hasTypedocConfig` is
+   * Imports a fresh module instance with `process.cwd()` mocked to `cwd`: `hasTypedocConfig` is
    * computed once, at import time, from `process.cwd()`, so exercising both branches requires a
    * fresh module per `cwd`. Uses a cache-busting query string (Vite/Vitest's own documented
    * re-import technique) rather than `vi.resetModules()`, which clears the *entire* shared module
@@ -680,7 +739,7 @@ describe("apiContract (module export -- checks/api-contract.ts's `hasTypedocConf
     expect(result).toEqual({
       outcome: "pass",
       rationale:
-        "ApiContract: no typedoc.json -- this package documents no public entry points to compare.",
+        "ApiContract: no typedoc.json, so this package documents no public entry points to compare.",
     })
   })
 })

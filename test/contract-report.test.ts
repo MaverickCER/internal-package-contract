@@ -177,7 +177,7 @@ describe("renderMarkdown()", () => {
     expect(md).toContain("| FAIL | 1 |")
     expect(md).toContain("#### Tests\n\n```text\n2 failing\nfoo.test.ts\n```")
     expect(md).toContain("### NOT EVALUATED, NO EXCEPTION")
-    expect(md).toContain("- **Docs** -- 1 broken external link")
+    expect(md).toContain("- **Docs**: 1 broken external link")
     expect(md).not.toContain("second line")
     expect(md).toContain("### Slowest checks")
     expect(md).toContain("| Tests | 9.0s |")

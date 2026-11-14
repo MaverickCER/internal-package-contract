@@ -30,7 +30,7 @@ describe("runUpdateBaseline() when API Extractor fails", () => {
       {
         target: "index",
         status: "failed",
-        message: "API Extractor reported 3 error(s) -- see stderr above for details.",
+        message: "API Extractor reported 3 error(s); see stderr above for details.",
       },
     ])
   })
@@ -42,7 +42,7 @@ describe("runUpdateBaseline() when API Extractor fails", () => {
     expect(code).toBe(1)
     expect(out).toEqual([])
     expect(err).toEqual([
-      "[index] API Extractor reported 3 error(s) -- see stderr above for details.\n",
+      "[index] API Extractor reported 3 error(s); see stderr above for details.\n",
     ])
   })
 })

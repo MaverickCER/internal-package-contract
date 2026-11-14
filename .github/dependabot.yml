@@ -5,7 +5,7 @@
 # something rewriting them. Dependabot rewrites a pinned action SHA *and* refreshes the `# vX.Y.Z`
 # tag comment next to it, which is exactly the form `.github/workflows/*` already use.
 #
-# Dev-dependency PRs are grouped into one weekly PR to keep the noise down -- none of them reach
+# Dev-dependency PRs are grouped into one weekly PR to keep the noise down: none of them reach
 # consumers. The `internal-package-contract` pin is deliberately left to its own
 # `dependency-pin-sync` workflow (it re-pins the reusable workflows in the same pull request).
 version: 2
@@ -21,9 +21,9 @@ updates:
       - dependencies
     ignore:
       - dependency-name: "internal-package-contract"
-      # TypeScript 7 has no compiler API. The packages' build entries use the consumer's TypeScript when it is 5 or 6
-      # and a bundled TypeScript 6 otherwise, and the tooling this standard runs (typescript-eslint, TypeDoc, API
-      # Extractor) is built on that API, so the development toolchain stays on 6; 7 is type-checked in CI.
+      # TypeScript 7 has no compiler API. The packages' build entries use the consumer's TypeScript when it is 5
+      # or 6, and a bundled TypeScript 6 otherwise. The tooling this standard runs (typescript-eslint, TypeDoc,
+      # API Extractor) is built on that API, so the development toolchain stays on 6; 7 is type-checked in CI.
       - dependency-name: "typescript"
         versions: [">= 7.0.0"]
     groups:

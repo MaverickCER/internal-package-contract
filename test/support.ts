@@ -1,5 +1,5 @@
 /**
- * Shared test fixtures for `checks/*.test.ts` -- every check's `policy` is a
+ * Shared test fixtures for `checks/*.test.ts`: every check's `policy` is a
  * pure function of a `PolicyContext`-shaped object, so a check is testable in
  * complete isolation by constructing one directly, with no real subprocess
  * ever spawned. `makeResult`/`makeContext` build the minimal, well-formed
@@ -47,7 +47,7 @@ export function makeJsonParseFailure(
   })
 }
 
-/** A minimal, well-formed `Evidence` -- `siblingChecks` populates `evidence.checks` for a policy that reads a sibling's own result (e.g. `Coverage` reading `evidence.checks["Tests"]`). */
+/** A minimal, well-formed `Evidence`: `siblingChecks` populates `evidence.checks` for a policy that reads a sibling's own result (e.g. `Coverage` reading `evidence.checks["Tests"]`). */
 export function makeEvidence(
   siblingChecks: Readonly<Record<string, CheckEvidence>> = {},
 ): Evidence {
@@ -73,7 +73,7 @@ export function makeContext(
   }
 }
 
-/** Every `version: 2` exception-record field blank -- what a freshly scaffolded stub carries. */
+/** Every `version: 2` exception-record field blank: what a freshly scaffolded stub carries. */
 export const BLANK_V2 = {
   ruleBroken: "",
   attempted: "",
@@ -84,7 +84,7 @@ export const BLANK_V2 = {
   expires: "",
 } as const
 
-/** Every `version: 2` exception-record field written -- what a complete, reviewed record carries. */
+/** Every `version: 2` exception-record field written: what a complete, reviewed record carries. */
 export const COMPLETE_V2 = {
   ruleBroken: "The rule this exception breaks.",
   attempted: "What was tried first and why it did not work.",

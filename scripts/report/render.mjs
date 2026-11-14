@@ -95,7 +95,7 @@ export function render(facts) {
     lines.push("## Exceptions", "")
     for (const { registry, id, justification, change } of facts.exceptions) {
       lines.push(
-        `- **${change}** in \`${registry}\`: \`${id}\`${justification === "" ? "" : ` — ${firstSentence(justification)}`}`,
+        `- **${change}** in \`${registry}\`: \`${id}\`${justification === "" ? "" : `: ${firstSentence(justification)}`}`,
       )
     }
     lines.push("")

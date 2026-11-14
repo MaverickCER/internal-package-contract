@@ -478,7 +478,7 @@ describe("the EnvContract check", () => {
       rationale: "EnvContract: 2 contract(s) documented, and the generated files are current.",
     })
   })
-  it("warns, never fails, listing each finding and each stale file", async () => {
+  it("fails when a generated file is stale, listing each finding and each stale file", async () => {
     expect(
       await judge({
         ok: true,
@@ -488,19 +488,19 @@ describe("the EnvContract check", () => {
         stale: ["docs/ENVIRONMENT.md"],
       }),
     ).toEqual({
-      outcome: "warn",
+      outcome: "fail",
       rationale:
         'EnvContract: 3 thing(s) to look at in the environment contract:\n- "A" expires in 3 day(s).\n- "B" has expired.\n- docs/ENVIRONMENT.md is out of date; run `internal-package-contract env` and commit it.',
     })
   })
-  it("warns when only the generated file is out of date, and when only a finding is", async () => {
+  it("fails when only the generated file is out of date, and only warns when only a finding is", async () => {
     const stale = await judge({
       ok: true,
       state: "present",
       contracts: 1,
       stale: ["docs/ENVIRONMENT.md"],
     })
-    expect(stale.outcome).toBe("warn")
+    expect(stale.outcome).toBe("fail")
     expect(stale.rationale).toContain("1 thing(s)")
     expect(stale.rationale).toBe(
       "EnvContract: 1 thing(s) to look at in the environment contract:\n- docs/ENVIRONMENT.md is out of date; run `internal-package-contract env` and commit it.",
@@ -514,6 +514,7 @@ describe("the EnvContract check", () => {
     expect(finding.rationale).toBe(
       "EnvContract: 1 thing(s) to look at in the environment contract:\n- x",
     )
+    expect(finding.outcome).toBe("warn")
   })
   it("warns, with the reason, when the contract could not be read", async () => {
     expect(await judge({ ok: false, message: "could not parse" })).toEqual({

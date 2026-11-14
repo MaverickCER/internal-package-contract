@@ -14,3 +14,4 @@ export function runCommand(
     options: object,
   ) => { status: number | null; error?: unknown },
 ): number | null
+export function keepsSkill(cwd: string): boolean

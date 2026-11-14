@@ -19,15 +19,15 @@ export interface NoNodeFsWording {
 }
 
 export interface RuleOptions {
-  /** Glob-array of files this rule doesn't apply to -- a project's own
+  /** Glob-array of files this rule doesn't apply to: a project's own
    *  executable entry points (a CLI, a script) that legitimately construct
-   *  the concrete filesystem adapter. Empty by default -- populate it
+   *  the concrete filesystem adapter. Empty by default: populate it
    *  explicitly; the rule never guesses at what counts as an executable
    *  capability boundary. */
   allow?: string[]
 }
 
-/** `"node:fs"`, `"fs"`, and their `/promises` subpaths -- every specifier that resolves to Node's filesystem module. */
+/** `"node:fs"`, `"fs"`, and their `/promises` subpaths: every specifier that resolves to Node's filesystem module. */
 const FS_SPECIFIER = /^(node:)?fs(\/promises)?$/
 
 /** The specifier string if it names Node's filesystem module, else `undefined`. */
@@ -66,7 +66,7 @@ function loadsModule(callee: TSESTree.Expression): boolean {
 /**
  * Flags any `import`, re-export (`export ... from`, `export * from`), `require`, `process.getBuiltinModule`,
  * TypeScript `import x = require()` or dynamic `import()` of `node:fs` (a string or a `${}`-free template) in
- * library code, so a library surface acquires its filesystem capability from the
+ * library code. That way a library surface acquires its filesystem capability from the
  * caller instead of reaching for `node:fs` itself (the same discipline
  * `repo-contract`'s ADR-0011 established for `child_process`/`process.env`).
  * The wording passed in names the package's own documentation and decision record.

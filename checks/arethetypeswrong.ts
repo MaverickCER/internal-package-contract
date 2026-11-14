@@ -53,22 +53,18 @@ export const arethetypeswrong: CheckDefinitionConfig = {
       }
     }
 
-    // Drop `node10` resolution problems -- the legacy pre-`exports` resolver is
+    // Drop `node10` resolution problems: the legacy pre-`exports` resolver is
     // not a target for a package that publishes modern `exports`.
     //
-    // Every `typeof x === "object"`-style guard below is an equivalent mutant when forced to
-    // `true` (or loosened via `||`/`>=`): `value` only ever comes from `JSON.parse`, so the only
-    // "truthy but not typeof object" values it can ever hold are strings/numbers/booleans -- none
-    // of which can carry an own array-valued property, so widening any of these guards can never
-    // change what ends up in `kept`. And even a spurious non-object entry that DID leak into
-    // `kept` would still be dropped by `arethetypeswrongPreset`'s own
-    // `typeof problem === "object"` filter downstream (`evaluateAttwReport` in
-    // `repo-contract/src/presets/arethetypeswrong.ts`), so the pass/fail verdict can never diverge
-    // either way -- which is also why a non-array `group` falling back to a placeholder array
-    // (instead of `[]`) can never be observed: the placeholder is never a real problem object, so
-    // it is filtered out by the very same downstream guard. Hand-verified: forcing each of these
-    // to always-true (or substituting a placeholder array), one at a time, leaves every test in
-    // arethetypeswrong.test.ts passing unchanged.
+    // Every `typeof x === "object"` guard below is an equivalent mutant when forced to `true` or
+    // loosened (`||`, `>=`). `value` comes only from `JSON.parse`, so a truthy non-object is a string,
+    // number or boolean. None of those carries an own array-valued property, so a wider guard never
+    // changes `kept`. A non-object entry that did reach `kept` is still dropped downstream, by the
+    // `typeof problem === "object"` filter in `evaluateAttwReport`
+    // (`repo-contract/src/presets/arethetypeswrong.ts`). The verdict therefore cannot change. A
+    // placeholder array in place of `[]` for a non-array `group` is filtered out the same way.
+    // Hand-verified: forcing each guard to `true`, or substituting a placeholder array, one at a time,
+    // leaves every test in arethetypeswrong.test.ts passing.
     // Stryker disable ConditionalExpression,LogicalOperator,EqualityOperator,ArrayDeclaration
     if (value !== null && typeof value === "object") {
       const raw = (value as { problems?: Record<string, unknown[]> }).problems
@@ -91,7 +87,7 @@ export const arethetypeswrong: CheckDefinitionConfig = {
     // Stryker restore ConditionalExpression,LogicalOperator,EqualityOperator,ArrayDeclaration
 
     // Hand the (filtered) report to repo-contract's own preset policy as if attw
-    // had printed it to stdout -- reuses `evaluateAttwReport` (not on the public
+    // had printed it to stdout: reuses `evaluateAttwReport` (not on the public
     // export surface) plus the preset's dependency/termination guards.
     // Stryker disable StringLiteral: an equivalent mutant -- `arethetypeswrongPreset`'s own policy
     // (and the shared `checkDependencyInstalled`/`checkTerminatedAbnormally` guards it calls

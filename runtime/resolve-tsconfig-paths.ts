@@ -11,14 +11,14 @@ import type { BuildFileSystem } from "./build-fs.js"
  * `tsconfig.json` `compilerOptions.paths`/`baseUrl`, so a schema or consumer reached only
  * through an alias isn't misreported by `link.ts`/`dependency-graph.ts` as unresolved or
  * abandoned. Unlike a package-schema resolver, this never crosses a
- * trust/versioning boundary -- every resolved file is already local, already-trusted
- * project source -- so it is on by default (auto-detecting `root/tsconfig.json`) rather
+ * trust/versioning boundary (every resolved file is already local, already-trusted
+ * project source), so it is on by default (auto-detecting `root/tsconfig.json`) rather
  * than requiring an explicit allowlist.
  *
  * The actual `paths`/`baseUrl` matching algorithm (longest-prefix matching, `*` wildcard
  * substitution, multiple fallback targets, `extends`-chain merging, JSONC parsing) is
  * delegated entirely to the TypeScript compiler via `ts.resolveModuleName()` and
- * `ts.parseJsonConfigFileContent()` -- the same functions `tsc`/`tsserver` themselves use --
+ * `ts.parseJsonConfigFileContent()` (the same functions `tsc`/`tsserver` themselves use)
  * rather than reimplemented here. This module's own logic is limited to loading the config,
  * caching resolutions, and enforcing the `node_modules` safety boundary below.
  */
@@ -47,7 +47,7 @@ export function pathMappingOptions(options: TS.CompilerOptions): PathMappingOpti
 
 /** Parsed `tsconfig.json` `paths`/`baseUrl` configuration, immutable for the life of one generate*() run. See {@link loadTsconfigPaths}. */
 export interface TsconfigPathsResolution {
-  /** The subset of `compilerOptions` `ts.resolveModuleName()` needs -- at minimum `paths` and/or `baseUrl`. */
+  /** The subset of `compilerOptions` `ts.resolveModuleName()` needs: at minimum `paths` and/or `baseUrl`. */
   readonly compilerOptions: TS.CompilerOptions
   /** Absolute path of the tsconfig.json this was loaded from, for diagnostics. */
   readonly configFile: string
@@ -63,7 +63,7 @@ export interface AliasResolutionCache {
   /**
    * Keyed by `` `${importingFile}\0${specifier}` ``, not by `specifier` alone. With one
    * fixed `compilerOptions` object and no project-reference support, `paths`-pattern
-   * substitution itself doesn't depend on the importing file -- but `ts.resolveModuleName()`'s
+   * substitution itself doesn't depend on the importing file, but `ts.resolveModuleName()`'s
    * fallback behavior when `paths` doesn't match a real file (classic-mode ancestor search,
    * extension-preference edge cases) legitimately can. A `Map`, not a network call, so
    * keying defensively by both costs nothing.
@@ -113,24 +113,24 @@ export function typescriptPath(file: string, separator: string): string {
 /**
  * Loads and parses a `tsconfig.json` for alias resolution. Called exactly once per
  * `generate*()`/`computeArtifacts()` invocation, at the same point
- * `resolveAllowlistedPackages()` is already called once -- so at most one tsconfig-related
+ * `resolveAllowlistedPackages()` is already called once, so at most one tsconfig-related
  * warning is ever produced per run, never once per file scanned.
  *
  * @param product - The consuming package's name, used in the message when no usable compiler resolved.
  * @remarks
  * `tsconfigOption === false` disables alias resolution entirely.
- * `tsconfigOption === undefined` (the default) looks for `root/tsconfig.json` exactly --
+ * `tsconfigOption === undefined` (the default) looks for `root/tsconfig.json` exactly:
  * deliberately not `ts.findConfigFile()`'s upward directory walk, since every other
  * root-relative mechanism in this codebase (schema discovery, `packages` resolution)
  * treats `root` as a hard boundary. A missing default tsconfig is silent (most projects
  * don't use aliases); a missing *explicit* `tsconfigOption` is a real misconfiguration and
- * warns. `jsconfig.json` is intentionally not auto-detected -- pass `tsconfig:
+ * warns. `jsconfig.json` is intentionally not auto-detected: pass `tsconfig:
  * "jsconfig.json"` explicitly if needed; this loader only cares about the file's JSON
  * shape, not its name.
  *
  * The gate for building a resolution is "`paths` non-empty OR `baseUrl` set", not `paths`
- * alone -- a `baseUrl`-only tsconfig (no `paths` at all) still makes TypeScript resolve
- * bare specifiers relative to `baseUrl`, and `ts.resolveModuleName()` already handles that
+ * alone. A `baseUrl`-only tsconfig (no `paths` at all) still makes TypeScript resolve
+ * bare specifiers relative to `baseUrl`. `ts.resolveModuleName()` already handles that
  * once `compilerOptions.baseUrl` is passed through.
  */
 export async function loadTsconfigPaths(
@@ -216,7 +216,7 @@ export async function loadTsconfigPaths(
  * or returns `undefined` if it doesn't resolve through this mechanism.
  *
  * @remarks
- * Necessarily synchronous -- `ts.resolveModuleName()` has no async form, matching how
+ * Necessarily synchronous: `ts.resolveModuleName()` has no async form, matching how
  * `tsc`/`tsserver` themselves always call it. `ts.sys` is used directly as the resolution
  * host (an existing Node-backed singleton the `typescript` package exports; nothing to
  * construct).
@@ -224,16 +224,16 @@ export async function loadTsconfigPaths(
  * Two safety/scope filters apply to any candidate `ts.resolveModuleName()` returns,
  * independent of its own internal fallback behavior:
  *  - **Never resolves into `node_modules`.** `ts.resolveModuleName()` can, in principle,
- *    fall through to classic Node resolution and land inside `node_modules`; any resolved
+ *    fall through to classic Node resolution and land inside `node_modules`. Any resolved
  *    path containing a `node_modules` path segment (checked after `path.normalize()`, so
  *    mixed separators can't slip past it on Windows) is discarded here. Bare package
- *    specifiers continue to be handled exclusively by `resolvePackageImport()`
- *    -- this mechanism never overlaps with that trust boundary.
+ *    specifiers continue to be handled exclusively by `resolvePackageImport()`:
+ *    this mechanism never overlaps with that trust boundary.
  *  - **`.ts`/`.tsx` only.** Matches `resolveRelativeImport()`'s own existing candidate set
- *    and `resolve-package-schema.ts`'s `SCHEMA_FILE_EXTENSIONS` -- this codebase's static-
+ *    and `resolve-package-schema.ts`'s `SCHEMA_FILE_EXTENSIONS`: this codebase's static-
  *    analysis pipeline is `.ts`/`.tsx` only today. A resolved non-`.ts`/`.tsx` file is a
  *    real risk, not just a gap: feeding it straight into `ts.createSourceFile()` wouldn't
- *    error, it would silently parse garbage -- exactly the "guess" this codebase's
+ *    error, it would silently parse garbage: exactly the "guess" this codebase's
  *    warn-don't-guess philosophy exists to avoid.
  */
 export function resolveAliasImport(

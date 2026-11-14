@@ -63,7 +63,7 @@ export interface EnvironmentExceptionRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * `environment:<Check>:<code>` -- the check and the machine-readable reason it could not run.
+ * `environment:<Check>:<code>`: the check and the machine-readable reason it could not run.
  * @param check - The check's id, e.g. `"CodeRabbit"`.
  * @param code - Why it could not run, e.g. `"ci"` or `"no-chrome"`.
  * @returns The record id that accepts this degradation.
@@ -107,7 +107,7 @@ const registrySchema: StandardSchemaV1<unknown, readonly EnvironmentExceptionRec
 }
 
 /**
- * What is missing from `record` for it to count as an accepted exception -- an empty list means it
+ * What is missing from `record` for it to count as an accepted exception: an empty list means it
  * is complete and unexpired.
  * @param record - The registry record.
  * @param now - The clock `expires` is compared against.

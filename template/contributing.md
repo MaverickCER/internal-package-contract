@@ -3,7 +3,7 @@
 ## Before you start
 
 - `npm ci`, then `npm run contract`: the full gate CI runs on a push to main. Pre-push runs it without
-  Coverage, Crap and Mutation; a pull request runs the subset the change can reach (`--scope auto`), so
+  Coverage, Crap and Mutation. A pull request runs the subset the change can reach (`--scope auto`), so
   the full run is the push to main after the merge.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) and carry no
   `Co-Authored-By` trailer; commitlint on `commit-msg` and the `Commits` check reject both. `git commit`
@@ -11,7 +11,7 @@
 - Every change lands through a pull request. `internal-package-contract init --github` writes the ruleset once
   (deletion and force-pushes blocked; a pull request with resolved review threads and the `contract` and
   `required` status checks, strict). The `BranchProtection` check fails the contract when the ruleset lacks any
-  of that except `required`, which it does not assert.
+  of that. It asserts `required` only where a workflow defines both a `contract` and a `required` job.
 
 ## Making a change
 

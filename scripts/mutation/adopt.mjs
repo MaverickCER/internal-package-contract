@@ -2,8 +2,8 @@
 // `IPC_MUTATION_REPORT=<file>` names it; the run copies it where Stryker would have written its own, and the
 // `Mutation` check judges it by the same rules, without mutating again.
 //
-// A report is adopted only when it is evidence about this checkout: every file a full run would mutate is in it,
-// or Stryker's instrumenter finds no mutant in that file's text on disk (./mutant-free.mjs), no file is in it that
+// A report is adopted only when it is evidence about this checkout. Every file a full run would mutate is in it,
+// or Stryker's instrumenter finds no mutant in that file's text on disk (./mutant-free.mjs). No file is in it that
 // this run would not mutate, and each file's recorded source is the text on disk. Anything else refuses the report,
 // and the check fails: slices made from another revision or another plan would otherwise judge different code. The
 // evidence a previous run left is removed first, so a refused report is never judged as if it had been accepted.

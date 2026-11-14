@@ -108,6 +108,45 @@ describe("classifySurface: CLIs", () => {
   })
 })
 
+describe("classifySurface: commands", () => {
+  const withCommands = (
+    commands: Record<string, { exitCode: number | null; help: string }>,
+  ): Surface => ({
+    ...empty,
+    cli: { x: { exitCode: 0, help: "Usage: x <command>", commands } },
+  })
+  it("treats a removed command as breaking and an added one as widening, by full name", () => {
+    const r = classifySurface(
+      withCommands({ init: { exitCode: 0, help: "i" }, sync: { exitCode: 0, help: "s" } }),
+      withCommands({ init: { exitCode: 0, help: "i" }, new: { exitCode: 0, help: "n" } }),
+    )
+    expect(r.map((c) => [c.id, c.kind, c.impact, c.widens, c.explanation])).toEqual([
+      ["cli:x new", "cli-command-added", "compatible", true, "`x new` was added."],
+      ["cli:x sync", "cli-command-removed", "breaking", false, "`x sync` was removed."],
+    ])
+  })
+  it("judges a command's own flags and exit code like a CLI's", () => {
+    const r = classifySurface(
+      withCommands({ init: { exitCode: 0, help: "--name --force" } }),
+      withCommands({ init: { exitCode: 1, help: "--name" } }),
+    )
+    expect(r.map((c) => [c.id, c.kind, c.impact])).toEqual([
+      ["cli:x init", "cli-exit-code-changed", "breaking"],
+      ["cli:x init:--force", "cli-flag-removed", "breaking"],
+    ])
+  })
+  it("compares only the top-level help against a baseline taken before commands were collected", () => {
+    const old: Surface = { ...empty, cli: { x: { exitCode: 0, help: "Usage: x <command>" } } }
+    expect(classifySurface(old, withCommands({ init: { exitCode: 0, help: "i" } }))).toEqual([])
+  })
+  it("reads every command as removed when the current help lists none", () => {
+    const current: Surface = { ...empty, cli: { x: { exitCode: 0, help: "Usage: x <command>" } } }
+    expect(kinds(withCommands({ init: { exitCode: 0, help: "i" } }), current)).toEqual([
+      "cli-command-removed:breaking",
+    ])
+  })
+})
+
 describe("classifySurface: schemas", () => {
   const s = (schema: unknown): Surface => ({ ...empty, schemas: { "./schema": schema } })
   const base = { type: "object", required: ["a"], properties: { a: { type: "string" } } }
@@ -226,6 +265,112 @@ describe("classifySurface: action", () => {
     ])
     expect(kinds(opt, act({ a: { required: false, default: "2" } }))).toEqual([
       "action-input-default-changed:breaking",
+    ])
+  })
+})
+
+describe("classifySurface: reusable workflows", () => {
+  const wf = (workflows: NonNullable<Surface["workflows"]>): Surface => ({ ...empty, workflows })
+  const base = { inputs: { size: { required: true, default: null } }, outputs: ["out"] }
+  it("judges a workflow's inputs, secrets and outputs like an Action's, under the workflow's name", () => {
+    const r = classifySurface(
+      wf({ "r.yml": base }),
+      wf({
+        "r.yml": {
+          inputs: { "secrets.TOKEN": { required: true, default: null } },
+          outputs: ["out", "more"],
+        },
+      }),
+    )
+    expect(r.map((c) => [c.id, c.kind, c.impact, c.explanation])).toEqual([
+      [
+        "workflow:r.yml:input:secrets.TOKEN",
+        "workflow-input-added",
+        "breaking",
+        "Workflow r.yml input secrets.TOKEN was added and is required.",
+      ],
+      [
+        "workflow:r.yml:input:size",
+        "workflow-input-removed",
+        "breaking",
+        "Workflow r.yml input size was removed.",
+      ],
+      [
+        "workflow:r.yml:output:more",
+        "workflow-output-added",
+        "compatible",
+        "Workflow r.yml output more was added.",
+      ],
+    ])
+  })
+  it("treats a removed workflow as breaking and an added one as widening", () => {
+    expect(kinds(wf({ "r.yml": base }), wf({}))).toEqual(["workflow-removed:breaking"])
+    expect(classifySurface(wf({}), wf({ "n.yml": base }))).toEqual([
+      expect.objectContaining({
+        id: "workflow:n.yml",
+        kind: "workflow-added",
+        impact: "compatible",
+        widens: true,
+      }),
+    ])
+  })
+  it("names the added or removed workflow file in the explanation", () => {
+    expect(classifySurface(wf({ "r.yml": base }), wf({ "n.yml": base }))).toEqual([
+      {
+        id: "workflow:n.yml",
+        kind: "workflow-added",
+        impact: "compatible",
+        widens: true,
+        explanation: "The reusable workflow n.yml was added.",
+      },
+      {
+        id: "workflow:r.yml",
+        kind: "workflow-removed",
+        impact: "breaking",
+        widens: false,
+        explanation: "The reusable workflow r.yml was removed.",
+      },
+    ])
+  })
+  it("compares nothing about workflows against a baseline taken before they were collected", () => {
+    expect(classifySurface(empty, wf({ "n.yml": base }))).toEqual([])
+    expect(classifySurface(wf({ "r.yml": base }), { ...empty })).toEqual([
+      expect.objectContaining({ kind: "workflow-removed" }),
+    ])
+  })
+})
+
+describe("classifySurface: generated-document headings", () => {
+  it("treats a removed heading as breaking and an added one as widening", () => {
+    const r = classifySurface(
+      { ...empty, documents: ["## A", "## B"] },
+      { ...empty, documents: ["## B", "## C"] },
+    )
+    expect(r.map((c) => [c.id, c.kind, c.impact, c.widens, c.explanation])).toEqual([
+      [
+        "document:## A",
+        "document-heading-removed",
+        "breaking",
+        false,
+        'Generated documents no longer contain the heading "## A".',
+      ],
+      [
+        "document:## C",
+        "document-heading-added",
+        "compatible",
+        true,
+        'Generated documents gained the heading "## C".',
+      ],
+    ])
+  })
+  it("compares nothing against a baseline without headings, and reads dropped renderers as every heading removed", () => {
+    expect(classifySurface(empty, { ...empty, documents: ["## A"] })).toEqual([])
+    expect(classifySurface({ ...empty, documents: ["## A"] }, empty)).toEqual([
+      expect.objectContaining({
+        id: "document:## A",
+        kind: "document-heading-removed",
+        impact: "breaking",
+      }),
     ])
   })
 })

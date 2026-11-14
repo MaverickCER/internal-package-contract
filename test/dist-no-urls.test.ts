@@ -181,7 +181,7 @@ describe("evaluateDistUrls()", () => {
       true,
     )
     expect(result.rationale).toContain(
-      '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test" -- this URL no longer ships; delete this entry.',
+      '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test"; this URL no longer ships; delete this entry.',
     )
   })
   it("renders the exact failure text, counting offenders and stale records together", () => {
@@ -196,9 +196,9 @@ describe("evaluateDistUrls()", () => {
     )
     expect(result.rationale).toBe(
       [
-        "2 shipped URL(s) or stale record(s) need attention -- Socket.dev flags every URL in a published package; remove it from the source (comments, JSDoc, string literals, sourcemap content) or explain it in .repo-contract/exceptions/dist-urls.json:",
+        "2 shipped URL(s) or stale record(s) need attention: Socket.dev flags every URL in a published package; remove it from the source (comments, JSDoc, string literals, sourcemap content) or explain it in .repo-contract/exceptions/dist-urls.json:",
         "- https://a.test/x (first at index.js:1): exception incomplete (missing: justification)",
-        '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test" -- this URL no longer ships; delete this entry.',
+        '- Stale exception in .repo-contract/exceptions/dist-urls.json: "dist-url:https://gone.test"; this URL no longer ships; delete this entry.',
       ].join("\n"),
     )
   })
@@ -251,7 +251,7 @@ describe("distNoUrlsCheck() -- policy", () => {
     const result = await policy(report([], { dirExists: false }), "out")
     expect(result).toEqual({
       outcome: "fail",
-      rationale: 'Build output directory "out" does not exist -- build before running this check.',
+      rationale: 'Build output directory "out" does not exist; build before running this check.',
     })
   })
 

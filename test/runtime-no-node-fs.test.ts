@@ -18,7 +18,7 @@ const ruleTester = new RuleTester({ languageOptions: { ecmaVersion: 2022, source
 
 ruleTester.run("no-node-fs", noNodeFs as unknown as Rule.RuleModule, {
   valid: [
-    // The executable capability boundary -- explicitly allowed.
+    // The executable capability boundary: explicitly allowed.
     {
       code: `import fs from "node:fs/promises";`,
       filename: "src/cli/index.ts",
@@ -35,20 +35,20 @@ ruleTester.run("no-node-fs", noNodeFs as unknown as Rule.RuleModule, {
     },
     // require() of something else.
     { code: `const x = require("node:path");`, filename: "src/build/discover.ts" },
-    // A call that isn't `require` -- must fall straight through the guard,
+    // A call that isn't `require`: must fall straight through the guard,
     // even when its argument names a filesystem module.
     { code: `loadModule("node:fs");`, filename: "src/build/discover.ts" },
     // A member-expression callee named `require` (e.g. `foo.require(...)`) is
-    // not the global `require` -- also falls through.
+    // not the global `require`: also falls through.
     { code: `mod.require("node:fs");`, filename: "src/build/discover.ts" },
-    // `require` with no argument, or a non-literal argument -- nothing to check.
+    // `require` with no argument, or a non-literal argument: nothing to check.
     { code: `require();`, filename: "src/build/discover.ts" },
     { code: `const spec = "node:fs"; require(spec);`, filename: "src/build/discover.ts" },
-    // A non-string literal argument to `require` -- `fsSpecifier` must reject it.
+    // A non-string literal argument to `require`: `fsSpecifier` must reject it.
     { code: `require(42);`, filename: "src/build/discover.ts" },
     // dynamic import of something else.
     { code: `const p = import("./other.js");`, filename: "src/build/discover.ts" },
-    // dynamic import with a non-literal source -- nothing statically to check.
+    // dynamic import with a non-literal source: nothing statically to check.
     { code: `const name = "node:fs"; const p = import(name);`, filename: "src/build/discover.ts" },
   ],
   invalid: [
@@ -87,7 +87,7 @@ ruleTester.run("no-node-fs", noNodeFs as unknown as Rule.RuleModule, {
       filename: "src/build/discover.ts",
       errors: [{ messageId: "noNodeFs", data: { specifier: "node:fs" } }],
     },
-    // The allow list doesn't match this file -- still flagged.
+    // The allow list doesn't match this file: still flagged.
     {
       code: `import fs from "node:fs";`,
       filename: "src/build/discover.ts",

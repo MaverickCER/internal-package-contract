@@ -104,7 +104,7 @@ describe("coverage", () => {
     expect(result).toEqual({
       outcome: "fail",
       rationale:
-        "Coverage: 0 statements instrumented -- there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
+        "Coverage: 0 statements instrumented: there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
     })
   })
 
@@ -186,7 +186,7 @@ describe("coverage", () => {
 
   it("fails when a metric's percentage is a number but not finite (Infinity) -- via a raw summary so it survives as an actual Infinity, not JSON.stringify's own Infinity->null coercion", async () => {
     mkdirSync(path.join(process.cwd(), "coverage"), { recursive: true })
-    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double -- unlike
+    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double: unlike
     // `JSON.stringify(Infinity)`, which `writeSummary` would silently turn into `null`.
     writeFileSync(
       path.join(process.cwd(), "coverage/coverage-summary.json"),
@@ -250,7 +250,7 @@ describe("coverage", () => {
     )
     expect(result).toEqual({
       outcome: "warn",
-      rationale: "Coverage: not evaluated -- the `Tests` run did not pass (see `Tests`).",
+      rationale: "Coverage: not evaluated, because the `Tests` run did not pass (see `Tests`).",
     })
   })
 
@@ -298,7 +298,7 @@ describe("coverage -- a narrowed run", () => {
     expect(result).toEqual({
       outcome: "warn",
       rationale:
-        "Coverage: not evaluated -- this run covers the 2 test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.",
+        "Coverage: not evaluated: this run covers the 2 test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.",
     })
   })
 

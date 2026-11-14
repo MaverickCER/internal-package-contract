@@ -83,7 +83,24 @@ describe.skipIf(process.platform === "win32")("check-branch-protection.mjs", () 
       requiredChecks: ["contract", "required"],
       strictStatusChecks: true,
       requiresThreadResolution: true,
+      aggregateWorkflow: null,
     })
+  })
+
+  it("names the workflow that defines both a contract and a required job, and only such a workflow", () => {
+    installGh({
+      "repos/acme/widget": "main",
+      "repos/acme/widget/rulesets": [{ id: 7, target: "branch", enforcement: "active" }],
+      "repos/acme/widget/rulesets/7": ruleset(true),
+    })
+    const workflows = path.join(cwd, ".github", "workflows")
+    mkdirSync(workflows, { recursive: true })
+    writeFileSync(path.join(workflows, "broken.yml"), "jobs: [unclosed")
+    writeFileSync(path.join(workflows, "lint.yml"), "jobs:\n  required: {}\n")
+    writeFileSync(path.join(workflows, "notes.txt"), "jobs:\n  contract: {}\n  required: {}\n")
+    expect(run()["aggregateWorkflow"]).toBeNull()
+    writeFileSync(path.join(workflows, "ci.yml"), "jobs:\n  contract: {}\n  required: {}\n")
+    expect(run()["aggregateWorkflow"]).toBe(".github/workflows/ci.yml")
   })
 
   it("reports a required-status-checks rule that is not strict as such", () => {

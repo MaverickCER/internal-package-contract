@@ -2,9 +2,9 @@
 // it costs, not how many microseconds it takes.
 //
 // Two pricing shapes bracket the answer:
-//   low  -- CPU-priced compute (a container or VM billed per vCPU-hour): CPU seconds are what is paid for.
-//   high -- duration-and-memory-priced compute (functions billed per GB-second): wall seconds multiplied by
-//           the memory the platform reserves, never less than its minimum.
+// - low: CPU-priced compute (a container or VM billed per vCPU-hour). CPU seconds are what is paid for.
+// - high: duration-and-memory-priced compute (functions billed per GB-second). Wall seconds multiplied by
+//   the memory the platform reserves, never less than its minimum.
 // The default rates are published list prices rounded for the model. They are assumptions, change with time
 // and region, and are overridable through `benchmark.config.json` -> `costRates`. Every dollar figure in a
 // report is labelled an estimate for that reason.

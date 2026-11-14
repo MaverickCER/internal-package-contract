@@ -49,7 +49,7 @@ describe("commits", () => {
       rationale: unexcepted(
         "environment:Commits:pre-adoption",
         [
-          "Commits: 8 commits in `origin/main..HEAD` are not Conventional Commits -- this looks like history that predates the standard, not a regression.",
+          "Commits: 8 commits in `origin/main..HEAD` are not Conventional Commits; this looks like history that predates the standard, not a regression.",
           "Resolve it as a git-history operation before merge:",
           "  - squash-merge the branch (one conforming message), or",
           "  - `git rebase -i origin/main` and `reword` each with a `type: subject` header.",

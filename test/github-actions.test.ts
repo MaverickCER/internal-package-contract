@@ -115,7 +115,7 @@ describe("githubActions", () => {
     expect(result).toEqual({
       outcome: "fail",
       rationale:
-        'GitHub Actions: not a git repository yet -- actionlint needs one to resolve the project root. Run `git init` (see README "Adopt it"), then re-run.',
+        'GitHub Actions: not a git repository yet; actionlint needs one to resolve the project root. Run `git init` (see README "Adopt it"), then re-run.',
     })
   })
 })

@@ -66,7 +66,7 @@ export const docsFragments: CheckDefinitionConfig = {
         ...broken.map((b) => {
           const closest =
             b.availableFragments.length > 0 ? b.availableFragments.join(", ") : "(no headings)"
-          return `- ${b.file}:${String(b.line)} -- #${b.fragment} does not match any heading in ${b.target}. Available: ${closest}`
+          return `- ${b.file}:${String(b.line)}: #${b.fragment} does not match any heading in ${b.target}. Available: ${closest}`
         }),
       ].join("\n"),
     }

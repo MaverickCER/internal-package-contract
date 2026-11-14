@@ -174,7 +174,7 @@ describe("resolveRunScope", () => {
         }),
       ),
     })
-    expect(doc.reason).toBe("git-failed: diff -- no base")
+    expect(doc.reason).toBe("git-failed: diff (no base)")
   })
 
   it("runs everything when the analysis itself fails", async () => {
@@ -315,7 +315,7 @@ describe("describeScope", () => {
         sources: ["s"],
         mutate: ["m1", "m2", "m3"],
       }),
-    ).toBe("scope: affected (a pull request) -- 1 changed file, 2 test files, 3 mutation targets")
+    ).toBe("scope: affected (a pull request); 1 changed file, 2 test files, 3 mutation targets")
     expect(
       describeScope({
         schemaVersion: 1,
@@ -326,7 +326,7 @@ describe("describeScope", () => {
         sources: [],
         mutate: ["m"],
       }),
-    ).toBe("scope: affected (r) -- 2 changed files, 1 test file, 1 mutation target")
+    ).toBe("scope: affected (r); 2 changed files, 1 test file, 1 mutation target")
   })
 })
 

@@ -28,7 +28,7 @@ describe("npmScriptCheck", () => {
     const result = await check.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "pass",
-      rationale: "Build: no `build` npm script -- not applicable to this package.",
+      rationale: "Build: no `build` npm script, so it does not apply to this package.",
     })
   })
 
@@ -164,7 +164,7 @@ describe("npmScriptCheck", () => {
       expect(result).toEqual({
         outcome: "fail",
         rationale: [
-          "Schema: `npm run schema` regenerated 2 file(s) -- the committed output is stale. Run it locally and commit:",
+          "Schema: `npm run schema` regenerated 2 file(s): the committed output is stale. Run it locally and commit:",
           "- schemas/env.json",
           "- schemas/data.json",
         ].join("\n"),

@@ -93,7 +93,7 @@ describe("append-history.mjs", () => {
             envCapVersion: "0.1.0",
             benchmarkSuiteVersion: 1,
             runner: "local",
-            measurements: { "cold-start": { baseline: { medianMs: 9 } } }, // no inputs -- real v1 shape
+            measurements: { "cold-start": { baseline: { medianMs: 9 } } }, // no inputs: real v1 shape
           },
         ],
       }),
@@ -105,7 +105,7 @@ describe("append-history.mjs", () => {
     const history = JSON.parse(readFileSync(historyPath, "utf8"))
     expect(history.historySchemaVersion).toBe(2)
     expect(history.entries).toHaveLength(2)
-    // Old entry is untouched -- no forced backfill/migration.
+    // Old entry is untouched: no forced backfill/migration.
     expect(history.entries[0]).toMatchObject({
       envCapVersion: "0.1.0",
       measurements: { "cold-start": { baseline: { medianMs: 9 } } },

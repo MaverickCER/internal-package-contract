@@ -189,8 +189,8 @@ async function runConsumerContract() {
   // vitest, publint, attw, licensee, secretlint, knip, jscpd, depcruise,
   // crap4ts, stryker, actionlint, linkinator, markdownlint-cli2). When this
   // package is a plain `file:` devDependency of a standalone repo (not an npm
-  // workspace), npm symlinks it but does NOT hoist its dependencies, so those
-  // executors live only in THIS package's own node_modules/.bin -- not on the
+  // workspace), npm symlinks it but does NOT hoist its dependencies. Those
+  // executors then live only in THIS package's own node_modules/.bin, not on the
   // PATH npm set up for `npm run contract`. Prepend every node_modules/.bin
   // between this file and the filesystem root so the executors resolve wherever
   // npm actually placed them.

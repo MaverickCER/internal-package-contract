@@ -3,8 +3,7 @@
 //
 // One table describes every command. The overview groups them by what a person is doing, and
 // `internal-package-contract <command> --help` prints that command's page from the same entry, so the two cannot
-// disagree. The run options listed are the "(none)" command's; `--scope` and `--base`, which
-// `scripts/affected-scope.mjs` reads, are not among them.
+// disagree. The run options listed are the "(none)" command's.
 
 /** The `init` options whose next argument is their value, so a `-h` there is a value and not a request for help. */
 const INIT_VALUE_OPTIONS = ["--name", "--owner", "--description", "--tag", "--spec"]
@@ -25,7 +24,7 @@ export const COMMANDS = [
     name: "init",
     group: "Start",
     usage: "init [--name <package>] [options]",
-    summary: "bring the package here under the standard, or start a new one with --name <package>",
+    summary: "bring this package under the standard, or start a new one with --name <package>",
     details:
       "In an existing package: adds the pin and the scripts and tools the checks need, installs, writes every config,\nworkflow, document and template the package lacks (never overwriting one it has), drafts docs/surface.json,\nstarts adoption mode and generates the API map. With --name, in an empty directory: scaffolds a complete new\npackage. It refuses to start over uncommitted changes and ends with `doctor`. Running it again finishes what is\nmissing.",
     options: [
@@ -61,6 +60,11 @@ export const COMMANDS = [
       ["--checks a,b", "run only checks a and b (and what they depend on)"],
       ["--skip a,b", "run every check except a and b"],
       ["--changed", "run only the checks the changed files can affect"],
+      [
+        "--scope <mode>",
+        "full, affected or auto: narrow tests, mutation and CRAP to what the change can reach (default: full)",
+      ],
+      ["--base <ref>", "the ref an affected or auto scope compares against"],
       ["--json", "print the report as JSON on stdout and nothing else"],
       ["--logs <mode>", "write a log per check: all, failing or off (default: failing)"],
       [
@@ -146,9 +150,9 @@ export const COMMANDS = [
     group: "Daily",
     usage: "tool <name> [args]",
     summary:
-      "run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation",
+      "run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation, ambient",
     details:
-      "The helpers every package used to copy: `size` checks the gzip budgets in ci/size-budgets.mjs, `badges` writes the coverage and size badges,\n`api-report` fails when docs/api-report/ is out of date, `cjs-interop` makes require() of the ESLint plugin return the plugin,\nand `compiler-isolation` fails when a client entry can reach the bundled compiler. Run one from the package's root.",
+      "The helpers every package used to copy: `size` checks the gzip budgets in ci/size-budgets.mjs, `badges` writes the coverage and size badges,\n`api-report` fails when docs/api-report/ is out of date, `cjs-interop` makes require() of the ESLint plugin return the plugin,\n`compiler-isolation` fails when a client entry can reach the bundled compiler, and `ambient` gives the\nAmbientCapabilities answer without running the contract. Run one from the package's root.",
     options: [["size --json <file>", "also write the measured sizes, which `badges` reads"]],
   },
   {
@@ -183,13 +187,13 @@ export const COMMANDS = [
     usage: "upgrade <vX.Y.Z>",
     summary: "move to a release and bring everything it owns up to date",
     details:
-      "Installs the release, re-pins the workflows that call its reusable workflows, brings the managed files up to\ndate, regenerates the landing page and copies the benchmark guides. It stops at the first step that fails.",
+      "Installs the release, re-pins the workflows that call its reusable workflows and brings the managed files up to\ndate. Then it regenerates the generated regions and, where the package has them, the agent skill,\ndocs/ENVIRONMENT.md and the landing page, and copies the benchmark guides. The API and surface baselines are\nleft to the package's own release. It stops at the first step that fails.",
   },
   {
     name: "sync",
     group: "Maintain",
     usage: "sync [--apply [--update]] [--add <copy>]",
-    summary: "report the files this package owns that are missing or drifted",
+    summary: "report the files the standard owns here that are missing or drifted",
     details:
       "Compares the files the standard owns here (workflows, the Changesets config, shared code and documents) with\nthe standard's, and shows what differs.",
     options: [
@@ -255,7 +259,13 @@ const pad = (text, width) => text.padEnd(width)
 /** @returns {string} the overview: every command, grouped by what a person is doing, then the run options. */
 export function helpText() {
   const width = 26
-  const lines = ["Usage: internal-package-contract [command] [options]", ""]
+  const lines = [
+    "Usage: internal-package-contract [command] [options]",
+    "",
+    "Reusable CI checks, workflows and document generators shared by every MaverickCER package, added and kept current with one command.",
+    "Together they are the standard: `init` adds it, `upgrade` keeps it current. With no command, runs every check.",
+    "",
+  ]
   for (const group of ["Start", "Daily", "Maintain"]) {
     lines.push(`${group}:`)
     for (const command of COMMANDS.filter((item) => item.group === group)) {

@@ -182,7 +182,7 @@ describe("tests -- skipped tests are findings, not silence", () => {
       "3 test(s) did not run in 2 file(s), and 2 file(s) have no complete record",
     )
     expect(result.rationale).toContain(
-      "- test/a.test.ts: 2 skipped -- add skipped-test:test/a.test.ts to .repo-contract/exceptions/skipped-tests.json",
+      "- test/a.test.ts: 2 skipped; add skipped-test:test/a.test.ts to .repo-contract/exceptions/skipped-tests.json",
     )
     expect(result.rationale).toContain("- test/b.test.ts: 0 skipped, 1 todo")
   })

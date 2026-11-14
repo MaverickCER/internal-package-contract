@@ -227,7 +227,7 @@ describe("summarize() -- gates", () => {
     expect(failures).toHaveLength(1)
     expect(markdown).toContain("## ❌ 1 gate failed")
     expect(markdown).toContain(
-      "❌ **Runtime** — `fn:validator-includes`: documented O(n), measured O(1)",
+      "❌ **Runtime**: `fn:validator-includes`: documented O(n), measured O(1)",
     )
   })
 
@@ -268,6 +268,6 @@ describe("summarize() -- gates", () => {
       marker: "<!-- m -->",
       examples: [`Runtime|${prev}|${cur}||`],
     })
-    expect(markdown).toContain("ℹ️ **Runtime** — The previous run used Node v22.0.0")
+    expect(markdown).toContain("ℹ️ **Runtime**: The previous run used Node v22.0.0")
   })
 })

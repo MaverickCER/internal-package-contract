@@ -85,7 +85,7 @@ describe("duplication", () => {
 
   it("fails when the percentage is a number but not finite (Infinity) -- via a raw report so it survives as an actual Infinity, not JSON.stringify's own Infinity->null coercion", async () => {
     mkdirSync(path.join(cwd, "reports/jscpd"), { recursive: true })
-    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double -- unlike
+    // `1e999` overflows to `Infinity` once JSON.parse converts it to a double, unlike
     // `JSON.stringify(Infinity)`, which the `writeReport` helper would silently turn into `null`.
     writeFileSync(
       path.join(cwd, "reports/jscpd/jscpd-report.json"),

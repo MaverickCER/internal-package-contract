@@ -188,7 +188,7 @@ describe("variables", () => {
   it("needs a value for a fixed variable, whatever falsy value it holds", () => {
     const fixed = { name: "cache", how: "fixed", description: "Held warm on purpose." }
     expect(vars([fixed])).toEqual([
-      `${name}[0].value is required for a "fixed" variable -- say what it was held at.`,
+      `${name}[0].value is required for a "fixed" variable; say what it was held at.`,
     ])
     for (const value of [0, "", false, null])
       expect(vars([{ ...fixed, value }]), String(value)).toEqual([])

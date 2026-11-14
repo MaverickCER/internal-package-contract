@@ -96,7 +96,7 @@ export function evaluateFinding(
   // Stryker disable all -- equivalent mutants. `CODERABBIT_GLOBAL_DEFAULT_POLICY` is deliberately
   // byte-identical to `CODERABBIT_POLICY.coderabbit.default` (see
   // `scripts/coderabbitai/policy-config.ts`: one group, one group-level default, the same four
-  // requirements), so mutating `"coderabbit"` to `""` -- or the whole classification to `{}` --
+  // requirements), so mutating `"coderabbit"` to `""` (or the whole classification to `{}`)
   // only makes `resolveExceptionPolicy` miss the group and fall through to that identical global
   // default. Every input then resolves to exactly the same policy, the same verdict and the same
   // `missing` list, so no test could ever observe a difference.
@@ -113,7 +113,7 @@ export function evaluateFinding(
 }
 
 /**
- * Evaluates this check's own emitted evidence -- a pure evidence->verdict function.
+ * Evaluates this check's own emitted evidence: a pure evidence->verdict function.
  * `not-applicable` (CI, review delegated to the GitHub App) / `unavailable` is a `warn`, always
  * visibly recorded. `error` fails closed. A malformed/unreconcilable registry (`registryError`)
  * fails regardless of status. A `reviewed` run: any `forbidden` / `insufficient` / `unmatched`
@@ -121,7 +121,7 @@ export function evaluateFinding(
  * @param input - Wraps the evidence to evaluate.
  * @param input.evidence - The `CoderabbitEvidence` emitted by `scripts/coderabbitai/review.ts`.
  * @returns The check's `PolicyResult`.
- * @internal Exported for direct unit coverage -- the whole verdict surface is reachable from a
+ * @internal Exported for direct unit coverage: the whole verdict surface is reachable from a
  * constructed evidence value, with no real CodeRabbit CLI ever spawned.
  */
 export function evaluateCoderabbitPolicy(input: {
@@ -147,7 +147,7 @@ export function evaluateCoderabbitPolicy(input: {
   // constants (see `scripts/coderabbitai/policy-config.ts`); this defensive guard can never observe
   // a misconfigured policy under any real invocation of this function, since it never varies at
   // runtime. No test can hit it without literally breaking those constants. Kept as
-  // defense-in-depth against a future editing mistake in CODERABBIT_POLICY itself -- exactly as
+  // defense-in-depth against a future editing mistake in CODERABBIT_POLICY itself: exactly as
   // `SecuritySocket`'s and `SecurityDeps`' own identical guards are annotated.
   if (configErrors.length > 0) {
     return {
@@ -162,7 +162,7 @@ export function evaluateCoderabbitPolicy(input: {
   if (evidence.status === "not-applicable") {
     return {
       outcome: "warn",
-      rationale: `CodeRabbit did not run (${evidence.reason}) -- findings were not evaluated. Expected in CI, where review is delegated to the ${evidence.expectedProvider}.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
+      rationale: `CodeRabbit did not run (${evidence.reason}), so findings were not evaluated. Expected in CI, where review is delegated to the ${evidence.expectedProvider}.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
     }
   }
 
@@ -176,7 +176,7 @@ export function evaluateCoderabbitPolicy(input: {
     }[evidence.reason]
     return {
       outcome: "warn",
-      rationale: `CodeRabbit did not run (${evidence.reason}) -- findings were not evaluated. ${hint} to enable real enforcement.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
+      rationale: `CodeRabbit did not run (${evidence.reason}), so findings were not evaluated. ${hint} to enable real enforcement.${unreconciledNote(evidence.existingRecordCount, evidence.registryPath)}`,
     }
   }
 
@@ -217,7 +217,7 @@ export function evaluateCoderabbitPolicy(input: {
 
   const staleLines = evidence.staleExceptions.map(
     (record) =>
-      `- Stale exception in ${evidence.registryPath}: ${JSON.stringify(record.id)} -- CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
+      `- Stale exception in ${evidence.registryPath}: ${JSON.stringify(record.id)}; CodeRabbit no longer raises this finding (or its wording changed); delete this entry.`,
   )
 
   const determinants = evidence.findings.map((finding) => ({
@@ -238,15 +238,15 @@ export function evaluateCoderabbitPolicy(input: {
   }
 
   const offenderLines = offenders.map((d) => {
-    // Both leading branches are structurally unreachable *from here*, unlike in
-    // `SecuritySocket`'s identically-shaped `evaluateFinalVerdict` this line format was ported
-    // alongside: `CODERABBIT_POLICY` declares no `{ mode: "forbidden" }` tier at all (one group,
-    // every severity in `"exception"` mode), so `evaluateFinding` can never return `"forbidden"`
-    // here; and `findBijectionErrors` above has already failed the whole run for any finding whose
-    // id is absent from `evidence.activeExceptions`, so `evaluateFindingVerdict`'s
+    // Both leading branches are structurally unreachable *from here*. That differs from
+    // `SecuritySocket`'s identically-shaped `evaluateFinalVerdict`, which this line format was
+    // ported alongside. `CODERABBIT_POLICY` declares no `{ mode: "forbidden" }` tier at all (one
+    // group, every severity in `"exception"` mode), so `evaluateFinding` can never return
+    // `"forbidden"` here. And `findBijectionErrors` above has already failed the whole run for any
+    // finding whose id is absent from `evidence.activeExceptions`. So `evaluateFindingVerdict`'s
     // `record === undefined -> "unmatched"` short-circuit can never be observed past that guard
-    // either (both verdicts *are* independently covered on `evaluateFinding`/`findBijectionErrors`
-    // themselves). Kept verbatim as defense-in-depth: a future `forbidden` severity tier, or a
+    // either. Both verdicts *are* covered on `evaluateFinding`/`findBijectionErrors` themselves.
+    // Kept verbatim as defense-in-depth: a future `forbidden` severity tier, or a
     // relaxed bijection guard, must still render a correct offender line rather than silently
     // mislabel one as "exception incomplete".
     // Stryker disable all -- unreachable defensive branches, see comment above.
@@ -257,7 +257,7 @@ export function evaluateCoderabbitPolicy(input: {
           ? "no reconciled exception record (registry integrity failure)"
           : // Stryker restore all
             `exception incomplete (missing: ${d.missing.join(", ")})`
-    return `- ${d.finding.file} [${d.finding.severity}]: ${detail} -- ${d.finding.summary}`
+    return `- ${d.finding.file} [${d.finding.severity}]: ${detail}; ${d.finding.summary}`
   })
 
   // Advisory: CodeRabbit's findings are suggestions, adopted where they improve the code. A review of the same
@@ -273,7 +273,7 @@ export function evaluateCoderabbitPolicy(input: {
   }
 }
 
-/** The " N exception record(s) ... were validated but not reconciled" suffix both no-review warn states share -- empty when the registry holds nothing. */
+/** The " N exception record(s) ... were validated but not reconciled" suffix both no-review warn states share: empty when the registry holds nothing. */
 function unreconciledNote(existingRecordCount: number, registryPath: string): string {
   return existingRecordCount > 0
     ? ` ${String(existingRecordCount)} exception record(s) in ${registryPath} were validated but not reconciled (no review ran).`
@@ -285,7 +285,7 @@ function unreconciledNote(existingRecordCount: number, registryPath: string): st
  * broken: a duplicate finding id, a finding with no active record, or an active record matching no
  * finding. All three mean the reconciliation this policy is about to read is not trustworthy, so
  * none of them is tolerated.
- * @internal Exported for direct unit coverage -- each of the three branches is independently
+ * @internal Exported for direct unit coverage: each of the three branches is independently
  * reachable only from a hand-built, deliberately-inconsistent evidence value.
  */
 export function findBijectionErrors(
@@ -317,9 +317,9 @@ export function coderabbitai(): CheckDefinitionConfig {
     run: ["tsx", reviewScript],
     output: { format: "json" },
     policy: async ({ result }): Promise<PolicyResult> => {
-      // The wrapper script always exits 0 having printed *some* well-formed evidence, so a
+      // The wrapper script always exits 0 having printed *some* well-formed evidence. So a
       // non-`completed` status or unparseable stdout means the script itself never ran (no `tsx` on
-      // PATH) or crashed -- a real breakage of this package's own tooling, not a CodeRabbit state.
+      // PATH) or crashed. That is a real breakage of this package's own tooling, not a CodeRabbit state.
       const terminated = abnormalTermination(result, "tsx")
       if (terminated) return { outcome: "fail", rationale: terminated }
 

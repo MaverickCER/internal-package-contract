@@ -1,8 +1,9 @@
 // `internal-package-contract doctor`: what is set up in this package, and what is left to do.
 //
-// Read-only. It looks at the files and git settings that adopting this standard puts in place, runs the cheap
-// checks that say whether they are current (managed files, generated regions, the landing page, the environment
-// document, prompts, adoption mode), and lists the steps only a person can take, with the values to enter. Each
+// Read-only. It looks at the files and git settings that adopting this standard puts in place. It runs the
+// cheap checks that say whether they are current (managed files, generated regions, the landing page, the
+// environment document, prompts, adoption mode). It lists the steps only a person can take, with the values to
+// enter. Each
 // thing that is missing names the command that fixes it. It also flags two setups that make the hooks or the
 // checks misbehave: a symlinked install of the standard, and a linked git worktree. It changes nothing and never
 // calls the network. The exit code is 1 while anything is left to run; the manual steps never change it.
@@ -296,7 +297,7 @@ export async function diagnose({ cwd, packageRoot, git = gitIn(cwd) }) {
       id: "apps",
       state: "manual",
       what: "Review and scanning services are installed on the repository, not in it.",
-      fix: "Install the CodeRabbit and Socket apps on the repository. Add a SOCKET_SECURITY_API_KEY secret for the Socket scan. Optionally add a PIN_SYNC_TOKEN secret (a fine-grained token with Contents, Pull requests and Workflows write access) so pin-sync pull requests can change workflow files.",
+      fix: "Install the CodeRabbit and Socket apps on the repository. Add a SOCKET_SECURITY_API_KEY secret for the Socket scan. Optionally add a PIN_SYNC_TOKEN secret (a fine-grained token with Contents, Pull requests, Workflows and Actions write access) so pin-sync pull requests can change workflow files.",
     },
   )
   return items

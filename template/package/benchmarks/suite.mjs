@@ -1,12 +1,12 @@
 // {{name}} benchmark suite. Read WRITING-BENCHMARKS.md first: it explains what to measure, how, and
 // how to document it. `defineSuite` REFUSES a suite whose documentation is missing or a placeholder.
 //
-// Run:    npm run benchmark          (full ladder, writes results.json and BENCHMARKS.md)
-//         npm run benchmark -- --quick     (smoke test, never commit its output)
-//         npm run benchmark:check    (validates the documentation only; fast, runs in CI)
+// Run:    `npm run benchmark`               (full ladder, writes results.json and BENCHMARKS.md)
+//         `npm run benchmark -- --quick`    (smoke test, never commit its output)
+//         `npm run benchmark:check`         (validates the documentation only; fast, runs in CI)
 
 import { defineSuite } from "internal-package-contract/benchmark"
-// Import the package the way a consumer does -- its built entry point -- never a source path.
+// Import the package the way a consumer does (its built entry point), never a source path.
 import { packageName } from "../dist/index.js"
 
 export default defineSuite({
@@ -19,7 +19,7 @@ export default defineSuite({
     typicalN: 640,
   },
 
-  // AREA 1 -- the total impact of adopting the package, measured with EMPTY or MINIMAL functions on
+  // AREA 1: the total impact of adopting the package, measured with EMPTY or MINIMAL functions on
   // both sides so the difference is the package's own cost, not your application's.
   endToEnd: {
     purpose:
@@ -59,7 +59,7 @@ export default defineSuite({
     ],
   },
 
-  // AREA 2 -- every function the end-to-end run uses, measured on its own.
+  // AREA 2: every function the end-to-end run uses, measured on its own.
   functions: [
     {
       id: "package-name",

@@ -16,7 +16,7 @@
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { abnormalTermination, combinedOutput, firstExisting } from "./shared.js"
 
-/** actionlint's own exact wording when it can't resolve a project root because the consumer isn't a git repository yet. Matched on content, not `.git` presence, so this only fires for the real cause -- never masking a genuinely different actionlint failure (a crash, a bad flag) that happens to coincide with a missing `.git` in a test fixture or an unusual checkout. */
+/** actionlint's own exact wording when it can't resolve a project root because the consumer isn't a git repository yet. Matched on content, not `.git` presence, so this only fires for the real cause. A different actionlint failure (a crash, a bad flag) is never masked, even when a test fixture or an unusual checkout also lacks `.git`. */
 const NOT_A_GIT_REPO_PATTERN = /no project was found in any parent director/i
 
 interface ActionlintFinding {
@@ -44,8 +44,8 @@ export const githubActions: CheckDefinitionConfig = {
     const value: unknown = result.output?.success ? result.output.value : undefined
 
     if (!Array.isArray(value)) {
-      // actionlint prints nothing (and exits 0) when there are no findings on
-      // some versions; treat a clean exit with unparseable/empty output as pass.
+      // Some actionlint versions print nothing and exit 0 when there are no
+      // findings, so a clean exit with empty or unparseable output passes.
       if (result.exitCode === 0) {
         return { outcome: "pass", rationale: "GitHub Actions: actionlint reported 0 issues." }
       }
@@ -54,7 +54,7 @@ export const githubActions: CheckDefinitionConfig = {
         return {
           outcome: "fail",
           rationale:
-            'GitHub Actions: not a git repository yet -- actionlint needs one to resolve the project root. Run `git init` (see README "Adopt it"), then re-run.',
+            'GitHub Actions: not a git repository yet; actionlint needs one to resolve the project root. Run `git init` (see README "Adopt it"), then re-run.',
         }
       }
       return {

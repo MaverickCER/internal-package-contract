@@ -1,5 +1,5 @@
 // What this repository's workflows and scripts read from the environment, written down once. None of it is required:
-// every variable has a default, a missing credential is a warning, and a setting falls back to a sensible value.
+// every variable has a default, a missing credential is a warning, and a missing setting takes its default.
 // `internal-package-contract env` reads this file (it never runs it) and writes docs/ENVIRONMENT.md.
 import { createEnv, documentEnv } from "../reexports/env-cap/index.ts"
 
@@ -30,12 +30,12 @@ documentEnv(ciSecrets, {
       description:
         "Optional. Lets the pin-sync workflow change workflow files and start CI on its pull request; without it the workflow cannot push workflow-file changes, and `internal-package-contract upgrade <tag>` does the same by hand.",
       refreshInstructions:
-        "Create a fine-grained personal access token for this repository with Contents, Pull requests and Workflows write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then give it an `expiresAt` here (the token's expiry), so a weekly check can warn before it lapses.",
+        "Create a fine-grained personal access token for this repository with Contents, Pull requests, Workflows and Actions write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then set its `expiresAt` in `ci/env.schema.ts` to the token's expiry, so a weekly check can warn before it lapses.",
       sensitivity: "secret",
     },
     SOCKET_SECURITY_API_KEY: {
       description:
-        "Optional. Read by the `socket` CLI while the contract runs, for the SecuritySocket check; without it that check reports a warning and the rest of the contract runs.",
+        "Optional. Read by the `socket` CLI while the contract runs, for the SecuritySocket check. Without it that check warns; under CI the warning fails unless `.repo-contract/exceptions/environment.json` records `environment:SecuritySocket:no-key`.",
       refreshInstructions:
         "Create an API token at socket.dev (Settings > API Tokens) with the `packages:list` permission, then replace the repository secret SOCKET_SECURITY_API_KEY.",
       sensitivity: "secret",

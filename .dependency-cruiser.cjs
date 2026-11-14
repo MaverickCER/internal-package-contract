@@ -1,14 +1,13 @@
 /**
- * Self-hosting override of the bundled dependency-cruiser baseline
- * (config/dependency-cruiser.cjs) -- resolved via `Architecture`'s own
- * `resolveConfig`(`checks/architecture.ts`), which prefers a consumer's own
- * `.dependency-cruiser.cjs` over the bundled default. This package IS such a
- * consumer of itself for `npm run contract` (see repo-contract.config.ts):
- * this repo has no `src/` (its real code lives in `checks/`), so the two
- * `^src/`-scoped rules are retargeted at `checks/`, and type resolution uses
- * `tsconfig.self.json` (the one that actually `include`s `checks/**\/*.ts`),
- * not the published `tsconfig.json` baseline (which declares no `include` at
- * all -- consumers choose that themselves).
+ * This repository's override of the bundled dependency-cruiser baseline
+ * (config/dependency-cruiser.cjs). `Architecture` (`checks/architecture.ts`)
+ * prefers a consumer's own `.dependency-cruiser.cjs`, and this package runs its
+ * own contract as a consumer (see repo-contract.config.ts).
+ *
+ * This repo has no `src/`; its code lives in `checks/`. So the one
+ * `^src/`-scoped rule (`not-to-dev-dep`) is retargeted at `checks/`. Type
+ * resolution uses `tsconfig.self.json`, which `include`s `checks/**\/*.ts`. The
+ * published `tsconfig.json` baseline declares no `include`; consumers choose it.
  *
  * @type {import('dependency-cruiser').IConfiguration}
  */

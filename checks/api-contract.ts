@@ -7,7 +7,12 @@
  * diff and classification live in `scripts/api-contract/check.ts`; this policy only reads its
  * evidence.
  *
- * Fails when the diff requires a higher release level than the changesets declare. Fails when an
+ * Fails when the diff requires a higher release level than the changesets declare. Fails when a
+ * target's baseline records another version than package.json: the release did not refresh it, and a
+ * stale baseline would let later changes pass unjudged. The `version` script runs `update-baseline`
+ * so the release pull request carries the refreshed baselines. Fails when the branch itself rewrote a
+ * baseline while package.json keeps the base branch's version (scripts/baseline-guard.mjs); without the
+ * base branch in the clone that comparison is skipped. Fails when an
  * exported interface with a literal `version` member changed while that literal did not. No setting
  * or record opts out of that rule. Warns when the change could not be classified, so a person must
  * confirm the declared bump. Passes with no `typedoc.json`: the package documents no entry points
@@ -32,7 +37,7 @@ import type {
   RequiredReleaseLevel,
 } from "../scripts/api-contract/evidence-types.js"
 
-/** Absolute path to this feature's check script -- resolved from IPC's own installed location, since `run` executes with the consumer's repo as cwd. */
+/** Absolute path to this feature's check script: resolved from IPC's own installed location, since `run` executes with the consumer's repo as cwd. */
 const checkScript = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -116,7 +121,7 @@ function getApiContractDeterminant(evidence: ApiContractEvidence): ApiContractDe
 
 /**
  * The Changeset a contributor must add so the branch declares `level`.
- * @param level - the release level the public-API diff requires (never `"none"` here -- a
+ * @param level - the release level the public-API diff requires (never `"none"` here: a
  *   `"none"` requirement is always satisfied).
  * @returns an imperative sentence telling the contributor how to add the right changeset.
  */
@@ -134,12 +139,12 @@ function remediationForLevel(level: RequiredReleaseLevel | undefined): string {
 }
 
 /**
- * Versioning is Changesets-driven everywhere in this fleet, so this check can and does **gate** --
- * it fails a PR whose changesets declare a smaller bump than the public-API diff requires (a
+ * Versioning is Changesets-driven everywhere in this fleet, so this check can and does **gate**.
+ * It fails a PR whose changesets declare a smaller bump than the public-API diff requires (a
  * breaking API change with no changeset, or one under-declared as `patch`/`minor`, etc.). It also
  * fails on an internal schema-version literal that changed shape without its own version marker
- * being bumped, and warns (rather than gating) when the contract delta could not be classified
- * deterministically -- that case still needs a human to confirm the declared bump. It cannot catch
+ * being bumped. It warns (rather than gating) when the contract delta could not be classified
+ * deterministically: that case still needs a human to confirm the declared bump. It cannot catch
  * a behavioral breaking change with an unchanged type signature; that remains a human-review
  * concern.
  * @param root0 - the policy input.
@@ -150,6 +155,28 @@ export function evaluateApiContractPolicy({
   evidence,
 }: EvaluateApiContractPolicyInput): PolicyResult {
   const determinant = getApiContractDeterminant(evidence)
+
+  if (evidence.editedBaselines.length > 0) {
+    return {
+      outcome: "fail",
+      rationale: [
+        `ApiContract: this branch changed ${evidence.editedBaselines.join(", ")} while package.json stays at ${evidence.currentVersion}, the base branch's version.`,
+        "A baseline moves only with a release, so editing it here would hide this branch's own API change.",
+        "Restore the baseline from the base branch and declare the change with `npx changeset add`.",
+      ].join("\n"),
+    }
+  }
+
+  if (evidence.staleBaselines.length > 0) {
+    return {
+      outcome: "fail",
+      rationale: [
+        `ApiContract: package.json is ${evidence.currentVersion}, but these baselines record another version: ${evidence.staleBaselines.join(", ")}.`,
+        "The release that set this version did not refresh them, so later API changes would pass unjudged.",
+        "Run `npx internal-package-contract update-baseline` and commit the result, and add `internal-package-contract update-baseline` to the `version` script after the build so every release pull request refreshes them.",
+      ].join("\n"),
+    }
+  }
 
   if (determinant.staleLiteralExplanations.length > 0) {
     return {
@@ -214,10 +241,10 @@ export function evaluateApiContractPolicy({
 // extraction/diffing/impact/minimum-level derivation and compares the required level against what
 // the branch's changesets declare; the policy above only interprets its evidence, never inspects
 // TypeScript/API Extractor/source/Git itself.
-// A consumer with no typedoc.json documents no public entry points this way -- targets.ts has
+// A consumer with no typedoc.json documents no public entry points this way: targets.ts has
 // nothing to derive a target list from, so there is nothing for this check to compare. Resolved at
 // contract-assembly time (contract.ts is evaluated with the consumer repo as cwd), matching
-// `resolveConfig`'s own "decide once, bake into `run`" convention -- rather than letting check.ts
+// `resolveConfig`'s own "decide once, bake into `run`" convention: rather than letting check.ts
 // throw at run time and surface as an opaque JSON-parse failure.
 const hasTypedocConfig = existsSync(path.join(process.cwd(), "typedoc.json"))
 
@@ -241,6 +268,6 @@ export const apiContract: CheckDefinitionConfig = hasTypedocConfig
       policy: (): PolicyResult => ({
         outcome: "pass",
         rationale:
-          "ApiContract: no typedoc.json -- this package documents no public entry points to compare.",
+          "ApiContract: no typedoc.json, so this package documents no public entry points to compare.",
       }),
     }

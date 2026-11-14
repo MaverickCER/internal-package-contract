@@ -21,7 +21,7 @@ function hasClassicApi(candidate: unknown): candidate is TypeScript {
 /**
  * Whether `error` says the module `id` itself is not installed. A `MODULE_NOT_FOUND` raised while an
  * installed module loads one of its own dependencies is a broken install, not an absent module, and
- * names a different module -- so the message has to name `id`.
+ * names a different module, so the message has to name `id`.
  */
 function isModuleNotFound(error: unknown, id: string): boolean {
   const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown }
@@ -48,13 +48,13 @@ function tryLoad(load: (id: string) => unknown, id: string): unknown {
 
 /**
  * Picks the compiler the scanner parses with: the consumer's `typescript` when it exposes the
- * classic compiler API (TypeScript 5 and 6), otherwise the bundled `@typescript/typescript6` --
- * Microsoft's side-by-side TypeScript 6 package, a dependency of the package so the scanner keeps working
- * for a consumer whose own `typescript` is 7+, which ships no programmatic API. Chosen by capability, never by version,
+ * classic compiler API (TypeScript 5 and 6), otherwise the bundled `@typescript/typescript6`. That is
+ * Microsoft's side-by-side TypeScript 6 package, a dependency of the package, so the scanner keeps working
+ * for a consumer whose own `typescript` is 7+ (which ships no programmatic API). Chosen by capability, never by version,
  * so a future `typescript` that regains the API is used as-is.
  *
  * When neither has the API (the bundled dependency was stripped from an install), it returns the
- * consumer's module anyway so `assertCompilerApi` -- called at every scanner entry point -- fails
+ * consumer's module anyway so `assertCompilerApi` (called at every scanner entry point) fails
  * with its readable message instead of a bare "is not a function".
  * @param load - How a module id is resolved (a parameter so a test can hand in stand-ins).
  * @throws Whatever `load` throws for a reason other than the module not being installed.

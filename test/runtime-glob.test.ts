@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { globToRegExp, matchesAllowList } from "../runtime/glob.js"
 
 // discover.ts's schema-discovery walk only ever exercises this module
-// through `**`-heavy patterns in its own test fixtures -- a bare single `*`
+// through `**`-heavy patterns in its own test fixtures: a bare single `*`
 // segment wildcard and `?` are never exercised anywhere else, so this file
 // drives globToRegExp() directly.
 describe("globToRegExp", () => {
@@ -13,7 +13,7 @@ describe("globToRegExp", () => {
   })
 
   it("treats a `**` not bounded by slashes on both sides as a plain any-characters wildcard", () => {
-    // e.g. "foo**bar" or a trailing "**" with no following "/" -- not the
+    // e.g. "foo**bar" or a trailing "**" with no following "/": not the
     // "any number of path segments" idiom, since that requires "**/" or a
     // leading/start-anchored "**/".
     const re = globToRegExp("foo**bar")
@@ -45,26 +45,26 @@ describe("globToRegExp", () => {
 
   // Exact `.source` assertions isolating each clause of the `**` detection
   // (`char === "*" && pattern[i + 1] === "*"`) and the `(?:.*/)?` vs plain
-  // `.*` branch's own guard (`precededBySlashOrStart && followedBySlash`) --
+  // `.*` branch's own guard (`precededBySlashOrStart && followedBySlash`):
   // a bare `.test()` on a hand-picked string can't distinguish every
   // sub-clause, since several inputs happen to produce the same match result
   // through a differently-shaped (but still-matching) regex. Same fixture
   // set as this file's deliberately-duplicated `eslint-plugin/glob.ts` copy.
   it.each<[string, string]>([
-    // Leading "**/ " -- i === 0 (the OR's first operand) AND followed by slash.
+    // Leading "**/ ": i === 0 (the OR's first operand) AND followed by slash.
     ["**/x", "^(?:.*\\/)?x$"],
-    // Mid-path "**/ " -- NOT i === 0, but preceded by "/" (the OR's second
+    // Mid-path "**/ ": NOT i === 0, but preceded by "/" (the OR's second
     // operand) AND followed by slash.
     ["a/**/b", "^a\\/(?:.*\\/)?b$"],
-    // Preceded by "/" but NOT followed by slash (trailing "**") -- isolates
+    // Preceded by "/" but NOT followed by slash (trailing "**"): isolates
     // `followedBySlash` on its own: without it, this would wrongly also
     // produce the `(?:.*/)?` form.
     ["a/**", "^a\\/.*$"],
-    // Followed by slash but NOT preceded by "/" or start -- isolates
+    // Followed by slash but NOT preceded by "/" or start: isolates
     // `precededBySlashOrStart`, and proves the guard is `&&`, not `||`
     // (with `||` this would wrongly also produce the `(?:.*/)?` form).
     ["x**/y", "^x.*\\/y$"],
-    // Neither preceded nor followed by a slash -- the baseline "no special
+    // Neither preceded nor followed by a slash: the baseline "no special
     // form at all" case, and the one that most sharply exposes the `i + 1`
     // "is the NEXT char also a `*`" detection itself being corrupted (a
     // corrupted detection drops the trailing character entirely instead of
@@ -79,17 +79,17 @@ describe("globToRegExp", () => {
     // literal segments
     ["src/user.ts", "src/user.ts", true],
     ["src/user.ts", "src/other.ts", false],
-    // single `*` -- one segment, no slash
+    // single `*`: one segment, no slash
     ["src/*.ts", "src/user.ts", true],
     ["src/*.ts", "src/nested/user.ts", false],
     ["*.ts", "user.ts", true],
     ["*.ts", "a.tsx", false],
-    // `?` -- exactly one non-slash char
+    // `?`: exactly one non-slash char
     ["src/user.?s", "src/user.ts", true],
     ["src/user.?s", "src/user.js", true],
     ["src/user.?s", "src/user.mjs", false],
     ["a?b", "a/b", false],
-    // leading `**/` -- zero or more segments
+    // leading `**/`: zero or more segments
     ["**/node_modules/**", "node_modules/x", true],
     ["**/node_modules/**", "a/b/node_modules/x", true],
     ["**/*.spec.ts", "a.spec.ts", true],

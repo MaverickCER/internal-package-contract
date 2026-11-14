@@ -164,7 +164,7 @@ describe("runUpdateBaseline()", { timeout: 180_000 }, () => {
       {
         target: "index",
         status: "updated",
-        message: `Baseline contents refreshed at version 1.0.0 -- the public API changed without a version bump. ${review}`,
+        message: `Baseline contents refreshed at version 1.0.0: the public API changed without a version bump. ${review}`,
       },
     ])
     expect(readFileSync(path.join(baselineDir(repo.root), "baseline.d.ts"), "utf8")).toContain(
@@ -196,7 +196,7 @@ describe("runUpdateBaseline()", { timeout: 180_000 }, () => {
         target: "index",
         status: "refused",
         message:
-          "Refusing to update: package.json declares version 1.0.0, older than the committed baseline's 1.1.0 -- regenerating now would roll the baseline backwards. Bump package.json (normally via the Version Packages PR) first.",
+          "Refusing to update: package.json declares version 1.0.0, older than the committed baseline's 1.1.0; regenerating now would roll the baseline backwards. Bump package.json (normally via the Version Packages PR) first.",
       },
     ])
   })

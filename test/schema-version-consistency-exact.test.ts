@@ -66,7 +66,7 @@ describe("detectSchemaVersionDrift()", () => {
         kind: "schema-version-literal-stale",
         compatibility: "breaking",
         explanation:
-          "Doc changed shape (6 member(s) added/removed/changed) but its `version` literal is still 1 -- bump it to reflect the new schema shape.",
+          "Doc changed shape (6 member(s) added/removed/changed) but its `version` literal is still 1; bump it to reflect the new schema shape.",
       },
     ])
   })
@@ -88,7 +88,7 @@ describe("detectSchemaVersionDrift()", () => {
       versioned("Doc", "1", [child("Doc", "x", "string")], "src/doc.ts"),
     )
     expect(result[0]?.explanation).toBe(
-      "Doc in src/doc.ts changed shape (1 member(s) added/removed/changed) but its `version` literal is still 1 -- bump it to reflect the new schema shape.",
+      "Doc in src/doc.ts changed shape (1 member(s) added/removed/changed) but its `version` literal is still 1; bump it to reflect the new schema shape.",
     )
   })
 
@@ -117,7 +117,7 @@ describe("detectSchemaVersionDrift()", () => {
         versioned("Doc", literal, [child("Doc", "x", "string")]),
       )
       expect(result, literal).toHaveLength(1)
-      expect(result[0]?.explanation, literal).toContain(`is still ${literal} --`)
+      expect(result[0]?.explanation, literal).toContain(`is still ${literal};`)
     }
     for (const type of ["number", "string", "1.5", "1 | 2", '"a" | "b"', ""]) {
       expect(

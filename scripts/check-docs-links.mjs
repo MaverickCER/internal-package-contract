@@ -19,11 +19,11 @@ import path from "node:path"
 
 // Put every node_modules/.bin between this script and the filesystem root on
 // PATH, so `linkinator` resolves whether this package is symlinked (`file:`
-// dep, not hoisted) or installed normally -- same shim scripts/run-attw.mjs
-// uses, repeated here so this script also works when invoked directly rather
-// than only through bin/contract.mjs (which already applies it once, but a
+// dep, not hoisted) or installed normally. It is the same shim scripts/run-attw.mjs
+// uses. It is repeated here so this script also works when invoked directly rather
+// than only through bin/contract.mjs. That one already applies it, but a
 // child process re-deriving its own PATH here costs nothing and doesn't rely
-// on that ordering).
+// on that ordering.
 for (let dir = import.meta.dirname; ;) {
   const bin = path.join(dir, "node_modules", ".bin")
   if (existsSync(bin)) process.env.PATH = `${bin}${path.delimiter}${process.env.PATH ?? ""}`
@@ -52,9 +52,9 @@ if (existsSync(path.join(process.cwd(), "README.md"))) {
   crawls.push(runLinkinator(["README.md", "--recurse", "--markdown"]))
 }
 
-// --recurse: linkinator's default is "crawl only the given start file" --
-// without it, this would check docs/index.html alone and never descend into
-// docs/api/** once that's been generated.
+// `--recurse`: by default linkinator crawls only the given start file. Without
+// it, this would check docs/index.html alone and never reach the generated
+// docs/api/**.
 if (existsSync(path.join(process.cwd(), "docs", "index.html"))) {
   crawls.push(runLinkinator(["docs", "--recurse"]))
 }

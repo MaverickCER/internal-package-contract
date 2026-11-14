@@ -75,19 +75,19 @@ export const docsLinks: CheckDefinitionConfig = {
     const isExternal = (url: string): boolean => /^https?:\/\//i.test(url)
     // linkinator reports a bare directory link (`specs/decisions/`) as a 404
     // even though every git host renders it. Treat any local link that exists
-    // on disk (file or dir) -- stripping a `#anchor`/`?query` -- as fine.
+    // on disk (file or dir), after stripping a `#anchor`/`?query`, as fine.
     const existsLocally = (url: string): boolean => {
       // Stryker disable Regex: two of this line's mutants are equivalent, hand-verified (one at a
-      // time, every test in docs-links.test.ts still passes unchanged) -- Stryker's per-line
+      // time, every test in docs-links.test.ts still passes unchanged): Stryker's per-line
       // disable can't separate them from a third, genuinely-killable mutant on this same regex
       // literal (dropping the leading `^` anchor from `/^\.?\//`, covered by the "strips only a
       // LEADING './' or '/'" test above), so that one loses its mutation-score credit too:
       //  - dropping the `$` anchor from `/[#?].*$/` is unobservable for any url this check will
-      //    ever see -- a url with no embedded newline (every realistic and every currently-tested
-      //    url) makes `.*` already greedy-consume to the true end of the string, so `$` never adds
-      //    a constraint; an embedded newline does make the two diverge, but in that case BOTH
+      //    ever see. In a url with no embedded newline (every realistic and every currently-tested
+      //    url), `.*` already greedy-consumes to the true end of the string, so `$` never adds
+      //    a constraint. An embedded newline does make the two diverge, but then BOTH
       //    variants leave a stray "\n" attached to `rel`, which can never match a real on-disk
-      //    filename either way -- `existsLocally` can't tell them apart from either side.
+      //    filename either way. `existsLocally` can't tell them apart from either side.
       //  - `path.join` (below) already normalizes away a leading "/" whether or not `/^\.?\//`
       //    actually stripped it (`path.join(cwd, "/x")` === `path.join(cwd, "x")`), so relaxing
       //    the optional-dot requirement in `/^\.?\//` to mandatory (`/^\.\//`) can never change
@@ -136,7 +136,7 @@ export const docsLinks: CheckDefinitionConfig = {
         `Docs (links): ${String(brokenLocal.length)} broken local link(s):`,
         ...brokenLocal.map(
           (l) =>
-            `- ${l.url}${l.parent ? ` (from ${l.parent})` : ""} -- HTTP ${String(l.status ?? "?")}`,
+            `- ${l.url}${l.parent ? ` (from ${l.parent})` : ""}: HTTP ${String(l.status ?? "?")}`,
         ),
       ].join("\n"),
     }

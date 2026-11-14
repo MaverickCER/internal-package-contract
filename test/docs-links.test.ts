@@ -17,7 +17,7 @@ afterEach(() => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
-/** The scan script's own combined-crawl envelope (see scripts/check-docs-links.mjs) -- `docsLinks.policy` reads `{ ok: true, value: { links } }`, never a bare `{ links }`. */
+/** The scan script's own combined-crawl envelope (see scripts/check-docs-links.mjs): `docsLinks.policy` reads `{ ok: true, value: { links } }`, never a bare `{ links }`. */
 function makeLinksResult(links: readonly Record<string, unknown>[]) {
   return makeJsonResult({ ok: true, value: { links } })
 }
@@ -161,7 +161,7 @@ describe("docsLinks", () => {
       outcome: "fail",
       rationale: [
         "Docs (links): 1 broken local link(s):",
-        "- ./missing.md (from README.md) -- HTTP 404",
+        "- ./missing.md (from README.md): HTTP 404",
       ].join("\n"),
     })
   })
@@ -183,7 +183,7 @@ describe("docsLinks", () => {
     )
     expect(result).toEqual({
       outcome: "fail",
-      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md -- HTTP 404"].join("\n"),
+      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md: HTTP 404"].join("\n"),
     })
   })
 
@@ -194,7 +194,7 @@ describe("docsLinks", () => {
     )
     expect(result).toEqual({
       outcome: "fail",
-      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md -- HTTP ?"].join("\n"),
+      rationale: ["Docs (links): 1 broken local link(s):", "- ./missing.md: HTTP ?"].join("\n"),
     })
   })
 
@@ -270,7 +270,7 @@ describe("docsLinks", () => {
       ),
     )
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("./missing.md (from README.md) -- HTTP 404")
+    expect(result.rationale).toContain("./missing.md (from README.md): HTTP 404")
   })
 
   it("fails when the scan script reported ok: true with no links array", async () => {

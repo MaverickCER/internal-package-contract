@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { runCoderabbitReview } from "../../../scripts/coderabbitai/review.js"
 
 /**
- * Runs `runCoderabbitReview()` for real -- no mocking of `cross-spawn` or the `coderabbit`/`git`
+ * Runs `runCoderabbitReview()` for real: no mocking of `cross-spawn` or the `coderabbit`/`git`
  * binaries. A real, uncontrolled `coderabbit review --agent` invocation would start an actual,
- * billable AI review against whatever this environment's real CodeRabbit credentials allow -- never
+ * billable AI review against whatever this environment's real CodeRabbit credentials allow: never
  * appropriate to trigger from a test suite. These tests instead exercise the one real, fast, free,
  * fully deterministic path every environment (CI included) actually takes on every run: the
  * `env.CI` short-circuit, asserted by setting it explicitly rather than depending on whatever the

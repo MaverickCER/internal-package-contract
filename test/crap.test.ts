@@ -17,10 +17,10 @@ afterEach(() => {
   rmSync(cwd, { recursive: true, force: true })
 })
 
-/** Matches `checks/crap.ts`'s own private `crapReportPath` -- kept in sync by construction (both build it via `path.join`) rather than by a hardcoded literal, so a test assertion never hardcodes a `/`-only separator that fails on Windows. */
+/** Matches `checks/crap.ts`'s own private `crapReportPath`: kept in sync by construction (both build it via `path.join`) rather than by a hardcoded literal, so a test assertion never hardcodes a `/`-only separator that fails on Windows. */
 const crapReportPath = path.join("reports", "crap.json")
 
-/** Writes `reports/crap.json`, matching what `crap4ts --output` writes for real -- see coverage.test.ts's identical `writeSummary()` convention. */
+/** Writes `reports/crap.json`, matching what `crap4ts --output` writes for real: see coverage.test.ts's identical `writeSummary()` convention. */
 function writeCrapReport(value: unknown): void {
   mkdirSync(path.join(process.cwd(), "reports"), { recursive: true })
   writeFileSync(path.join(process.cwd(), crapReportPath), JSON.stringify(value), "utf8")
@@ -76,7 +76,7 @@ describe("crap", () => {
       outcome: "fail",
       rationale: [
         "Complexity ceiling (20) exceeded by 1 function(s):",
-        "- a.ts:1 f — complexity 21",
+        "- a.ts:1 f: complexity 21",
       ].join("\n"),
     })
   })
@@ -100,7 +100,7 @@ describe("crap", () => {
   })
 
   it("warns instead of failing when Tests already failed, leaving no coverage to weight against", async () => {
-    // No reports/crap.json written -- exactly what happens when crap4ts never ran.
+    // No reports/crap.json written: exactly what happens when crap4ts never ran.
     const result = await crap.policy(
       makeContext(makeResult({ exitCode: 1 }), {
         evidence: {
@@ -115,7 +115,7 @@ describe("crap", () => {
     expect(result).toEqual({
       outcome: "warn",
       rationale:
-        "CRAP: not evaluated -- the `Tests` run did not pass, so there is no coverage to weight complexity against (see `Tests`).",
+        "CRAP: not evaluated, because the `Tests` run did not pass, so there is no coverage to weight complexity against (see `Tests`).",
     })
   })
 
@@ -185,7 +185,7 @@ describe("crap", () => {
     const result = await crap.policy(makeContext(makeResult()))
     expect(result).toEqual({
       outcome: "fail",
-      rationale: ["CRAP threshold (30) exceeded by 1 function(s):", "- a.ts:1 f — CRAP 40"].join(
+      rationale: ["CRAP threshold (30) exceeded by 1 function(s):", "- a.ts:1 f: CRAP 40"].join(
         "\n",
       ),
     })
@@ -221,9 +221,9 @@ describe("crap", () => {
       outcome: "fail",
       rationale: [
         "CRAP threshold (30) exceeded by 1 function(s):",
-        "- a.ts:3 badCrap — CRAP 40",
+        "- a.ts:3 badCrap: CRAP 40",
         "Complexity ceiling (20) exceeded by 1 function(s):",
-        "- a.ts:4 badComplexity — complexity 25",
+        "- a.ts:4 badComplexity: complexity 25",
       ].join("\n"),
     })
   })

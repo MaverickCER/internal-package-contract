@@ -1,14 +1,20 @@
 /**
- * `SurfaceContract`: the CLI, schema and action surface changed no more than the changesets
- * declare. That surface is the `--help` and exit code of each `bin`, the JSON Schemas `exports`
- * serve, and the root `action.yml`. `ApiContract` guards the types; this guards the rest.
+ * `SurfaceContract`: the CLI, schema, action and workflow surface changed no more than the changesets
+ * declare. That surface is the `--help` and exit code of each `bin` and of each command its help lists,
+ * the JSON files `exports` serve, and the inputs, secrets and outputs of the root `action.yml` and of each
+ * reusable workflow. With `surfaceRenderers` in package.json it also holds the headings of generated
+ * documents. `ApiContract` guards the types; this guards the rest.
  *
  * Reads: package.json, the current surface (`scripts/surface-contract/collect.ts`), and the
  * committed `.repo-contract/surface-contract/baseline.json`. Also the pending `.changeset/*.md`,
  * and `CI`. All through `scripts/surface-contract/run.ts`.
  *
- * Fails when the difference requires a higher release level than the changesets declare. A version
- * that is already bumped, as on a release pull request, satisfies it. Fails under `CI` when the
+ * Fails when the difference requires a higher release level than the changesets declare. Fails when
+ * the baseline records another version than package.json: the release did not refresh it, and a
+ * stale baseline would let later changes pass unjudged. The `version` script runs `update-baseline`
+ * so the release pull request carries the refreshed baseline. Fails when the branch itself rewrote the
+ * baseline while package.json keeps the base branch's version (scripts/baseline-guard.mjs); without the
+ * base branch in the clone that comparison is skipped. Fails under `CI` when the
  * package has a surface and no committed baseline. CI never creates one, so deleting the file is
  * not a way past the gate. Never warns. Passes with no CLI, schema or action. Locally with no
  * baseline, the first one is written and must be committed.
@@ -51,6 +57,18 @@ export function evaluateSurfacePolicy(evidence: SurfaceEvidence): PolicyResult {
     return {
       outcome: "fail",
       rationale: `SurfaceContract: this package has a CLI, schema or action but ${BASELINE} is not committed. Run \`npx internal-package-contract update-baseline\` locally and commit the result; CI never creates it.`,
+    }
+  }
+  if (evidence.baselineEdited) {
+    return {
+      outcome: "fail",
+      rationale: `SurfaceContract: this branch changed ${BASELINE} while package.json stays at ${evidence.currentVersion}, the base branch's version. A baseline moves only with a release, so editing it here would hide this branch's own surface change. Restore it from the base branch and declare the change with \`npx changeset add\`.`,
+    }
+  }
+  if (evidence.baselineStale) {
+    return {
+      outcome: "fail",
+      rationale: `SurfaceContract: ${BASELINE} records version ${String(evidence.baselineVersion)} but package.json is ${evidence.currentVersion}, so the release that set this version did not refresh it. Run \`npx internal-package-contract update-baseline\` and commit the result, and add \`internal-package-contract update-baseline\` to the \`version\` script after the build so every release pull request refreshes it.`,
     }
   }
   if (evidence.changes.length === 0) {

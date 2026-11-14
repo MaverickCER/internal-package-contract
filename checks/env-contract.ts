@@ -6,11 +6,13 @@
  * through `scripts/check-env-contract.mjs` and `scripts/env/run.mjs`. The schema is read, never
  * executed.
  *
- * Never fails. Warns on a missing owner or expiry, and on a credential that is expiring or expired.
- * Warns on a generated file that is stale, and on a schema that cannot be read. Passes with no
+ * Fails on a generated file that is stale: `internal-package-contract env` regenerates it from the
+ * schema, so a stale one is a document that no longer says what the schema does. Warns on a missing
+ * owner or expiry, and on a credential that is expiring or expired: those depend on the calendar, so
+ * they never fail a run on their own. Warns on a schema that cannot be read. Passes with no
  * `ci/env.schema.ts`: none is required.
  *
- * Exceptions: none needed; nothing here fails the run.
+ * Exceptions: none. Regenerate the stale file.
  *
  * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  */
@@ -50,12 +52,10 @@ export function envContractCheck(): CheckDefinitionConfig {
           rationale: "EnvContract: there is no ci/env.schema.ts, and none is required.",
         }
       }
-      const problems = [
-        ...(report.findings ?? []).map((finding) => finding.message),
-        ...(report.stale ?? []).map(
-          (file) => `${file} is out of date; run \`internal-package-contract env\` and commit it.`,
-        ),
-      ]
+      const stale = (report.stale ?? []).map(
+        (file) => `${file} is out of date; run \`internal-package-contract env\` and commit it.`,
+      )
+      const problems = [...(report.findings ?? []).map((finding) => finding.message), ...stale]
       if (problems.length === 0) {
         return {
           outcome: "pass",
@@ -63,7 +63,7 @@ export function envContractCheck(): CheckDefinitionConfig {
         }
       }
       return {
-        outcome: "warn",
+        outcome: stale.length > 0 ? "fail" : "warn",
         rationale: [
           `EnvContract: ${String(problems.length)} thing(s) to look at in the environment contract:`,
           ...problems.map((problem) => `- ${problem}`),

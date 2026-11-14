@@ -161,7 +161,7 @@ describe("accessibility", () => {
       outcome: "warn",
       rationale: [
         "Accessibility: pa11y reported 0 errors, but 1 warning(s):",
-        "- docs/index.html -- h1 [c1]: contrast too low",
+        "- docs/index.html at h1 [c1]: contrast too low",
       ].join("\n"),
     })
   })
@@ -193,7 +193,7 @@ describe("accessibility", () => {
       outcome: "fail",
       rationale: [
         "Accessibility: pa11y reported 1 WCAG2AA error(s) across the scanned pages:",
-        "- docs/index.html -- img [c1]: missing alt text",
+        "- docs/index.html at img [c1]: missing alt text",
       ].join("\n"),
     })
   })

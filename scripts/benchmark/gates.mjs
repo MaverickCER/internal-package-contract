@@ -104,7 +104,7 @@ export function complexityFindings(current) {
     findings.push({
       level: "fail",
       kind: "complexity",
-      message: `\`${group}\`: documented ${value.expectedNotation ?? value.expected}, measured ${value.notation ?? value.class} (exponent ${typeof value.exponent === "number" ? value.exponent.toFixed(2) : "n/a"}, R² ${typeof value.rSquared === "number" ? value.rSquared.toFixed(2) : "n/a"}). Either the code regressed or the documented big-O is wrong -- decide which and fix it.`,
+      message: `\`${group}\`: documented ${value.expectedNotation ?? value.expected}, measured ${value.notation ?? value.class} (exponent ${typeof value.exponent === "number" ? value.exponent.toFixed(2) : "n/a"}, R² ${typeof value.rSquared === "number" ? value.rSquared.toFixed(2) : "n/a"}). Either the code regressed or the documented big-O is wrong; decide which and fix it.`,
     })
   }
   return findings
@@ -179,7 +179,7 @@ export function overheadFindings(current, references, gates) {
     if (then.baselineMs < gates.noiseFloorBaselineMs) continue
     if (typeof now.overheadPercent !== "number") continue
     // The ratio is a property of one run, but for work this fast it is also a property of the
-    // machine (how much of the baseline is process start-up versus the package's own work), so two
+    // machine: how much of the baseline is process start-up versus the package's own work. So two
     // CPU models are compared only when both were measured on this runner.
     if (!sameMachine && now.cpuModel && then.cpuModel && now.cpuModel !== then.cpuModel) {
       findings.push({
@@ -199,14 +199,14 @@ export function overheadFindings(current, references, gates) {
       findings.push({
         level: "note",
         kind: "normalized-overhead-within-interval",
-        message: `${grew} -- up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, but the change (${points(delta)}) is inside ${intervals}: not a regression this run can see.`,
+        message: `${grew}, up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, but the change (${points(delta)}) is inside ${intervals}: not a regression this run can see.`,
       })
       continue
     }
     findings.push({
       level: "fail",
       kind: "normalized-overhead",
-      message: `${grew} -- up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, and the change (${points(delta)}) is outside ${intervals}${sameMachine ? "; both were measured on this runner in this job" : ""}.`,
+      message: `${grew}, up ${increase.toFixed(0)}%, over the ${String(allowed)}% allowed for work this fast, and the change (${points(delta)}) is outside ${intervals}${sameMachine ? "; both were measured on this runner in this job" : ""}.`,
     })
   }
   return findings

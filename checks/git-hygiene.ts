@@ -67,7 +67,7 @@ function collectBlockingIssues(ev: GitHygieneEvidence): string[] {
   const blocking: string[] = []
 
   if (ev.gitignore === undefined) {
-    blocking.push("no .gitignore -- run `internal-package-contract init`")
+    blocking.push("no .gitignore; run `internal-package-contract init`")
   }
 
   const badTracked = ev.tracked.filter((f) => MUST_IGNORE_TRACKED.some((re) => re.test(f)))
@@ -85,7 +85,7 @@ function collectBlockingIssues(ev: GitHygieneEvidence): string[] {
 
   if (ev.untrackedTargets.length > 0) {
     blocking.push(
-      `${String(ev.untrackedTargets.length)} import(s) that resolve only to a file git does not track, so a clean checkout (CI, a consumer) will not have it -- add the file, or fix the .gitignore pattern that hides it: ${ev.untrackedTargets
+      `${String(ev.untrackedTargets.length)} import(s) that resolve only to a file git does not track, so a clean checkout (CI, a consumer) will not have it; add the file, or fix the .gitignore pattern that hides it: ${ev.untrackedTargets
         .slice(0, 10)
         .map(({ file, specifier, target }) => `${file} imports ${specifier} (${target})`)
         .join("; ")}${ev.untrackedTargets.length > 10 ? " …" : ""}`,
@@ -93,7 +93,7 @@ function collectBlockingIssues(ev: GitHygieneEvidence): string[] {
   }
 
   if (!ev.pkg.private && !ev.pkg.hasFiles) {
-    blocking.push('package.json has no "files" array -- an unscoped publish ships the whole tree')
+    blocking.push('package.json has no "files" array, so an unscoped publish ships the whole tree')
   }
 
   return blocking

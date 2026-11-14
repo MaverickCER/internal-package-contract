@@ -32,14 +32,14 @@ interface CoverageSummary {
   readonly total?: Record<string, { readonly pct?: number | "Unknown" }>
 }
 
-/** V8/Istanbul's own `pct` sentinel for a metric with nothing instrumented (`0/0`, printed instead of dividing 0 by 0) -- the literal string `"Unknown"`, distinct from a missing field or an actual `NaN`/`Infinity`. Checked directly, ahead of the generic per-metric loop, so a brand-new consumer with no `src/` yet gets one clear explanation instead of the same vague "percentage missing or invalid" bullet repeated four times. Requires every metric to say so (not just one) -- a report that is genuinely missing a single field, or carries a real `NaN`, still falls through to the generic per-metric message, which already names exactly which metric and why. Callers only reach this after already ruling out a missing/non-object `total`, so it takes the narrowed, non-nullable type rather than re-guarding against something that can't happen here. */
+/** V8/Istanbul's own `pct` sentinel for a metric with nothing instrumented (`0/0`, printed instead of dividing 0 by 0): the literal string `"Unknown"`, distinct from a missing field or an actual `NaN`/`Infinity`. Checked directly, ahead of the generic per-metric loop, so a brand-new consumer with no `src/` yet gets one clear explanation instead of the same vague "percentage missing or invalid" bullet repeated four times. Requires every metric to say so (not just one): a report that is genuinely missing a single field, or carries a real `NaN`, still falls through to the generic per-metric message, which already names exactly which metric and why. Callers only reach this after already ruling out a missing/non-object `total`, so it takes the narrowed, non-nullable type rather than re-guarding against something that can't happen here. */
 function hasNoInstrumentedCode(total: NonNullable<CoverageSummary["total"]>): boolean {
   const metrics = Object.values(total)
   return metrics.length > 0 && metrics.every((metric) => metric?.pct === "Unknown")
 }
 
 export const coverage: CheckDefinitionConfig = {
-  // No work of its own -- a harmless noop so the check has a `run`; all the
+  // No work of its own: a harmless noop so the check has a `run`; all the
   // signal is in the artifact `Tests` produced.
   run: ["node", "--version"],
   policy: async (ctx): Promise<PolicyResult> => {
@@ -47,7 +47,7 @@ export const coverage: CheckDefinitionConfig = {
     if (narrowed !== undefined) {
       return {
         outcome: "warn",
-        rationale: `Coverage: not evaluated -- this run covers the ${String(narrowed.tests.length)} test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.`,
+        rationale: `Coverage: not evaluated: this run covers the ${String(narrowed.tests.length)} test file(s) a change affects, so the package-wide aggregate would say nothing about the package; a full run checks it.`,
       }
     }
     let summary: CoverageSummary
@@ -60,20 +60,20 @@ export const coverage: CheckDefinitionConfig = {
       const raw = await readFile(path.join(process.cwd(), "coverage/coverage-summary.json"), "utf8")
       summary = JSON.parse(raw) as CoverageSummary
     } catch {
-      // Vitest writes no coverage summary when the suite itself failed -- that
+      // Vitest writes no coverage summary when the suite itself failed: that
       // is already reported by `Tests`, so don't pile a second red line on the
       // same root cause.
       const testsExit = ctx.evidence.checks["Tests"]?.exitCode
       if (testsExit !== undefined && testsExit !== 0) {
         return {
           outcome: "warn",
-          rationale: "Coverage: not evaluated -- the `Tests` run did not pass (see `Tests`).",
+          rationale: "Coverage: not evaluated, because the `Tests` run did not pass (see `Tests`).",
         }
       }
       return {
         outcome: "fail",
         rationale:
-          "Coverage: no coverage/coverage-summary.json -- the `Tests` run produced no coverage (is `@vitest/coverage-v8` installed?).",
+          "Coverage: no coverage/coverage-summary.json: the `Tests` run produced no coverage (is `@vitest/coverage-v8` installed?).",
       }
     }
 
@@ -89,7 +89,7 @@ export const coverage: CheckDefinitionConfig = {
       return {
         outcome: "fail",
         rationale:
-          "Coverage: 0 statements instrumented -- there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
+          "Coverage: 0 statements instrumented: there is no source under `src/` for Tests to cover yet. Add source files (and tests for them); this check starts scoring once Tests instruments real code.",
       }
     }
 
@@ -100,7 +100,7 @@ export const coverage: CheckDefinitionConfig = {
       // Stryker disable next-line ConditionalExpression: an equivalent mutant -- forcing
       // `typeof pct !== "number"` to `false` leaves just `!Number.isFinite(pct)`, which is already
       // logically equivalent to the full expression: `Number.isFinite` (unlike the global
-      // `isFinite`) never coerces, so for any non-number `pct` it already returns `false` --
+      // `isFinite`) never coerces, so for any non-number `pct` it already returns `false`;
       // `typeof pct !== "number"` never adds a case `!Number.isFinite(pct)` didn't already cover.
       // Hand-verified: forcing this to `false` leaves every test in coverage.test.ts passing
       // unchanged.

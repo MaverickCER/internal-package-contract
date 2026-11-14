@@ -54,7 +54,7 @@ export function isStrict(argv, env) {
  * Removes what a run generated so it does not trip the NEXT run's Lint/Format/DeadCode or the
  * consumer's own `prettier --check .`: Stryker's sandbox always; `coverage/` and the tool reports in
  * `reports/` only if the repository had none before the run. `reports/contract` is the one thing
- * that stays -- it is the contract's own record, and `reports/` is git-ignored.
+ * that stays: it is the contract's own record, and `reports/` is git-ignored.
  * @param {string} cwd
  * @param {{ coverage: boolean, reports: boolean }} created - what did not exist before the run.
  */
@@ -81,8 +81,19 @@ const nowhere = {
  * @returns {string} what to add to its progress line: nothing when it ended normally with code 0, else why the verdict will probably fail.
  */
 export function processTrouble(evidence) {
-  if (evidence.status !== "completed") return ` -- ${evidence.status}`
-  return evidence.exitCode === 0 ? "" : ` -- exit code ${String(evidence.exitCode)}`
+  if (evidence.status !== "completed") return ` (${evidence.status})`
+  return evidence.exitCode === 0 ? "" : ` (exit code ${String(evidence.exitCode)})`
+}
+
+/**
+ * The text after a result's label on the console. Most rationales already start with `<id>: `, so the id is
+ * printed only when the rationale lacks it. The rationale itself, in report.json and the logs, is unchanged.
+ * @param {string} id - the check id.
+ * @param {string} rationale - the check's rationale.
+ * @returns {string} `<id>: <rationale>`, with the id once.
+ */
+export function resultText(id, rationale) {
+  return rationale.startsWith(`${id}: `) ? rationale : `${id}: ${rationale}`
 }
 
 /**
@@ -173,13 +184,13 @@ export async function runContract({
     onVerdict: (id, result) => {
       prependVerdict(id, result)
       if (result.outcome === "fail") {
-        human.write(`[contract] FAIL ${id}: ${result.rationale.split("\n")[0]}\n`)
+        human.write(`[contract] FAIL ${resultText(id, result.rationale.split("\n")[0])}\n`)
       }
     },
   }
 
   // Phase 1 is every check but SecuritySocket; the Socket scan (which spends API quota) runs second,
-  // and only if phase 1 passed -- see scripts/contract-phases.mjs.
+  // and only if phase 1 passed: see scripts/contract-phases.mjs.
   const { first, deferred } = planPhases(available, checkIds)
   const results = {}
   const documents = []
@@ -258,7 +269,7 @@ export async function runContract({
 
   out.write(`\n${title}${checkIds ? ` (${checkIds.join(", ")})` : ""}\n\n`)
   for (const check of report.checks) {
-    out.write(`[${labelOf(check)}] ${check.id}: ${check.rationale}\n`)
+    out.write(`[${labelOf(check)}] ${resultText(check.id, check.rationale)}\n`)
   }
   const { counts } = report
   out.write(

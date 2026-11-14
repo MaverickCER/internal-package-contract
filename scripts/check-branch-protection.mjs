@@ -9,18 +9,48 @@
 //
 // What is reported: whether `deletion`, `non_fast_forward`, `pull_request` and `required_status_checks`
 // rules exist, the status-check contexts required, whether that rule is strict (the branch must be up to
-// date with its base before it merges), and whether review threads must be resolved. The policy asks for
-// the `contract` context among the required checks and does not ask for the aggregate `required` one.
+// date with its base before it merges), and whether review threads must be resolved. Also the aggregate job
+// the package's own CI defines: a workflow under `.github/workflows` with both a `contract` and a `required`
+// job. The policy asks for `contract` among the required checks, and for `required` when that job exists.
 //
 // Read-only: nothing here creates or changes a ruleset; `internal-package-contract init --github` does
 // that with the same owner/repo resolution. `gh` missing or not logged in, an `origin` that is not a
-// GitHub URL, or an API call that fails is `{ ok: false, error }`, which the policy records as the
+// GitHub URL, or an API call that fails is `{ ok: false, error }`. The policy records that as the
 // `BranchProtection:gh-unavailable` degradation: a warning locally, a failure under `--strict` in CI
 // unless `.repo-contract/exceptions/environment.json` accepts it. A ruleset whose detail cannot be read
 // is skipped, so the envelope then reads as unprotected rather than as a degradation.
 
+import { readdirSync, readFileSync } from "node:fs"
+import path from "node:path"
 import { sync as spawnSync } from "cross-spawn"
+import { parse } from "yaml"
 import { resolveOwnerRepo, rulesetCoversBranch } from "./github-repo.mjs"
+
+/**
+ * @param {string} cwd - the package root.
+ * @returns {string | null} the first workflow (by file name) that defines both a `contract` and a `required`
+ *   job, or null. A workflow that cannot be read or parsed is skipped.
+ */
+function aggregateWorkflow(cwd) {
+  const dir = path.join(cwd, ".github", "workflows")
+  let files
+  try {
+    files = readdirSync(dir)
+  } catch {
+    return null
+  }
+  for (const file of files.filter((name) => /\.ya?ml$/.test(name)).sort()) {
+    let jobs
+    try {
+      jobs = parse(readFileSync(path.join(dir, file), "utf8"))?.jobs
+    } catch {
+      continue
+    }
+    if (jobs && typeof jobs === "object" && "contract" in jobs && "required" in jobs)
+      return `.github/workflows/${file}`
+  }
+  return null
+}
 
 function gh(args) {
   return spawnSync("gh", args, { encoding: "utf8" })
@@ -35,14 +65,13 @@ function main() {
   if (gh(["--version"]).status !== 0) {
     return report({
       ok: false,
-      error: "gh CLI not found -- install it to check GitHub branch protection.",
+      error: "gh CLI not found; install it to check GitHub branch protection.",
     })
   }
   if (gh(["auth", "status"]).status !== 0) {
     return report({
       ok: false,
-      error:
-        "gh CLI is not authenticated -- run `gh auth login` to check GitHub branch protection.",
+      error: "gh CLI is not authenticated; run `gh auth login` to check GitHub branch protection.",
     })
   }
 
@@ -114,6 +143,7 @@ function main() {
     requiredChecks: [...requiredChecks],
     strictStatusChecks,
     requiresThreadResolution,
+    aggregateWorkflow: aggregateWorkflow(process.cwd()),
   })
 }
 
