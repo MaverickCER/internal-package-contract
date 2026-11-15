@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 /**
- * Derives this feature's per-entry-point target list from the consumer's own `typedoc.json`
- * `entryPoints` (the same field TypeDoc itself uses to document the public surface (see
- * `config/typedoc.json`)) rather than a second, hand-maintained list. A consumer with several
+ * Derives the per-entry-point target list from the consumer's `typedoc.json` `entryPoints`. TypeDoc
+ * documents the public surface from that same field (see `config/typedoc.json`), so no second
+ * list is kept by hand. A consumer with several
  * public entry points (e.g. `src/runtime/index.ts`, `src/build/index.ts`) gets one independent
  * api-contract target per entry point, each with its own baseline under
  * `.repo-contract/api-contract/<target>/`.
@@ -47,8 +47,8 @@ export function subpathForEntryPoint(entryPoint: string): string {
 
 /**
  * Compares what the package EXPORTS with what the API contract GUARDS. A public subpath no target
- * covers could break in a patch release without the gate noticing; a documented entry point that is
- * not exported guards something users cannot import.
+ * covers could break in a patch release unnoticed. A documented entry point that is not exported
+ * guards something users cannot import.
  * @param entryPoints - The `typedoc.json` `entryPoints`.
  * @param subpaths - The package's public subpaths ({@link exportedApiSubpaths}).
  * @param aliases - `package.json` `internal-package-contract.apiTargets`: a subpath whose entry point is not named after it, e.g. `{ ".": "src/runtime/index.ts" }`.
@@ -98,9 +98,9 @@ function mainEntryPointFilePathFor(entryPoint: string): string {
 }
 
 /**
- * Reads the consumer's own `typedoc.json` (never a `typedoc.markdown.json`/other config that only
- * `extends` it: `entryPoints` is always declared directly, not inherited) and derives one
- * `ApiContractTarget` per entry point.
+ * Reads the consumer's `typedoc.json` and derives one `ApiContractTarget` per entry point. A config
+ * that only `extends` it, such as `typedoc.markdown.json`, is never read: `entryPoints` is
+ * declared directly, not inherited.
  * @param root - Absolute path to the consumer's project root; must contain `typedoc.json`.
  * @returns Every public entry point this consumer documents, as an api-contract target.
  * @throws {Error} If `typedoc.json` is missing, unparseable, or declares no `entryPoints`.
@@ -143,7 +143,7 @@ export async function readTargets(root: string): Promise<readonly ApiContractTar
 }
 
 /**
- * Fails when `package.json` `exports` and `typedoc.json` `entryPoints` disagree: the semver promise
+ * Fails when `package.json` `exports` and `typedoc.json` `entryPoints` disagree. The semver promise
  * covers every public subpath, so a subpath with no target is a hole in it.
  * @param root - The project root.
  * @param entryPoints - The validated `typedoc.json` entry points.

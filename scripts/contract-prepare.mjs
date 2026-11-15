@@ -1,11 +1,11 @@
 // What a consumer's contract run needs on disk before any check looks at it.
 //
-// The docs link to the benchmark history page (`docs/benchmarks/`). That page is generated from the committed
-// history and never committed, so a link check on a clean checkout finds nothing there and reports the link as
-// broken. A package that defines a `docs:benchmarks` script has said how its page is built; the run builds it
-// first. The contract then behaves the same on a laptop, in CI and in a fresh clone, with no wrapper script and
-// no copy of the command in a workflow. A package without the script skips this. A script that fails stops the
-// run before any check.
+// The docs link to the benchmark history page (`docs/benchmarks/`). That page is generated from the
+// committed history and never committed. A link check on a clean checkout finds nothing there and
+// reports the link as broken. A package that defines a `docs:benchmarks` script has said how its
+// page is built; the run builds it first. The contract then behaves the same on a laptop, in CI and
+// in a fresh clone. No wrapper script or copy of the command in a workflow is needed. A package
+// without the script skips this. A script that fails stops the run before any check.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync } from "node:fs"

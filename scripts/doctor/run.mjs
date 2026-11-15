@@ -113,8 +113,8 @@ export async function diagnose({ cwd, packageRoot, git = gitIn(cwd) }) {
         },
   )
 
-  // A symlinked install makes the standard resolve its own tools from the wrong node_modules, which fails in
-  // ways that look like bugs in the package (a missing typedoc, a duplicated ESLint plugin).
+  // A symlinked install makes the standard resolve its own tools from the wrong node_modules. The
+  // failures look like bugs in the package: a missing typedoc, a duplicated ESLint plugin.
   const installedPath = path.join(cwd, "node_modules", DEPENDENCY)
   if (existsSync(installedPath) && lstatSync(installedPath).isSymbolicLink()) {
     items.push({
@@ -125,8 +125,9 @@ export async function diagnose({ cwd, packageRoot, git = gitIn(cwd) }) {
     })
   }
 
-  // Hooks resolve their paths from the repository's top level, which is the main checkout's, not a linked
-  // worktree's: commits and pushes made from one can run the wrong hook or the wrong copy of the standard.
+  // Hooks resolve their paths from the repository's top level: the main checkout's, not a linked
+  // worktree's. Commits and pushes made from a worktree can run the wrong hook or the wrong copy of
+  // the standard.
   const gitDirectory = git(["rev-parse", "--path-format=absolute", "--git-dir"])
   const commonDirectory = git(["rev-parse", "--path-format=absolute", "--git-common-dir"])
   if (

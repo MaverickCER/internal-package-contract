@@ -23,19 +23,17 @@ import { DEFAULT_GATES } from "./gates.mjs"
 import { readJson } from "./lib/results.mjs"
 import { describeProvenance, groupKind, isDerivedGroup, packageCostRows } from "./page-sections.mjs"
 
-// The page's prose lives in one data file so every package that generates a page says the same thing,
-// and so the wording can be reviewed as text.
+// The page's prose lives in one data file. Every package that generates a page then says the same
+// thing, and the wording can be reviewed as text.
 const copy = JSON.parse(readFileSync(new URL("./page-copy.json", import.meta.url), "utf8"))
 
 const DEFAULT_MAX_ENTRIES = 200
 
-// The skill's reference categorical palette (references/palette.md), fixed
-// slot order: never reordered or regenerated per page. Only the first 4-5
-// slots are ever realistically needed (env-cap's/data-cap's own tier ladders
-// top out at 4 tier names). That keeps every chart inside the
-// all-pairs-safe zone the palette doc calls out for small multiples. Its
-// first 3 slots validate all-pairs cleanly in both modes; a realistic 4th
-// tier name like "enterprise"/"fixed" uses slot 4 with that documented
+// The skill's reference categorical palette (references/palette.md), in a fixed slot order that no
+// page reorders or regenerates. Only the first 4-5 slots are realistically needed: the env-cap and
+// data-cap tier ladders top out at 4 tier names. That keeps every chart inside the all-pairs-safe
+// zone the palette doc names for small multiples. The first 3 slots validate all-pairs cleanly in
+// both modes. A 4th tier name such as "enterprise" or "fixed" uses slot 4, with that documented
 // caveat.
 const CATEGORICAL_SLOTS = [
   { light: "#2a78d6", dark: "#3987e5" }, // 1 blue
@@ -48,10 +46,9 @@ const CATEGORICAL_SLOTS = [
   { light: "#e34948", dark: "#e66767" }, // 8 red
 ]
 
-// Tier names seen across env-cap and data-cap's own tier ladders, in a
-// preferred display order: purely cosmetic (first-seen order would work
-// too), keeps baseline/stress/extreme first and consistent on every page
-// regardless of which group happens to declare them first.
+// Tier names seen across the env-cap and data-cap tier ladders, in a preferred display order. It is
+// cosmetic: first-seen order would work too. It keeps baseline/stress/extreme first on every page,
+// whichever group declares them first.
 const PREFERRED_TIER_ORDER = ["baseline", "stress", "extreme", "enterprise", "fixed"]
 
 /**
@@ -260,8 +257,8 @@ const PAD = { left: 38, right: 54, top: 8, bottom: 20 }
 const DASHES = ["none", "6 3", "2 3", "8 3 2 3", "none", "6 3", "2 3", "8 3 2 3"]
 
 /**
- * One group's chart as a standalone SVG string: named for assistive technology, each series labelled
- * directly at its last point, and distinguished by dash pattern as well as colour.
+ * One group's chart as a standalone SVG string, named for assistive technology. Each series is
+ * labelled at its last point and told apart by dash pattern as well as colour.
  * @param {object} group
  * @param {string[]} tierOrder
  * @param {Record<string, number>} tierColorIndex
@@ -403,7 +400,7 @@ function renderPackageCost(cost, id) {
 
 /**
  * The same data as a table: every figure a chart shows, readable by keyboard, screen reader or
- * spreadsheet, with the commit, pull request and version each run belongs to.
+ * spreadsheet. Each run names its commit, pull request and version.
  * @param {object} group
  * @param {string[]} tierOrder
  * @param {object[]} runs

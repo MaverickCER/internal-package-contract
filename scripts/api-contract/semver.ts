@@ -14,9 +14,9 @@ interface Version {
 
 // The trailing suffix is an alternation (`[-+].*` or empty) rather than a
 // `(?:...)?` group around it. A `?` wrapping the already-quantified `.*`
-// would nest one repetition inside another, which is what actually trips
-// eslint-plugin-security's detect-unsafe-regex heuristic (it flags nesting
-// depth, not whether the quantifiers are on disjoint tokens).
+// would nest one repetition inside another. That nesting trips
+// eslint-plugin-security's detect-unsafe-regex heuristic, which judges nesting
+// depth, not whether the quantifiers are on disjoint tokens.
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*|)$/
 
 /**
@@ -76,9 +76,8 @@ function bumpForLevel(base: Version, level: Exclude<RequiredReleaseLevel, "none"
  * Derives the minimum required package version from a baseline version and a required release
  * level. `baselineVersion === undefined` means no historical contract exists yet (the
  * initial-baseline case): this always returns `"0.1.0"` regardless of `requiredLevel`. The
- * caller must never substitute the current package.json version here, and must never call this at
- * all when the level is indeterminate (`RequiredReleaseLevel` has no `"unknown"` member for
- * exactly this reason).
+ * caller passes only the baseline's version, never the current package.json version. It calls this
+ * only with a determinate level, which is why `RequiredReleaseLevel` has no `"unknown"` member.
  * @param baselineVersion - The historical baseline's version, or `undefined` if no baseline exists yet.
  * @param requiredLevel - The SemVer magnitude the classified contract delta requires.
  * @returns `"0.1.0"` when `baselineVersion` is absent; otherwise `baselineVersion` formatted as-is when `requiredLevel` is `"none"`, or bumped at `requiredLevel` otherwise.

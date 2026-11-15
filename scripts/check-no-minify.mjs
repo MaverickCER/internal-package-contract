@@ -1,14 +1,15 @@
 // Entry point for the `NoMinify` check (see checks/no-minify.ts). Prints one JSON envelope with every
 // request for minification and every shipped file that looks minified; the policy decides the verdict.
 //
-// Minified code is a supply-chain alert on Socket.dev, and none of it may ship. Two independent layers
-// catch it. The configuration layer reads every `tsup.config.*` for a `minify*` option other than `false`,
-// and every package.json script for a `--minify*` flag, so the intent is found before a build runs.
-// The output layer reads every `.js`, `.cjs` and `.mjs` file under the build directory (the argument,
-// `dist` by default) and flags a line longer than MAX_LINE_LENGTH, or a file of at least MEAN_MIN_BYTES
-// whose non-empty lines average more than MAX_MEAN_LINE_LENGTH. Sourcemaps and declaration files are not
-// code and are not read. A build directory that does not exist yields no output findings, and the
-// envelope says so with `dirExists`.
+// Minified code is a supply-chain alert on Socket.dev, and none of it may ship. Two independent
+// layers catch it. The configuration layer finds the intent before a build runs. It reads every
+// `tsup.config.*` for a `minify*` option other than `false`, and every package.json script for a
+// `--minify*` flag. The output layer reads every `.js`, `.cjs` and `.mjs` file under the build
+// directory (the argument, `dist` by default). It flags a line longer than MAX_LINE_LENGTH. It also
+// flags a file of at least MEAN_MIN_BYTES whose non-empty lines average more than
+// MAX_MEAN_LINE_LENGTH. Sourcemaps and declaration files are not code and are not read. A build
+// directory that does not exist yields no output findings, and the envelope says so with
+// `dirExists`.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"

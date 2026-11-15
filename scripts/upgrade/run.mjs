@@ -1,12 +1,15 @@
 // `internal-package-contract upgrade <vX.Y.Z>`: moves a package to a release of this one and brings everything
 // that release owns up to date, in one command.
 //
-// Moving the pin is the easy half. The release also changes files the package carries: the workflows that call
-// its reusable workflows (pinned by commit), the managed copies and documents, the generated regions, the agent
-// skill, docs/ENVIRONMENT.md, the landing page and the benchmark guides. Done by hand that is several commands in
-// the right order, and a package that misses one fails its own contract on the next run. This runs them, stops at
-// the first that fails, and leaves the result as uncommitted changes for a person to review. The API and surface
-// baselines are left alone: they follow the package's own releases, not this one's.
+// Moving the pin is the small part. The release also changes files the package carries:
+//   - the workflows that call its reusable workflows (pinned by commit);
+//   - the managed copies and documents, and the generated regions;
+//   - the agent skill, docs/ENVIRONMENT.md, the landing page and the benchmark guides.
+//
+// Done by hand, that is several commands in the right order. A package that misses one fails its
+// own contract on the next run. This runs them, stops at the first that fails, and leaves the
+// result as uncommitted changes for a person to review. The API and surface baselines are left
+// alone: they follow the package's own releases, not this one's.
 //
 // Every step after the install runs the installed release's `bin/contract.mjs`, never this file's own commands.
 // The code running here is the release being replaced, and each file must come out as the new release writes it. It refuses to start while package.json, the lockfile or the

@@ -48,9 +48,9 @@ on:
       PIN_SYNC_TOKEN:
         description: >-
           Optional. A token that can push workflow files and start CI on the pull request. Its permissions
-          and refresh steps are in
-          https://github.com/MaverickCER/internal-package-contract/blob/main/docs/ENVIRONMENT.md#ci-secrets-pin_sync_token.
-          Without it the run uses GITHUB_TOKEN, which cannot change `.github/workflows/*` or start CI.
+          and refresh steps are in the calling repository's `docs/ENVIRONMENT.md#ci-secrets-pin_sync_token`,
+          which `internal-package-contract env` generates. Without it the run uses GITHUB_TOKEN, which
+          cannot change `.github/workflows/*` or start CI.
         required: false
 
 jobs:

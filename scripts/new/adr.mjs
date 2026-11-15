@@ -1,5 +1,6 @@
-// `internal-package-contract new adr "<title>"`: starts a decision record with the next number and the sections
-// every record in this standard has, each opened by the question a good answer starts from.
+// `internal-package-contract new adr "<title>"`: starts a decision record with the next number. It
+// writes the sections every record in this standard has. Each opens with the question a good answer
+// starts from.
 //
 // The questions are prompts (scripts/prompts/scan.mjs): `PromptBlocks` reports them until they are answered and
 // fails a release. The record goes in the package's own decision folder (specs/decisions, docs/decisions or

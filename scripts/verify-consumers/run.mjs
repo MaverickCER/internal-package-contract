@@ -1,13 +1,14 @@
 // `internal-package-contract verify-consumers <path>...`: does this change to the standard still work for the
 // packages that depend on it?
 //
-// A consumer is only ever as reliable as the last time someone remembered to run its contract against a new
-// version of the standard. This runs it, mechanically, and says what the change did. For each consumer checkout
-// it runs the contract twice in throwaway copies of the checkout: once with the version of the standard the
-// consumer has installed and once with this one. Every check that got worse is reported. A check that fails
-// both ways was already failing and is not blamed on the change. The network-bound and long checks (`NOT_RUN`)
-// are left out, plus any named with `--skip`. A check absent from the first run counts as passing, so a new
-// check that fails is a regression.
+// A consumer is only ever as reliable as the last time someone remembered to run its contract
+// against a new version of the standard. This runs it, mechanically, and says what the change did.
+// For each consumer checkout it runs the contract twice, in throwaway copies of the checkout. The
+// first run uses the version of the standard the consumer has installed, and the second uses this
+// one. Every check that got worse is reported. A check that fails both ways was already failing and
+// is not blamed on the change. The network-bound and long checks (`NOT_RUN`) are left out, plus any
+// named with `--skip`. A check absent from the first run counts as passing, so a new check that
+// fails is a regression.
 //
 // The consumer's own working tree and node_modules are never touched: the copies share its installed packages
 // through symbolic links and replace only the standard.
@@ -33,8 +34,8 @@ import { filesOf } from "../checkout-files.mjs"
 export const STANDARD = "internal-package-contract"
 
 /**
- * The checks left out, because they need the network or a service (so they say the same thing whatever the standard
- * does, and fail offline) or a long run that CI makes anyway.
+ * The checks left out. Some need the network or a service: they say the same thing whatever the
+ * standard does, and fail offline. The rest are long runs that CI makes anyway.
  */
 export const NOT_RUN = [
   "BranchProtection",
@@ -112,9 +113,9 @@ export function satisfies(version, range) {
 }
 
 /**
- * What an install of the standard would put next to its own copy rather than share with the checkout. These are the
- * packages the standard depends on that the checkout has not installed, or has installed at a version that does not
- * satisfy what the standard asks for.
+ * What an install of the standard would put next to its own copy rather than share with the
+ * checkout. These are the packages the standard depends on that the checkout lacks. A package
+ * installed at a version that does not satisfy the standard's range counts too.
  * @param {string} standard - the standard's checkout.
  * @param {string} consumer - the consumer's checkout.
  * @returns {{ name: string, wanted: string, installed: string | undefined }[]}
@@ -165,8 +166,8 @@ export function workspaceOf({ consumer, standard }) {
 }
 
 /**
- * Copies what the standard publishes, and gives the copy its own copy of each package that an install would have
- * nested beside it rather than shared.
+ * Copies what the standard publishes. The copy also gets its own copy of each package that an
+ * install would have nested beside it rather than shared.
  * @param {string} root - the standard's own checkout.
  * @param {string} into - where the copy goes.
  * @param {{ name: string }[]} nested - the packages to give it.

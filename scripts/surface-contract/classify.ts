@@ -5,11 +5,15 @@
  * Markdown headings its generators write. `ApiContract` covers the types; `SurfaceContract`
  * (checks/surface-contract.ts) covers this.
  *
- * Breaking: a removed CLI, command, flag, schema, reusable workflow, generated-document heading, or
- * action or workflow input, secret or output, a changed exit code, a
- * new required input or a changed input default, and any schema constraint that accepts less. Compatible: an addition, a schema
- * constraint relaxed to accept more, a documentation keyword, and a change to help prose that leaves
- * every command and flag in place. A rename reads as a removal plus an addition, so it is breaking.
+ * Breaking:
+ * - a removed CLI, command, flag, schema, reusable workflow or generated-document heading;
+ * - a removed action or workflow input, secret or output;
+ * - a changed exit code, a new required input or a changed input default;
+ * - any schema constraint that accepts less.
+ *
+ * Compatible: an addition, a schema constraint relaxed to accept more, a documentation keyword. So
+ * is a change to help prose that leaves every command and flag in place. A rename reads as a
+ * removal plus an addition, so it is breaking.
  *
  * Limit: help prose is read for commands and flags only. A behaviour change behind unchanged help,
  * such as a flag that now means something else, is invisible here.
@@ -23,7 +27,7 @@ export interface CommandSurface {
 
 /**
  * A CLI as a user sees it: its top-level help, and the help of each command that help lists.
- * `commands` is absent in a baseline taken before commands were collected; such a baseline is
+ * `commands` is absent in a baseline taken before commands were collected. Such a baseline is
  * compared on the top-level help only, until `update-baseline` records the commands.
  */
 export interface CliSurface extends CommandSurface {

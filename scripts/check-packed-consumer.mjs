@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Entry point for the `PackedConsumer` check (see checks/packed-consumer.ts). Takes the packed tarball,
-// installs it into an empty project under the temporary directory, and imports every entry point the way
-// a consumer would, `require`-ing the ones whose export map promises CommonJS. It also lists every file
-// package.json promises that the tarball lacks (scripts/packed-consumer/plan.mjs). Prints one JSON
-// envelope; the policy decides the verdict.
+// Entry point for the `PackedConsumer` check (see checks/packed-consumer.ts). Takes the packed
+// tarball and installs it into an empty project under the temporary directory. Then it imports
+// every entry point the way a consumer would, `require`-ing the ones whose export map promises
+// CommonJS. It also lists every file package.json promises that the tarball lacks
+// (scripts/packed-consumer/plan.mjs). Prints one JSON envelope; the policy decides the verdict.
 //
 //   node check-packed-consumer.mjs [--tarball <file.tgz>] [--strict]
 //
@@ -39,8 +39,8 @@ const work = mkdtempSync(path.join(tmpdir(), "ipc-packed-consumer-"))
 function finish(report) {
   rmSync(work, { recursive: true, force: true })
   process.stdout.write(JSON.stringify({ ok: true, ...report }))
-  // Under --strict (the release build job) a tarball that cannot even be installed is as much a
-  // failure as one whose entry points break; only `exempt` and `none` and a clean `ok` exit 0.
+  // Under --strict (the release build job), a tarball that cannot be installed fails like one whose
+  // entry points break. Only `exempt`, `none` and a clean `ok` exit 0.
   process.exitCode =
     strict && (report.state === "problem" || report.state === "install-failed") ? 1 : 0
 }

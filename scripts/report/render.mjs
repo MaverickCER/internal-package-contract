@@ -1,7 +1,8 @@
-// A change report as Markdown a person can paste into a pull request: what changed in the package, what it does
-// to a release, and what the checks said, in the order a reviewer asks. Every line comes from a fact (see
-// collect.mjs). A section with nothing in it is left out rather than saying so, so a small change reads as a
-// small report. What no local run can see (`CI_ONLY`) is named, so nobody assumes it was.
+// A change report as Markdown a person can paste into a pull request. It says what changed in the
+// package, what it does to a release, and what the checks said, in the order a reviewer asks. Every
+// line comes from a fact (see collect.mjs). A section with nothing in it is left out rather than
+// saying so, so a small change reads as a small report. What no local run can see (`CI_ONLY`) is
+// named, so nobody assumes it was.
 
 import { AREAS, areaOf } from "./collect.mjs"
 

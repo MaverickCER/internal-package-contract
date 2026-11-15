@@ -93,7 +93,10 @@ interface NpmAuditReport {
   readonly vulnerabilities?: Record<string, NpmAuditVulnerability>
 }
 
-/** One normalized `npm audit` finding: one per vulnerable top-level package name, exactly as npm audit's own report already groups them (a single entry can cover several distinct advisories at once). */
+/**
+ * One normalized `npm audit` finding: one per vulnerable top-level package name, as npm audit
+ * groups them. A single entry can cover several advisories.
+ */
 interface NormalizedDepFinding {
   readonly id: string
   readonly package: string
@@ -116,7 +119,9 @@ interface SecurityDepsExceptionRecord extends Partial<ExceptionV2Fields> {
 }
 
 /**
- * `security-deps:<package>@<range>`: stable while the same vulnerable range is reported; a version bump or a new/different advisory changes `range` and the id with it, so a stale record is never silently reused for an unrelated finding.
+ * `security-deps:<package>@<range>`: stable while the same vulnerable range is reported. A version
+ * bump or a different advisory changes `range` and the id with it. So a stale record is never
+ * reused for an unrelated finding.
  * @internal Exported for direct unit coverage: see this module's own doc comment.
  */
 export function deriveSecurityDepsExceptionId(finding: {
@@ -162,12 +167,10 @@ export const SECURITY_DEPS_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SecurityDep
       const pkgValid = isValidNonEmptyStringField(pkg, `${at}.package`, errors)
       const rangeValid = isValidNonEmptyStringField(range, `${at}.range`, errors)
       // Stryker disable ConditionalExpression: replacing `typeof severity === "string"` with `true`
-      // is behaviorally equivalent here: `SEVERITY_VALUES` is a `Set<string>`, and
-      // `severity === "unknown"` is a strict-equality string comparison, so both disjuncts are
-      // already `false` for any non-string `severity` (no coercion, no throw either way). The guard
-      // exists purely to satisfy TypeScript's narrowing, not to change runtime behavior.
-      // Hand-verified 2026-09-17: applying this exact mutation by hand leaves the whole suite
-      // (438 tests) passing.
+      // is behaviorally equivalent here. `SEVERITY_VALUES` is a `Set<string>`, and
+      // `severity === "unknown"` is a strict string comparison. So both disjuncts are `false` for
+      // any non-string `severity`, with no coercion and no throw. The guard serves TypeScript's
+      // narrowing only. Hand-verified 2026-09-17: this mutation leaves all 438 tests passing.
       const severityValid =
         typeof severity === "string" && (SEVERITY_VALUES.has(severity) || severity === "unknown")
       // Stryker restore ConditionalExpression
@@ -240,13 +243,13 @@ export function evaluateFinding(
   readonly missing: readonly string[]
 } {
   // Stryker disable ObjectLiteral, StringLiteral -- unlike SecuritySocket (which forbids
-  // critical/high outright), SECURITY_DEPS_POLICY has exactly one group ("security-deps") whose
-  // `default` policy is value-identical to SECURITY_DEPS_GLOBAL_DEFAULT_POLICY (see both above):
-  // every severity requires the same full field set, with no per-category rule to select. Since
-  // `resolveExceptionPolicy` falls back to the group default (or, absent a matching group, the
-  // global default) whenever the classification doesn't pick a specific rule, corrupting or
-  // dropping this classification object entirely still resolves to the exact same policy. Hand
-  // -verified 2026-09-17: applying this exact mutation by hand leaves the whole suite passing.
+  // critical/high outright), SECURITY_DEPS_POLICY has one group ("security-deps"). Its `default`
+  // policy is value-identical to SECURITY_DEPS_GLOBAL_DEFAULT_POLICY (see both above). Every
+  // severity requires the same full field set, with no per-category rule to select. When the
+  // classification picks no specific rule, `resolveExceptionPolicy` falls back to the group
+  // default, or to the global default when no group matches. So corrupting or dropping this
+  // classification still resolves to the same policy. Hand-verified 2026-09-17: applying this
+  // mutation by hand leaves the whole suite passing.
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "security-deps", category: finding.severity },
   ]
@@ -280,11 +283,10 @@ export function normalizeFindings(report: NpmAuditReport): readonly NormalizedDe
   return Object.entries(report.vulnerabilities ?? {}).map(([name, vulnerability]) => {
     const severityRaw = vulnerability.severity
     // Stryker disable ConditionalExpression: replacing `typeof severityRaw === "string"` with
-    // `true` is behaviorally equivalent here: `SEVERITY_VALUES` is a `Set<string>`, so
-    // `SEVERITY_VALUES.has(severityRaw)` is already `false` for any non-string `severityRaw` (no
-    // coercion, no throw either way). The guard exists purely to satisfy TypeScript's narrowing
-    // for the `severityRaw as Severity` cast below, not to change runtime behavior. Hand-verified
-    // 2026-09-17: applying this exact mutation by hand leaves the whole suite (438 tests) passing.
+    // `true` is behaviorally equivalent here. `SEVERITY_VALUES` is a `Set<string>`, so
+    // `SEVERITY_VALUES.has(severityRaw)` is `false` for any non-string, with no coercion and no
+    // throw. The guard serves TypeScript's narrowing for the `severityRaw as Severity` cast below.
+    // Hand-verified 2026-09-17: this mutation leaves all 438 tests passing.
     const severity: Severity =
       typeof severityRaw === "string" && SEVERITY_VALUES.has(severityRaw)
         ? (severityRaw as Severity)
@@ -340,10 +342,9 @@ export function securityDeps(): CheckDefinitionConfig {
         VALID_SECURITY_DEPS_REQUIREMENTS,
       )
       // Stryker disable all -- SECURITY_DEPS_POLICY/VALID_SECURITY_DEPS_REQUIREMENTS are fixed,
-      // valid module constants (see their own definitions above); this defensive guard can never
-      // observe a misconfigured policy under any real invocation of this function, since it never
-      // varies at runtime. No test can hit it without literally breaking those constants. Kept as
-      // defense-in-depth against a future editing mistake in SECURITY_DEPS_POLICY itself.
+      // valid module constants (defined above). They never vary at runtime, so this guard never
+      // sees a misconfigured policy, and no test can reach it without breaking them. It stays as
+      // defense in depth against a future editing mistake in SECURITY_DEPS_POLICY.
       if (configErrors.length > 0) {
         return {
           outcome: "fail",
@@ -368,12 +369,11 @@ export function securityDeps(): CheckDefinitionConfig {
 
       if (offenders.length === 0 && staleLines.length === 0) {
         // Stryker disable all -- unlike SecuritySocket, every severity here requires the full
-        // field set (see this module's own doc comment), so `createSecurityDepsStub`'s blank stub
-        // is NEVER "permitted": every finding behind a freshly-scaffolded stub (`newStubIds`) is
-        // therefore always its own offender, which would already have made `offenders.length`
-        // nonzero and skipped this whole branch. `newStubIds.length > 0` can never be observed
-        // true here under any real reconciliation outcome. Hand-verified 2026-09-17: applying
-        // this exact mutation by hand leaves the whole suite passing. Kept as defense-in-depth.
+        // field set (see this module's doc comment). So `createSecurityDepsStub`'s blank stub is
+        // never "permitted". Every finding behind a new stub (`newStubIds`) is its own offender.
+        // That makes `offenders.length` nonzero, which skips this branch. So `newStubIds.length >
+        // 0` is never true here. Hand-verified 2026-09-17: this mutation leaves the whole suite
+        // passing. It stays as defense in depth.
         const suffix =
           newStubIds.length > 0
             ? ` (${String(newStubIds.length)} new record(s) scaffolded blank in ${REGISTRY_RELATIVE_PATH})`
@@ -387,12 +387,11 @@ export function securityDeps(): CheckDefinitionConfig {
 
       const offenderLines = offenders.map((d) => {
         // Stryker disable all -- `activeById` is built from `activeRecords`, which
-        // `reconcileAndPersistExceptionRegistry` guarantees contains an entry (existing or a
-        // freshly-scaffolded stub) for every id in `findings`, so `activeById.get(finding.id)` can
-        // never be `undefined` here and `evaluateFinding` can never return "unmatched" through
-        // this real call path. Hand-verified 2026-09-17: applying this exact mutation by hand
-        // leaves the whole suite passing. Kept as defense-in-depth against a reconcile/evaluate
-        // bijection bug.
+        // `reconcileAndPersistExceptionRegistry` fills with an entry for every id in `findings`
+        // (existing or a new stub). So `activeById.get(finding.id)` is never `undefined` here, and
+        // `evaluateFinding` never returns "unmatched" on this path. Hand-verified 2026-09-17: this
+        // mutation leaves the whole suite passing. It stays as defense in depth against a
+        // reconcile/evaluate bijection bug.
         const detail =
           d.verdict === "unmatched"
             ? "no reconciled exception record (registry integrity failure)"

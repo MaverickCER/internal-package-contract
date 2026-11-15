@@ -21,7 +21,8 @@ import { bundledConfig, resolveConfig } from "./shared.js"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-// Lists the repository's own files for secretlint instead of letting it expand the recursive glob over every generated directory.
+// Lists the repository's files for secretlint, so it never expands the recursive glob over every
+// generated directory.
 const runSecretlint = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../scripts/run-secretlint.mjs",

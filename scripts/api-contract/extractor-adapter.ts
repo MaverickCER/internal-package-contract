@@ -7,17 +7,16 @@ import path from "node:path"
 import type { ApiContractTarget } from "./targets.js"
 
 /**
- * Adapted from repo-contract's own `scripts/api-contract/extractor-adapter.ts`: `runApiExtractor`
- * is unchanged; `runApiExtractorForRoot` (which hardcoded repo-contract's own single entry point)
- * is replaced by `runApiExtractorForTarget`, namespacing output per target (see targets.ts) since a
- * consumer here may declare several public entry points.
+ * Adapted from repo-contract's `scripts/api-contract/extractor-adapter.ts`. `runApiExtractor` is
+ * unchanged. `runApiExtractorForTarget` replaces `runApiExtractorForRoot`, which hardcoded
+ * repo-contract's single entry point. A consumer here may declare several public entry points, so
+ * output is kept per target (see targets.ts).
  *
- * The only file in this feature that imports `@microsoft/api-extractor`/
- * `@microsoft/api-extractor-model` directly: the small internal adapter that isolates the rest of
- * the feature from API Extractor's own implementation details. Builds its `IConfigFile`
- * programmatically via `ExtractorConfig.prepare` rather than requiring a hand-authored
- * `api-extractor.json`, since every setting this feature needs is already derivable from the
- * consumer's own conventions (the entry point, the root tsconfig.json).
+ * The only file in this feature that imports `@microsoft/api-extractor` or
+ * `@microsoft/api-extractor-model`. It keeps API Extractor's details out of the rest of the
+ * feature. It builds its `IConfigFile` with `ExtractorConfig.prepare`, not from a hand-authored
+ * `api-extractor.json`. Every setting it needs follows from the consumer's entry point and root
+ * tsconfig.json.
  */
 interface RunExtractorOptions {
   /** Absolute path to the consumer's project root. */
@@ -50,9 +49,9 @@ interface RunExtractorResult {
  * are the Doc Model JSON (`.api.json`, the canonical machine-readable contract) and a fully
  * self-contained `.d.ts` rollup (what `type-assignability.ts`'s TypeChecker probe analyzes). The
  * third is the human-readable API report (`.api.md`, discarded by this feature's own callers; kept
- * only because API Extractor always produces one). Suppresses API Extractor's own default
- * STDOUT/STDERR-writing message behavior (it would otherwise corrupt this check's pure-JSON stdout contract) by supplying an
- * explicit `messageCallback` that routes everything to stderr instead.
+ * only because API Extractor always produces one). An explicit `messageCallback` routes every
+ * API Extractor message to stderr. By default those messages reach stdout, which must carry only
+ * this check's JSON.
  * @param options - Where to read the entry point/tsconfig from and where to write the Doc Model JSON, `.d.ts` rollup, and API report.
  * @returns Whether the extraction succeeded, its error/warning counts, and the absolute paths of the three files it wrote.
  */
@@ -113,9 +112,9 @@ export function runApiExtractor(options: RunExtractorOptions): RunExtractorResul
 }
 
 /**
- * Invokes `runApiExtractor` against one target's own entry point, writing scratch output under
- * `<root>/.repo-contract/api-contract/<target.name>/`: shared by `check.ts` and
- * `update-baseline.ts`, which both extract the exact same "current" snapshot for a given target.
+ * Runs `runApiExtractor` on one target's entry point, writing scratch output under
+ * `<root>/.repo-contract/api-contract/<target.name>/`. `check.ts` and `update-baseline.ts` both
+ * call it, so both extract the same "current" snapshot of a target.
  * @param root - Absolute path to the consumer's project root; must contain a built `dist/` and `tsconfig.json`.
  * @param target - The entry point to extract (see targets.ts).
  * @returns The same result `runApiExtractor` returns.

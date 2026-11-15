@@ -43,7 +43,7 @@ function fsSpecifier(source: unknown): string | undefined {
 function staticValue(node: TSESTree.Node | undefined): unknown {
   if (node?.type === AST_NODE_TYPES.Literal) return node.value
   if (node?.type === AST_NODE_TYPES.TemplateLiteral && node.expressions.length === 0) {
-    // Stryker disable next-line OptionalChaining: equivalent -- a template literal always has at least one quasi.
+    // Stryker disable next-line OptionalChaining: equivalent: a template literal always has at least one quasi.
     return node.quasis[0]?.value.cooked
   }
   return undefined

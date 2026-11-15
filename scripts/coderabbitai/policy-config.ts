@@ -4,18 +4,18 @@ import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpe
 /**
  * The `CodeRabbit` check's own instantiation of `repo-contract/helpers`' classification-neutral
  * exception policy (see repo-contract's own
- * specs/decisions/0013-reusable-exception-policy-helper.md): a single `"coderabbit"` group. Every
- * CodeRabbit finding (an AI opinion, not a deterministic tool result) requires a complete
- * finding-specific exception regardless of severity, so one group-level `default` expresses "every
- * severity, same requirements". Required fields: `justification`, `remediation`, `method`,
- * `exceptionType` (all root fields on the reconciled record). `method` must not be
- * `"mechanical-reverification"`: no tool can re-run an AI finding, so `scripts/coderabbitai/registry.ts`
- * rejects that value and `"independent-human-review"` is the expected one; it also excludes
- * `"validated-false-positive"` from the allowed `exceptionType` set.
+ * specs/decisions/0013-reusable-exception-policy-helper.md): a single `"coderabbit"` group. A
+ * CodeRabbit finding is an AI opinion, not a deterministic tool result. Every one needs a complete
+ * finding-specific exception at any severity. So one group-level `default` says "every severity,
+ * same requirements". Required fields: `justification`, `remediation`, `method`, `exceptionType`
+ * (all root fields on the reconciled record). No tool can re-run an AI finding, so
+ * `scripts/coderabbitai/registry.ts` rejects `method: "mechanical-reverification"`. The expected
+ * method is `"independent-human-review"`. It also drops `"validated-false-positive"` from the
+ * allowed `exceptionType` set.
  *
- * `alternatives` is deliberately NOT required (unlike `SecuritySocket`'s `middle`/`unknown` tier):
- * "what else could we have used instead" is a supply-chain question about a dependency choice, and
- * has no meaning for a review comment about this repository's own source line.
+ * `alternatives` is not required here, unlike `SecuritySocket`'s `middle`/`unknown` tier. "What
+ * else could we have used instead" is a supply-chain question about a dependency choice. It has no
+ * meaning for a review comment about a source line in this repository.
  */
 const ALL_REQUIREMENTS = [
   "justification",

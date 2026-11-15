@@ -136,8 +136,9 @@ export async function run(argv, cwd, io, hooks = {}) {
     const sources = readSources(cwd, known)
     problems.push(...sources.problems)
     if (sources.pkg !== undefined && sources.surface !== undefined) {
-      // A cited test must be a regular file inside this package, symlinks resolved, so a path that climbs
-      // out (`../other/x.test.ts`, an absolute path, a link to elsewhere) is never presented as its test.
+      // A cited test must be a regular file inside this package, symlinks resolved. A path that
+      // climbs out (`../other/x.test.ts`, an absolute path, a link to elsewhere) is then never
+      // presented as its test.
       const root = realpathSync(cwd)
       const exists = (file) => {
         if (path.isAbsolute(file)) return false

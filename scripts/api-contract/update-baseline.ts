@@ -8,9 +8,11 @@
 // surface baseline is updated. Files are written to the working tree for a person, or the CI job on the
 // Changesets "Version Packages" branch, to review and commit.
 //
-// Intended order: a public-API change merges with a changeset declaring the right bump (`ApiContract` fails
-// otherwise), the Version Packages pull request bumps `package.json`, the release publishes, this command runs,
-// the new baseline is committed.
+// Intended order:
+// 1. A public-API change merges with a changeset declaring the right bump (`ApiContract` fails otherwise).
+// 2. The Version Packages pull request bumps `package.json`.
+// 3. The release publishes.
+// 4. This command runs, and the new baseline is committed.
 //
 // Per-target outcomes, of which only `updated` and `current` exit 0.
 //   updated   Regenerates and writes. Either there is no baseline yet for this target (bootstrap), or
@@ -18,11 +20,10 @@
 //             is unchanged but the public API contents differ (an API-changing commit that merged while
 //             the Release PR was open).
 //   current   Writes nothing. The baseline already carries package.json's version AND its contents
-//             match. This is what every Release-PR `synchronize` after the first sync sees, so it must
-//             not fail.
-//   refused   Either package.json's version is unparseable, or it is older than the committed baseline's
-//             (regenerating would roll the baseline backwards). Or the committed baseline itself records
-//             an unparseable version.
+//             match. Every Release-PR `synchronize` after the first sync sees this, so it must not
+//             fail.
+//   refused   package.json's version is unparseable, or older than the committed baseline's (regenerating
+//             would roll the baseline backwards). Or the committed baseline records an unparseable version.
 //   failed    API Extractor reported errors for this target.
 //
 // The command's exit code is 1 when any target's outcome is `refused` or `failed`, else 0.
@@ -143,9 +144,10 @@ async function updateOneTarget(
 }
 
 /**
- * A package with no `typedoc.json` documents no TypeScript entry point, so it has no API baseline to update,
- * only its CLI, schema and action surface (this repository is one). With a `typedoc.json`, its entry points are
- * the targets, and a `typedoc.json` that cannot be read is the error `readTargets` reports.
+ * A package with no `typedoc.json` documents no TypeScript entry point, so it has no API baseline
+ * to update. Only its CLI, schema and action surface remain (this repository is one). With a
+ * `typedoc.json`, its entry points are the targets, and a `typedoc.json` that cannot be read is the
+ * error `readTargets` reports.
  * @param root - Absolute path to the consumer's project root.
  * @returns The API-contract targets to update, possibly none.
  */

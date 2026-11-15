@@ -68,12 +68,12 @@ const JOB_KEY = /^ {4}([\w-]+):/
 const LIST_ITEM = /^ {6,}- *(.+?)\s*$/
 
 /** @param item - one trimmed scalar. @returns it without the quotes YAML allows around it. */
-// Stryker disable next-line Regex: equivalent -- a job id holds no quote, so the anchors are only precision.
+// Stryker disable next-line Regex: equivalent: a job id holds no quote, so the anchors are only precision.
 const unquote = (item: string): string => item.replace(/^['"]|['"]$/g, "")
 
 /** @param text - a trimmed inline YAML flow sequence or scalar. @returns its items, unquoted. */
 function inlineList(text: string): string[] {
-  // Stryker disable next-line Regex: equivalent -- a job id holds no bracket, so the anchors are only precision.
+  // Stryker disable next-line Regex: equivalent: a job id holds no bracket, so the anchors are only precision.
   const inner = text.replace(/^\[|\]$/g, "")
   return inner
     .split(",")

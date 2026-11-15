@@ -1,23 +1,24 @@
 /**
  * `SurfaceContract`: the CLI, schema, action and workflow surface changed no more than the changesets
- * declare. That surface is the `--help` and exit code of each `bin` and of each command its help lists,
- * the JSON files `exports` serve, and the inputs, secrets and outputs of the root `action.yml` and of each
- * reusable workflow. With `surfaceRenderers` in package.json it also holds the headings of generated
- * documents. `ApiContract` guards the types; this guards the rest.
+ * declare. That surface has three parts. First, the `--help` and exit code of each `bin` and of
+ * each command its help lists. Second, the JSON files `exports` serve. Third, the inputs, secrets
+ * and outputs of the root `action.yml` and of each reusable workflow. With `surfaceRenderers` in
+ * package.json it also holds the headings of generated documents. `ApiContract` guards the types;
+ * this guards the rest.
  *
  * Reads: package.json, the current surface (`scripts/surface-contract/collect.ts`), and the
  * committed `.repo-contract/surface-contract/baseline.json`. Also the pending `.changeset/*.md`,
  * and `CI`. All through `scripts/surface-contract/run.ts`.
  *
  * Fails when the difference requires a higher release level than the changesets declare. Fails when
- * the baseline records another version than package.json: the release did not refresh it, and a
- * stale baseline would let later changes pass unjudged. The `version` script runs `update-baseline`
- * so the release pull request carries the refreshed baseline. Fails when the branch itself rewrote the
- * baseline while package.json keeps the base branch's version (scripts/baseline-guard.mjs); without the
- * base branch in the clone that comparison is skipped. Fails under `CI` when the
- * package has a surface and no committed baseline. CI never creates one, so deleting the file is
- * not a way past the gate. Never warns. Passes with no CLI, schema or action. Locally with no
- * baseline, the first one is written and must be committed.
+ * the baseline records another version than package.json. The release did not refresh it, so later
+ * changes would pass unjudged. The `version` script runs `update-baseline`, so the release pull
+ * request carries the refreshed baseline. Fails when the branch rewrote the baseline while
+ * package.json keeps the base branch's version (scripts/baseline-guard.mjs). Without the base
+ * branch in the clone, that comparison is skipped. Fails under `CI` when the package has a surface
+ * and no committed baseline. CI never creates one, so deleting the file is not a way past the gate.
+ * Never warns. Passes with no CLI, schema or action. Locally with no baseline, the first one is
+ * written and must be committed.
  *
  * Exceptions: none. Add a changeset at the required level, or run `internal-package-contract
  * update-baseline` after a release.

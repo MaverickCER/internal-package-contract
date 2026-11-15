@@ -6,10 +6,10 @@
  * through `scripts/check-env-contract.mjs` and `scripts/env/run.mjs`. The schema is read, never
  * executed.
  *
- * Fails on a generated file that is stale: `internal-package-contract env` regenerates it from the
- * schema, so a stale one is a document that no longer says what the schema does. Warns on a missing
- * owner or expiry, and on a credential that is expiring or expired: those depend on the calendar, so
- * they never fail a run on their own. Warns on a schema that cannot be read. Passes with no
+ * Fails on a generated file that is stale: it no longer says what the schema does, and
+ * `internal-package-contract env` regenerates it. Warns on a missing owner or expiry, and on a
+ * credential that is expiring or expired. Those depend on the calendar, so they never fail a run on
+ * their own. Warns on a schema that cannot be read. Passes with no
  * `ci/env.schema.ts`: none is required.
  *
  * Exceptions: none. Regenerate the stale file.

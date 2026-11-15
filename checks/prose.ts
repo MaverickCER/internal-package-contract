@@ -1,9 +1,10 @@
 /**
  * `Prose`: no em-dash and no ` -- ` dash substitute in the prose the package writes.
  *
- * Reads: every tracked Markdown file outside code blocks, code spans and HTML comments; the comments in
- * TypeScript and JavaScript files; and full-line comments in YAML and shell files. Through
- * `scripts/check-prose.mjs` and `scripts/prose.mjs`. Code, strings and tool directives (ESLint's
+ * Reads, through `scripts/check-prose.mjs` and `scripts/prose.mjs`: every tracked Markdown file
+ * outside code blocks, code spans and HTML comments. Also the comments in TypeScript and JavaScript
+ * files, and full-line comments in YAML and shell files. Code, strings and tool directives
+ * (ESLint's
  * `-- reason` syntax among them) are never read as prose.
  *
  * Fails on any such dash, listing the first 30 by `file:line`. Fails when the scan cannot list the
@@ -13,8 +14,8 @@
  *
  * Not read: `CHANGELOG.md` and decision records (history), `CODE_OF_CONDUCT.md` (third-party text),
  * declaration files, and anything under `node_modules` or a fixtures directory. Generated files are
- * not read either: `docs/api-report/`, `docs/api/`, `BENCHMARKS.md`, and any file whose first ten
- * lines say "GENERATED FILE", "Machine-generated", "@generated" or "do not edit by hand".
+ * not read either: `docs/api-report/`, `docs/api/` and `BENCHMARKS.md`. Nor is any file whose first
+ * ten lines say "GENERATED FILE", "Machine-generated", "@generated" or "do not edit by hand".
  *
  * Runs in the consumer `contract` job, in both git hooks, and in IPC's own self-contract.
  *

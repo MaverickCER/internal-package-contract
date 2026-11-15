@@ -1,7 +1,7 @@
-// A first draft of `docs/surface.json` for a package that has none: one entry per published entry point, with
-// the source folder guessed from where the code is. Everything a person must say is left as a `TODO:` that the
-// `PromptBlocks` check reports until it is answered. A hand-written API table in AGENTS.md seeds the draft, so
-// adopting loses none of it.
+// A first draft of `docs/surface.json` for a package that has none. It has one entry per published
+// entry point, with the source folder guessed from where the code is. Everything a person must say
+// is left as a `TODO:` that the `PromptBlocks` check reports until it is answered. A hand-written
+// API table in AGENTS.md seeds the draft, so adopting loses none of it.
 
 import { publishedEntries } from "../generate/entry-points.mjs"
 
@@ -56,8 +56,8 @@ const cells = (line) =>
     .map((cell) => cell.trim())
 
 /**
- * The first table in a document whose header has an `Export` column, which is how a package that already keeps
- * a hand-written API map spells it.
+ * The first table in a document whose header has an `Export` column. That is how a package spells a
+ * hand-written API map.
  * @param {string} text - a Markdown document.
  * @returns {{ start: number, end: number, headers: string[], rows: string[][] } | undefined}
  *   `start` and `end` are line indexes, `end` exclusive; `rows` are the body rows, without the separator.

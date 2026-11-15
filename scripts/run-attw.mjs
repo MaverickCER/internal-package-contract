@@ -2,28 +2,28 @@
 // stdout redirected to reports/arethetypeswrong.json instead of a pipe. The policy reads that file; this
 // script only produces the evidence and passes attw's exit code through.
 //
-// Why a file: attw's `--format json` output can be truncated when attw writes to a pipe, and the contract
-// runner captures every check's stdout through a pipe, so the preset's own `run` could not parse the
-// report. Writing to a regular file does not hit that limit.
+// Why a file: attw's `--format json` output can be truncated when attw writes to a pipe. The
+// contract runner captures every check's stdout through a pipe, so the preset's own `run` could not
+// parse the report. Writing to a regular file does not hit that limit.
 //
-// Why `npm pack --ignore-scripts` instead of attw's own `--pack .`: attw packs without `--ignore-scripts`,
-// which runs the consumer's `prepare` lifecycle (often a build that first deletes `dist/`) while every
-// other check that reads `dist/` is running.
+// Why `npm pack --ignore-scripts` instead of attw's own `--pack .`: attw packs without
+// `--ignore-scripts`. That runs the consumer's `prepare` lifecycle, often a build that first
+// deletes `dist/`, while every other check that reads `dist/` is running.
 //
-// `--exclude=<name,...>` names the entry points attw skips; by default `schema`, whose subpaths are JSON
-// assets that attw's legacy `node10` resolver flags although they are not code. The PATH shim at the top
-// lets `attw` resolve when this package is installed as a symlink and not hoisted.
+// `--exclude=<name,...>` names the entry points attw skips. The default is `schema`: its subpaths
+// are JSON assets, and attw's legacy `node10` resolver flags them although they are not code. The
+// PATH shim at the top lets `attw` resolve when this package is installed as a symlink and not
+// hoisted.
 
 import { sync as spawnSync } from "cross-spawn"
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-// Put every node_modules/.bin between this script and the filesystem root on
-// PATH, so `attw` resolves whether this package is symlinked (`file:` dep, not
-// hoisted) or installed normally. `bin/contract.mjs` already does this for the
-// contract run as a whole; repeated here so the script also works when invoked
-// directly.
+// Put every node_modules/.bin between this script and the filesystem root on PATH. Then `attw`
+// resolves whether this package is symlinked (`file:` dep, not hoisted) or installed normally.
+// `bin/contract.mjs` already does this for the contract run as a whole. This copy lets the script
+// work when invoked directly.
 for (let dir = import.meta.dirname; ;) {
   const bin = path.join(dir, "node_modules", ".bin")
   if (existsSync(bin)) process.env.PATH = `${bin}${path.delimiter}${process.env.PATH ?? ""}`

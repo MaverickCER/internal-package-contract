@@ -95,8 +95,8 @@ export function gitIn(cwd?: string): GitRunner {
  * Whether the current git checkout is on a detached `HEAD`. `coderabbit review`'s own base-
  * branch comparison needs a real branch to diff from/to. A detached checkout (a CI runner mid-
  * rebase, a tag checkout, a bisect) is a genuine "can't establish git context" condition. This
- * wrapper recognizes it itself, up front, rather than trying to parse it back out of whatever error
- * text a future CLI version happens to print for the same underlying problem.
+ * wrapper detects it up front. Parsing it back out of a CLI error would depend on wording a future
+ * CLI version can change.
  * @param git - Runs git; the real one in the current directory by default.
  * @returns `true` if `HEAD` is detached (not on a named branch).
  * @internal Exported for direct unit coverage.
@@ -132,10 +132,10 @@ export function defaultBaseRef(git: GitRunner = gitIn()): string {
 }
 
 /**
- * The arguments for one review. Uncommitted edits are reviewed as they are; with a clean tree (
- * which is the state at pre-push, the one moment findings can still change what is published) the
- * committed branch diff against the base branch is reviewed instead. (Reviewing only uncommitted
- * edits made the check a no-op for exactly the changes about to be pushed.)
+ * The arguments for one review. Uncommitted edits are reviewed as they are. With a clean tree, the
+ * committed branch diff against the base branch is reviewed instead. A clean tree is the pre-push
+ * state, the last moment findings can change what is published. Reviewing only uncommitted edits
+ * made the check a no-op for the changes about to be pushed.
  * @param uncommitted - whether the working tree has uncommitted edits.
  * @param baseRef - the ref to diff committed work against.
  * @returns the `coderabbit` arguments.
@@ -175,11 +175,10 @@ function normalizeFinding(raw: Record<string, unknown>): NormalizedFinding | und
 
 /**
  * Parses `coderabbit review --agent`'s newline-delimited JSON event stream. Unrecognized event
- * `type`s are silently skipped: the stream protocol is inherently extensible (progress/status
- * events already vary run to run) and a future CLI version adding a new informational event type
- * must not break this check. A `finding` event that doesn't match the minimum recognized shape,
- * or a line that isn't parseable JSON at all, is NOT silently skipped: either fails the whole
- * parse closed, exactly like `checks/mutation.ts` does for a malformed Stryker report.
+ * `type`s are skipped. The protocol is extensible (progress and status events already vary run to
+ * run), so a new informational event type must not break this check. A malformed `finding` event,
+ * or a line that is not JSON, fails the whole parse closed. `checks/mutation.ts` does the same for
+ * a malformed Stryker report.
  * @param stdout - The CLI's raw captured stdout.
  * @returns The findings observed and whether a terminal `complete` event was seen, or the error message if parsing failed closed.
  */
@@ -199,10 +198,9 @@ export function parseAgentStream(stdout: string):
     .filter((line) => line.length > 0)
 
   for (const line of lines) {
-    // The `complete` event is terminal by definition: anything after it means the stream did
-    // not end where the CLI said it did (a truncated-and-concatenated capture, a second review's
-    // output bleeding in). Accepting a trailing `finding` here would silently add it to an
-    // already-"completed" result; fail the whole parse closed instead.
+    // The `complete` event is terminal. Anything after it means the stream did not end where the
+    // CLI said: a truncated-and-concatenated capture, or a second review's output bleeding in. A
+    // trailing `finding` would join an already-"completed" result, so the whole parse fails closed.
     if (completed) {
       return {
         ok: false,
@@ -251,13 +249,11 @@ export function parseAgentStream(stdout: string):
           error: `coderabbit review --agent produced a "complete" event with an unexpected status (${JSON.stringify(parsed["status"])}); expected "review_completed" or "review_skipped".`,
         }
       }
-      // The terminal event carries its own findings *count*. Every individual `finding` event is
-      // streamed as its own line before this one, so that count and the number of findings
-      // actually parsed must agree exactly. A `complete` claiming more findings than were streamed
-      // means the stream was truncated (and accepting it would let an incomplete run produce a
-      // clean `reviewed` result); claiming fewer means an event this parser recognized that the
-      // CLI itself didn't count. Either way the stream is malformed: fail closed, exactly as a
-      // bad status does.
+      // The terminal event carries its own findings *count*. Every `finding` event is streamed on
+      // its own line before this one, so the count must equal the findings parsed. A higher count
+      // means the stream was truncated; accepting it would give an incomplete run a clean
+      // `reviewed` result. A lower count means this parser recognized an event the CLI did not
+      // count. Either way the stream is malformed, so it fails closed, as a bad status does.
       if (parsed["findings"] !== findings.length) {
         return {
           ok: false,
@@ -265,9 +261,8 @@ export function parseAgentStream(stdout: string):
         }
       }
       // `review_skipped` means "nothing was in scope to review": it must carry zero findings.
-      // A `review_skipped` with findings streamed is self-contradictory (the CLI both skipped and
-      // reviewed), and treating it as a clean terminal state would let those findings through
-      // unevaluated.
+      // A `review_skipped` with findings streamed contradicts itself: the CLI both skipped and
+      // reviewed. As a clean terminal state it would let those findings through unevaluated.
       if (parsed["status"] === "review_skipped" && findings.length > 0) {
         return {
           ok: false,
@@ -399,9 +394,8 @@ const REAL_DEPENDENCIES: CliDependencies = {
  * @internal Exported for direct unit coverage.
  */
 export function runCoderabbitCli(deps: CliDependencies = REAL_DEPENDENCIES): CoderabbitCliResult {
-  // In CI the review is delegated to CodeRabbit's own GitHub App, which posts findings directly on
-  // the pull request: this local CLI pass is deliberately the narrower, faster layer, never a
-  // duplicate of it (repo-contract ADR 0014).
+  // In CI, CodeRabbit's GitHub App reviews and posts findings on the pull request. This local CLI
+  // pass is the narrower, faster layer and never duplicates it (repo-contract ADR 0014).
   if (deps.env["CI"]) {
     return { status: "not-applicable", reason: "ci", expectedProvider: "coderabbit-github-app" }
   }
@@ -416,9 +410,9 @@ export function runCoderabbitCli(deps: CliDependencies = REAL_DEPENDENCIES): Cod
     {
       encoding: "utf8",
       // A real review of a small local diff completes in ~1-2 min against an observed real run.
-      // Ten minutes is a generous ceiling that still bounds a stalled process, so it can never hang
-      // `runCoderabbitReview`, the consumer's own `npm run contract`, or the pre-push hook
-      // indefinitely. `cross-spawn` forwards this straight to `child_process.spawnSync`.
+      // Ten minutes is a generous ceiling that still bounds a stalled process. So it never hangs
+      // `runCoderabbitReview`, the consumer's `npm run contract`, or the pre-push hook.
+      // `cross-spawn` forwards this to `child_process.spawnSync`.
       timeout: 10 * 60 * 1000,
       // `SIGKILL` (not the default `SIGTERM`): a wedged `coderabbit` process that ignores or slowly
       // handles `SIGTERM` would keep `spawnSync` blocked past the deadline anyway.
@@ -470,12 +464,11 @@ function withRegistry<T extends object>(
 }
 
 /**
- * Runs the CodeRabbit CLI. Only when a review actually ran (`reviewed`), it then reconciles the
- * consumer's `.repo-contract/exceptions/coderabbit.json` against the findings and writes it back,
- * via this package's own shared `reconcileAndPersistExceptionRegistry`
- * (`checks/exception-record.ts`): the one entrypoint `SecuritySocket`/`SecurityDeps` already use
- * for exactly this reconcile -> validate -> persist sequence. On `not-applicable` (CI) /
- * `unavailable` / `error` the registry is validated but not reconciled.
+ * Runs the CodeRabbit CLI. When a review ran (`reviewed`), it reconciles the consumer's
+ * `.repo-contract/exceptions/coderabbit.json` against the findings and writes it back. It does so
+ * through `reconcileAndPersistExceptionRegistry` (`checks/exception-record.ts`), the entrypoint
+ * `SecuritySocket` and `SecurityDeps` use for this reconcile -> validate -> persist sequence. On
+ * `not-applicable` (CI), `unavailable` or `error`, the registry is validated but not reconciled.
  * @param root - Absolute path to the repository being checked (the consumer's own `process.cwd()`).
  * @param deps - What the CLI run reads from its surroundings; the real ones by default.
  * @returns The full `CoderabbitEvidence` for `output: { format: "json" }`.

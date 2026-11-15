@@ -85,9 +85,9 @@ export function describeGain(gain) {
 }
 
 /**
- * Matches each gain with the record that accepts it. A record accepts a group growing to its `to` class
- * or to any cheaper one; growing past it needs a new record, because the human accepted that increase and
- * not a larger one.
+ * Matches each gain with the record that accepts it. A record accepts a group growing to its `to`
+ * class or to any cheaper one. Growing past it needs a new record: the human accepted that increase
+ * and not a larger one.
  * @param {readonly Gain[]} gains
  * @param {readonly Record<string, unknown>[]} records - the registry's records.
  * @param {Date} now

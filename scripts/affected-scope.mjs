@@ -189,9 +189,10 @@ const TESTS_CHECK = "Tests"
 const NOTHING_TO_RUN = ["node", "--version"]
 
 /**
- * Narrows a narrowed run's checks. Every policy is handed the scope, as `ctx.scope`, so a check that can judge only
- * what the run covered knows what that was; the test command names only the affected test files (or does nothing when
- * there are none). A full run's config is returned as it is: nothing about it changes.
+ * Narrows a narrowed run's checks. Every policy is handed the scope, as `ctx.scope`, so a check
+ * that can judge only what the run covered knows what that was. The test command names only the
+ * affected test files, or does nothing when there are none. A full run's config is returned as it
+ * is: nothing about it changes.
  * @template {{ checks: Record<string, { run?: unknown, policy: (ctx: any) => unknown }> }} Config
  * @param {Config} config - the contract's configuration.
  * @param {{ scope: string, tests?: string[] }} doc - the scope document.

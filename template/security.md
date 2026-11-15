@@ -24,6 +24,8 @@ before a merge:
   The contract verifies the ruleset; `internal-package-contract init --github` applied it once.
 - A published tarball containing only the files `package.json`'s `files` allowlist names (`GitHygiene`
   requires the field; `PackedConsumer` installs the packed tarball and imports every entry point).
+- A published manifest that declares every bundled package in `dependencies` (`BundledDependencies`). npm
+  publishes an undeclared one as `"*"`, which Socket reports as manifest confusion.
 
 ## Supported versions
 

@@ -88,11 +88,10 @@ function renderExample(label, previous, current) {
     return lines.join("\n")
   }
 
-  // `previous` is `{}` (truthy, no real metadata) on a first-ever run (see
-  // CI's `git show ... || echo '{}'` fallback), never `null`. So this is guarded on
-  // `previous?.metadata` being present, not just `previous` being truthy, and
-  // a first run reports "no prior data" instead of a confusing "previous run
-  // used sundefined" mismatch warning.
+  // `previous` is `{}` (truthy, no real metadata) on a first-ever run, never `null`: see CI's
+  // `git show ... || echo '{}'` fallback. So the guard is on `previous?.metadata`, not on
+  // `previous`. A first run then reports "no prior data", not a "previous run used sundefined"
+  // mismatch warning.
   if (
     previous?.metadata &&
     previous.metadata.versions?.benchmarkSuiteVersion !==

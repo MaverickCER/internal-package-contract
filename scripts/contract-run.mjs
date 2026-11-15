@@ -178,9 +178,9 @@ export async function runContract({
         `[contract] ${id} finished in ${(evidence.durationMs / 1000).toFixed(1)}s (${String(finished)} of ${String(total)})${processTrouble(evidence)}\n`,
       )
     },
-    // The verdict goes to the top of the check's log the moment the policy returns it; a failure is also
-    // said on the console at once, ahead of the full report. The report's own classification (advisory,
-    // not evaluated) rewrites the label once it is known.
+    // The verdict goes to the top of the check's log the moment the policy returns it. A failure is
+    // also printed on the console at once, ahead of the full report. The report's own
+    // classification (advisory, not evaluated) rewrites the label once it is known.
     onVerdict: (id, result) => {
       prependVerdict(id, result)
       if (result.outcome === "fail") {

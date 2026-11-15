@@ -13,10 +13,9 @@ import { readFileSync } from "node:fs"
 
 /**
  * Finds the first `medianMs`-bearing field on a raw results.json tier entry.
- * Not every benchmark shape has one under the same key (`totalMs` vs a
- * generic `durationMs`): ported unchanged from env-cap's/data-cap's own
- * render-benchmark-summary.mjs, which both independently arrived at this
- * exact two-field fallback.
+ * Benchmark shapes keep it under different keys (`totalMs` or a generic `durationMs`). This
+ * two-field fallback is ported unchanged from the render-benchmark-summary.mjs of env-cap and
+ * data-cap, which each reached it on their own.
  */
 export function primaryMedianMs(entry) {
   if (entry?.totalMs?.medianMs !== undefined) return entry.totalMs.medianMs
@@ -24,10 +23,10 @@ export function primaryMedianMs(entry) {
 }
 
 /**
- * The spread of the same measurement `primaryMedianMs` summarizes: standard deviation, 95th percentile
- * and iteration count, each only when it is a finite number. A median alone hides how noisy a run was;
- * keeping these lets a reader judge later whether a change is larger than the run's own noise. A derived
- * entry (the overhead) has none and yields `{}`.
+ * The spread of the same measurement `primaryMedianMs` summarizes: standard deviation, 95th
+ * percentile and iteration count, each only when it is a finite number. A median alone hides how
+ * noisy a run was. With these, a reader can later judge whether a change is larger than the run's
+ * noise. A derived entry (the overhead) has none and yields `{}`.
  * @param {any} entry - one tier of a raw results.json.
  * @returns {{ stdDevMs?: number, p95Ms?: number, iterations?: number }}
  */
@@ -49,7 +48,10 @@ export function tryReadJson(filePath) {
   }
 }
 
-/** Reads and JSON-parses a file, throwing a clear error on failure: for a path the caller has already decided is required (unlike `tryReadJson`'s "missing is fine"). */
+/**
+ * Reads and JSON-parses a file, throwing a clear error on failure. It is for a path the caller has
+ * already decided is required; `tryReadJson` is the one where missing is fine.
+ */
 export function readJson(filePath) {
   return JSON.parse(readFileSync(filePath).toString())
 }
@@ -67,15 +69,12 @@ export function collectEntries(results) {
 }
 
 /**
- * Normalizes a raw results.json into the compact `{ group: { tier: {
- * medianMs, inputs? } } }` shape shared with a history entry's own
- * `measurements`. Only `status: "completed"` tiers with a resolvable
- * `medianMs` are included: a failed/skipped tier contributes nothing to
- * either the timing chart or complexity classification, same as today's
- * append-benchmark-history.mjs behavior. `inputs` is carried through
- * verbatim (schema v2's whole point: see append-history.mjs) when the raw
- * entry has one; omitted otherwise, so a caller can tell "no inputs
- * recorded" apart from "inputs was an empty object."
+ * Normalizes a raw results.json into the compact `{ group: { tier: { medianMs, inputs? } } }` shape
+ * shared with a history entry's own `measurements`. Only `status: "completed"` tiers with a
+ * resolvable `medianMs` are included. A failed or skipped tier adds nothing to the timing chart or
+ * the complexity classification, as in append-benchmark-history.mjs. `inputs` is copied verbatim
+ * when the raw entry has one; schema v2 exists for it (see append-history.mjs). It is omitted
+ * otherwise. A caller can then tell "no inputs recorded" apart from "inputs was an empty object."
  */
 export function resultsToMeasurements(results) {
   const measurements = {}

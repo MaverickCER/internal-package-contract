@@ -2,15 +2,15 @@
 // `#fragment` link in the hand-written Markdown names a heading that exists, and prints one JSON envelope:
 // `{ ok: true, broken }` or `{ ok: false, error }`. The policy decides the verdict.
 //
-// Why a check of its own: markdownlint's MD051 (`DocsMarkdown`) resolves a bare `#fragment` against the
-// current file but not a `file.md#fragment` link, and linkinator (`DocsLinks`) does not judge fragments.
-// Both forms are covered here, same-file and cross-file.
+// Why a check of its own: markdownlint's MD051 (`DocsMarkdown`) resolves a bare `#fragment` against
+// the current file, but not a `file.md#fragment` link. Linkinator (`DocsLinks`) does not judge
+// fragments. Both forms are covered here, same-file and cross-file.
 //
-// What is read: `*.md` at the root and `docs/**/*.md`, the same files `DocsMarkdown` reads, minus
-// `docs/api-report/**`, which is generated and has its own freshness check. Fenced code blocks are blanked
-// before headings or links are read, so an example never counts as either. A heading becomes the slug
-// GitHub gives it, through `github-slugger`, duplicate suffixes included; an explicit `<a id>` or `<a name>`
-// counts as a heading too.
+// What is read: `*.md` at the root and `docs/**/*.md`, the same files `DocsMarkdown` reads. The one
+// exception is `docs/api-report/**`: it is generated and has its own freshness check. Fenced code
+// blocks are blanked before headings or links are read, so an example never counts as either. A
+// heading becomes the slug GitHub gives it, through `github-slugger`, duplicate suffixes included.
+// An explicit `<a id>` or `<a name>` counts as a heading too.
 //
 // Known limits: only inline `[text](target)` links are parsed, not reference-style links. A target file
 // that does not exist is skipped, not reported: a missing file is `DocsLinks`' finding.
@@ -22,7 +22,10 @@ import GithubSlugger from "github-slugger"
 
 const EXCLUDED_DIR_PREFIXES = ["docs/api-report/"]
 
-/** Strips fenced code blocks (``` or ~~~, undented only) to plain-line placeholders, so neither heading extraction nor link scanning ever treats an example's own `#`/`[...]( )` text as real. */
+/**
+ * Strips fenced code blocks (``` or ~~~, undented only) to empty lines. Heading extraction and link
+ * scanning then never read an example's `#` or `[...]( )` text as real.
+ */
 function stripFencedCodeBlocks(content) {
   const lines = content.split("\n")
   let inFence = false
@@ -46,7 +49,12 @@ function stripFencedCodeBlocks(content) {
     .join("\n")
 }
 
-/** Converts inline link/image markdown to plain text, keeping a link's own visible text and dropping an image entirely. `github-slugger` strips punctuation character-by-character and has no notion of markdown syntax. So `[Link text](url)` must become `Link text` *before* slugging, or the URL's own characters pollute the slug. */
+/**
+ * Converts inline link and image markdown to plain text: a link keeps its visible text, an image is
+ * dropped. `github-slugger` strips punctuation one character at a time and knows no markdown. So
+ * `[Link text](url)` must become `Link text` *before* slugging, or the URL's characters pollute the
+ * slug.
+ */
 function toPlainHeadingText(raw) {
   const text = raw.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
   // One pass can leave a tag behind (`<<b>b>` -> `<b>`), so strip until nothing changes.
@@ -59,7 +67,10 @@ function toPlainHeadingText(raw) {
   return stripped
 }
 
-/** Every explicit HTML anchor (`<a id="x">`, `<a name="x">`) outside a code block: GitHub and every renderer resolve `#x` to it, and a generated document (the environment catalog) relies on them. */
+/**
+ * Every explicit HTML anchor (`<a id="x">`, `<a name="x">`) outside a code block. GitHub and every
+ * renderer resolve `#x` to it, and a generated document (the environment catalog) relies on them.
+ */
 function extractHtmlAnchors(content) {
   const ids = new Set()
   for (const match of stripFencedCodeBlocks(content).matchAll(
@@ -70,7 +81,11 @@ function extractHtmlAnchors(content) {
   return ids
 }
 
-/** Every heading in `content`, as `{ line, slug }`, in document order: duplicate heading text gets GitHub's own `-1`/`-2`/... suffix, via one `GithubSlugger` instance per file (its dedup state is intentionally per-document). */
+/**
+ * The slug of every heading in `content`, plus its explicit HTML anchors. Duplicate heading text
+ * gets GitHub's `-1`/`-2`/... suffix. One `GithubSlugger` per file keeps that numbering per
+ * document.
+ */
 function extractHeadingSlugs(content) {
   const slugger = new GithubSlugger()
   const slugs = new Set()
@@ -87,7 +102,11 @@ function extractHeadingSlugs(content) {
   return slugs
 }
 
-/** Every local `#fragment` link in `content`, as `{ line, target, fragment }`: `target` is `""` for a bare same-file `#fragment` link. External (`http(s)://`, `mailto:`, etc.) and fragment-less links are not returned. */
+/**
+ * Every local `#fragment` link in `content`, as `{ line, target, fragment }`. `target` is `""` for
+ * a bare same-file `#fragment` link. External links (`http(s)://`, `mailto:`, etc.) and links
+ * without a fragment are left out.
+ */
 function extractFragmentLinks(content) {
   const stripped = stripFencedCodeBlocks(content)
   const lines = stripped.split("\n")

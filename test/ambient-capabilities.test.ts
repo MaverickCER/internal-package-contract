@@ -318,7 +318,11 @@ describe("optional checks", () => {
     writeFileSync(path.join(dir, "package.json"), JSON.stringify(value))
 
   it("offers AmbientCapabilities, which waits for the tests", () => {
-    expect(Object.keys(OPTIONAL_CHECKS)).toEqual(["AgentSkill", "AmbientCapabilities"])
+    expect(Object.keys(OPTIONAL_CHECKS)).toEqual([
+      "AgentSkill",
+      "AmbientCapabilities",
+      "QuickStart",
+    ])
     expect(OPTIONAL_CHECKS["AgentSkill"]?.dependsOn).toEqual([])
     expect(OPTIONAL_CHECKS["AmbientCapabilities"]?.dependsOn).toEqual(["Tests"])
   })
@@ -344,7 +348,7 @@ describe("optional checks", () => {
     try {
       manifest({ "internal-package-contract": { checks: ["Nope"] } })
       expect(() => optionalChecks(dir)).toThrow(
-        "Available: AgentSkill, AmbientCapabilities, Other.",
+        "Available: AgentSkill, AmbientCapabilities, QuickStart, Other.",
       )
     } finally {
       delete table["Other"]
@@ -354,7 +358,7 @@ describe("optional checks", () => {
     for (const name of ["Nope", "toString", 3]) {
       manifest({ "internal-package-contract": { checks: [name] } })
       expect(() => optionalChecks(dir)).toThrow(
-        `package.json turns on a check that does not exist: ${String(name)}. Available: AgentSkill, AmbientCapabilities.`,
+        `package.json turns on a check that does not exist: ${String(name)}. Available: AgentSkill, AmbientCapabilities, QuickStart.`,
       )
     }
   })

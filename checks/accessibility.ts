@@ -31,8 +31,8 @@ import { packageRoot, parseToolEnvelope } from "./shared.js"
 const accessibilityScript = path.join(packageRoot, "scripts", "check-accessibility.mjs")
 
 /**
- * One pa11y finding, `--reporter json` shape (not published as a TypeScript type by the tool),
- * plus the `page` check-accessibility.mjs attaches so a finding names which scanned page it is on.
+ * One pa11y finding in the `--reporter json` shape, which pa11y publishes no TypeScript type for.
+ * check-accessibility.mjs adds `page`, so a finding names the scanned page it is on.
  */
 interface Pa11yFinding {
   readonly code: string
@@ -59,10 +59,8 @@ function formatFinding(finding: Pa11yFinding): string {
   return `${finding.page} at ${finding.selector} [${finding.code}]: ${finding.message}`
 }
 
-// "error"-type findings fail; "warning" surfaces as warn (never blocks);
-// "notice" is too noisy relative to its actionability to gate on and is
-// dropped from the rationale entirely: matches repo-contract's own
-// accessibility check exactly.
+// "error" findings fail and "warning" findings warn. "notice" findings are too noisy to act on,
+// so they leave the rationale. This matches repo-contract's own accessibility check.
 export const accessibility: CheckDefinitionConfig = {
   run: ["node", accessibilityScript],
   output: { format: "json" },
@@ -89,10 +87,9 @@ export const accessibility: CheckDefinitionConfig = {
       }
     }
 
-    // A genuinely absent built docs site (neither docs/index.html nor docs/api/index.html
-    // exists) is not the same thing as a clean scan: pa11y never ran against anything, so
-    // "0 issues" here would be false confidence, not a real pass. Distinct from the 0-pages
-    // case, a real scan that finds 0 issues across N pages still reports `pass` below.
+    // No built site (neither docs/index.html nor docs/api/index.html) is not a clean scan. pa11y
+    // scanned nothing, so "0 issues" would be a false pass. A scan of N pages that finds 0 issues
+    // still reports `pass` below.
     if (evidence.pagesScanned === 0) {
       return degraded({
         check: "Accessibility",

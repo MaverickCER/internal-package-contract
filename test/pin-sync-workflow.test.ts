@@ -41,11 +41,16 @@ describe("the pin-sync workflow", () => {
     for (const file of ["docs/ENVIRONMENT.md", "scripts/doctor/run.mjs"])
       expect(listed(read(file)), file).toEqual(permissions)
   })
-  it("points the workflow's secret description at the generated catalog instead of listing permissions", () => {
+  it("points the workflow's secret description at the caller's generated catalog instead of listing permissions", () => {
     const description = /PIN_SYNC_TOKEN:\n\s+description: >-\n([\s\S]*?)\n\s+required:/.exec(
       text,
     )?.[1]
-    expect(description).toContain("/docs/ENVIRONMENT.md#ci-secrets-pin_sync_token")
+    // The caller's catalog is generated from the release it pins. This repository's `main` can be newer.
+    expect(description).toContain(
+      "calling repository's `docs/ENVIRONMENT.md#ci-secrets-pin_sync_token`",
+    )
+    expect(description).toContain("`internal-package-contract env`")
+    expect(description).not.toMatch(/https?:\/\//)
     expect(description).not.toMatch(/write access/)
   })
   it("leaves the permission list out of the README and links to the generated catalog instead", () => {

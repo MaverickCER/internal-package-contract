@@ -31,8 +31,8 @@ const CONFIG_CANDIDATES = [
 /** @returns the `DocsMarkdown` check. */
 export function docsMarkdown(): CheckDefinitionConfig {
   const config = resolveConfig(CONFIG_CANDIDATES, "markdownlint.jsonc")
-  // A consumer config drives its own globs; the bundled config has none, so pass
-  // explicit safe globs when falling back.
+  // A consumer config drives its own globs. The bundled config has none, so the fallback passes
+  // explicit safe globs.
   const run = config.isBundled
     ? ["markdownlint-cli2", "--config", config.path, "*.md", "docs/**/*.md"]
     : ["markdownlint-cli2", "*.md", "docs/**/*.md"]

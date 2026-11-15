@@ -112,6 +112,10 @@ describe("selectChanged", () => {
       expect(ids).not.toContain("GithubActions")
     }
   })
+  it("runs QuickStart when only documentation changed, because the README holds its commands", () => {
+    expect(DOCUMENTATION).toContain("QuickStart")
+    expect(selectChanged(["README.md"], ["QuickStart", "Lint"]).ids).toEqual(["QuickStart"])
+  })
   it("runs the workflow checks, and only them, when only a workflow changed", () => {
     const { ids, reason } = selectChanged([".github/workflows/ci.yml"], available)
     expect(reason).toBe("only workflows changed")

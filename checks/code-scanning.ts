@@ -14,11 +14,11 @@
  *
  * Fails on any alert in code that builds, runs or ships. Development-only code is `test/`,
  * `tests/`, `examples/`, `benchmarks/`, `docs/`, `.github/`, `scripts/` and the test and config
- * file patterns, minus anything package.json `files` publishes and minus the directories a root
- * `action.yml` runs code from (`scripts/github-action/` in env-cap and data-cap). Fails when a development-only alert
- * has an incomplete record. Fails when the registry cannot be loaded or written. Fails when the
- * alerts could not be read: no token, `gh` missing, not signed in, no access, too many pages. Never
- * warns on a finding.
+ * file patterns. Anything package.json `files` publishes is excluded from it. So are the
+ * directories a root `action.yml` runs code from (`scripts/github-action/` in env-cap and
+ * data-cap). Fails when a development-only alert has an incomplete record. Fails when the registry
+ * cannot be loaded or written. Fails when the alerts could not be read: no token, `gh` missing, not
+ * signed in, no access, too many pages. Never warns on a finding.
  *
  * Exceptions: only for development-only code. The id is `code-scanning:<rule>@<path>`, with `rule`
  * and `path` fields, `exceptionType` `dev-only-not-shipped` and `method` `policy-rule`. The check
@@ -171,8 +171,9 @@ export function deriveCodeScanningId(rule: string, filePath: string): string {
 }
 
 /**
- * Whether `filePath` is development-only code: under a dev directory or matching a dev file pattern,
- * and NOT covered by one of the package's published `files` entries (a published `scripts/` is shipped).
+ * Whether `filePath` is development-only code: under a dev directory or matching a dev file
+ * pattern. A path one of the package's `files` entries publishes is shipped, so it is never
+ * development-only.
  * @param filePath - repo-relative, forward-slash path of the alert.
  * @param publishedEntries - the package.json `files` entries.
  * @internal Exported for direct unit coverage.

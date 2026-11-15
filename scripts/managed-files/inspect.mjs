@@ -1,19 +1,20 @@
 // Which files in a consumer repository this package owns, and whether they still say what it says. The
 // `ManagedFiles` check and `internal-package-contract sync` both read the answer here.
 //
-// `init` scaffolds a starter and then steps back: everything it writes is the consumer's afterwards, and
-// most of it should change (a README, the sources, the docs). A few files are different. They are plumbing
-// that exists only to call this package's shared workflows or to configure the release it drives, so a
-// consumer copy that drifts is a release that stops behaving like the standard. Those are MANAGED;
-// everything else stays consumer-owned and is never reported.
+// `init` scaffolds a starter and then steps back. Everything it writes belongs to the consumer
+// afterwards, and most of it should change (a README, the sources, the docs). A few files are
+// different. They exist only to call this package's shared workflows or to configure the release it
+// drives. A consumer copy that drifts is a release that stops behaving like the standard. Those
+// files are MANAGED; everything else stays consumer-owned and is never reported.
 //
-// A consumer may also carry COPIES of shared code and documents, enrolled by name in package.json under
-// "internal-package-contract"."copies" (see `sync --add`); only the enrolled ones are written and compared.
+// A consumer may also carry COPIES of shared code and documents. It enrols each by name in
+// package.json under "internal-package-contract"."copies" (see `sync --add`). Only the enrolled
+// ones are written and compared.
 //
-// Drift is judged on what a file means, not on its bytes. For a workflow, comments, blank lines and the
-// commit an action is pinned to are ignored (the pin is moved by the pin-sync workflow, not by hand). So a
-// wording change in the template does not read as drift in every consumer. JSON is compared after
-// parsing. A copy, a document or a plain file is code or canon, and is compared byte for byte.
+// Drift is judged on what a file means, not on its bytes. A workflow's comments, blank lines and
+// action pins are ignored, because the pin-sync workflow moves the pins. So a wording change in the
+// template does not read as drift in every consumer. JSON is compared after parsing. A copy, a
+// document or a plain file is code or canon, and is compared byte for byte.
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -52,10 +53,11 @@ export const MANAGED = Object.freeze([
 /**
  * Code this package owns and a consumer carries as a managed copy, so a published package needs no
  * runtime dependency on this repository. A copy is opt-in: a consumer lists the ones it uses in
- * `package.json` under `"internal-package-contract": { "copies": [...] }` (see `sync --add`), and only
- * those are written and checked. A copy is compared byte for byte, because it is code, not configuration.
- * A `file` is a configuration or documentation file that is the same in every package: it is carried as is, with
- * no header (a header would not fit JSON), and compared byte for byte.
+ * `package.json` under `"internal-package-contract": { "copies": [...] }` (see `sync --add`), and
+ * only those are written and checked. A copy is compared byte for byte, because it is code, not
+ * configuration. A `file` is a configuration or documentation file that is the same in every
+ * package. It is carried as is and compared byte for byte. It has no header, because a header would
+ * not fit JSON.
  */
 export const COPIES = Object.freeze([
   {
@@ -163,8 +165,9 @@ export const COPIES = Object.freeze([
     from: "runtime/no-node-fs.ts",
     to: "src/_ipc/no-node-fs.ts",
     requires: ["glob"],
-  }, // The official schemas a package's tests validate its standard-format output against: one canonical,
-  // hash-pinned copy here (template/standards/README.md), carried byte for byte into each package that enrols it.
+  }, // The official schemas a package's tests validate its standard-format output against.
+  // One canonical, hash-pinned copy lives here (template/standards/README.md). Each package that
+  // enrols it gets it byte for byte.
   {
     name: "standards-readme",
     from: "template/standards/README.md",

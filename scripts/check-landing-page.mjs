@@ -1,7 +1,7 @@
-// Entry point for the `LandingPage` check (see checks/landing-page.ts). Without docs/site.json the state is
-// `absent`; otherwise `site --check` runs in this process (scripts/site/render-site.mjs) with its errors
-// captured, and the state is `current` or `problem` with what it said. Prints one JSON envelope; the policy
-// decides the verdict.
+// Entry point for the `LandingPage` check (see checks/landing-page.ts). Without docs/site.json the
+// state is `absent`. Otherwise `site --check` runs in this process (scripts/site/render-site.mjs)
+// with its errors captured, and the state is `current`, or `problem` with what it said. Prints one
+// JSON envelope; the policy decides the verdict.
 
 import { existsSync } from "node:fs"
 import path from "node:path"

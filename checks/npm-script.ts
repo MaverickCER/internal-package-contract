@@ -36,9 +36,8 @@ export interface NpmScriptCheckOptions {
   /** Human-readable name for rationales (e.g. "Build", "Schema"). */
   readonly label: string
   /**
-   * When the consumer has no such script: `"skip"` passes with a note (the
-   * default; not every package generates schemas or API docs); `"fail"`
-   * blocks (the package is expected to have this script).
+   * When the consumer has no such script. `"skip"`, the default, passes with a note: not every
+   * package generates schemas or API docs. `"fail"` blocks: the package must have this script.
    */
   readonly whenMissing?: "skip" | "fail"
   /**

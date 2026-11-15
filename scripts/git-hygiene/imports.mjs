@@ -14,8 +14,8 @@ import path from "node:path"
 export const SOURCE_FILE = /\.[cm]?[jt]sx?$/
 
 /**
- * Folders a build, a test run or an install fills in, which are ignored on purpose: a file under one is not
- * source that a clean checkout is missing, it is produced there.
+ * Folders a build, a test run or an install fills in, which are ignored on purpose. A file under
+ * one is produced there, not source that a clean checkout is missing.
  */
 export const GENERATED = [
   "node_modules/",

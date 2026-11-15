@@ -1,7 +1,7 @@
 /**
- * The record validator every `.repo-contract/exceptions/*.json` registry shares, and the
+ * The record validator every `.repo-contract/exceptions/*.json` registry shares. Also the
  * security-family fields and verdict helpers the registry-backed checks build on. repo-contract
- * leaves this layer unpublished, so it is kept here once instead of in every check.
+ * leaves this layer unpublished, so it lives here once instead of in every check.
  *
  * Every record carries `id`, `version` and `justification`. A `version: 2` record also carries
  * `ruleBroken`, `attempted`, `constraint`, `whyPreferable`, `residualRisk`, `revisitWhen` and
@@ -84,7 +84,10 @@ export const EXCEPTION_V2_FIELD_KEYS = [
   "revisitWhen",
 ] as const
 
-/** Every key a v2 record may carry beyond its registry's own: the {@link EXCEPTION_V2_FIELD_KEYS} plus `expires` (a date, or `""` for none; the key itself must be present). */
+/**
+ * Every key a v2 record may carry beyond its registry's own: the {@link EXCEPTION_V2_FIELD_KEYS}
+ * plus `expires`. `expires` is a date, or `""` for none, and the key must be present.
+ */
 const EXCEPTION_V2_ALL_KEYS = [...EXCEPTION_V2_FIELD_KEYS, "expires"] as const
 
 /** The version-2 fields of an exception record; every one is an empty string on a freshly scaffolded stub until a human writes it. */
@@ -113,8 +116,8 @@ export function emptyV2Fields(): ExceptionV2Fields {
 
 /**
  * A record that carries the optional version-2 structure. `version: 1` records (the legacy shape)
- * have none of the {@link ExceptionV2Fields}; both versions are accepted so a registry can migrate
- * record by record, and the inventory reports how many legacy records remain.
+ * have none of the {@link ExceptionV2Fields}. Both versions are accepted, so a registry can migrate
+ * record by record. The inventory reports how many legacy records remain.
  */
 export interface VersionedExceptionRecord {
   readonly id: string
@@ -226,8 +229,8 @@ function validateOneExceptionRecord<TRecord extends { readonly id: string }>(
 
 /**
  * Validates an untrusted parsed value as one exception registry's `exceptions` array against
- * `schema`. Every problem found is reported (`ok: false` with the full list, never just the
- * first); a single bad record fails the whole registry rather than being silently dropped.
+ * `schema`. Every problem found is reported: `ok: false` with the full list, not only the first.
+ * A single bad record fails the whole registry rather than being dropped.
  * @param value - The parsed (otherwise untrusted) value: expected to be an array of record objects.
  * @param schema - The per-registry schema (namespace, permitted metadata keys, field validator).
  * @returns Every valid, freshly-rebuilt record, or every validation error found.
@@ -269,11 +272,10 @@ export function validateExceptionRegistry<TRecord extends { readonly id: string 
 }
 
 /**
- * The small, closed vocabulary of *why* a security-family exception (`SecuritySocket`,
- * `SecurityDeps`, ...) is deliberately tolerated: ported from repo-contract's own
- * `scripts/shared/exception-record.ts` (unpublished there too; see this module's own header for
- * why the core validator is re-derived here rather than imported). Each retrofitted check may
- * narrow which members apply to it.
+ * The closed vocabulary of *why* a security-family exception (`SecuritySocket`, `SecurityDeps`,
+ * ...) is tolerated. It is ported from repo-contract's `scripts/shared/exception-record.ts`, which
+ * is unpublished there too (this module's header says why). Each retrofitted check may narrow
+ * which members apply to it.
  *
  * - `"validated-false-positive"`: the finding does not actually apply here. Only satisfiable
  *   alongside `method: "mechanical-reverification"`: re-running the same tool that raised the
@@ -308,11 +310,11 @@ export type ExceptionType = (typeof EXCEPTION_TYPES)[number]
 
 /**
  * The exception types `SecuritySocket` accepts. Critical and high alerts are never waivable at
- * all (policy, not type). For everything else the type must say what is actually true. Either the
- * alert is a heuristic that does not apply (`validated-false-positive`, re-verified mechanically),
- * an artifact of the scanner (`tooling-limitation`), a real but tolerated property
- * (`accepted-risk`), or the dependency is why the package exists
- * (`required-for-package-to-exist`).
+ * all (policy, not type). For everything else the type must say what is true. The four choices:
+ * - `validated-false-positive`: a heuristic that does not apply, re-verified mechanically.
+ * - `tooling-limitation`: an artifact of the scanner.
+ * - `accepted-risk`: a real but tolerated property.
+ * - `required-for-package-to-exist`: the dependency is why the package exists.
  */
 export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = [
   "validated-false-positive",
@@ -389,10 +391,9 @@ export function validateSecurityExceptionFields(
   if (!remediationValid) errors.push(`${at}.remediation must be a string.`)
 
   // Stryker disable ConditionalExpression: `typeof method === "string"` guarding
-  // `.includes(method)` is an equivalent mutant when forced to `true`: `Array.includes` on a
-  // string array uses SameValueZero (no coercion), so a non-string `method` can never match any
-  // element regardless of this guard. Hand-verified: forcing this to `true` leaves every test in
-  // exception-record.test.ts passing unchanged.
+  // `.includes(method)` is an equivalent mutant when forced to `true`. `Array.includes` on a
+  // string array uses SameValueZero (no coercion), so a non-string `method` never matches.
+  // Hand-verified: forcing this to `true` leaves every test in exception-record.test.ts passing.
   const methodValid =
     method === "" ||
     (typeof method === "string" && (EXCEPTION_METHODS as readonly string[]).includes(method))
@@ -404,10 +405,9 @@ export function validateSecurityExceptionFields(
   }
 
   // Stryker disable ConditionalExpression: `typeof exceptionType === "string"` guarding
-  // `.includes(exceptionType)` is an equivalent mutant when forced to `true`, for the same reason
-  // as the `method` guard above: `Array.includes` never matches a non-string against a string
-  // array. Hand-verified: forcing this to `true` leaves every test in exception-record.test.ts
-  // passing unchanged.
+  // `.includes(exceptionType)` is an equivalent mutant when forced to `true`, as the `method`
+  // guard above is. `Array.includes` never matches a non-string against a string array.
+  // Hand-verified: forcing this to `true` leaves every test in exception-record.test.ts passing.
   const exceptionTypeValid =
     exceptionType === "" ||
     (typeof exceptionType === "string" &&
@@ -457,8 +457,8 @@ export function isValidNonEmptyStringField(
  * Reads one of `record`'s own string fields: the `fieldValue` accessor both `evaluateExceptionRecord`
  * and {@link evaluateFindingVerdict} take. Every exception record here is a flat, string-keyed shape,
  * so this one generic accessor covers all of them. A legacy `version: 1` record has none of the
- * structured {@link EXCEPTION_V2_FIELD_KEYS}; for those it answers {@link LEGACY_FIELD_VALUE} so the
- * record stays valid until it is migrated, while a `version: 2` record must really have written them.
+ * structured {@link EXCEPTION_V2_FIELD_KEYS}. For those it answers {@link LEGACY_FIELD_VALUE}, so
+ * the record stays valid until it is migrated. A `version: 2` record must have written them.
  */
 export function recordFieldValue<TRecord>(record: TRecord, requirement: string): string {
   const flat = record as unknown as Record<string, unknown>
@@ -479,10 +479,10 @@ function asFlatExceptionRecords<TRecord extends { readonly id: string }>(
 }
 
 /**
- * Evaluates one finding against its reconciled (possibly `undefined`, meaning the reconcile<->
- * evaluate bijection itself broke) record: the `record === undefined -> "unmatched"`
- * short-circuit every security-family check needs before it can even call
- * `evaluateExceptionRecord`, shared so each check only supplies its own classification.
+ * Evaluates one finding against its reconciled record. `undefined` means the reconcile <->
+ * evaluate bijection broke. Every security-family check needs the `record === undefined ->
+ * "unmatched"` short-circuit before it calls `evaluateExceptionRecord`. Sharing it here leaves each
+ * check only its classification to supply.
  * @param record - This finding's reconciled active record, or `undefined` for a bijection failure.
  * @param classifications - This finding's own `{ group, category }` classification(s).
  * @param config - The check's own `ExceptionPolicyConfig`.
@@ -569,8 +569,8 @@ export async function reconcileAndPersistExceptionRegistry<
 }
 
 /**
- * Loads a registry from disk, reconciles `findings` against it and persists the result: the
- * whole "read, reconcile, write back" sequence every registry-backed check performs, in one place.
+ * Loads a registry from disk, reconciles `findings` against it and persists the result. Every
+ * registry-backed check performs this "read, reconcile, write back" sequence.
  * @param registryPath - Absolute path of the registry file.
  * @param registryRelativePath - The registry's repo-relative path, for rationales.
  * @param schema - Validates the file's records.

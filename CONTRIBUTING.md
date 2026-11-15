@@ -16,7 +16,9 @@
   pull request with resolved review threads and zero approvals, and the `contract`, `self-check` and
   `windows-smoke` status checks, strict. `self-check` is a transitional duplicate of `contract`.
   `windows-smoke` runs `npm run check`, `npm test` and the scaffold smoke on Windows, not the full contract.
-  `typescript-7` is advisory. The admin role can bypass by pull request.
+  `typescript-7` is advisory. The admin role can bypass by pull request. The ruleset itself lives in GitHub's
+  settings. `test/readme-self-contract-counts.test.ts` fails when this list, `SECURITY.md` and the jobs in
+  `ci.yml` disagree.
 - Changes meant to ship in the next version need a changeset: `npx changeset` (see "Releasing").
 
 ## Making a change

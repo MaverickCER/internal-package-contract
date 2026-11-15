@@ -1,7 +1,8 @@
-// Entry point for the `GeneratedRegions` check (see checks/generated-regions.ts). Runs `generate --check`
-// in this process (scripts/generate/run.mjs) with its output captured, and prints one JSON envelope: `absent`
-// when no document marks a region, `current` when every region matches its sources, else `problem` with
-// what the command said. The policy decides the verdict.
+// Entry point for the `GeneratedRegions` check (see checks/generated-regions.ts). Runs `generate
+// --check` in this process (scripts/generate/run.mjs) with its output captured. Prints one JSON
+// envelope. The state is `absent` when no document marks a region, and `current` when every region
+// matches its sources. Otherwise it is `problem`, with what the command said. The policy decides
+// the verdict.
 
 import { run } from "./generate/run.mjs"
 

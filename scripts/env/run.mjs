@@ -1,13 +1,14 @@
 // `internal-package-contract env`: documents the environment variables and secrets a package depends on, from
 // `ci/env.schema.ts`, with env-cap (which this package carries, so the package installs nothing extra).
 //
-// None of it is required. A package with no `ci/env.schema.ts` has nothing to document and is told so. A
-// variable with no expiry date or no owner is reported as a finding, not a failure. Only `--check` fails, when
-// `docs/ENVIRONMENT.md` differs from what the schema produces; the `EnvContract` check runs that
-// (checks/env-contract.ts). `--rotation-issue` opens, updates or closes the one GitHub issue for credentials due
-// for rotation, through `gh`. The schema is only read, never executed (env-cap parses it). The document is
-// written through the package's own Prettier settings, with the machine's paths and the per-run stamp left out,
-// so two machines produce the same text. No evidence or manifest is written, so nothing ships in a package.
+// None of it is required. A package with no `ci/env.schema.ts` has nothing to document and is told
+// so. A variable with no expiry date or no owner is reported as a finding, not a failure. Only
+// `--check` fails, when `docs/ENVIRONMENT.md` differs from what the schema produces; the
+// `EnvContract` check runs that (checks/env-contract.ts). `--rotation-issue` opens, updates or
+// closes the one GitHub issue for credentials due for rotation, through `gh`. The schema is only
+// read, never executed (env-cap parses it). The document is written through the package's own
+// Prettier settings. The machine's paths and the per-run stamp are left out, so two machines
+// produce the same text. No evidence or manifest is written, so nothing ships in a package.
 
 import {
   existsSync,
@@ -150,8 +151,9 @@ export function withoutMachine(text, roots, separator, caseless) {
 }
 
 /**
- * What `docs/ENVIRONMENT.md` should say, formatted the way the package's own Prettier settings want, so the Format
- * check never disagrees with it, and the evidence it was made from. Computed in memory: nothing is written.
+ * What `docs/ENVIRONMENT.md` should say, and the evidence it was made from. The text is formatted
+ * with the package's own Prettier settings, so the Format check never disagrees with it. Computed
+ * in memory: nothing is written.
  * @param {string} cwd
  * @param {import("./run.mjs").EnvCapModule} envCap
  * @returns {Promise<{ expected: string, evidence: { contract: { contracts: readonly unknown[] }, finding: { findings: readonly { family: string, severity: string, code: string, message: string }[] } } }>}
@@ -171,9 +173,9 @@ async function renderDocs(cwd, envCap) {
   const { evidence } = await envCap.generateEnvArtifacts({ ...shared(cwd, envCap), fs })
   const raw = written.get(path.resolve(cwd, DOCS_PATH))
   const file = path.join(cwd, DOCS_PATH)
-  // A contract a package ships is read from where it is installed, and env-cap writes that place as an absolute
-  // path (the real one, not the one it was given), which differs on every machine. Said from the package root it is
-  // the same everywhere.
+  // A contract a package ships is read from where it is installed. The env-cap library writes that
+  // place as an absolute path (the real one, not the one it was given), which differs on every
+  // machine. Said from the package root, it is the same everywhere.
   const slashed = withoutMachine(
     raw,
     [realpathSync(cwd), realpathSync.native(cwd), path.resolve(cwd)],

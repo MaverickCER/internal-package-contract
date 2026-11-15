@@ -1,14 +1,15 @@
-// Adoption mode: a package that is moving to this standard starts with every check reporting its errors
-// but only the promoted ones deciding the exit code, and promotes checks one at a time.
+// Adoption mode: a package moving to this standard sees every check's errors. Only the promoted
+// checks decide the exit code, and the package promotes them one at a time.
 //
-// Adopting a package at once is rarely possible. The first run finds Lint, Coverage, Docs and Security
-// issues that have been there for a long time. Failing the build on all of them on day one makes
-// people turn the standard off. `.repo-contract/adoption.json` says the package is adopting. While it is
-// active a failing check is still reported as a failure, with its full reason, but only the checks listed
-// under `enforce` decide the exit code; `AdoptionMode` itself always does. The policies are not softened,
-// so what each one finds is what it will find when enforced. `promote` moves checks across as they are
-// fixed. The mode has an end date, so "adopting" cannot become permanent: once it has passed, the
-// `AdoptionMode` check fails until the file is removed (`promote --all`).
+// Adopting a package at once is rarely possible. The first run finds Lint, Coverage, Docs and
+// Security issues that have been there for a long time. Failing the build on all of them on day one
+// makes people turn the standard off. `.repo-contract/adoption.json` says the package is adopting.
+// While it is active, a failing check is still reported as a failure, with its full reason. Only
+// the checks listed under `enforce` decide the exit code; `AdoptionMode` itself always does. The
+// policies are not softened, so what each one finds is what it will find when enforced. `promote`
+// moves checks across as they are fixed. The mode has an end date, so "adopting" cannot become
+// permanent: once it has passed, the `AdoptionMode` check fails until the file is removed (`promote
+// --all`).
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"

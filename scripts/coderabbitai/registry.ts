@@ -2,10 +2,10 @@
  * The record shape of `.repo-contract/exceptions/coderabbit.json`, how a record's id is derived, and the blank
  * stub review.ts writes for a finding with no record yet.
  *
- * A record is invalid, and the `CodeRabbit` check fails, when its id does not match its own
- * `file`/`severity`/`summary`, when `severity` is not one the stream can report, or when `method` is
- * `mechanical-reverification`. No tool can re-run an AI finding to confirm it. `exceptionType` may be any
- * shared type except `validated-false-positive`, for the same reason.
+ * A record is invalid, and the `CodeRabbit` check fails, in three cases. Its id does not match its
+ * `file`/`severity`/`summary`. Its `severity` is not one the stream can report. Its `method` is
+ * `mechanical-reverification`: no tool can re-run an AI finding to confirm it. `exceptionType` may
+ * be any shared type except `validated-false-positive`, for the same reason.
  */
 import { createHash } from "node:crypto"
 import {
@@ -22,11 +22,10 @@ import type { CoderabbitExceptionRecord, NormalizedFinding } from "./evidence-ty
 const SEVERITY_VALUES = new Set<unknown>(["critical", "major", "minor", "unknown"])
 
 /**
- * `"validated-false-positive"` is excluded from a CodeRabbit exception's allowed set: unlike a
- * deterministic scanner, there is no more-authoritative tool to mechanically re-run against an
- * AI-generated finding to confirm it "doesn't actually apply". A CodeRabbit finding judged
- * incorrect is still only ever dismissed via `"accepted-risk"` / `"tooling-limitation"` / etc.,
- * backed by `method: "independent-human-review"`.
+ * `"validated-false-positive"` is excluded from a CodeRabbit exception's allowed set. A
+ * deterministic scanner can be re-run to confirm a finding does not apply; an AI finding has no
+ * such tool. A CodeRabbit finding judged incorrect is dismissed through another type, such as
+ * `"accepted-risk"` or `"tooling-limitation"`, backed by `method: "independent-human-review"`.
  */
 export const CODERABBIT_EXCEPTION_TYPES: readonly ExceptionType[] = EXCEPTION_TYPES.filter(
   (type) => type !== "validated-false-positive",

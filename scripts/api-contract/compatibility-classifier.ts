@@ -2,16 +2,14 @@ import type { ApiContractChange, ChangeKind, ContractImpact } from "./evidence-t
 import type { NormalizedMember, NormalizedParameter, ReleaseTagLevel } from "./model-normalizer.js"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/compatibility-classifier.ts`: this engine
- * now lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
- * devDependency rather than hosting a copy.
+ * Ported from repo-contract's `scripts/api-contract/compatibility-classifier.ts`. The engine now
+ * lives only here; repo-contract runs it as a devDependency instead of keeping a copy.
  *
- * Pure diff over two normalized maps: zero API-Extractor/TypeScript imports, so this module is
- * testable with a fake `resolveAssignability` (fast, synchronous unit tests) while check.ts wires
- * in the real TypeChecker-backed resolver from type-assignability.ts. Implements every
- * deterministic rule from the compatibility-analysis requirements directly from normalized-map
- * facts; only reaches into `resolveAssignability` when a type-bearing position's rendered excerpt
- * text literally changed between baseline and current.
+ * A pure diff over two normalized maps, with no API Extractor or TypeScript import. Unit tests can
+ * therefore pass a fake `resolveAssignability` and stay fast and synchronous. check.ts wires in the
+ * real TypeChecker-backed resolver from type-assignability.ts. Every deterministic rule of the
+ * compatibility analysis reads normalized-map facts only. `resolveAssignability` runs only when the
+ * rendered excerpt of a type-bearing position changed between baseline and current.
  */
 
 const RELEASE_TAG_RANK: Record<ReleaseTagLevel, number> = {
@@ -68,9 +66,9 @@ function push(
   idSuffix = "",
 ): void {
   changes.push({
-    // `kind` is part of the id: one member can emit several genuinely distinct
-    // changes at once (e.g. a release-tag change *and* a property-type change),
-    // and keying only on `canonicalReference` collided them into one id.
+    // `kind` is part of the id because one member can emit several distinct changes at once,
+    // such as a release-tag change and a property-type change. An id of `canonicalReference`
+    // alone collided them.
     id: `${member.canonicalReference}#${kind}${idSuffix}`,
     path: member.scopedName,
     kind,
@@ -502,10 +500,10 @@ function compareOverloadSets(
       )
       continue
     }
-    // A signature-matched overload is compared with the full per-member comparison, not only its
-    // return type. A release-tag narrowing (@public -> @internal), a new @deprecated, or a
-    // type-parameter change on a single overload of a multi-overload set is just as breaking as it
-    // is on a non-overloaded function.
+    // A signature-matched overload gets the full per-member comparison, not only its return type.
+    // Three changes break callers on one overload of a set as they do on a plain function. They are
+    // a release-tag narrowing (@public -> @internal), a new @deprecated, and a type-parameter
+    // change.
     compareMatchedMember(oldMember, newMember, resolve, changes)
   }
   for (const [signature, newMember] of currentBySignature) {
@@ -534,9 +532,8 @@ function classifyOverloadSet(
   resolve: ResolveAssignability,
   changes: ApiContractChange[],
 ): void {
-  // An entirely-new (or entirely-removed) overload set is reported once, for the whole
-  // function/method, regardless of how many overloads it has: not as N bare `overload-added`
-  // entries with no `export-added` among them.
+  // A wholly new or removed overload set is reported once, for the whole function or method.
+  // Otherwise it would read as N bare `overload-added` entries with no `export-added` among them.
   const [removed, ...moreRemoved] = baselineGroup
   const [first, ...moreAdded] = currentGroup
   if (!removed) {
@@ -555,13 +552,12 @@ function classifyOverloadSet(
 }
 
 /**
- * Handles every member with `overloadIndex !== undefined`. The common case, a single
- * non-overloaded function or method on each side, is compared directly by position, so an
- * ordinary parameter/return-type change is reported with the normal, specific change kinds rather
- * than as a coarse overload add+remove. Genuine multi-overload sets are matched *within* their
- * group by exact parameter-list signature text rather than positional `overloadIndex` (inserting a
- * new first overload would otherwise shift every later overload's identity and misreport it as
- * removed+added).
+ * Handles every member with `overloadIndex !== undefined`. The common case is one non-overloaded
+ * function or method on each side. It is compared by position, so a parameter or return-type
+ * change gets its specific change kind instead of a coarse overload add and remove. Overloads in a
+ * multi-overload set are matched within their group by exact parameter-list text, not by
+ * `overloadIndex`. A new first overload would otherwise shift every later overload's identity, and
+ * each would read as removed and added.
  * @param baselineMap - All normalized members on the baseline side, keyed by canonical reference.
  * @param currentMap - All normalized members on the current side, keyed by canonical reference.
  * @param resolve - Callback that classifies whether a changed type excerpt is assignability-compatible.
@@ -590,7 +586,7 @@ function classifyOverloadable(
 /**
  * @param baseline - All normalized members on the baseline side, keyed by canonical reference.
  * @param current - All normalized members on the current side, keyed by canonical reference.
- * @param options - Callbacks/config the classifier needs, currently just `resolveAssignability`.
+ * @param options - Callbacks/config the classifier needs, currently only `resolveAssignability`.
  * @returns Every classified change (sorted by `id`) and the single worst-case `ContractImpact` across them.
  */
 export function classifyContractChanges(
@@ -625,15 +621,12 @@ export function classifyContractChanges(
           `Added enum member ${currentMember.scopedName}.`,
         )
       } else if (currentMember.propertyTypeExcerptText !== undefined) {
-        // A required property added to a container (interface/class/namespace member, etc.)
-        // that itself has no baseline counterpart cannot break an existing consumer: nobody
-        // could have implemented or matched against a shape that did not exist in the baseline
-        // contract at all. Only a required property added to an *already-existing* container is
-        // a real breaking change (an existing consumer's own conforming object literal/class no
-        // longer satisfies the type). Without this check, every new interface/namespace with two
-        // or more required members would be misclassified as breaking on its very first release,
-        // even though the whole container (reported separately as its own compatible
-        // `export-added`) is new.
+        // A required property in a container with no baseline counterpart breaks no consumer.
+        // Nobody could implement or match a shape the baseline never had. A required property
+        // added to an existing container does break: a consumer's conforming object literal or
+        // class no longer satisfies the type. Without this check, every new interface or
+        // namespace with two or more required members would read as breaking on its first
+        // release. The container itself is reported separately, as a compatible `export-added`.
         const parentIsAlsoNew =
           currentMember.parentCanonicalReference !== undefined &&
           !baseline.has(currentMember.parentCanonicalReference)

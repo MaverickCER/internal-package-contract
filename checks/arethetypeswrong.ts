@@ -1,9 +1,9 @@
 /**
  * `TypeResolution`: the published types resolve under every module resolution a consumer may use.
  *
- * Reads: a tarball packed with `--ignore-scripts` by `scripts/run-attw.mjs`, which runs
- * `@arethetypeswrong/cli`. attw's JSON goes to `reports/arethetypeswrong.json`: it truncates on a
- * pipe once a package has several entry points.
+ * Reads: a tarball `scripts/run-attw.mjs` packs with `--ignore-scripts`; that script runs
+ * `@arethetypeswrong/cli`. attw's JSON goes to `reports/arethetypeswrong.json`, because it
+ * truncates on a pipe once a package has several entry points.
  *
  * Fails when the report is missing or unreadable. Otherwise the verdict is repo-contract's own
  * `arethetypeswrong` preset's, once `node10` problems are removed. `node10` is dropped because a

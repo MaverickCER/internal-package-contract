@@ -119,8 +119,9 @@ export const noNetwork = {
         }
       },
       "Program:exit"() {
-        // A global ESLint was told about (`languageOptions.globals`) resolves to a variable of the global scope;
-        // one it was not told about is left unresolved, in `through`. A library reaching for either is the finding.
+        // A global declared to ESLint (`languageOptions.globals`) resolves to a variable of the
+        // global scope. An undeclared one is left unresolved, in `through`. A library reaching for
+        // either is the finding.
         const scope = /** @type {import("eslint").Scope.Scope} */ (
           context.sourceCode.scopeManager.globalScope
         )

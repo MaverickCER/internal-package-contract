@@ -3,9 +3,9 @@
 //   --checks a,b   / --only a,b    run only these checks
 //   --skip c,d                     run every check except these
 //
-// A name the contract does not declare is refused before anything runs, with the closest declared name as a
-// hint. `--skip` is how the bundled pre-push hook leaves out Coverage, Crap and Mutation: a deny-list, so a check
-// added later is in the pre-push set unless it is named there.
+// A name the contract does not declare is refused before anything runs, with the closest declared
+// name as a hint. The bundled pre-push hook leaves out Coverage, Crap and Mutation with `--skip`.
+// It is a deny-list: a check added later is in the pre-push set unless it is named there.
 
 import { nearest } from "./contract-help.mjs"
 

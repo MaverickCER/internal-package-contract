@@ -143,8 +143,8 @@ export function benchmarkComplexityCheck(
       )
       if (!envelope.ok) return envelope.result
       const { state, tag, suites, gains, undetermined = [] } = envelope.value
-      // Nothing is known to be wrong about a group whose big-O could not be determined, but nothing is
-      // checked either, so it is told, never failed. A real failure below still leads.
+      // A group whose big-O could not be determined is unchecked, not known to be wrong. So it is
+      // reported, never failed. A real failure below still leads.
       const unknown =
         undetermined.length === 0
           ? []

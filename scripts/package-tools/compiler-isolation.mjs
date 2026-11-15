@@ -3,8 +3,9 @@
 // A consumer who only imports the runtime must never load, or pay for the bytes of, a compiler. This walks the
 // static import graph of every built entry point in `dist/`. It fails in three cases.
 //
-//   - A client entry (every exported entry point except `./build`, and not the CLI) can reach the compiler
-//     loader, the bundled package, or `node:module` (the loader's `createRequire`).
+//   - A client entry can reach the compiler loader, the bundled package, or `node:module` (the
+//     loader's `createRequire`). Every exported entry point except `./build` and the CLI is a
+//     client.
 //   - A client entry imports `typescript` itself. The ESLint plugin is exempt: it runs inside the consumer's
 //     own ESLint/typescript-eslint process and takes the consumer's `typescript` by design.
 //   - The build entry does NOT reach the bundled compiler (which would make this check vacuous).

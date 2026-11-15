@@ -1,8 +1,9 @@
 // Whether git in this clone is using the bundled internal-package-contract hooks. The hooks run the
-// contract before a commit and a push, so a clone without them finds its failures in CI instead. The
-// answer is `ci` under CI (the `CI` variable set to anything but `false` or `0`, or GitHub Actions),
-// `not-a-repo` outside a repository, and `installed` only when `core.hooksPath` resolves to the bundled
-// hooks/ directory itself. Anything else, including a path that cannot be resolved, is `missing`.
+// contract before a commit and a push, so a clone without them finds its failures in CI instead.
+// The answer is `ci` under CI: the `CI` variable set to anything but `false` or `0`, or GitHub
+// Actions. It is `not-a-repo` outside a repository. It is `installed` only when `core.hooksPath`
+// resolves to the bundled hooks/ directory itself. Anything else, including a path that cannot be
+// resolved, is `missing`.
 
 /**
  * @param {Readonly<Record<string, string | undefined>>} env

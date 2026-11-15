@@ -162,7 +162,7 @@ export const COMMANDS = [
     summary:
       "wire a new subpath export into every place that lists one, or turn on an optional check",
     details:
-      "`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check AmbientCapabilities` names the check in package.json, with its settings written out to change.",
+      "`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check <Name>` turns on AgentSkill, AmbientCapabilities or QuickStart.\nIt names the check in package.json, with its settings written out to change.",
     options: [["--dry-run", "print what would be written and change nothing"]],
   },
   {
@@ -335,8 +335,8 @@ export function nearest(word, names) {
 }
 
 /**
- * A word that is not an option and not a command would otherwise start the whole contract, which can run for
- * hours, on what is almost certainly a typo.
+ * A word that is not an option and not a command would otherwise start the whole contract on a
+ * likely typo. That run can take hours.
  * @param {readonly string[]} argv - the arguments after the script name.
  * @returns {string | undefined} what to tell the person, or `undefined` when the arguments name a command or an option.
  */
