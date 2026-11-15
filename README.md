@@ -692,7 +692,8 @@ A check that not every package needs is off until the package names it.
 `AmbientCapabilities` reads the tarball npm would publish. It fails if a shipped file reaches `node:fs`,
 `node:child_process` or `process.env` outside the entry points listed for that capability. It also fails if a
 shipped file declares a forbidden dependency. Each capability lists its allowed entry points (`"bin"`, or an
-export such as `"./node"`); a capability that is not listed is not checked.
+export such as `"./node"`); a capability that is not listed is not checked. Bundled code under `node_modules/`
+is not read: npm packs it only for bundled packages and their own dependencies.
 
 ```json
 "internal-package-contract": {

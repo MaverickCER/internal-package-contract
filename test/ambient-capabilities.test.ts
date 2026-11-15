@@ -183,14 +183,16 @@ describe("scanFiles", () => {
     })
     expect(result.checked).toBe(2)
   })
-  it("reads only JavaScript, skips bundled dependencies and files too large to be source", () => {
-    const manifest = { bundleDependencies: ["typescript"] }
+  it("reads only JavaScript, skips bundled code and files too large to be source", () => {
+    // `bundleDependencies` names only the wrapper; npm still packs the wrapper's own dependency.
+    const manifest = { bundleDependencies: ["@typescript/typescript6"] }
     const big = { name: "big.js", content: Buffer.alloc(8 * 1024 * 1024 + 1, "a") }
     const files = [
       file("a.d.ts", 'import "node:fs"'),
       file("README.md", "node:fs"),
-      file("node_modules/typescript/lib.js", 'import "node:fs"'),
-      file("node_modules/other/lib.js", 'import "node:fs"'),
+      file("node_modules/@typescript/typescript6/index.js", 'import "node:fs"'),
+      file("node_modules/@typescript/old/lib/_tsc.js", 'require("fs")'),
+      file("dist/node_modules/lib.js", 'import "node:fs"'),
       file("a.cjs", 'import "node:fs"'),
       file("a.mjs", 'import "node:fs"'),
       file("noextension", 'import "node:fs"'),
@@ -198,7 +200,7 @@ describe("scanFiles", () => {
     ]
     const result = scan(files, { fs: [] }, manifest)
     expect(result.violations.map((v) => v.file)).toEqual([
-      "node_modules/other/lib.js",
+      "dist/node_modules/lib.js",
       "a.cjs",
       "a.mjs",
     ])

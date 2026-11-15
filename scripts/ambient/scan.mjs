@@ -9,7 +9,8 @@
 //
 // Textual defense in depth, not a proof: it finds a literal reintroduction (a stray
 // `require("child_process")`, a `process.env` reference, a forbidden dependency) and cannot show that no
-// evasion exists. Bundled dependencies and files larger than LARGEST_SOURCE are not read.
+// evasion exists. Nothing under `node_modules/` is read: npm packs it only for bundled packages and
+// their own dependencies. Files larger than LARGEST_SOURCE are not read either.
 
 /** What each capability looks like in shipped code. */
 export const CAPABILITIES = Object.freeze({
@@ -141,13 +142,11 @@ function reaches(text, capability) {
 /**
  * @param {object} input
  * @param {{ name: string, content: Buffer }[]} input.files - the tarball's files.
- * @param {{ bin?: unknown, exports?: Record<string, unknown>, dependencies?: Record<string, string>, bundleDependencies?: string[] }} input.manifest
+ * @param {{ bin?: unknown, exports?: Record<string, unknown>, dependencies?: Record<string, string> }} input.manifest
  * @param {{ child_process?: string[], fs?: string[], env?: string[], forbiddenDependencies?: string[] }} input.config
  * @returns {{ violations: { file: string, capability: string, hit: string }[], exempt: Record<string, string[]>, checked: number }}
  */
 export function scanFiles({ files, manifest, config }) {
-  // Stryker disable next-line ArrayDeclaration: equivalent -- a placeholder name matches no path in the tarball.
-  const bundled = (manifest.bundleDependencies ?? []).map((name) => `node_modules/${name}/`)
   const forbidden = Object.keys(CAPABILITIES).filter(
     (capability) => config[capability] !== undefined,
   )
@@ -157,7 +156,9 @@ export function scanFiles({ files, manifest, config }) {
   const violations = []
   let checked = 0
   for (const { name, content } of files) {
-    if (bundled.some((root) => name.startsWith(root))) continue
+    // npm packs `node_modules/` only for bundled packages, and with them their own dependencies,
+    // whether or not `bundleDependencies` names them. None of it is this package's code.
+    if (name.startsWith("node_modules/")) continue
     if (!CODE_EXTENSIONS.has(name.slice(name.lastIndexOf(".")))) continue
     if (content.length > LARGEST_SOURCE) continue
     checked += 1

@@ -22,7 +22,6 @@ export function scanFiles(input: {
     bin?: unknown
     exports?: Record<string, unknown>
     dependencies?: Record<string, string>
-    bundleDependencies?: string[]
   }
   config: AmbientConfig
 }): {
