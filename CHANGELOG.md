@@ -1,5 +1,17 @@
 # internal-package-contract
 
+## 0.20.0
+
+### Minor Changes
+
+- 8a65c12: Bump `repo-contract` to 0.14.0.
+
+### Patch Changes
+
+- 8a65c12: `AmbientCapabilities` skips everything under `node_modules/` in the tarball. npm packs that folder only for
+  bundled packages, and with them their own dependencies, which `bundleDependencies` need not name. Before, a
+  dependency of a bundled package was scanned as if it were the package's own code.
+
 ## 0.19.0
 
 ### Minor Changes
