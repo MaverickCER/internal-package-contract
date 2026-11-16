@@ -231,10 +231,9 @@ export async function loadTsconfigPaths(
  *    this mechanism never overlaps with that trust boundary.
  *  - **`.ts`/`.tsx` only.** Matches `resolveRelativeImport()`'s own existing candidate set
  *    and `resolve-package-schema.ts`'s `SCHEMA_FILE_EXTENSIONS`: this codebase's static-
- *    analysis pipeline is `.ts`/`.tsx` only today. A resolved non-`.ts`/`.tsx` file is a
- *    real risk, not just a gap: feeding it straight into `ts.createSourceFile()` wouldn't
- *    error, it would silently parse garbage: exactly the "guess" this codebase's
- *    warn-don't-guess philosophy exists to avoid.
+ *    analysis pipeline reads only `.ts` and `.tsx` today. Any other resolved file is a risk.
+ *    `ts.createSourceFile()` would not error on it; it would parse garbage. That is the
+ *    "guess" the warn-don't-guess rule exists to prevent.
  */
 export function resolveAliasImport(
   specifier: string,

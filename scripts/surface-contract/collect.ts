@@ -1,14 +1,16 @@
 /**
- * Reads a package's surface besides its TypeScript API: the `--help` of each `package.json` `bin` and of
- * every command that help lists, the JSON Schemas its `exports` serve, and the inputs and outputs of its
- * root `action.yml`. Each CLI is run with colour off and keys are sorted, so two runs on one commit read
- * the same surface. A CLI that is not built yet, or that prints its help to stderr, is read as it is;
- * classify.ts judges the difference. Each reusable workflow under `.github/workflows/` (one with
- * `on.workflow_call`) is read for its inputs, outputs and secrets.
+ * Reads a package's surface besides its TypeScript API. That is the `--help` of each `package.json`
+ * `bin` and of every command that help lists, and the JSON Schemas its `exports` serve. It is also
+ * the inputs and outputs of its root `action.yml`. Each CLI is run with colour off and keys are
+ * sorted, so two runs on one commit read the same surface. A CLI that is not built yet, or that
+ * prints its help to stderr, is read as it is; classify.ts judges the difference. Each reusable
+ * workflow under `.github/workflows/` (one with `on.workflow_call`) is read for its inputs, outputs
+ * and secrets.
  *
- * A listed command is a help line indented two spaces whose first word, optionally after the bin's own
- * name, is a lowercase word followed by two or more spaces (`  init   Scaffold ...`). Each one runs as
- * `<bin> <command> --help`, so every command must print its help and exit without side effects.
+ * A listed command is a help line indented two spaces. Its first word, optionally after the bin's
+ * own name, is a lowercase word followed by two or more spaces (`  init   Scaffold ...`). Each one
+ * runs as `<bin> <command> --help`, so every command must print its help and exit without side
+ * effects.
  */
 import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"

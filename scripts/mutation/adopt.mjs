@@ -1,6 +1,7 @@
-// Judging a mutation report made elsewhere, such as the merged slices of a sharded run (./shard.mjs, ./merge.mjs).
-// `IPC_MUTATION_REPORT=<file>` names it; the run copies it where Stryker would have written its own, and the
-// `Mutation` check judges it by the same rules, without mutating again.
+// Judging a mutation report made elsewhere, such as the merged slices of a sharded run
+// (./shard.mjs, ./merge.mjs). `IPC_MUTATION_REPORT=<file>` names it. The run copies it where
+// Stryker would have written its own report. The `Mutation` check then judges it by the same rules,
+// without mutating again.
 //
 // A report is adopted only when it is evidence about this checkout. Every file a full run would mutate is in it,
 // or Stryker's instrumenter finds no mutant in that file's text on disk (./mutant-free.mjs). No file is in it that

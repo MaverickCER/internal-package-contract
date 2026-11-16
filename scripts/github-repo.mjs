@@ -3,11 +3,11 @@
 // covers the default branch. It knows which rules and status checks a default branch must require, and how
 // to add what is missing without loosening anything present.
 //
-// The owner/repo pair is read by scripts/check-branch-protection.mjs, scripts/code-scanning-alerts.mjs
-// and checks/socket-guidance.ts; checks/branch-protection.ts takes the required `contract` context from
-// here; `init --github` (bin/scaffold.mjs) writes the ruleset with the same rules. The required status
-// checks are pinned to GitHub Actions' app id, so a check of the same name from another app cannot
-// satisfy the rule.
+// The owner/repo pair is read by scripts/check-branch-protection.mjs,
+// scripts/code-scanning-alerts.mjs and checks/socket-guidance.ts. checks/branch-protection.ts takes
+// the required `contract` and `required` contexts from here. `init --github` (bin/scaffold.mjs)
+// writes the ruleset with the same rules. The required status checks are pinned to GitHub Actions'
+// app id, so a check of the same name from another app cannot satisfy the rule.
 
 import { sync as spawnSync } from "cross-spawn"
 

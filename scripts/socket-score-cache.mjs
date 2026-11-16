@@ -1,18 +1,20 @@
 // On-disk cache for `socket package score` results (socket-package-score.mjs).
 //
-// Socket scores a published version, so the answer depends only on `<package>@<version>` and Socket's own slowly
-// moving database, not on the branch, the lockfile or the pull request. One entry per scored version therefore
-// serves every run and the hooks until it expires, and a scan costs quota only for a new version. Only a successful
-// score is cached: a failure (auth, rate limit, network) is retried, never replayed.
+// Socket scores a published version. So the answer depends only on `<package>@<version>` and
+// Socket's slowly moving database, not on the branch, the lockfile or the pull request. One entry
+// per scored version therefore serves every run and the hooks until it expires, and a scan costs
+// quota only for a new version. Only a successful score is cached: a failure (auth, rate limit,
+// network) is retried, never replayed.
 //
 // `IPC_SOCKET_CACHE_DIR` relocates the cache, `IPC_SOCKET_CACHE_TTL_HOURS` changes the lifetime, and
 // `IPC_SOCKET_CACHE=off` bypasses it. CI does not keep the cache between runs: a cache written by a workflow that
 // ran pull-request code could be poisoned.
 //
-// The cache is trusted input: an entry with `alerts: []` makes the check pass. It therefore lives in a directory
-// only the current user can write (by default under `~/.cache`, created with mode 0700, never a shared temp
-// directory). A directory owned by someone else or writable by others is not read or written, and an entry is used
-// only when it is shaped like a score for exactly the package and version asked about.
+// The cache is trusted input: an entry with `alerts: []` makes the check pass. It therefore lives
+// in a directory only the current user can write (by default under `~/.cache`, created with mode
+// 0700, never a shared temp directory). A directory owned by someone else or writable by others is
+// not read or written. An entry is used only when it is shaped like a score for exactly the package
+// and version asked about.
 
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"

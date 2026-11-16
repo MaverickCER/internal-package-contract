@@ -1,6 +1,6 @@
 /**
- * `BranchProtection`: the default branch of the repository `origin` points at cannot be merged into
- * without a green `contract` job, nor without a green `required` job where the package's CI has one.
+ * `BranchProtection`: a merge into the default branch of `origin`'s repository needs a green
+ * `contract` job. Where the package's CI has a `required` job, the merge needs that green too.
  *
  * Reads: the repository's active GitHub rulesets through the `gh` CLI, by way of
  * `scripts/check-branch-protection.mjs`. Locally that is a person's `gh auth login`; in Actions it

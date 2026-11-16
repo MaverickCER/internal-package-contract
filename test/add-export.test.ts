@@ -700,7 +700,7 @@ describe("planAddCheck", () => {
     table["Other"] = {}
     try {
       expect(planAddCheck({ name: "Nope", packageJson: "{}" }).problems).toEqual([
-        "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, Other.",
+        "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart, Other.",
       ])
     } finally {
       delete table["Other"]
@@ -739,7 +739,7 @@ describe("planAddCheck", () => {
     const plan = (name: string, packageJson: string | undefined) =>
       planAddCheck({ name, packageJson }).problems
     expect(plan("Nope", manifest())).toEqual([
-      "unknown check: Nope. Available: AgentSkill, AmbientCapabilities.",
+      "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart.",
     ])
     expect(plan("toString", manifest())).toHaveLength(1)
     expect(plan("AmbientCapabilities", undefined)).toEqual(["package.json does not exist here."])
@@ -752,6 +752,13 @@ describe("planAddCheck", () => {
     expect(
       plan("AmbientCapabilities", manifest({ "internal-package-contract": { checks: "x" } })),
     ).toEqual(['"internal-package-contract"."checks" must be a list of check names.'])
+  })
+  it("turns on QuickStart with its name alone, since it reads no settings", () => {
+    const result = planAddCheck({ name: "QuickStart", packageJson: manifest({}) })
+    expect(result.problems).toEqual([])
+    expect(JSON.parse(result.text ?? "")["internal-package-contract"]).toEqual({
+      checks: ["QuickStart"],
+    })
   })
 })
 
@@ -800,7 +807,7 @@ describe("add check (run)", () => {
     })
     put("{}")
     expect(add(["check", "Nope"]).err).toBe(
-      "[add] nothing was written:\n- unknown check: Nope. Available: AgentSkill, AmbientCapabilities.\n",
+      "[add] nothing was written:\n- unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart.\n",
     )
     expect(read()).toBe("{}")
   })

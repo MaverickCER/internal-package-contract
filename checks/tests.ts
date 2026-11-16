@@ -156,9 +156,9 @@ export function skippedByFile(
 
 /**
  * A run of "N tests, 0 failures" says nothing about the tests that did not run. This holds the
- * skips to the same standard as every other exception: a test file that skips needs a complete
- * `skipped-test:<file>` record saying why (a platform-only suite, a fixture installed by a separate
- * CI job). A run in which no test ran at all already fails in repo-contract's `test` preset.
+ * skips to the same standard as every other exception. A test file that skips needs a complete
+ * `skipped-test:<file>` record saying why: a platform-only suite, or a fixture a separate CI job
+ * installs. A run in which no test ran at all already fails in repo-contract's `test` preset.
  * @param report - Vitest's JSON report.
  * @param passRationale - the delegated pass verdict's rationale.
  * @returns the verdict for the run's skips.
@@ -216,10 +216,9 @@ async function judgeSkips(report: VitestReport, passRationale: string): Promise<
 }
 
 /**
- * Where the Vitest JSON reporter writes. This is deliberately the exact path repo-contract's own
- * `test` preset reads (newer repo-contract versions read this file themselves instead of the
- * process's stdout), so the delegation below works against both the older stdout-based preset and
- * the newer file-based one.
+ * Where the Vitest JSON reporter writes: the exact path repo-contract's `test` preset reads.
+ * Newer repo-contract versions read this file instead of the process's stdout. So the delegation
+ * below works with both the older stdout-based preset and the newer file-based one.
  */
 export const VITEST_RESULTS_PATH = "reports/vitest/vitest-report.json"
 

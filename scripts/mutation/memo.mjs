@@ -1,10 +1,12 @@
 // Reuses a mutation run when nothing that could change its result has changed.
 //
-// A mutation run is a function of the code, the tests, the configuration and the tools that run them. This keeps
-// the evidence of a run under a hash of every file git does not ignore, the Node.js version and what the run was
-// restricted to, and puts it back when the hash is the same. Only a run that exited 0 with every mutant caught or
-// left out is kept: a survivor or a timeout may be a loaded machine's result, and replaying it would pin that. It
-// decides nothing; the check reads the evidence and applies its own policy, so a reused run is judged like a fresh one.
+// A mutation run is a function of the code, the tests, the configuration and the tools that run
+// them. This keeps the evidence of a run under a hash of three inputs. They are every file git does
+// not ignore, the Node.js version, and what the run was restricted to. It puts the evidence back
+// when the hash is the same. Only a run that exited 0 with every mutant caught or left out is kept.
+// A survivor or a timeout may be a loaded machine's result, and replaying it would pin that. It
+// decides nothing: the check reads the evidence and applies its own policy, so a reused run is
+// judged like a fresh one.
 //
 // Nothing is reused under `CI` or with `IPC_MUTATION_MEMO=0`. What it cannot see: ignored files not derived from
 // tracked ones, and installed packages beyond what the lockfile pins.

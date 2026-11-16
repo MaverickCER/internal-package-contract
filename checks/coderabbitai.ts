@@ -94,12 +94,11 @@ export function evaluateFinding(
   readonly missing: readonly string[]
 } {
   // Stryker disable all -- equivalent mutants. `CODERABBIT_GLOBAL_DEFAULT_POLICY` is deliberately
-  // byte-identical to `CODERABBIT_POLICY.coderabbit.default` (see
-  // `scripts/coderabbitai/policy-config.ts`: one group, one group-level default, the same four
-  // requirements), so mutating `"coderabbit"` to `""` (or the whole classification to `{}`)
-  // only makes `resolveExceptionPolicy` miss the group and fall through to that identical global
-  // default. Every input then resolves to exactly the same policy, the same verdict and the same
-  // `missing` list, so no test could ever observe a difference.
+  // byte-identical to `CODERABBIT_POLICY.coderabbit.default`.
+  // `scripts/coderabbitai/policy-config.ts` declares one group, one group-level default and the
+  // same four requirements. Mutating `"coderabbit"` to `""`, or the classification to `{}`, only
+  // makes `resolveExceptionPolicy` fall through to that identical global default. Every input then
+  // resolves to the same policy, verdict and `missing` list, so no test can observe a difference.
   const classifications: readonly [ExceptionClassification, ...ExceptionClassification[]] = [
     { group: "coderabbit", category: finding.severity },
   ]
@@ -144,11 +143,10 @@ export function evaluateCoderabbitPolicy(input: {
     VALID_CODERABBIT_REQUIREMENTS,
   )
   // Stryker disable all -- CODERABBIT_POLICY/VALID_CODERABBIT_REQUIREMENTS are fixed, valid module
-  // constants (see `scripts/coderabbitai/policy-config.ts`); this defensive guard can never observe
-  // a misconfigured policy under any real invocation of this function, since it never varies at
-  // runtime. No test can hit it without literally breaking those constants. Kept as
-  // defense-in-depth against a future editing mistake in CODERABBIT_POLICY itself: exactly as
-  // `SecuritySocket`'s and `SecurityDeps`' own identical guards are annotated.
+  // constants (see `scripts/coderabbitai/policy-config.ts`). They never vary at runtime, so this
+  // guard never sees a misconfigured policy, and no test can reach it without breaking them. It
+  // stays as defense in depth against a future editing mistake in CODERABBIT_POLICY, like the
+  // identical guards in `SecuritySocket` and `SecurityDeps`.
   if (configErrors.length > 0) {
     return {
       outcome: "fail",
@@ -186,9 +184,8 @@ export function evaluateCoderabbitPolicy(input: {
     return { outcome: "warn", rationale: `CodeRabbit review failed: ${evidence.message}` }
   }
 
-  // Independent re-validation of what the wrapper script actually wrote: the policy never trusts
-  // its own subprocess's reconciled records without re-checking them against the same registry
-  // schema the script loaded them with.
+  // Re-validate what the wrapper script wrote. The policy re-checks its subprocess's reconciled
+  // records against the registry schema the script loaded them with.
   const activeRecords = Object.values(evidence.activeExceptions)
   const revalidated = validateExceptionRegistry(
     [...activeRecords, ...evidence.staleExceptions],
@@ -246,9 +243,8 @@ export function evaluateCoderabbitPolicy(input: {
     // finding whose id is absent from `evidence.activeExceptions`. So `evaluateFindingVerdict`'s
     // `record === undefined -> "unmatched"` short-circuit can never be observed past that guard
     // either. Both verdicts *are* covered on `evaluateFinding`/`findBijectionErrors` themselves.
-    // Kept verbatim as defense-in-depth: a future `forbidden` severity tier, or a
-    // relaxed bijection guard, must still render a correct offender line rather than silently
-    // mislabel one as "exception incomplete".
+    // They stay as defense in depth. A future `forbidden` severity tier, or a relaxed bijection
+    // guard, must still render a correct offender line, not "exception incomplete".
     // Stryker disable all -- unreachable defensive branches, see comment above.
     const detail =
       d.verdict === "forbidden"
@@ -260,9 +256,9 @@ export function evaluateCoderabbitPolicy(input: {
     return `- ${d.finding.file} [${d.finding.severity}]: ${detail}; ${d.finding.summary}`
   })
 
-  // Advisory: CodeRabbit's findings are suggestions, adopted where they improve the code. A review of the same
-  // diff words them differently on every run, so no record can be relied on to match the next one; they are
-  // reported, never a reason to stop a commit.
+  // Advisory: CodeRabbit's findings are suggestions, adopted where they improve the code. A review
+  // of the same diff words them differently on every run, so no record reliably matches the next
+  // one. They are reported, never a reason to stop a commit.
   return {
     outcome: "warn",
     rationale: [
@@ -281,10 +277,10 @@ function unreconciledNote(existingRecordCount: number, registryPath: string): st
 }
 
 /**
- * Every way the wrapper script's own `findings` <-> `activeExceptions` correspondence can be
- * broken: a duplicate finding id, a finding with no active record, or an active record matching no
- * finding. All three mean the reconciliation this policy is about to read is not trustworthy, so
- * none of them is tolerated.
+ * Every way the wrapper script's `findings` <-> `activeExceptions` correspondence can break. The
+ * three ways are a duplicate finding id, a finding with no active record, and an active record
+ * matching no finding. Each means the reconciliation this policy reads is untrustworthy, so none is
+ * tolerated.
  * @internal Exported for direct unit coverage: each of the three branches is independently
  * reachable only from a hand-built, deliberately-inconsistent evidence value.
  */

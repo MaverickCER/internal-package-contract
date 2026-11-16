@@ -6,12 +6,14 @@
 // does not ignore is hashed as the inputs of the run. It writes `reports/mutation/mutation.json` and the memo
 // beside it.
 //
-// Every mutant is run (`--force`), whatever an incremental file says: a result carried over from a loaded machine
-// could pass a local gate that CI, starting cold, then fails. A narrowed run (`--scope affected`) mutates only the
-// sources the change affects, and skips when there are none (scripts/mutation/narrow.mjs). A sharded run mutates
-// one slice (scripts/mutation/shard.mjs). `IPC_MUTATION_REPORT` judges a report made elsewhere instead of mutating
-// (scripts/mutation/adopt.mjs). A clean run is reused while nothing it depends on has changed, never under CI
-// (scripts/mutation/memo.mjs). A timeout is run again alone before it counts (scripts/mutation/confirm-timeouts.mjs).
+// Every mutant is run (`--force`), whatever an incremental file says. A result carried over from a
+// loaded machine could pass a local gate that CI, starting cold, then fails. A narrowed run
+// (`--scope affected`) mutates only the sources the change affects, and skips when there are none
+// (scripts/mutation/narrow.mjs). A sharded run mutates one slice (scripts/mutation/shard.mjs).
+// `IPC_MUTATION_REPORT` judges a report made elsewhere instead of mutating
+// (scripts/mutation/adopt.mjs). A clean run is reused while nothing it depends on has changed,
+// never under CI (scripts/mutation/memo.mjs). A timeout is run again alone before it counts
+// (scripts/mutation/confirm-timeouts.mjs).
 //
 // Nothing here lets a package skip mutation testing. The pre-push hook leaves the check out by name; the pre-commit
 // hook and the consumer `contract` job run it. Stryker's sandbox under `.stryker-tmp` is removed afterwards, as far
@@ -65,15 +67,17 @@ const fallbackConfig = fallbackIdx === -1 ? undefined : process.argv[fallbackIdx
 
 const ownConfig = CONFIG_CANDIDATES.some((c) => existsSync(path.join(process.cwd(), c)))
 
-// Always every mutant, whatever an incremental file says. A package may keep `incremental` on for a developer
-// iterating by hand, but the check's evidence must be a full analysis. A result carried over from a run made under
-// other conditions (another concurrency, a loaded machine whose tests timed out and so counted as kills) can stand in
-// for a run that would not have said the same. CI, starting cold, would then fail what a local gate passed.
-// A narrowed run mutates only the sources a change affects (see scripts/mutation/narrow.mjs).
+// Always every mutant, whatever an incremental file says. A package may keep `incremental` on for a
+// developer iterating by hand, but the check's evidence must be a full analysis. A carried-over
+// result may come from other conditions: another concurrency, or a loaded machine whose tests timed
+// out and so counted as kills. It can then stand in for a run that would not have said the same.
+// CI, starting cold, would fail what a local gate passed. A narrowed run mutates only the sources a
+// change affects (see scripts/mutation/narrow.mjs).
 const scope = readScope(process.cwd())
 let narrowed = narrowMutation(scope)
-// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run) instead of mutating,
-// and takes precedence over `IPC_MUTATION_SHARD`: a job that judges a report mutates nothing, whatever else it inherits.
+// `IPC_MUTATION_REPORT=<file>` judges a report made elsewhere (the merged slices of a sharded run)
+// instead of mutating. It takes precedence over `IPC_MUTATION_SHARD`: a job that judges a report
+// mutates nothing, whatever else it inherits.
 const adopted = reportToAdopt(process.env, process.cwd())
 // What a full run mutates, as targets (see scripts/mutation/shard.mjs): the sources a change affects when the run is
 // narrowed, else what the Stryker config selects.
@@ -83,7 +87,7 @@ const targets = async () =>
     ? [...(scope.mutate ?? [])]
     : expandMutate(process.cwd(), mutateGlobsOf(await strykerConfig()))
 // `IPC_MUTATION_SHARD=i/n` mutates one slice, so that the slices can run as parallel jobs and finish where one job
-// would not; a narrowed run is cut into slices of the sources it narrowed to.
+// would not. A narrowed run is cut into slices of the sources it narrowed to.
 const shard = adopted === undefined ? shardSpecOf(process.env) : undefined
 if (shard !== undefined && !narrowed.skip) {
   narrowed = shardMutation({
@@ -139,7 +143,7 @@ if (adopted !== undefined) {
   try {
     rmSync(path.join(process.cwd(), ".stryker-tmp"), { recursive: true, force: true })
   } catch {
-    // best effort; bin/contract.mjs cleans it too
+    // Best effort: bin/contract.mjs cleans it too.
   }
 
   if (result.error) throw result.error

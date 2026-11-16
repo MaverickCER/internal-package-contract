@@ -9,6 +9,7 @@ import {
   unknownCommand,
   wantsHelp,
 } from "../scripts/contract-help.mjs"
+import { OPTIONAL_SETTINGS } from "../scripts/recipes/optional-settings.mjs"
 
 const bin = path.resolve(import.meta.dirname, "../bin/contract.mjs")
 
@@ -191,5 +192,12 @@ describe("the entry point on a mistyped check", () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('Unknown check "Lnt". Did you mean Lint?')
     expect(result.stderr).not.toContain("    at ")
+  })
+})
+
+describe("add's help", () => {
+  it("names every optional check that add check can turn on", () => {
+    const details = COMMANDS.find((command) => command.name === "add")?.details ?? ""
+    for (const name of Object.keys(OPTIONAL_SETTINGS)) expect(details, name).toContain(name)
   })
 })

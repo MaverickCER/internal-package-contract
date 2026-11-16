@@ -69,8 +69,8 @@ export const crap: CheckDefinitionConfig = {
   ],
   policy: async (ctx): Promise<PolicyResult> => {
     const { result, evidence } = ctx
-    // A narrowed run executed only the tests a change affects, so only the files those tests exercise have
-    // coverage worth weighing complexity against; the rest would read as untested.
+    // A narrowed run executed only the tests a change affects. Only the files those tests exercise
+    // have coverage worth weighing complexity against; the rest would read as untested.
     const narrowed = narrowedScope(ctx)
     if (narrowed?.tests.length === 0) {
       return {

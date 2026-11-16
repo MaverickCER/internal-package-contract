@@ -285,9 +285,9 @@ async function runSingleTargetCheck(
   // Below 1.0.0 the required level is deflated: see `requiredLevelFor`.
   const preOne = parseVersion(packageJson.version)?.major === 0
 
-  // A compatible change widens the public surface when it adds an export/member/overload/enum-member
-  // (`*-added`), and also on a `release-tag-changed`: which, being compatible rather than breaking,
-  // can only mean a tag was widened (e.g. `@beta` -> `@public`), newly exposing API.
+  // A compatible change widens the public surface when it adds an export, member, overload or enum
+  // member (`*-added`). A compatible `release-tag-changed` widens it too. Being compatible, it can
+  // only mean a widened tag (`@beta` -> `@public`, for example), which newly exposes API.
   const widensSurface = diff.some(
     (change) => change.kind.endsWith("-added") || change.kind === "release-tag-changed",
   )
@@ -336,17 +336,17 @@ export async function runApiContractCheck(
 
   const preOneRoot = parseVersion(packageJson.version)?.major === 0
   const targetResults: ApiContractTargetResult[] = []
-  // Sequential, not `Promise.all`: each target invokes API Extractor's own programmatic API, which
-  // is not safe to run concurrently against the same process (it mutates shared compiler-host
-  // state); the same reason repo-contract's own report-targets.ts looped its (analogous)
-  // multi-target extraction sequentially.
+  // Sequential, not `Promise.all`. Each target calls API Extractor's programmatic API, which
+  // mutates shared compiler-host state, so two runs in one process are unsafe. The
+  // report-targets.ts script in repo-contract looped its multi-target extraction for the same
+  // reason.
   for (const target of targets) {
     targetResults.push(await runSingleTargetCheck(root, releaseTag, target, packageJson))
   }
 
-  // The aggregate required level across every target, folding in "unknown" targets via the same
-  // worst-case reasoning a single target's own impact ranking already uses: see
-  // evidence-types.ts's own doc comment on `ApiContractEvidence.requiredLevel`.
+  // The aggregate required level across every target. "unknown" targets fold in by the same
+  // worst-case rule a single target's impact ranking uses. See the doc comment on
+  // `ApiContractEvidence.requiredLevel` in evidence-types.ts.
   const knownTargets = targetResults.filter((result) => result.impact !== "unknown")
   let requiredLevel = knownTargets
     .map((result) => result.requiredLevel)
@@ -378,9 +378,9 @@ export async function runApiContractCheck(
 
   const summary = targetResults.map((result) => `[${result.target}] ${result.summary}`).join("\n\n")
 
-  // A version bump never declares a level on its own. Measured from a baseline the last release did
-  // not refresh, any version past the minimum would excuse every later break, so a baseline that
-  // records another version than package.json is reported and the policy fails on it.
+  // A version bump never declares a level on its own. Against a baseline the last release did not
+  // refresh, any version past the minimum would excuse every later break. So a baseline recording
+  // another version than package.json is reported, and the policy fails on it.
   const staleBaselines = targetResults
     .filter((result) => !result.initialBaseline && result.baselineVersion !== packageJson.version)
     .map((result) => `${result.target}@${String(result.baselineVersion)}`)

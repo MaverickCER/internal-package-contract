@@ -30,14 +30,11 @@ export const COMPLEXITY_CLASSES = Object.freeze([
 ])
 
 /**
- * The exponent `p` such that `medianMs ~ size^p` a "clean" example of each
- * class would produce. `linearithmic`'s 1.2 (rather than n*log(n)'s
- * theoretical non-power-law shape) is a deliberately chosen representative
- * value for typical benchmark tier ratios (5x-20x): see the module
- * comment's "linear vs linearithmic" limitation. `cubic-or-worse`'s 3
- * is an anchor, not a ceiling: nearest-anchor classification means anything
- * with `p` past the quadratic/cubic midpoint (2.5) snaps here
- * regardless of how much higher it actually is.
+ * The exponent `p` such that `medianMs ~ size^p` a "clean" example of each class would produce. An
+ * n*log(n) cost is not a power law, so `linearithmic` takes 1.2: the exponent it shows over typical
+ * tier ratios (5x-20x). See the module comment's "linear vs linearithmic" limitation.
+ * `cubic-or-worse`'s 3 is an anchor, not a ceiling. Any `p` past the quadratic/cubic midpoint (2.5)
+ * snaps here, however much higher it is.
  */
 const CLASS_ANCHORS = Object.freeze([
   { complexityClass: "constant", exponent: 0 },
@@ -68,10 +65,9 @@ export function inputTotal(inputs) {
  * Builds a size-ordered series from a group's `{ tierName: { medianMs,
  * inputs? } }` measurements (the shape shared by a normalized results.json:
  * see lib/results.mjs's `resultsToMeasurements`; and a history entry's
- * own `measurements[group]`). Excludes any tier lacking a usable `inputs`
- * total, a positive size, or a positive finite `medianMs`: see the module
- * comment's "insufficient-data" / "no-size-variation" limitations for what
- * happens once too few points remain.
+ * own `measurements[group]`). Excludes any tier without a positive `inputs` total or a positive
+ * finite `medianMs`. The module comment's "insufficient-data" and "no-size-variation" limitations
+ * say what happens once too few points remain.
  */
 export function buildSizeSeries(tiers) {
   const points = []
@@ -105,12 +101,10 @@ export function discardedTiers(tiers) {
 }
 
 /**
- * Least-squares slope of ln(medianMs) against ln(size) across `series`
- * (already filtered to positive size/medianMs by `buildSizeSeries`). Returns
- * `null` when fewer than 2 points are given, or when every point shares the
- * same size (zero variance on the x-axis: the slope is undefined, not
- * infinite or zero). For exactly 2 points this is algebraically identical to
- * the single pairwise ratio `ln(T2/T1) / ln(N2/N1)`.
+ * Least-squares slope of ln(medianMs) against ln(size) across `series` (already filtered to
+ * positive size/medianMs by `buildSizeSeries`). Returns `null` for fewer than 2 points, or when
+ * every point shares one size. With no x-axis variance the slope is undefined, not infinite or
+ * zero. For exactly 2 points this equals the pairwise ratio `ln(T2/T1) / ln(N2/N1)`.
  */
 export function estimateGrowthExponent(series) {
   if (!Array.isArray(series)) return null
@@ -132,9 +126,9 @@ export function estimateGrowthExponent(series) {
 
 /**
  * How many of the LARGEST sizes the exponent is fitted on once a ladder is longer than this. A real
- * cost is `fixed overhead + work(n)`; a single power law fitted across every size is dominated by the
- * fixed per-call overhead at the small end and reports a function that is linear for large inputs as
- * "logarithmic". The large end is where the algorithm shows, so that is what is fitted.
+ * cost is `fixed overhead + work(n)`. Fitted across every size, the fixed per-call overhead
+ * dominates the small end. A function that is linear for large inputs then reads as "logarithmic".
+ * The large end is where the algorithm shows, so that is what is fitted.
  */
 export const FIT_WINDOW = 5
 
@@ -148,8 +142,8 @@ export const MIN_R_SQUARED = 0.8
 const FLAT_RATIO = 1.5
 
 /**
- * Fits the growth exponent on the largest {@link FIT_WINDOW} sizes of `series` (all of them when the
- * ladder is not longer), and says how well a power law describes them.
+ * Fits the growth exponent on the largest {@link FIT_WINDOW} sizes of `series`, or all of them on a
+ * shorter ladder. Also says how well a power law describes them.
  * @param {readonly { size: number, medianMs: number }[]} series - ascending by size, positive values.
  * @returns {{ exponent: number, rSquared: number, flat: boolean, points: number } | null} `null` when no slope exists.
  */
@@ -173,11 +167,9 @@ export function fitGrowth(series) {
 /**
  * Nearest-anchor snap of a growth exponent to one of COMPLEXITY_CLASSES.
  * CLASS_ANCHORS is ascending, and ties are broken toward the FIRST (lower,
- * simpler) anchor found at the minimum distance. An exact midpoint between
- * two classes snaps to the cheaper one, so this classifier is conservative
- * about alarming a caller with a scarier label than the data strictly
- * supports. A strict `<` comparison below, not `<=`, is what keeps the
- * earlier/lower anchor as the incumbent on a tie.
+ * simpler) anchor found at the minimum distance. An exact midpoint between two classes snaps to the
+ * cheaper one. The label is then never scarier than the data supports. The strict `<` below, not
+ * `<=`, keeps the lower anchor as the incumbent on a tie.
  */
 export function snapExponentToClass(exponent) {
   const distance = (anchor) => Math.abs(exponent - anchor.exponent)
@@ -186,11 +178,9 @@ export function snapExponentToClass(exponent) {
 }
 
 /**
- * Full classification of one group's tier measurements: builds the series,
- * estimates the exponent, and snaps it to a class. `points` in the result is
- * how many tiers actually survived filtering: useful for a caller that
- * wants to show its confidence (2 points is the bare minimum; more is
- * better).
+ * Full classification of one group's tier measurements: builds the series, estimates the exponent,
+ * and snaps it to a class. `points` in the result is how many tiers survived filtering. A caller
+ * can show it as confidence: 2 points is the minimum, and more is better.
  */
 export function classifyGroup(tiers) {
   const series = buildSizeSeries(tiers)
@@ -215,8 +205,8 @@ export function classifyGroup(tiers) {
     }
   }
 
-  // A group that barely moves is flat, whatever its R-squared; one that moves but not along a power
-  // law (a step, a cache cliff) is not given a class the data does not support.
+  // A group that barely moves is flat, whatever its R-squared. One that moves off a power law (a
+  // step, a cache cliff) gets no class, because the data does not support one.
   // Stryker disable next-line EqualityOperator: an R-squared computed from logarithms of real timings is never exactly MIN_R_SQUARED, so `<` and `<=` cannot disagree
   if (!fit.flat && fit.rSquared < MIN_R_SQUARED) {
     return {
@@ -241,8 +231,8 @@ export function classifyGroup(tiers) {
  * Classes are anchors on a line (0, 0.3, 1, 1.2, 2, 3). A group whose exponent sits near the midpoint
  * of two of them changes label on a shift of a few hundredths. Measured on real CI runs, an exponent of
  * 1.13 became 1.03 (`linearithmic` to `linear`) with nothing but run-to-run noise. A real change of
- * algorithm moves the exponent by about a whole class gap (linear to quadratic is ~1.0), so requiring 0.25
- * keeps those and drops the label flips that are only noise at a boundary.
+ * algorithm moves the exponent by about a whole class gap (linear to quadratic is ~1.0). Requiring
+ * 0.25 keeps those shifts and drops the label flips that are only noise at a boundary.
  */
 export const SHIFT_MARGIN = 0.25
 
@@ -252,10 +242,10 @@ export function movedByMargin(previousExponent, currentExponent) {
 }
 
 /**
- * Diffs a group's previous (history) vs current (fresh run) tier
- * measurements. `shifted` is true only when BOTH classifications succeeded
- * AND they disagree by at least {@link SHIFT_MARGIN} of exponent: see the module comment's "known limitations" for why
- * a `null` on either side never counts as a shift.
+ * Diffs a group's previous (history) vs current (fresh run) tier measurements. `shifted` is true
+ * only when BOTH classifications succeeded AND their exponents differ by at least
+ * {@link SHIFT_MARGIN}. The module comment's "known limitations" say why a `null` on either side
+ * never counts as a shift.
  */
 export function detectComplexityShift(previousTiers, currentTiers) {
   const previous = classifyGroup(previousTiers ?? {})

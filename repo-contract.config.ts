@@ -27,8 +27,9 @@
  *   TypeScript by path (`checks/*`, `./benchmark` and the other exports), and there is no build that emits the
  *   declarations API Extractor reads. Those exports are not diffed; README "Stability" says review decides. The
  *   CLI surface is what `SurfaceContract` guards.
- * - `ReadmeStructure`, `LandingPage`, `Accessibility`, `ScorecardWorkflow`, `EngineMatrix`: for published
- *   packages; this one is private (`"private": true`), so each would pass vacuously.
+ * - `ReadmeStructure`, `LandingPage`, `Accessibility`, `ScorecardWorkflow`, `EngineMatrix`,
+ *   `BundledDependencies`: for published packages; this one is private (`"private": true`), so each
+ *   would pass vacuously.
  * - `PinConsistency`, `ManagedFiles`: judge a consumer's pin of this package and the files it manages there;
  *   this repository is the source of both, not a consumer, so each would pass vacuously.
  * - `BenchmarkCoverage`, `BenchmarkComplexity`, `BenchmarkGuides`: the suites under `benchmarks/` are committed,

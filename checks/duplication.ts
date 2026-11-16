@@ -44,10 +44,9 @@ export const duplication: CheckDefinitionConfig = {
     let report: JscpdReport
     try {
       // Stryker disable StringLiteral: an equivalent mutant -- `readFile(path, "")` returns a
-      // Buffer instead of a string, but `JSON.parse` coerces any non-string argument via its
-      // default (utf8) `toString()`, which produces byte-for-byte the same text `"utf8"` would
-      // have decoded. Hand-verified: forcing this to `""` leaves every test in
-      // duplication.test.ts passing unchanged.
+      // Buffer instead of a string. `JSON.parse` coerces it with its default (utf8) `toString()`,
+      // which yields the same text `"utf8"` would have decoded. Hand-verified: forcing this to
+      // `""` leaves every test in duplication.test.ts passing.
       const raw = await readFile(
         path.join(process.cwd(), "reports/jscpd/jscpd-report.json"),
         "utf8",
@@ -73,13 +72,10 @@ export const duplication: CheckDefinitionConfig = {
 
     if (pct <= DUPLICATION_MAX_PERCENTAGE) {
       // Stryker disable ConditionalExpression,EqualityOperator: an equivalent mutant -- forcing
-      // this to always take the "build the list" branch produces byte-identical output to the
-      // `: ""` fallback whenever `duplicates` really is empty (`["", ...[].map(...)].join("\n")`
-      // is `""`, same as the fallback), and produces the SAME "build the list" output as the
-      // unmutated code whenever `duplicates` is genuinely non-empty (the real condition already
-      // takes this same branch then): there is no `duplicates` array this can ever diverge on.
-      // Hand-verified: forcing this to `true` leaves every test in duplication.test.ts passing
-      // unchanged.
+      // this to always build the list changes nothing. With `duplicates` empty, the list is
+      // `""` (`["", ...[].map(...)].join("\n")`), the same as the `: ""` fallback. With
+      // `duplicates` non-empty, the real condition already builds the list. Hand-verified:
+      // forcing this to `true` leaves every test in duplication.test.ts passing.
       const detail =
         duplicates.length > 0
           ? [

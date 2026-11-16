@@ -108,8 +108,8 @@ export function gitState(root, exec) {
       return null
     }
   }
-  // The benchmark's own outputs are written into the tree before the next suite starts, so they must
-  // not make the tree "dirty": `gitDirty` means the CODE under test had uncommitted changes.
+  // The benchmark writes its outputs into the tree before the next suite starts. They must not make
+  // the tree "dirty": `gitDirty` means the CODE under test had uncommitted changes.
   const status = run([
     "status",
     "--porcelain",
@@ -129,8 +129,8 @@ export function gitState(root, exec) {
 }
 
 /**
- * Raw and gzip size of each shipped entry file: context for the cost report (bytes shipped are bytes
- * parsed at every cold start), not a benchmark in itself.
+ * Raw and gzip size of each shipped entry file. It is context for the cost report, not a benchmark:
+ * bytes shipped are bytes parsed at every cold start.
  * @param {string} root - the repository root.
  * @param {readonly string[]} files - repo-relative files to measure.
  * @returns {Record<string, { bytes: number | null, gzipBytes: number | null }>}

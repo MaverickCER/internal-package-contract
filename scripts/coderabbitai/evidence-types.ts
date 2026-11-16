@@ -6,8 +6,8 @@
  *
  * A `finding` event carries `severity`, `fileName` and `codegenInstructions`; it has no line, category or id of
  * its own. The summary is AI prose and can change between reviews of the same diff. The id is therefore
- * `coderabbit:<file>:<severity>:<hash of summary>`: distinct within a run, and stale as soon as the wording
- * changes, which is when a person should re-confirm the record.
+ * `coderabbit:<file>:<severity>:<hash of summary>`, distinct within a run. It goes stale as soon as
+ * the wording changes, which is when a person should re-confirm the record.
  *
  * The four authoring fields a record carries (`alternatives`, `remediation`, `method`, `exceptionType`) come
  * from this package's own `checks/exception-record.ts`; repo-contract does not publish its equivalent.

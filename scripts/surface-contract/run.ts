@@ -2,16 +2,16 @@
  * The script behind the `SurfaceContract` check, and the baseline update `update-baseline` calls.
  *
  * It reads `package.json`, the current surface (collect.ts), the committed baseline at
- * `.repo-contract/surface-contract/baseline.json`, the pending `.changeset/*.md`, and `CI`. A package
- * with no CLI, schema or action and no baseline reports `no-surface`, which passes. With no baseline,
- * the first one is written and reported, except under `CI=true`, where the run reports
- * `missing-baseline` and fails; removing the file is not a way past the gate. Otherwise the difference
- * is classified (classify.ts), the required level follows `ApiContract`'s rules including the pre-1.0
- * deflation, and the branch fails unless its changesets declare at least that. A baseline whose version
- * differs from package.json's is stale: the release that set the version did not refresh it, so every
- * difference since would pass unjudged. It fails until `update-baseline` runs, which the `version`
- * script does on the release pull request. A baseline that is not JSON, or records an unparseable
- * version, throws.
+ * `.repo-contract/surface-contract/baseline.json`, the pending `.changeset/*.md`, and `CI`. A
+ * package with no CLI, schema or action and no baseline reports `no-surface`, which passes. With no
+ * baseline, the first one is written and reported. Under `CI=true` the run reports
+ * `missing-baseline` and fails instead, so removing the file is not a way past the gate. Otherwise
+ * classify.ts classifies the difference. The required level follows `ApiContract`'s rules,
+ * including the pre-1.0 deflation. The branch fails unless its changesets declare at least that
+ * level. A baseline whose version differs from package.json's is stale: the release that set the
+ * version did not refresh it. Every difference since would then pass unjudged. It fails until
+ * `update-baseline` runs, which the `version` script does on the release pull request. A baseline
+ * that is not JSON, or records an unparseable version, throws.
  *
  * The update never moves the baseline backwards and writes nothing when it already matches.
  */
@@ -48,8 +48,9 @@ export interface SurfaceBaseline {
 export interface SurfaceEvidence {
   readonly currentVersion: string
   /**
-   * `no-surface`: nothing to guard. `initial-baseline`: written just now. `missing-baseline`: there is a
-   * surface and no baseline, and this run may not create one (CI). `compared`: compared with the baseline.
+   * `no-surface`: nothing to guard. `initial-baseline`: written by this run. `missing-baseline`:
+   * there is a surface and no baseline, and this run may not create one (CI). `compared`: compared
+   * with the baseline.
    */
   readonly status: "no-surface" | "initial-baseline" | "missing-baseline" | "compared"
   readonly changes: readonly SurfaceChange[]
@@ -180,7 +181,7 @@ export async function runSurfaceCheck(
       `${BASELINE_PATH} records an unparseable version ${JSON.stringify(baseline.packageVersion)}; restore it from git or regenerate it with \`internal-package-contract update-baseline\`.`,
     )
   }
-  // A version bump is never a declaration on its own: measured from a baseline the release left
+  // A version bump is never a declaration on its own. Measured from a baseline the release left
   // behind, any version past the minimum would excuse every later break.
   const baselineStale = current === undefined || compareVersions(current, baselineVersion) !== 0
   const baselineEdited =

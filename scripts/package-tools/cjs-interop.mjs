@@ -1,13 +1,14 @@
 // Patches dist/eslint-plugin/index.cjs so `require("<package>/eslint-plugin")` resolves directly to the plugin
 // object, matching the ESM entry point's `import plugin from "..."`.
 //
-// Without this, a plain CommonJS `require()` returns esbuild's raw CJS output for a module with both a default
-// and a named export, `{ default: plugin, someRule }`, which breaks every `eslint.config.cjs` consumer. The
-// `cjsInterop` option of tsup only rewrites `module.exports` for a chunk with exactly one export named "default",
-// and an entry point with two cannot use it. An esbuild footer cannot fix it either: tsup appends its own
-// `exports.default = ...` assignments in a later pass, so the footer would land before the exports it needs.
-// Patching the written file is the one place that is after all of them. A file with no default export fails,
-// because the bundled output shape has changed.
+// Without this, a plain CommonJS `require()` returns esbuild's raw CJS output for a module with
+// both a default and a named export: `{ default: plugin, someRule }`. That breaks every
+// `eslint.config.cjs` consumer. The `cjsInterop` option of tsup rewrites `module.exports` only for
+// a chunk whose one export is named "default". An entry point with two exports cannot use it. An
+// esbuild footer cannot fix it either. tsup appends its own `exports.default = ...` assignments in
+// a later pass. The footer would land before the exports it needs. Patching the written file is
+// the one place that is after all of them. A file with no default export fails, because the bundled
+// output shape has changed.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"

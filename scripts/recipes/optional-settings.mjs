@@ -1,5 +1,5 @@
-// What `add check <Name>` writes next to the name, per check: the settings the check reads, with the defaults
-// written out so a package can see them and change them.
+// What `add check <Name>` writes next to the name, per check: the settings the check reads. The
+// defaults are written out so a package can see them and change them.
 
 import { DEFAULT_CONFIG } from "../ambient/scan.mjs"
 
@@ -7,4 +7,5 @@ import { DEFAULT_CONFIG } from "../ambient/scan.mjs"
 export const OPTIONAL_SETTINGS = {
   AgentSkill: {},
   AmbientCapabilities: { ambientCapabilities: DEFAULT_CONFIG },
+  QuickStart: {},
 }

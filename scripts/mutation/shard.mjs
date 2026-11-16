@@ -1,10 +1,11 @@
-// What a sharded run changes about mutation testing: one slice of the sources is mutated, so that the slices can
-// run as parallel jobs and finish where one job would not.
+// What a sharded run changes about mutation testing: it mutates one slice of the sources. The
+// slices run as parallel jobs and finish where one job would not.
 //
-// `IPC_MUTATION_SHARD=i/n` selects slice `i` of `n`. The slices are cut from the files the Stryker config's `mutate`
-// patterns match (or the sources a narrowed run selected), heaviest first by file size so they finish at about the
-// same time. The same files always give the same slices, and every file is in exactly one. A selector that is not
-// `i/n`, or asks for more slices than there are files, throws, and the check fails. `run-merge-mutation-reports.mjs`
+// `IPC_MUTATION_SHARD=i/n` selects slice `i` of `n`. The slices are cut from the files the `mutate`
+// patterns of the Stryker config match, or from the sources a narrowed run selected. Files are
+// dealt heaviest first by size, so the slices finish at about the same time. The same files always
+// give the same slices, and every file is in exactly one. A selector that is not `i/n`, or asks for
+// more slices than there are files, throws, and the check fails. `run-merge-mutation-reports.mjs`
 // puts the slices' reports back together and refuses a missing or repeated one.
 
 import { existsSync, globSync, readFileSync, statSync } from "node:fs"
@@ -85,9 +86,9 @@ export function mutateGlobsOf(config) {
 }
 
 /**
- * Lists what Stryker would mutate: each pattern adds the files it matches, a `!` pattern removes what it matches
- * from what the patterns before it added. A pattern may carry a line range (`src/a.ts:1-10`); a file is then mutated
- * only there, unless another pattern names it whole.
+ * Lists what Stryker would mutate. Each pattern adds the files it matches. A `!` pattern removes
+ * what it matches from what the patterns before it added. A pattern may carry a line range
+ * (`src/a.ts:1-10`). A file is then mutated only there, unless another pattern names it whole.
  * @param {string} cwd - the package.
  * @param {readonly string[]} patterns - Stryker `mutate` patterns.
  * @returns {string[]} one target per file, sorted by file: the file, or the file's ranges joined by commas.

@@ -1,9 +1,11 @@
 // Reads, offline, whether every pin of this package in a consumer names the same revision. The
 // `PinConsistency` check fails on each disagreement found.
 //
-// A consumer pins this package in three places that must agree: the `devDependency` ref in package.json,
-// the commit package-lock.json resolved it to, and the commit SHA (with a `# vX` comment) of every reusable
-// workflow it calls. They drift apart when one is bumped by hand. The symptom is a repository that runs one
+// A consumer pins this package in three places that must agree:
+//   - the `devDependency` ref in package.json;
+//   - the commit package-lock.json resolved it to;
+//   - the commit SHA, with a `# vX` comment, of every reusable workflow it calls.
+// They drift apart when one is bumped by hand. The symptom is a repository that runs one
 // revision's checks and another revision's release. This module only compares; it never rewrites
 // (`upgrade` and the consumer's pin-sync workflow do that). A repository that neither depends on this
 // package nor calls its workflows, this one included, does not apply.
@@ -24,7 +26,7 @@ const PIN =
 export function devDependencyRef(packageJson) {
   try {
     // A missing `devDependencies`, a missing entry and a spec that is not `github:...#ref` all throw
-    // here, and a throw is the same answer as no ref, below.
+    // here. A throw is the same answer as no ref, below.
     const spec = JSON.parse(packageJson).devDependencies["internal-package-contract"]
     return /^github:[^#]+#(.+)/.exec(spec)[1]
   } catch {

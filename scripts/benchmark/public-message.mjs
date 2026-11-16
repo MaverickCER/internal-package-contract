@@ -3,9 +3,10 @@
 // stay in results.json.
 
 /**
- * Where a path inside a message can start: after whitespace, a quote, a parenthesis or `=` (`path=/tmp/x.json`),
- * or after a `:` that follows a word of two or more characters and comes directly before a single `/`
- * (`key:/tmp/x.json`). Never inside a URL (`https://`) or after a drive letter (`D:/`).
+ * Where a path inside a message can start. One place is after whitespace, a quote, a parenthesis or
+ * `=` (`path=/tmp/x.json`). The other is after a `:` that follows a word of two or more characters
+ * and comes directly before a single `/` (`key:/tmp/x.json`). Never inside a URL (`https://`) or
+ * after a drive letter (`D:/`).
  */
 const DELIMITER = /([\s'"`()=]|(?<=[^\s'"`()=]{2}):(?=\/(?!\/)))/
 

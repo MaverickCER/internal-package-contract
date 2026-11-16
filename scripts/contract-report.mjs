@@ -102,9 +102,10 @@ export function buildReport({
   /** @type {Record<ResultClass, number>} */
   const counts = { pass: 0, warn: 0, "not-evaluated": 0, unexcepted: 0, fail: 0, skipped: 0 }
   for (const check of checks) counts[check.class] += 1
-  // A failure of an advisory check (one a package that is adopting has not promoted) is reported but does not
-  // decide the exit code. Strict mode is not suspended by adoption: a promoted check that could not run and has
-  // no exception fails the run, as it will once the package is no longer adopting.
+  // A failure of an advisory check (one a package that is adopting has not promoted) is reported
+  // but does not decide the exit code. Strict mode stays on during adoption. A promoted check that
+  // could not run and has no exception fails the run, as it will once the package is no longer
+  // adopting.
   const unexceptedEnforced = checks.filter(
     (check) =>
       check.class === "unexcepted" && !(unpromoted !== undefined && unpromoted.includes(check.id)),
@@ -146,8 +147,8 @@ function firstLine(text) {
 }
 
 /**
- * Renders the report as Markdown: totals first, then everything that needs attention in order of
- * how much it needs it, with each result's reason, then the slowest checks (the contract's own cost).
+ * Renders the report as Markdown. Totals come first. Then everything that needs attention, most
+ * urgent first, with each result's reason. Then the slowest checks (the contract's own cost).
  * @param {ReturnType<typeof buildReport>} report
  * @param {{ title?: string }} [options]
  */

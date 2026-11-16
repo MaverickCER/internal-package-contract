@@ -1,19 +1,20 @@
 // The script behind the `SecuritySocket` check (checks/security-socket.ts).
 //
-// It reads `package.json`, asks npm whether the current version is published, and runs `socket package score` on
-// it, or on the latest published version when Socket has no result for the current one yet. `socket package score`
-// returns what the package's own Socket page shows, for the package and its whole transitive closure. `socket ci`
-// is not used: it reports only alerts at the org policy's error level and said `healthy` for a package whose page
-// listed several alerts. A fresh cached score for the same version is used instead of spending quota
-// (socket-score-cache.mjs). A private or unnamed package publishes nothing, so there is nothing to score, and the
-// check passes.
+// It reads `package.json` and asks npm whether the current version is published. It runs `socket
+// package score` on that version. When Socket has no result for it yet, it scores the latest
+// published version. `socket package score` returns what the package's own Socket page shows, for
+// the package and its whole transitive closure. `socket ci` is not used: it reports only alerts at
+// the org policy's error level and said `healthy` for a package whose page listed several alerts. A
+// fresh cached score for the same version is used instead of spending quota
+// (socket-score-cache.mjs). A private or unnamed package publishes nothing, so there is nothing to
+// score, and the check passes.
 //
-// It prints one JSON envelope to stdout: `{ ok: true, data: { skipped | unpublished | package, purl, scoredVersion,
-// requestedVersion, alerts } }`, or Socket's own `{ ok: false, message, cause, data }` passed through so the policy
-// can classify it. Socket's HTTP 429 is retried a few times before it is passed through. A registry lookup that
-// fails for any reason but "no such version" is reported as a failure, never treated as unpublished. The script
-// always exits 0; the policy decides, and it warns without a key and fails on a refused key, a network error or a
-// rate limit.
+// It prints one JSON envelope to stdout: `{ ok: true, data: { skipped | unpublished | package,
+// purl, scoredVersion, requestedVersion, alerts } }`, or Socket's own `{ ok: false, message, cause,
+// data }` passed through so the policy can classify it. Socket's HTTP 429 is retried a few times
+// before it is passed through. A registry lookup that fails for any reason but "no such version" is
+// reported as a failure, never treated as unpublished. The script always exits 0, and the policy
+// decides. It warns without a key. It fails on a refused key, a network error or a rate limit.
 
 import { sync as spawnSync } from "cross-spawn"
 import { existsSync, readFileSync } from "node:fs"
@@ -105,9 +106,9 @@ if (!existsSync(pkgFile)) {
     if (emitCached(pkg.name, pkg.version, pkg.version)) process.exit(0)
     const exact = runJson("npm", ["view", `${pkg.name}@${pkg.version}`, "version", "--json"])
     if (typeof exact.parsed !== "string") {
-      // Only a definite "that version is not published" may fall back to the latest published one. A
-      // transient registry or network failure is not that: treating it as "unpublished" would score
-      // (or replay a cached score for) a different version than the one being released.
+      // Only a definite "that version is not published" may fall back to the latest published one.
+      // A transient registry or network failure is not that. Treated as "unpublished", it would
+      // score a different version than the one being released, or replay a cached score for one.
       if (!isNpmNotFound(exact)) emitLookupFailure(exact)
       const latest = runJson("npm", ["view", pkg.name, "version", "--json"])
       if (typeof latest.parsed === "string" && emitCached(pkg.name, latest.parsed, pkg.version)) {

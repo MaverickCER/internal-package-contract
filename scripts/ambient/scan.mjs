@@ -1,16 +1,18 @@
-// What a published package may acquire on its own. A library that takes its filesystem, its way to start a
-// process and its environment from the caller lets a consumer see, and replace, what it touches; a
-// supply-chain scanner such as socket.dev flags every package that reaches them itself. A package says
-// which of these it must never reach, and which entry points (its `bin`, an export such as `./node`) are
-// the exception, in package.json under "internal-package-contract"."ambientCapabilities". Nothing written
-// means DEFAULT_CONFIG: everything forbidden, except that a `bin` may touch files. This reads the tarball
-// npm would publish, because the tarball is what a consumer receives and a source-level lint rule cannot
-// see what a bundler pulled in.
+// What a published package may acquire on its own. A library can take its filesystem, its way to
+// start a process and its environment from the caller. A consumer then sees, and can replace, what
+// it touches. A supply-chain scanner such as socket.dev flags every package that reaches them
+// itself.
 //
-// Textual defense in depth, not a proof: it finds a literal reintroduction (a stray
-// `require("child_process")`, a `process.env` reference, a forbidden dependency) and cannot show that no
-// evasion exists. Nothing under `node_modules/` is read: npm packs it only for bundled packages and
-// their own dependencies. Files larger than LARGEST_SOURCE are not read either.
+// A package lists, in package.json under "internal-package-contract"."ambientCapabilities", which
+// of these it must never reach. It also lists the entry points that are the exception (its `bin`,
+// an export such as `./node`). Nothing written means DEFAULT_CONFIG: everything forbidden, except
+// that a `bin` may touch files. This reads the tarball npm would publish, because that is what a
+// consumer receives. A source-level lint rule cannot see what a bundler pulled in.
+//
+// Textual defense in depth, not a proof. It finds a literal reintroduction: a stray
+// `require("child_process")`, a `process.env` reference, a forbidden dependency. It cannot show
+// that no evasion exists. Nothing under `node_modules/` is read: npm packs it only for bundled
+// packages and their own dependencies. Files larger than LARGEST_SOURCE are not read either.
 
 /** What each capability looks like in shipped code. */
 export const CAPABILITIES = Object.freeze({

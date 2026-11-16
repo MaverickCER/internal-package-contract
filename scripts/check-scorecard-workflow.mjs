@@ -1,7 +1,8 @@
-// Entry point for the `ScorecardWorkflow` check (see checks/scorecard-workflow.ts). Reads package.json and
-// every `.github/workflows/*.yml` of the working directory and prints one JSON envelope: `exempt` for a
-// private package, `problem` when no workflow publishes a Scorecard result (scripts/scorecard/validate.mjs),
-// else `current`. The policy decides the verdict.
+// Entry point for the `ScorecardWorkflow` check (see checks/scorecard-workflow.ts). Reads
+// package.json and every `.github/workflows/*.yml` of the working directory and prints one JSON
+// envelope. A private package is `exempt`. With no workflow that publishes a Scorecard result
+// (scripts/scorecard/validate.mjs) the state is `problem`; else `current`. The policy decides the
+// verdict.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"

@@ -346,8 +346,8 @@ export function normalizeAlert(
     typeof severityRaw === "string" && RAW_SEVERITY_VALUES.has(severityRaw.toLowerCase())
       ? (severityRaw.toLowerCase() as "critical" | "high" | "middle" | "low")
       : "unknown"
-  // The package's own alerts are keyed by the stable word "self", not its version: the scored
-  // version changes with every release, and a version in the id would orphan every record each time.
+  // The package's own alerts are keyed by the stable word "self", not its version. The scored
+  // version changes with every release, so a version in the id would orphan every record each time.
   const version = scope === "self" || subject.name === selfPackage ? SELF_VERSION : subject.version
   return {
     id: deriveSocketExceptionId({
@@ -525,10 +525,9 @@ export function evaluateFinalVerdict(
 ): PolicyResult {
   const configErrors = validateExceptionPolicyConfig(SOCKET_POLICY, VALID_SOCKET_REQUIREMENTS)
   // Stryker disable all -- SOCKET_POLICY/VALID_SOCKET_REQUIREMENTS are fixed, valid module
-  // constants (see their own definitions above); this defensive guard can never observe a
-  // misconfigured policy under any real invocation of this function, since it never varies at
-  // runtime. No test can hit it without literally breaking those constants. Kept as
-  // defense-in-depth against a future editing mistake in SOCKET_POLICY itself.
+  // constants (defined above). They never vary at runtime, so this guard never sees a
+  // misconfigured policy, and no test can reach it without breaking them. It stays as defense in
+  // depth against a future editing mistake in SOCKET_POLICY.
   if (configErrors.length > 0) {
     return {
       outcome: "fail",

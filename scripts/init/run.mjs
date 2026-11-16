@@ -107,8 +107,8 @@ export function run(argv, cwd, io, hooks) {
     label,
     run: () => spawn(program, commandArgs, cwd),
   })
-  // `--spec` names the dependency outright (a fork, or a local copy while the standard itself is being
-  // developed), instead of the release this checkout would otherwise pin.
+  // `--spec` names the dependency outright: a fork, or a local copy of the standard under
+  // development. It replaces the release this checkout would otherwise pin.
   const pin = {
     label: `pin ${DEPENDENCY} to ${String(args.spec)}`,
     run: () => {

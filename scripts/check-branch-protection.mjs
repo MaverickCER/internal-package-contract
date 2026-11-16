@@ -2,16 +2,17 @@
 // rulesets of the repository `origin` points at and prints one JSON envelope describing what they enforce on
 // the default branch. The policy decides the verdict; this reports and never judges.
 //
-// What is read, through the `gh` CLI: the default branch, every active branch ruleset, and the rules of
-// each ruleset whose conditions cover that branch (scripts/github-repo.mjs decides which do). `gh` is used
-// so the check borrows the login a person or CI already has: `gh auth login` locally, GH_TOKEN or
-// GITHUB_TOKEN in Actions.
+// What is read, through the `gh` CLI: the default branch, every active branch ruleset, and the
+// rules of each ruleset that covers that branch. The helpers in scripts/github-repo.mjs decide
+// which ones do. `gh` is used so the check borrows the login a person or CI already has: `gh auth
+// login` locally, GH_TOKEN or GITHUB_TOKEN in Actions.
 //
-// What is reported: whether `deletion`, `non_fast_forward`, `pull_request` and `required_status_checks`
-// rules exist, the status-check contexts required, whether that rule is strict (the branch must be up to
-// date with its base before it merges), and whether review threads must be resolved. Also the aggregate job
-// the package's own CI defines: a workflow under `.github/workflows` with both a `contract` and a `required`
-// job. The policy asks for `contract` among the required checks, and for `required` when that job exists.
+// What is reported: whether `deletion`, `non_fast_forward`, `pull_request` and
+// `required_status_checks` rules exist, and the status-check contexts required. Then whether that
+// rule is strict (a branch must be up to date with its base to merge), and whether review threads
+// must be resolved. Also the aggregate job the package's own CI defines: a workflow under
+// `.github/workflows` with both a `contract` and a `required` job. The policy asks for `contract`
+// among the required checks, and for `required` when that job exists.
 //
 // Read-only: nothing here creates or changes a ruleset; `internal-package-contract init --github` does
 // that with the same owner/repo resolution. `gh` missing or not logged in, an `origin` that is not a

@@ -19,8 +19,8 @@ export const COMPLEXITY_NOTATION = Object.freeze({
 })
 
 /**
- * The name of one measured group: `fn:<id>`, then `@<variant>` when it is a variant, then `#<variable>`
- * when it varies a variable other than the suite's own unit.
+ * The name of one measured group: `fn:<id>`, then `@<variant>` for a variant. A group that varies a
+ * variable other than the suite's unit ends in `#<variable>`.
  * @param {string} id - the function's id.
  * @param {string | undefined} [variant] - the variant's name.
  * @param {string | undefined} [variable] - a swept variable other than the suite's unit.
@@ -46,8 +46,8 @@ export function parseGroup(group) {
 
 /** Thrown by {@link defineSuite} with every documentation/shape problem found. */
 /**
- * The growth class and reason that apply to one measured group: the swept variable's own when it is
- * not the suite's unit, else the variant's own when it declares one, otherwise the function's.
+ * The growth class and reason that apply to one measured group. The first that exists wins: the
+ * swept variable's (when it is not the suite's unit), the variant's, then the function's.
  * @param {object} fn - a function entry.
  * @param {object | undefined} variant - one of its variants, if measured as one.
  * @param {string | undefined} [variable] - the swept variable the group varies, when it is not the unit.
@@ -86,8 +86,8 @@ const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const isKebab = (value) => typeof value === "string" && KEBAB.test(value)
 
 /**
- * Reads `key` off `value`, tolerating a missing value: a definition under validation may be
- * anything, and every gap in it must be reported, not crash the validator.
+ * Reads `key` off `value`, tolerating a missing value. A definition under validation may be
+ * anything. The validator reports every gap in it instead of crashing.
  * @param {any} value - what to read from.
  * @param {string} key - the property to read.
  * @returns {any} the property, or `undefined`.
@@ -149,8 +149,8 @@ function validateRunnable(runnable, at, problems) {
 
 /**
  * Turns the call/input shorthand into setup/run. The function under test is invoked as
- * `call(...input(n, variantOptions))`, so a suite can import real functions and just describe how to
- * build their arguments at size n.
+ * `call(...input(n, variantOptions))`. A suite can then import real functions and describe only how
+ * to build their arguments at size n.
  */
 function normalizeRunnable(runnable) {
   if (runnable.call === undefined) return runnable
@@ -164,8 +164,8 @@ function normalizeRunnable(runnable) {
 
 /**
  * A function whose cost depends on more than one input declares each one it can sweep. The suite's
- * unit is the first; every other is a `sweeps` entry, measured on its own (the others held at their
- * base values) and given its own growth class, so one big-O never mixes two variables.
+ * unit is the first; every other is a `sweeps` entry. Each is measured with the others at their
+ * base values and gets its own growth class, so one big-O never mixes two variables.
  */
 function validateSweeps(benchmark, at, unit, problems) {
   const sweeps = get(benchmark, "sweeps")
@@ -219,8 +219,9 @@ function validateSweeps(benchmark, at, unit, problems) {
 }
 
 /**
- * What a benchmark says about each parameter (or key) of the public functions it exercises: `covers` maps a
- * function name to a parameter path (`options`, or `options.cache`) to one of the forms in accounting.mjs.
+ * What a benchmark says about each parameter (or key) of the public functions it exercises.
+ * `covers` maps a function name to a parameter path (`options`, or `options.cache`). Each path maps
+ * to one of the forms in accounting.mjs.
  */
 function validateCovers(benchmark, at, problems) {
   const covers = get(benchmark, "covers")
@@ -290,8 +291,8 @@ function validateBenchmark(benchmark, at, problems, { needsId, unit }) {
     const here = `${at}.variants[${String(index)}]`
     if (!isKebab(get(variant, "name"))) problems.push(`${here}.name must be kebab-case.`)
     text(get(variant, "description"), `${here}.description`, problems, 10)
-    // A variant may follow a different growth curve than the function as a whole (a scoped run that
-    // ignores most of the input, say); it then states its own expectation and the mechanism.
+    // A variant may grow differently from the function as a whole, such as a scoped run that
+    // ignores most of the input. It then states its own expectation and the mechanism.
     const expected = get(variant, "expectedComplexity")
     if (expected !== undefined) {
       if (!Object.hasOwn(COMPLEXITY_NOTATION, expected)) {

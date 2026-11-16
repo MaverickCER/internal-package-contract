@@ -7,16 +7,17 @@
 //                          one (`agreement: "differs"`, kit/run.mjs). Off when a package's `GATES` sets
 //                          `complexity: false`.
 //   2. normalized overhead `fail`: the package's added time as a percentage of the bare baseline grew past the
-//                          allowed increase against a reference (the last run on main, the last release, or
-//                          main measured on this runner). The allowance is looser for sub-millisecond work.
+//                          allowed increase against a reference. A reference is the last run on
+//                          main, the last release, or main measured on this runner. The allowance
+//                          is looser for sub-millisecond work.
 //                          A baseline under the noise floor is not judged. A reference from another CPU model
 //                          is not judged either, unless it was measured on this runner. A change inside the
 //                          two runs' 95% intervals is a `note`, not a failure.
 //   3. undetermined        `warn`: a group whose class could not be fitted. Nothing is known to be wrong or
 //                          right, so it never fails.
-//   4. complexity gain     `fail`: a group whose class got worse than at the last release with no complete
-//                          record in `.repo-contract/exceptions/benchmark-complexity.json`
-//                          (complexity-gain.mjs); an accepted gain is a `note`.
+//   4. complexity gain     `fail`: a group whose class got worse than at the last release, with no
+//                          complete record in `.repo-contract/exceptions/benchmark-complexity.json`
+//                          (complexity-gain.mjs). An accepted gain is a `note`.
 //   5. environment         `note`: the two runs differ in Node major or CPU model, so raw deltas mean little.
 //
 // A package overrides any threshold with a `GATES` export in its budgets file. render-summary.mjs renders
@@ -165,8 +166,8 @@ export function overheadFindings(current, references, gates) {
   for (const { name, results, sameMachine = false } of references) {
     const then = typicalOverhead(results)
     if (!then || !(then.overheadPercent > 0)) {
-      // The same-runner reference is the one the gate judges: its absence is worth a line, so a
-      // maintainer knows the ratio was compared only with committed results, if with anything.
+      // The gate judges the same-runner reference, so its absence earns a line. The maintainer then
+      // knows the ratio was compared only with committed results, if with anything.
       if (sameMachine) {
         findings.push({
           level: "note",
@@ -178,9 +179,9 @@ export function overheadFindings(current, references, gates) {
     }
     if (then.baselineMs < gates.noiseFloorBaselineMs) continue
     if (typeof now.overheadPercent !== "number") continue
-    // The ratio is a property of one run, but for work this fast it is also a property of the
-    // machine: how much of the baseline is process start-up versus the package's own work. So two
-    // CPU models are compared only when both were measured on this runner.
+    // The ratio is a property of one run. For work this fast it is also a property of the machine:
+    // how much of the baseline is process start-up versus the package's work. So two CPU models are
+    // compared only when both were measured on this runner.
     if (!sameMachine && now.cpuModel && then.cpuModel && now.cpuModel !== then.cpuModel) {
       findings.push({
         level: "note",

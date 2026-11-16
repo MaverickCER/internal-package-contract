@@ -125,9 +125,9 @@ export function shaFromLockfile(lockText) {
 }
 
 /**
- * Builds the variables for the pins of this package a scaffolded workflow or `package.json` carries.
- * A workflow that calls a reusable workflow of this repository is pinned by commit SHA, never by a
- * branch: anyone who can push to `main` here could otherwise publish every consumer.
+ * Builds the variables for the pins of this package a scaffolded workflow or `package.json`
+ * carries. A workflow that calls a reusable workflow of this repository is pinned by commit SHA,
+ * never by a branch. Otherwise anyone who can push to `main` here could publish every consumer.
  * @param {{ version: string, sha: string | undefined }} input
  * @returns {{ ipcRef: string, ipcSha: string }} `ipcSha` is empty when no commit could be resolved.
  */

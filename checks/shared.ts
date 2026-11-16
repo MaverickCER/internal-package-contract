@@ -23,9 +23,8 @@ export function bundledConfig(relPath: string): string {
 
 /**
  * The consumer's own config for a tool if one exists in `process.cwd()`, else the
- * bundled default. Resolution happens at contract-assembly time (when
- * `contract.ts` is evaluated with the consumer repo as cwd), so the chosen path
- * can be baked straight into a check's `run`.
+ * bundled default. It resolves at contract-assembly time, when `contract.ts` is evaluated with the
+ * consumer repo as cwd. So the chosen path is baked into a check's `run`.
  * @param consumerCandidates - config filenames to look for in the consumer repo, in priority order.
  * @param bundledRelPath - path under `config/` to fall back to.
  * @returns the absolute config path and whether it is the bundled default.
@@ -60,10 +59,10 @@ export function crashLine(result: CheckEvidence): string | undefined {
 const NOTHING_USABLE = /could not be parsed|did not evaluate|produced no output|exited \d+/i
 
 /**
- * Makes a failing check lead with the error its tool died with. A tool that crashes before it prints leaves a
- * stack trace after a headline that blames something else ("output could not be parsed as JSON", "exited 1"),
- * so the cause sits below tens of lines. The whole original rationale, stack included, is kept after the
- * headline: the stack is what is needed to debug it.
+ * Makes a failing check lead with the error its tool died with. A tool that crashes before it
+ * prints leaves a stack trace under a headline that blames something else. Examples: "output could
+ * not be parsed as JSON", "exited 1". The cause then sits tens of lines down. The whole original
+ * rationale, stack included, follows the headline, because the stack is what debugging needs.
  * @param checks - a set of check definitions, keyed by id.
  * @returns the same checks, each policy's failure led by the error when one is on stderr.
  */
@@ -96,8 +95,9 @@ export function withErrorHeadline<T extends Record<string, CheckDefinitionConfig
 
 /**
  * Why a check that should have printed one JSON document did not. A script that throws before it prints
- * leaves a stack trace on stderr and nothing on stdout. Calling that "output could not be parsed as JSON" sends
- * the reader to the wrong place, so the first line of the error leads when there is one.
+ * leaves a stack trace on stderr and nothing on stdout. Calling that "output could not be parsed as
+ * JSON" sends the reader to the wrong place. So the first line of the error leads when there is
+ * one.
  * @param prefix - everything before the reason, for example `"ApiContract:"`.
  * @param result - the check's raw execution evidence.
  * @returns the rationale: the error that stopped the check when stderr has one, else the unparseable-output text, then whatever the tool printed.

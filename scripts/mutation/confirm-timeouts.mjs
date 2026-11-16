@@ -1,11 +1,12 @@
-// A mutant that timed out is not always a mutant that loops. On a machine that is swapping, or whose process was
-// paused, the one test run going when it stalled takes minutes, and that mutant is reported as a timeout, which
-// fails the `Mutation` check. It is a different mutant in every run, and none of them times out alone.
+// A mutant that timed out is not always a mutant that loops. A machine can swap, or pause the
+// process. The one test run going during that stall then takes minutes. Stryker reports that mutant
+// as a timeout, which fails the `Mutation` check. It is a different mutant in every run, and none
+// of them times out alone.
 //
-// Before a timeout counts, this runs that one mutant again, alone, at concurrency 1. A mutant caught the second
-// time is caught, and the evidence file is rewritten to say so with `statusReason`; one that times out again stays
-// a timeout and fails the check. At most `MAXIMUM_CONFIRMED` timeouts are re-run: more than that is not a stall
-// but a broken run, and it is left as it is.
+// Before a timeout counts, this runs that one mutant again, alone, at concurrency 1. A mutant
+// caught the second time is caught, and `statusReason` in the rewritten evidence file says so. One
+// that times out again stays a timeout and fails the check. At most `MAXIMUM_CONFIRMED` timeouts
+// are re-run. More than that is not a stall but a broken run, and it is left as it is.
 
 import { spawnSync } from "node:child_process"
 import { readFileSync, rmSync, writeFileSync } from "node:fs"

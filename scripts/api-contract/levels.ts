@@ -48,11 +48,11 @@ export function rankAtLeast(
 /**
  * The release level one contract delta requires.
  *
- * Below 1.0.0 the level is deflated one step (a breaking change needs `minor`, a change that
- * widens the surface needs only `patch`) the usual 0.x convention, and the one the changeset
- * generator applies. It is also what makes 1.0.0 a decision: no API diff, however breaking, can
- * require a `major` while the package is 0.x, so the version crosses to 1.0.0 only when a human
- * writes a `major` changeset (which satisfies every requirement).
+ * Below 1.0.0 the level is deflated one step: a breaking change needs `minor`, and a widening
+ * change needs only `patch`. That is the usual 0.x convention, and the changeset generator applies
+ * it too. It also makes 1.0.0 a decision. No API diff can require a `major` while the package is
+ * 0.x. So the version reaches 1.0.0 only through a hand-written `major` changeset, which satisfies
+ * every requirement.
  * @param impact - the classified impact of the delta.
  * @param widensSurface - whether any change adds to the public surface (`*-added`, a widened release tag).
  * @param preOne - whether the package is below 1.0.0.

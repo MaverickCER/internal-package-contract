@@ -1,12 +1,13 @@
-// The scan behind the `Prose` check (checks/prose.ts): no em-dash and no ` -- ` dash substitute in the
-// prose a package writes. Prose is Markdown outside code, comments in TypeScript and JavaScript, and
-// full-line comments in YAML and shell files. Code, strings and code spans are never read as prose, and
-// a comment that is a tool directive (ESLint's `-- reason` syntax among them) is skipped whole.
+// The scan behind the `Prose` check (checks/prose.ts): no em-dash and no ` -- ` dash substitute in
+// the prose a package writes. Prose is Markdown outside code, comments in TypeScript and
+// JavaScript, and full-line comments in YAML and shell files. Code, strings and code spans are
+// never read as prose. A comment that is a tool directive (ESLint's `-- reason` syntax among them)
+// is skipped whole.
 //
-// Not read: the CHANGELOG and decision records (history), third-party text (CODE_OF_CONDUCT.md), and
-// anything under node_modules or a fixtures directory. Generated files are not read either: API reports,
-// benchmark reports, and any file whose first lines mark it generated. A generated file's prose comes from its generator's strings, which
-// this scan does not read either.
+// Not read: the CHANGELOG and decision records (history), third-party text (CODE_OF_CONDUCT.md),
+// and anything under node_modules or a fixtures directory. Generated files are not read either: API
+// reports, benchmark reports, and any file whose first lines mark it generated. A generated file's
+// prose comes from its generator's strings, which this scan does not read either.
 
 import { createRequire } from "node:module"
 
@@ -46,7 +47,8 @@ export function isProseFile(file) {
 
 /**
  * Blanks code spans so a dash inside one is not prose. A span opens and closes with the same run of
- * backticks and may wrap across lines, as Markdown allows; line breaks are kept so line numbers hold.
+ * backticks and may wrap across lines, as Markdown allows. Line breaks are kept so line numbers
+ * hold.
  */
 const blankSpans = (text) =>
   text.replace(/(`+)(?!`)[\s\S]*?[^`]\1(?!`)/g, (m) => m.replace(/[^\n]/g, " "))
@@ -95,9 +97,9 @@ function markdownLines(text) {
 }
 
 /**
- * Every comment in a TypeScript or JavaScript source, found through the parsed syntax tree so a template
- * literal or a regular expression never hides the comments after it. Each node is asked for the comments
- * leading up to its full start and for the ones trailing its end on the same line.
+ * Every comment in a TypeScript or JavaScript source, found through the parsed syntax tree. So a
+ * template literal or a regular expression never hides the comments after it. Each node is asked
+ * for the comments leading up to its full start and for the ones trailing its end on the same line.
  * @param {string} file - the path, which picks TSX or JSX parsing.
  * @param {string} text - the source.
  * @returns {[number, number][]} the comments' start and end offsets, sorted, without repeats.
@@ -115,8 +117,8 @@ export function commentRanges(file, text) {
   const add = (ranges) => {
     for (const range of ranges ?? []) found.set(range.pos, range.end)
   }
-  // `getChildren` includes punctuation tokens and the end-of-file token, so a comment after a comma, before
-  // a closing brace or at the end of the file leads some token, not only one beside a node.
+  // `getChildren` includes punctuation tokens and the end-of-file token. So a comment after a
+  // comma, before a closing brace or at the end of the file still leads some token.
   const visit = (node) => {
     add(ts.getLeadingCommentRanges(text, node.getFullStart()))
     add(ts.getTrailingCommentRanges(text, node.getEnd()))

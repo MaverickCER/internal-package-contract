@@ -102,6 +102,7 @@ The codes in use:
 - `Commits:no-base`, `Commits:pre-adoption`
 - `CodeRabbit:not-applicable` (CI), `CodeRabbit:unavailable` (no CLI)
 - `PackedConsumer:install` (the packed tarball could not be installed into a scratch project)
+- `QuickStart:network` (a command of the README's quick start failed with a network error code)
 - `SecuritySocket:no-key` (no Socket API token; `init` writes this record with a 90-day expiry)
 - `CodeScanning:not-enabled` and `CodeScanning:no-remote`
 - `DocsLinks:<url>` for each external link that could not be reached

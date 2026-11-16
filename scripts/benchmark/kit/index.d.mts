@@ -1,4 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- suites and results are plain, user-shaped data (`defineSuite` and `validateResults` are the real validators); typing every nested figure would only force casts on every consumer and test. */
+/* eslint-disable @typescript-eslint/no-explicit-any -- suites and results are plain, user-shaped
+   data that `defineSuite` and `validateResults` validate. Typing every nested figure would force
+   casts on every consumer and test. */
 // Hand-authored declarations for the benchmark kit (see classify-complexity.d.mts for why a sibling
 // `.d.mts` is used instead of `allowJs`). Suites are plain `.mjs`, so the shapes are intentionally
 // permissive; `defineSuite` is the real validator.

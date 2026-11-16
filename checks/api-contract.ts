@@ -8,15 +8,15 @@
  * evidence.
  *
  * Fails when the diff requires a higher release level than the changesets declare. Fails when a
- * target's baseline records another version than package.json: the release did not refresh it, and a
- * stale baseline would let later changes pass unjudged. The `version` script runs `update-baseline`
- * so the release pull request carries the refreshed baselines. Fails when the branch itself rewrote a
- * baseline while package.json keeps the base branch's version (scripts/baseline-guard.mjs); without the
- * base branch in the clone that comparison is skipped. Fails when an
- * exported interface with a literal `version` member changed while that literal did not. No setting
- * or record opts out of that rule. Warns when the change could not be classified, so a person must
- * confirm the declared bump. Passes with no `typedoc.json`: the package documents no entry points
- * this way. A target with no baseline gets its first one written and passes; commit it.
+ * target's baseline records another version than package.json. The release did not refresh it, so
+ * later changes would pass unjudged. The `version` script runs `update-baseline`, so the release
+ * pull request carries the refreshed baselines. Fails when the branch rewrote a baseline while
+ * package.json keeps the base branch's version (scripts/baseline-guard.mjs). Without the base
+ * branch in the clone, that comparison is skipped. Fails when an exported interface with a literal
+ * `version` member changed while that literal did not. No setting or record opts out of that rule.
+ * Warns when the change could not be classified, so a person must confirm the declared bump. Passes
+ * with no `typedoc.json`: the package documents no entry points this way. A target with no baseline
+ * gets its first one written and passes; commit it.
  *
  * Exceptions: none. Add a changeset at the required level (`npx changeset add`). After a release,
  * `internal-package-contract update-baseline` regenerates the baselines.
@@ -139,14 +139,12 @@ function remediationForLevel(level: RequiredReleaseLevel | undefined): string {
 }
 
 /**
- * Versioning is Changesets-driven everywhere in this fleet, so this check can and does **gate**.
- * It fails a PR whose changesets declare a smaller bump than the public-API diff requires (a
- * breaking API change with no changeset, or one under-declared as `patch`/`minor`, etc.). It also
- * fails on an internal schema-version literal that changed shape without its own version marker
- * being bumped. It warns (rather than gating) when the contract delta could not be classified
- * deterministically: that case still needs a human to confirm the declared bump. It cannot catch
- * a behavioral breaking change with an unchanged type signature; that remains a human-review
- * concern.
+ * Changesets drive versioning everywhere in this fleet, so this check can **gate**. It fails a PR
+ * whose changesets declare a smaller bump than the public-API diff requires. Examples: a breaking
+ * change with no changeset, or one declared as `patch` or `minor`. It also fails on an internal
+ * schema-version literal that changed shape without its version marker being bumped. It warns
+ * when the delta could not be classified, because a person must confirm the declared bump. A
+ * behavioral breaking change behind an unchanged type signature is left to human review.
  * @param root0 - the policy input.
  * @param root0.evidence - the api-contract check's evidence to evaluate.
  * @returns the pass/warn/fail outcome and its rationale.
@@ -237,15 +235,13 @@ export function evaluateApiContractPolicy({
   }
 }
 
-// API Extractor is kept entirely internal to scripts/api-contract/. check.ts owns contract
-// extraction/diffing/impact/minimum-level derivation and compares the required level against what
-// the branch's changesets declare; the policy above only interprets its evidence, never inspects
-// TypeScript/API Extractor/source/Git itself.
-// A consumer with no typedoc.json documents no public entry points this way: targets.ts has
-// nothing to derive a target list from, so there is nothing for this check to compare. Resolved at
-// contract-assembly time (contract.ts is evaluated with the consumer repo as cwd), matching
-// `resolveConfig`'s own "decide once, bake into `run`" convention: rather than letting check.ts
-// throw at run time and surface as an opaque JSON-parse failure.
+// API Extractor stays inside scripts/api-contract/. check.ts extracts, diffs and classifies the
+// contract, then compares the required level with the branch's changesets. The policy above only
+// interprets that evidence; it never reads TypeScript, source or Git itself.
+// A consumer with no typedoc.json documents no public entry points this way, so targets.ts has no
+// targets and this check has nothing to compare. contract.ts is evaluated with the consumer repo as
+// cwd, so this is decided once at assembly, as `resolveConfig` does. Otherwise check.ts would throw
+// at run time and surface as an opaque JSON-parse failure.
 const hasTypedocConfig = existsSync(path.join(process.cwd(), "typedoc.json"))
 
 export const apiContract: CheckDefinitionConfig = hasTypedocConfig

@@ -1,11 +1,12 @@
 // `--changed`: run only the checks the changed files can affect.
 //
-// A change to documentation cannot make TypeScript fail, and a change to a workflow cannot break a link, so
-// running everything for either is time spent for no information. The rule is blunt and errs toward running
-// more: any file that is not plainly documentation or a workflow runs every check. The checks about the
-// repository's own state (hooks, pins, managed files, adoption, commits, branch protection) always run. What
-// changed is read from git: the diff against the upstream branch (else origin/main, origin/master), uncommitted
-// edits and untracked files. When git cannot say, every check runs.
+// A change to documentation cannot make TypeScript fail, and a change to a workflow cannot break a
+// link. Running everything for either spends time for no information. The rule is blunt and errs
+// toward running more: any file that is not plainly documentation or a workflow runs every check.
+// The checks about the repository's own state (hooks, pins, managed files, adoption, commits,
+// branch protection) always run. What changed is read from git: the diff against the upstream
+// branch (else origin/main, origin/master), uncommitted edits and untracked files. When git cannot
+// say, every check runs.
 
 import { spawnSync } from "node:child_process"
 
@@ -33,6 +34,7 @@ export const DOCUMENTATION = [
   "Accessibility",
   "BenchmarkGuides",
   "ReadmeExample",
+  "QuickStart",
 ]
 /** What a change to a workflow or other GitHub configuration can affect. */
 export const WORKFLOWS = [

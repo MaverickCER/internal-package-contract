@@ -1,6 +1,7 @@
-// Who owns a repository, read from how a package writes it down: a GitHub URL (https, ssh or git+), the npm
-// shorthand `github:owner/name` or `owner/name`, or an object with a `url`. `init`, `doctor` and the
-// managed documents all read the owner through this, so they agree on the owner of one package.
+// Who owns a repository, read from how a package writes it down. That is a GitHub URL (https, ssh
+// or git+), the npm shorthand `github:owner/name` or `owner/name`, or an object with a `url`.
+// `init`, `doctor` and the managed documents all read the owner through this, so they agree on the
+// owner of one package.
 
 /**
  * @param {unknown} repository - package.json's `repository` field, or a git remote URL.

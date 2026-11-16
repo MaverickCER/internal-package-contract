@@ -1,12 +1,13 @@
-// The recipe behind `internal-package-contract add export <name>`: everything a new subpath export needs, worked
-// out as data. Adding an entry point means keeping several files in step: the module, the `exports` map, the
-// tsup entry, the declaration-shim list, the TypeDoc configs, the knip entry, `docs/surface.json`, a test and a
-// changeset. The API-compatibility gate fails when any of them disagrees. This computes every new file and every
-// edited file first, from the current text. A file that is not shaped the way it expects is reported as a
-// problem, not guessed at, and a problem voids the whole plan, so nothing is half applied.
+// The recipe behind `internal-package-contract add export <name>`: everything a new subpath export
+// needs, worked out as data. Adding an entry point means keeping several files in step. They are
+// the module, the `exports` map, the tsup entry, the declaration-shim list, the TypeDoc configs,
+// the knip entry, `docs/surface.json`, a test and a changeset. The API-compatibility gate fails
+// when any of them disagrees. This computes every new file and every edited file first, from the
+// current text. A file of an unexpected shape is reported as a problem, not guessed at. A problem
+// voids the whole plan, so nothing is half applied.
 //
-// It never decides a version bump: the changeset it drafts leaves the bump as `unset`, a value a person must
-// replace before the changeset can be applied.
+// It never decides a version bump. The changeset it drafts leaves the bump as `unset`, and a person
+// must replace that value before the changeset can be applied.
 
 const NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 const RESERVED = new Set(["package", "index"])

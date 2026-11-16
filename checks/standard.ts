@@ -21,6 +21,7 @@ import { benchmarkCoverageCheck } from "./benchmark-coverage.js"
 import { benchmarkGuides } from "./benchmark-guides.js"
 import { arethetypeswrong } from "./arethetypeswrong.js"
 import { branchProtection } from "./branch-protection.js"
+import { bundledDependenciesCheck } from "./bundled-dependencies.js"
 import { coderabbitai } from "./coderabbitai.js"
 import { commits } from "./commits.js"
 import { coverage } from "./coverage.js"
@@ -72,9 +73,9 @@ export function standardChecks() {
       mustNotChange: ["docs/api-report"],
     }),
     // Package-specific: extracts named sections from a consumer's own example CLI output and
-    // diffs them against README prose unique to that package. That is too bespoke to centralize the way
-    // Schema/Docs are, so this just gates whatever the consumer's own script already does (the
-    // fallback the maintainer chose over relocating that logic here).
+    // diffs them against README prose unique to that package. That is too bespoke to centralize the
+    // way Schema and Docs are. So this gates whatever the consumer's script does, the fallback the
+    // maintainer chose over moving that logic here.
     ReadmeExample: npmScriptCheck({
       script: "verify:readme-example",
       label: "README example freshness",
@@ -100,12 +101,11 @@ export function standardChecks() {
     Typecheck: typecheck,
     // The same type check on only what git tracks: a file hidden by .gitignore passes everything else.
     CleanCheckout: cleanCheckoutCheck(),
-    // `isolated`: Vitest with V8 coverage instrumentation is the single
-    // heaviest check, and a consumer's own subprocess-spawning integration tests
-    // (a real `npm pack`, a spawned CLI, a full `ts-json-schema-generator`
-    // program) flake under CPU contention from a concurrent jscpd / knip /
-    // depcruise. Running it alone trades ~40s of wall time for a trustworthy
-    // signal: the whole point of the check.
+    // `isolated`: Vitest with V8 coverage instrumentation is the heaviest check. A consumer's
+    // subprocess-spawning integration tests flake under CPU contention from a concurrent jscpd,
+    // knip or depcruise. Examples: a real `npm pack`, a spawned CLI, a full
+    // `ts-json-schema-generator` program. Running it alone trades ~40s of wall time for a
+    // trustworthy signal.
     Tests: { ...tests(), isolated: true },
     Architecture: architecture(),
     GithubActions: githubActions,
@@ -125,16 +125,17 @@ export function standardChecks() {
     Coverage: { ...coverage, dependsOn: ["Tests"] as const },
     Crap: { ...crap, dependsOn: ["Coverage"] as const },
     Size: npmScriptCheck({ script: "size", label: "Size" }),
-    // Both gate what actually ships (the build output the Build barrier above just produced).
-    // NoMinify has no exceptions at all; every URL DistNoUrls finds needs a record in the consumer's
-    // reviewed-exception registry `.repo-contract/exceptions/dist-urls.json` (see checks/dist-no-urls.ts).
+    // Both gate what ships: the build output the Build barrier above produced. NoMinify has no
+    // exceptions. Every URL DistNoUrls finds needs a record in the consumer's registry
+    // `.repo-contract/exceptions/dist-urls.json` (see checks/dist-no-urls.ts).
     NoMinify: noMinify(),
     DistNoUrls: distNoUrlsCheck(),
     Duplication: duplication,
     Packaging: publint,
-    // `dependsOn: ["Tests"] as const`: this packs a tarball, and a consumer's own
-    // install-and-run integration tests can pack too; keep the two off each
-    // other's back rather than racing under load.
+    // Reads only package.json, so it waits for nothing. It gates the manifest npm would publish.
+    BundledDependencies: bundledDependenciesCheck(),
+    // `dependsOn: ["Tests"] as const`: this packs a tarball, and a consumer's install-and-run
+    // integration tests can pack too. Running them in turn keeps them from racing under load.
     TypeResolution: { ...arethetypeswrong, dependsOn: ["Tests"] as const },
     PackedConsumer: { ...packedConsumerCheck(), dependsOn: ["Tests"] as const },
     Licenses: license,
@@ -145,10 +146,9 @@ export function standardChecks() {
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     Prose: proseCheck(),
-    // No explicit dependsOn needed: declaration-order phasing (writers,
-    // including ApiDocs, then the Build barrier, then readers) already
-    // guarantees docs/api/ is freshly generated before this reader runs;
-    // matches repo-contract's own plain `accessibility,` registration.
+    // No dependsOn: declaration order runs writers (ApiDocs among them), then the Build barrier,
+    // then readers. So docs/api/ is fresh before this reader runs. repo-contract registers
+    // `accessibility,` the same plain way.
     Accessibility: accessibility,
     SecurityDeps: securityDeps(),
     SecurityDevDeps: securityDevDeps(),
@@ -161,15 +161,12 @@ export function standardChecks() {
     Suppressions: suppressions(),
     DeadCode: deadCode(),
     Commits: commits(),
-    // Declared late among the readers (only `Mutation`'s own barrier follows):
-    // the slowest reader by far on a real reviewed run (a network round trip
-    // to a remote AI review, minutes long) so every fast, deterministic
-    // check's verdict surfaces before it. NOT `isolated`, unlike
-    // `Tests`/`Mutation`: it waits on a network response rather than
-    // saturating cores, so it contends with nothing; matching
-    // repo-contract's own plain `coderabbitai,` registration. Its own
-    // non-execution (CI, no CLI installed, a detached checkout) is a visible
-    // `warn` on every run, by design: see checks/coderabbitai.ts.
+    // Declared late among the readers; only `Mutation`'s barrier follows. A real review is a
+    // minutes-long network round trip, the slowest reader by far. So every fast, deterministic
+    // verdict surfaces before it. It is not `isolated`, unlike `Tests` and `Mutation`: it waits on
+    // the network instead of saturating cores. repo-contract registers `coderabbitai,` the same
+    // way. When it cannot run (CI, no CLI installed, a detached checkout) it warns on every run, by
+    // design: see checks/coderabbitai.ts.
     CodeRabbit: coderabbitai(),
     Mutation: { ...mutation(), isolated: true },
   })

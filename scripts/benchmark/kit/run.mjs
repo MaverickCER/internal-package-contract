@@ -24,8 +24,8 @@ export const RESULTS_SCHEMA_VERSION = 4
 const CLASS_ORDER = Object.keys(COMPLEXITY_NOTATION)
 
 /**
- * Which process produced a results file: the workflow and run in CI (so a number can be traced back to
- * the job that measured it), else the local command.
+ * Which process produced a results file: the workflow and run in CI, else the local command. In CI
+ * a number then traces back to the job that measured it.
  * @param {Record<string, string | undefined>} env
  * @returns {string}
  */
@@ -43,8 +43,8 @@ function median(values) {
 
 /**
  * How closely a measured class agrees with the documented expectation. Neighbouring classes are
- * "close" because constant-vs-logarithmic and linear-vs-linearithmic cannot be reliably told apart
- * on a bounded ladder (see classify-complexity.mjs); two or more classes apart is a real difference.
+ * "close": a bounded ladder cannot reliably tell constant from logarithmic, or linear from
+ * linearithmic (see classify-complexity.mjs). Two or more classes apart is a real difference.
  * @param {string | null} measured - the measured class.
  * @param {string} expected - the documented class.
  * @returns {"matches" | "close" | "differs" | "unknown"} the agreement.
@@ -88,14 +88,14 @@ async function measureTier({ n, unit, held, setup, run, teardown, fresh, samplin
 }
 
 /**
- * Pairs to take at the suite's typical size, at least: the overhead gate judges that tier, and a
+ * The fewest pairs to take at the suite's typical size. The overhead gate judges that tier. A
  * confidence interval on a handful of pairs is wide enough to hide a real regression.
  */
 const TYPICAL_MIN_PAIRS = 10
 
 /**
- * Measures the end-to-end pair tier by tier with {@link samplePaired}: baseline and with-package
- * samples interleaved, so the per-pair difference (the package's overhead) carries the run's
+ * Measures the end-to-end pair tier by tier with {@link samplePaired}, interleaving baseline and
+ * with-package samples. The per-pair difference (the package's overhead) then carries the run's
  * drift on neither side, and comes with a confidence interval. The two groups keep the shape a
  * separately measured group has; the with-package tier also records the paired statistics.
  * @param {{ tiers: readonly number[], unit: string, suite: object, sampling: object, onProgress?: (line: string) => void }} input
@@ -182,7 +182,7 @@ function heldField(held) {
 }
 
 /**
- * The value of every swept variable at one measurement: the one being swept at `n`, the others held at
+ * The value of every swept variable at one measurement. The swept one is at `n`; the others stay at
  * their base values (the suite's unit at `primaryValue`).
  * @param {{ suiteUnit: string, variable: string, primaryValue: number, benchmark: object }} context
  * @param {number} n - the size of the variable being swept.
@@ -301,8 +301,8 @@ export async function runSuite(suite, options = {}) {
     const variants = benchmark.variants?.length ? benchmark.variants : [undefined]
     const benchmarkTiers = benchmark.tiers ?? tiers
     for (const variant of variants) {
-      // The suite's own unit first, then each other variable the function declares, one at a time with the
-      // rest held at their base values, so every group has exactly one variable and one growth class.
+      // The suite's unit first, then each other variable the function declares, one at a time. The
+      // rest stay at their base values, so every group has one variable and one growth class.
       const sweeps = [
         { variable: unit, tiers: benchmarkTiers, primaryValue: suite.workload.typicalN },
         ...(benchmark.sweeps ?? []).map((sweep) => ({
@@ -450,8 +450,8 @@ export function analyze({ suite, results, tiers, rates }) {
     const base = completedAt(baseline, n)
     const full = completedAt(withPackage, n)
     if (!base || !full) continue
-    // Paired samples give the overhead directly, as the median per-pair difference with its own
-    // interval; a results file measured before pairing falls back to the difference of two medians.
+    // Paired samples give the overhead directly: the median per-pair difference, with its interval.
+    // A results file measured before pairing falls back to the difference of two medians.
     const paired = full.paired
     const overheadMs = Math.max(
       0,
@@ -479,9 +479,9 @@ export function analyze({ suite, results, tiers, rates }) {
   // What each function costs per operation (its own measured time x how often one operation calls
   // it). A function measured on its own includes everything it calls. So a function that calls
   // another attributed one names it in `inEndToEnd.includes`, and the nested time is subtracted from
-  // it. Every moment of the operation is then attributed to at most one function. The shares are
-  // measured against the operation's total (a figure measured directly), never against the
-  // difference of two medians, which is noisy and can be zero or negative.
+  // it. Every moment of the operation is then attributed to at most one function. Each share is of
+  // the operation's measured total. The difference of two medians is noisy and can be zero or
+  // negative, so no share is taken of it.
   const inclusive = new Map()
   for (const fn of suite.functions) {
     if (!fn.inEndToEnd) continue

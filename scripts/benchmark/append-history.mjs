@@ -27,14 +27,11 @@ import { readJson, resultsToMeasurements } from "./lib/results.mjs"
  * stay valid and are never migrated. Without `inputs`, classify-complexity.mjs leaves them out
  * of complexity classification; the timing chart still shows them, since it needs only `medianMs`.
  *
- * `unitsPerSecond` is a schema-v2 generalization of env-cap's own
- * `variablesPerSecond`. It replaces a hardcoded "divide `inputs.variables` by
- * time", which is meaningless for a group whose `inputs` has no `variables` key
- * (e.g. every one of data-cap's own groups). Instead it divides the SAME generic
- * `inputTotal` this file's own complexity classifier uses by elapsed
- * seconds. One consistent "how much size, how fast" figure per tier,
- * computed the same way regardless of what a consumer's `inputs` object
- * happens to contain.
+ * `unitsPerSecond` is a schema-v2 generalization of env-cap's `variablesPerSecond`. That figure
+ * divided `inputs.variables` by time. It means nothing for a group whose `inputs` has no
+ * `variables` key, such as every data-cap group. `unitsPerSecond` divides the generic `inputTotal`
+ * the complexity classifier uses by elapsed seconds. Each tier then gets one "how much size, how
+ * fast" figure, computed the same way whatever a consumer's `inputs` object contains.
  */
 const HISTORY_SCHEMA_VERSION = 2
 
@@ -60,10 +57,9 @@ export function parseAppendArgs(argv) {
 }
 
 /**
- * Intentionally compact: medianMs + inputs + a generic derived throughput figure per completed
- * (group, tier), plus the three numbers that say how noisy the run was (stdDevMs, p95Ms, iterations).
- * The rest of the per-run detail (min/max/memory) stays reachable via `gitCommit` in that commit's own
- * results.json.
+ * Compact on purpose. Each completed (group, tier) keeps medianMs, inputs and a generic throughput
+ * figure. It adds the three numbers that say how noisy the run was: stdDevMs, p95Ms and iterations.
+ * The rest of the per-run detail (min/max/memory) stays in the `gitCommit` commit's results.json.
  * @param {{ medianMs: number, inputs?: Record<string, number> }} measurement - one tier's result.
  * @returns {object} the compact tier entry.
  */
@@ -85,11 +81,10 @@ function summarizeTier(measurement) {
 /**
  * Builds the history entry for one results.json.
  *
- * `versions` is copied verbatim from results.metadata.versions rather than singling out one "the
- * package's own version" field by a hardcoded key (env-cap's `envCapVersion`, data-cap's
- * `dataCapVersion`, and any future consumer's own naming would each need a special case
- * otherwise). A reader wanting "the package version at this point in history" reads whichever key
- * its own results.json happens to report, e.g. `entry.versions.dataCapVersion`.
+ * `versions` is copied verbatim from results.metadata.versions. Picking one "package version" field
+ * by a hardcoded key would need a special case per consumer: env-cap's `envCapVersion`, data-cap's
+ * `dataCapVersion`, and each future name. A reader wanting the package version at this point in
+ * history reads the key its results.json reports, such as `entry.versions.dataCapVersion`.
  * @param {object} results - a parsed results.json.
  * @param {{ commit?: string, pullRequest?: number }} where - the merge commit and pull request this run belongs to.
  * @returns {object} the entry to append.

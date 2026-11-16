@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import contract from "../contract.js"
+import { OPTIONAL_CHECKS } from "../checks/optional.js"
 import { packageRoot } from "../checks/shared.js"
 
 /**
@@ -28,6 +29,15 @@ describe("README.md's check table", () => {
 
   it("lists exactly the checks contract.ts actually declares, no more, no fewer", () => {
     expect(new Set(documentedChecks)).toStrictEqual(new Set(actualChecks))
+  })
+})
+
+describe("README.md's optional checks", () => {
+  const readme = readFileSync(path.join(packageRoot, "README.md"), "utf8")
+  const section = readme.split(/^## Optional checks$/m)[1]?.split(/^## /m)[0] ?? ""
+
+  it.each(Object.keys(OPTIONAL_CHECKS))("%s is named in the Optional checks section", (id) => {
+    expect(section).toContain(`\`${id}\``)
   })
 })
 
@@ -172,6 +182,7 @@ describe("the promised surface", () => {
       "DistNoUrls",
       "Duplication",
       "Packaging",
+      "BundledDependencies",
       "TypeResolution",
       "PackedConsumer",
       "Licenses",

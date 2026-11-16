@@ -52,8 +52,8 @@ const TIMED = Symbol.for("internal-package-contract.benchmark.timed")
 
 /**
  * Lets an operation report its OWN duration (for work timed elsewhere, such as a child process whose
- * start-to-finish time the parent measures). Return `timed(ms)` from `run`; any other return value (
- * numbers included) is just a result and never read as a time.
+ * start-to-finish time the parent measures). Return `timed(ms)` from `run`. Any other return value,
+ * numbers included, is a result and never read as a time.
  * @param {number} ms - the duration to record, in milliseconds.
  * @returns {object} a marker the sampler recognizes.
  */
@@ -89,8 +89,8 @@ function realInstruments() {
  * `--expose-gc`, so one sample's garbage is not billed to the next.
  *
  * Operations faster than `minSampleMs` are far below what `performance.now()` and
- * `process.cpuUsage()` can resolve, so they are repeated back to back inside one sample (the batch
- * size is calibrated during warmup) and each reported value is divided by the batch size. Batching is
+ * `process.cpuUsage()` can resolve. They repeat back to back inside one sample, in a batch sized
+ * during warmup. Each reported value is divided by the batch size. Batching is
  * off when `prepare` is given (fresh state per sample cannot be repeated) or when the operation
  * reports its own time with {@link timed}.
  * @param {() => unknown} iteration - one operation; may be async. Return `timed(ms)` to record a duration measured elsewhere; any other returned value (numbers included) is kept alive so the engine cannot optimize the work away.
@@ -114,8 +114,8 @@ export async function sample(iteration, options = {}) {
     const cpuBefore = cpuUsage()
     const start = now()
     let returned
-    // Counted by `Array(batch)`'s own length rather than a counter variable: there is no
-    // increment to get wrong, so a loop that never ends is not something this code can do.
+    // Counted by the length of `Array(batch)`, not a counter variable. With no increment to get
+    // wrong, the loop always ends.
     for (const repetition of Array(batch).keys()) {
       void repetition
       returned = await iteration()
@@ -225,10 +225,10 @@ export function computePairedStats(differences) {
 
 /**
  * Samples two operations interleaved, A B then B A then A B .... A drift in the machine over the
- * run (a boost clock, a thermal limit, a neighbour on the runner) then lands on both sides alike, and the
- * per-pair difference carries only what distinguishes them. The difference is the figure to judge
- * when the two sides are close: two separately sampled medians put their noise on top of each
- * other, a pair subtracts it. No batching: this is for operations long enough to time on their own.
+ * run (a boost clock, a thermal limit, a neighbour on the runner) lands on both sides alike. The
+ * per-pair difference then carries only what distinguishes them. Judge that difference when the two
+ * sides are close. Two separately sampled medians add their noise together; a pair subtracts it. No
+ * batching: this is for operations long enough to time on their own.
  * @param {{ a: PairedSide, b: PairedSide }} sides - the two operations.
  * @param {{ warmupIterations?: number, targetDurationMs?: number, minIterations?: number, maxIterations?: number, instruments?: Instruments }} [options] - counts are in pairs; one warmup pair by default.
  * @returns {Promise<{ a: { wallMs: number[], cpuMs: number[], heapDeltaBytes: number[] }, b: { wallMs: number[], cpuMs: number[], heapDeltaBytes: number[] }, differenceMs: number[], configuration: object }>}

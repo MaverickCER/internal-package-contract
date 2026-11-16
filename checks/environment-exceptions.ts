@@ -136,8 +136,8 @@ export function incompleteFields(
  * @param input - What could not run.
  * @param input.check - The check's id, e.g. `"CodeRabbit"`.
  * @param input.code - A short, stable reason code, e.g. `"ci"` or `"no-chrome"`. Pass `codes`
- *   instead when one run degraded for several independent reasons (every unreachable URL, say):
- *   all of them must be accepted for the result to count as accepted.
+ *   instead when one run degraded for several independent reasons, such as every unreachable URL.
+ *   The result counts as accepted only when all of them are.
  * @param input.rationale - The human-readable reason, including what to do to enable the check.
  * @param input.cwd - The repository root; defaults to the working directory.
  * @param input.now - The clock; defaults to now.

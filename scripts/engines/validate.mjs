@@ -18,8 +18,8 @@ export function minimumNodeMajor(range) {
 }
 
 /**
- * The Node versions a workflow file asks for: every value on a `node-version:` line (a single value or an
- * inline matrix list) and every item of a block list that follows one.
+ * The Node versions a workflow file asks for. That is every value on a `node-version:` line (one
+ * value or an inline matrix list), and every item of a block list after one.
  * @param {string} text - a workflow file.
  * @returns {string[]} the raw version strings.
  */

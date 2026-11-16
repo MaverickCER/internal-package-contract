@@ -21,20 +21,18 @@ import {
 import type { ApiItem, ApiPackage, Excerpt } from "@microsoft/api-extractor-model"
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/model-normalizer.ts`: this engine now
- * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
- * devDependency rather than hosting a copy.
+ * Ported from repo-contract's `scripts/api-contract/model-normalizer.ts`. The engine now lives
+ * only here; repo-contract runs it as a devDependency instead of keeping a copy.
  *
- * The single highest-risk file in this feature: it must be built and tested against real,
- * installed `@microsoft/api-extractor-model` `ApiItem` subclasses and mixins, never assumptions
- * about `.api.json`'s raw JSON shape. `.api.json` is the persisted historical format; `ApiModel`/
- * `ApiPackage` is the semantic interpretation layer, and this file goes through the latter
- * exclusively.
+ * The highest-risk file in this feature. Build and test it against the installed
+ * `@microsoft/api-extractor-model` `ApiItem` subclasses and mixins, never against assumptions about
+ * the raw `.api.json` shape. `.api.json` is the persisted historical format.
+ * `ApiModel`/`ApiPackage` is the semantic layer, and this file reads through it only.
  *
- * Walks an `ApiPackage` into a flat, deterministic `ReadonlyMap<string, NormalizedMember>` keyed by
- * `ApiItem.canonicalReference.toString()`: the only file in the feature where `canonicalReference`
- * (an upstream-`@beta` API) is used as an identity mechanism; `compatibility-classifier.ts`
- * downstream only ever sees the resulting string keys.
+ * Walks an `ApiPackage` into a flat, deterministic `ReadonlyMap<string, NormalizedMember>`. The key
+ * is `ApiItem.canonicalReference.toString()`. `canonicalReference` is an upstream `@beta` API, so
+ * this is the only file that uses it as an identity. `compatibility-classifier.ts` sees only the
+ * resulting string keys.
  */
 
 export type ReleaseTagLevel = "public" | "beta" | "alpha" | "internal"
@@ -120,13 +118,11 @@ function excerptText(excerpt: Excerpt | undefined): string | undefined {
 }
 
 /**
- * `ApiDeclaredItem.fileUrlPath` is `undefined` in two genuinely different cases upstream doesn't
- * distinguish: the file is unknown, or (per that getter's own doc comment) "the path is the
- * same as the parent API item's". The second case is the overwhelmingly common one (any member
- * declared in the same file as its containing class/interface, e.g. a method). So using `item`'s
- * own `fileUrlPath` directly would leave `NormalizedMember.fileUrlPath` empty for most nested
- * members even though the file is perfectly knowable by walking up to the nearest ancestor that
- * does carry it.
+ * `ApiDeclaredItem.fileUrlPath` is `undefined` in two cases upstream does not distinguish. Either
+ * the file is unknown, or, per that getter's doc comment, "the path is the same as the parent API
+ * item's". The second is the common one: a method declared in its class's file, for example. So
+ * `item`'s `fileUrlPath` alone would leave most nested members without a file. The nearest
+ * ancestor that carries one supplies it.
  * @param item - The API item to resolve a source file location for.
  * @returns The nearest defined `fileUrlPath` found by walking `item` and its ancestors, or `undefined` if none of them carry one.
  */
@@ -216,8 +212,8 @@ function buildMember(item: ApiItem, parent: ApiItem): NormalizedMember {
 }
 
 /**
- * Kinds with no meaningful contract signature of their own: pure structural containers that
- * exist to hold other items, not declarations a consumer could depend on directly.
+ * Kinds with no contract signature of their own. They are structural containers for other
+ * items, not declarations a consumer could depend on.
  */
 const CONTAINER_ONLY_KINDS = new Set<ApiItemKind>([
   ApiItemKind.Model,

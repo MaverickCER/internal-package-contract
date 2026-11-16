@@ -20,7 +20,7 @@ const execFileAsync = promisify(execFile)
 async function gh(apiPath) {
   try {
     // Only `status` and `sha` are read. The compare response for a commit that is ahead or diverged
-    // lists every commit and file and can pass the default 1 MiB buffer, which would turn the very
+    // lists every commit and file, and can pass the default 1 MiB buffer. That would turn the very
     // defect this audit looks for into "blocked".
     const { stdout } = await execFileAsync(
       "gh",

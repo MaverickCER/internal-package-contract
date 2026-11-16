@@ -113,9 +113,9 @@
     })
   }
 
-  // Cmd+K / Ctrl+K search over this page's own headings and FAQ questions:
-  // no backend, no external service, no build step: the index is built once
-  // from the DOM already on the page.
+  // Cmd+K / Ctrl+K search over this page's own headings and FAQ questions.
+  // It needs no backend, no external service and no build step: the index is
+  // built once from the DOM already on the page.
   var searchOverlay = document.getElementById("search-overlay")
   var searchTrigger = document.getElementById("search-trigger")
   var searchInput = document.getElementById("search-input")
@@ -242,8 +242,8 @@
       }
       if (event.key === "Tab") {
         // Minimal focus trap: only the search input is focusable inside the
-        // dialog (results are activated via Enter, not Tab), so Tab should
-        // never leave the dialog while it's open.
+        // dialog, and Enter (not Tab) activates a result. So Tab stays inside
+        // the dialog while it is open.
         event.preventDefault()
         searchInput.focus()
       }

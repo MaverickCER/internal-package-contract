@@ -9,10 +9,11 @@
 //
 //   nameParts.join(' ').trim()   ->   nameParts.join(' > ').trim()
 //
-// It is applied by run-mutation.mjs before Stryker starts, only when Vitest 5 or later and the runner are both
-// installed, only when both files carry the old expression, and never twice. A runner that already injects
-// `testNameSeparator` has the upstream fix and is left alone. A runner this script does not recognise is left alone
-// and reported, so a run with zero kills has a named cause.
+// run-mutation.mjs applies it before Stryker starts. It applies only when Vitest 5 or later and the
+// runner are both installed and both files carry the old expression. It never applies twice. A
+// runner that already injects `testNameSeparator` has the upstream fix and is left alone. A runner
+// this script does not recognise is left alone and reported, so a run with zero kills has a named
+// cause.
 
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
@@ -157,8 +158,8 @@ export function ensureStrykerVitest5Compat(
   if (states.every((state) => state === "patched")) {
     return { status: "already-patched", vitestVersion, patched: [] }
   }
-  // Rewrite only when every file is one we understand: patching one of two would leave the names the
-  // setup file records and the pattern the runner builds from them out of step.
+  // Rewrite only when every file is one we understand. Patching one of two would leave two things
+  // out of step: the names the setup file records, and the pattern the runner builds from them.
   if (!states.every((state) => state === "patched" || state === "needs-patch")) {
     return { status: "unrecognised", vitestVersion, patched: [] }
   }

@@ -3,12 +3,12 @@
 //
 //   init [--tag vX.Y.Z | --spec <dependency spec>] [--owner <github owner>] [--github] [--docs] [--strict] [--dry-run]
 //
-// It adds the pin and the `contract` script, plus the scripts, devDependencies and overrides of the template
-// the package lacks. It installs, runs `bin/scaffold.mjs` for the files every package carries, and
-// `sync --apply` for the managed files. It enrols the shared documents the package has or lacks, drafts
-// `docs/surface.json` from the exports, generates the API map, documents the environment and ends with
-// `doctor`. Unless `--strict` is passed, a package adopting for the first time starts in adoption mode
-// (`.repo-contract/adoption.json`).
+// It adds the pin and the `contract` script, plus the scripts, devDependencies and overrides of the
+// template the package lacks. It installs, runs `bin/scaffold.mjs` for the files every package
+// carries, and `sync --apply` for the managed files. It enrols the shared documents the package has
+// or lacks. It drafts `docs/surface.json` from the exports, generates the API map, documents the
+// environment and ends with `doctor`. Unless `--strict` is passed, a package adopting for the first
+// time starts in adoption mode (`.repo-contract/adoption.json`).
 //
 // It is built to be reviewed, not trusted. It refuses to start over uncommitted changes (git is the way back),
 // never overwrites a file the package has, and leaves every result uncommitted. A shared document that differs
@@ -138,8 +138,8 @@ export function run(argv, cwd, io, hooks) {
     io.err("[init] package.json has no name.\n")
     return 1
   }
-  // A package that already depends on the standard is not refused: running `init` again finishes the setup,
-  // writing only what is still missing, and never moves the pin (`upgrade` does that).
+  // A package that already depends on the standard is accepted. Running `init` again finishes the
+  // setup: it writes only what is still missing, and never moves the pin (`upgrade` does that).
   const existingSpec = manifest.devDependencies?.[DEPENDENCY] ?? manifest.dependencies?.[DEPENDENCY]
   const alreadyAdopted = existingSpec !== undefined
 
@@ -153,8 +153,8 @@ export function run(argv, cwd, io, hooks) {
     )
     return 1
   }
-  // `--spec` names the dependency outright (a fork, a mirror, or a local checkout while the standard itself is
-  // being developed); the release lookup and the pin it gives are then not needed.
+  // `--spec` names the dependency outright: a fork, a mirror, or a local checkout of the standard
+  // under development. The release lookup and the pin it gives are then not needed.
   const needsRelease = !alreadyAdopted && args.spec === undefined
   const tag = needsRelease ? (args.tag ?? latestTag(capture, cwd)) : undefined
   if (needsRelease && !TAG.test(String(tag))) {
@@ -199,8 +199,8 @@ export function run(argv, cwd, io, hooks) {
       [DEPENDENCY]: args.spec ?? `github:${SOURCE}#${tag}`,
     }
   }
-  // The rest of what the standard's tooling needs, added only where the package has nothing of its own: the
-  // scripts the checks run (build, test, lint, docs) and the tools they use.
+  // The rest of what the standard's tooling needs, added only where the package has nothing of its
+  // own. That is the scripts the checks run (build, test, lint, docs) and the tools they use.
   const templateManifest = JSON.parse(
     readFileSync(path.join(hooks.packageRoot, "template", "package", "package.json")).toString(),
   )
@@ -293,8 +293,8 @@ export function run(argv, cwd, io, hooks) {
   let agentsText = existsSync(agents) ? readFileSync(agents).toString() : undefined
   if (!existsSync(surfacePath)) {
     const surface = draftSurface(manifest, (relative) => existsSync(path.join(cwd, relative)))
-    // A package that already keeps its API map by hand loses none of it: the table seeds the surface, and is
-    // replaced by the generated one.
+    // A package that keeps its API map by hand loses none of it. The table seeds the surface, then
+    // the generated one replaces it.
     const table = agentsText === undefined ? undefined : findApiTable(agentsText)
     if (table !== undefined && !agentsText.includes(markers[0])) {
       const seeded = seedFromTable(surface, table, name)
@@ -323,8 +323,8 @@ export function run(argv, cwd, io, hooks) {
   for (const relative of listTemplateFiles(templateRoot)) {
     if (!SKIPPED.test(relative)) writeIfAbsent(relative)
   }
-  // A shared file the package carries unchanged (whether it had it or was just given it) is enrolled as it is;
-  // one it changed, or lacks, is its choice.
+  // A shared file the package carries unchanged is enrolled, whether it had it or init wrote it. A
+  // file the package changed, or lacks, stays its choice.
   const files = COPIES.filter(
     (copy) =>
       copy.kind === "file" &&

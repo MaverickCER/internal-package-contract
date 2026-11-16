@@ -39,24 +39,27 @@ describe("README and SECURITY.md: the self-contract's numbers", () => {
 })
 
 describe("CONTRIBUTING.md: the main ruleset's required checks", () => {
-  it("names every job of this repository's CI workflow, as required or as advisory", () => {
-    const contributing = readFileSync(path.join(root, "CONTRIBUTING.md"), "utf8").replace(
-      /\s+/g,
-      " ",
-    )
-    const names = (text: string): string[] =>
-      [...text.matchAll(/`([a-z0-9-]+)`/g)].map((match) => match[1] as string)
-    const required = names(
+  const names = (text: string): string[] =>
+    [...text.matchAll(/`([a-z0-9-]+)`/g)].map((match) => match[1] as string)
+  const required = (doc: string): string[] =>
+    names(
       /requires .*? and the ((?:`[a-z0-9-]+`(?:, | and ))+`[a-z0-9-]+`) status checks/.exec(
-        contributing,
+        doc.replace(/\s+/g, " "),
       )?.[1] ?? "",
     )
+  const contributing = readFileSync(path.join(root, "CONTRIBUTING.md"), "utf8").replace(/\s+/g, " ")
+
+  it("names every job of this repository's CI workflow, as required or as advisory", () => {
     const advisory = names(/(`[a-z0-9-]+`) is advisory/.exec(contributing)?.[1] ?? "")
     const ci = readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8")
     const jobs = [...(ci.split(/^jobs:$/m)[1] ?? "").matchAll(/^ {2}([a-z0-9-]+):$/gm)].map(
       (match) => match[1] as string,
     )
-    expect(required).toContain("contract")
-    expect([...required, ...advisory].sort()).toEqual(jobs.sort())
+    expect(required(contributing)).toContain("contract")
+    expect([...required(contributing), ...advisory].sort()).toEqual(jobs.sort())
+  })
+
+  it("matches the required checks SECURITY.md lists for the same ruleset", () => {
+    expect(required(security)).toEqual(required(contributing))
   })
 })

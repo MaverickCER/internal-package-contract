@@ -1,6 +1,6 @@
 /**
- * The checks a package turns on by name instead of getting by default: `AgentSkill` and
- * `AmbientCapabilities`.
+ * The checks a package turns on by name instead of getting by default: `AgentSkill`,
+ * `AmbientCapabilities` and `QuickStart`.
  *
  * Reads: package.json `"internal-package-contract"."checks"`. A name that is not an optional check
  * throws when the contract is assembled, naming the ones that exist. A typo therefore never runs
@@ -14,6 +14,7 @@ import path from "node:path"
 import type { CheckDefinitionConfig } from "repo-contract"
 import { agentSkillCheck } from "./agent-skill.js"
 import { ambientCapabilitiesCheck } from "./ambient-capabilities.js"
+import { quickStartCheck } from "./quick-start.js"
 
 /** The checks a package may turn on, by the name it lists them under, and where each one waits. */
 export const OPTIONAL_CHECKS: Readonly<
@@ -26,6 +27,8 @@ export const OPTIONAL_CHECKS: Readonly<
   AgentSkill: { check: agentSkillCheck, dependsOn: [] },
   // The packed tarball is what is read, so the build it packs must be done: `Tests` runs after `Build`.
   AmbientCapabilities: { check: ambientCapabilitiesCheck, dependsOn: ["Tests"] },
+  // Packs the build too. Waiting on `Tests` also keeps its pack from racing a test that packs.
+  QuickStart: { check: quickStartCheck, dependsOn: ["Tests"] },
 }
 
 /**

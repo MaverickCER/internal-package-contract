@@ -1,7 +1,7 @@
-// Entry point for the `PinConsistency` check (see checks/pin-consistency.ts). Reads, offline, package.json,
-// package-lock.json and every `.github/workflows/*.yml` of the working directory, and prints one JSON
-// envelope: whether the check applies here and every pin that disagrees (scripts/pin-consistency.mjs).
-// The policy decides the verdict.
+// Entry point for the `PinConsistency` check (see checks/pin-consistency.ts). Reads, offline,
+// package.json, package-lock.json and every `.github/workflows/*.yml` of the working directory.
+// Prints one JSON envelope: whether the check applies here and every pin that disagrees
+// (scripts/pin-consistency.mjs). The policy decides the verdict.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"

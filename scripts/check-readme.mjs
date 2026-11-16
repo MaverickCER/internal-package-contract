@@ -1,7 +1,7 @@
-// Entry point for the `ReadmeStructure` check (see checks/readme-structure.ts). Reads package.json and
-// README.md of the working directory and prints one JSON envelope: `exempt` for a private package, `problem`
-// when the README is missing or breaks the shared layout (scripts/readme/validate.mjs), else `current`. The
-// policy decides the verdict.
+// Entry point for the `ReadmeStructure` check (see checks/readme-structure.ts). Reads package.json
+// and README.md of the working directory and prints one JSON envelope. A private package is
+// `exempt`. A README that is missing or breaks the shared layout (scripts/readme/validate.mjs) is
+// `problem`; else `current`. The policy decides the verdict.
 
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"

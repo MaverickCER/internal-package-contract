@@ -107,9 +107,9 @@ export interface ApiContractTargetResult {
 /**
  * What the branch's Changesets (`.changeset/*.md`) declare about this package's release bump, and
  * whether that clears the minimum the aggregate public-API diff requires. `satisfied` is `null`
- * when there is nothing to compare against: the aggregate `requiredLevel` is absent (some target's
- * impact is `"unknown"` and no other target already requires `"major"`), or every target is on its
- * initial baseline.
+ * when there is nothing to compare against. That happens when every target is on its initial
+ * baseline, or when the aggregate `requiredLevel` is absent. It is absent when some target's impact
+ * is `"unknown"` and no other target already requires `"major"`.
  */
 export interface ChangesetAnalysisEvidence {
   /** Number of `.changeset/*.md` entries found naming this package. */

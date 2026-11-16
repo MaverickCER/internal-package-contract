@@ -83,15 +83,13 @@ export const docsLinks: CheckDefinitionConfig = {
       // literal (dropping the leading `^` anchor from `/^\.?\//`, covered by the "strips only a
       // LEADING './' or '/'" test above), so that one loses its mutation-score credit too:
       //  - dropping the `$` anchor from `/[#?].*$/` is unobservable for any url this check will
-      //    ever see. In a url with no embedded newline (every realistic and every currently-tested
-      //    url), `.*` already greedy-consumes to the true end of the string, so `$` never adds
-      //    a constraint. An embedded newline does make the two diverge, but then BOTH
-      //    variants leave a stray "\n" attached to `rel`, which can never match a real on-disk
-      //    filename either way. `existsLocally` can't tell them apart from either side.
-      //  - `path.join` (below) already normalizes away a leading "/" whether or not `/^\.?\//`
-      //    actually stripped it (`path.join(cwd, "/x")` === `path.join(cwd, "x")`), so relaxing
-      //    the optional-dot requirement in `/^\.?\//` to mandatory (`/^\.\//`) can never change
-      //    what `existsSync` resolves.
+      //    ever see. Every realistic and every tested url has no embedded newline. There `.*`
+      //    already consumes to the end of the string, so `$` adds no constraint. An embedded
+      //    newline makes the two diverge, but both variants then leave a stray "\n" on `rel`.
+      //    That never matches a real filename, so `existsLocally` cannot tell them apart.
+      //  - `path.join` (below) drops a leading "/" whether or not `/^\.?\//` stripped it:
+      //    `path.join(cwd, "/x")` === `path.join(cwd, "x")`. So making the dot in `/^\.?\//`
+      //    mandatory (`/^\.\//`) never changes what `existsSync` resolves.
       const rel = decodeURIComponent(url.replace(/[#?].*$/, "")).replace(/^\.?\//, "")
       // Stryker restore Regex
       return rel.length > 0 && existsSync(path.join(process.cwd(), rel))
@@ -109,8 +107,8 @@ export const docsLinks: CheckDefinitionConfig = {
 
     if (brokenLocal.length === 0) {
       const base = `Docs (links): 0 broken local link(s) across ${String(links.length)} checked`
-      // HTTP 429 is the host saying "slow down", not "this page is gone", so it is accepted outright:
-      // a rate limit is the one degradation that needs no record per URL. Anything else linkinator could
+      // HTTP 429 means "slow down", not "this page is gone", so it is accepted outright. A rate
+      // limit is the one degradation that needs no record per URL. Anything else linkinator could
       // not reach (a bot wall, a timeout) is still a degradation, accepted per URL by
       // `environment:DocsLinks:<url>`.
       const rateLimited = new Set(brokenExternal.filter((l) => l.status === 429).map((l) => l.url))

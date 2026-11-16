@@ -9,9 +9,8 @@ export function summarizeInitialBaseline(): string {
 }
 
 /**
- * Ported from repo-contract's own `scripts/api-contract/summarize-changes.ts`: this engine now
- * lives only here (see `checks/api-contract.ts`'s own note); repo-contract consumes it as a
- * devDependency rather than hosting a copy.
+ * Ported from repo-contract's `scripts/api-contract/summarize-changes.ts`. The engine now lives
+ * only here; repo-contract runs it as a devDependency instead of keeping a copy.
  *
  * Builds a target's summary deterministically from structured data: never hand-authored per
  * scenario. `initialBaseline` and "no changes" both produce a fixed sentence; otherwise a
@@ -41,9 +40,9 @@ export function summarizeChanges(
 }
 
 /**
- * Formats changes visible only below the check's own `--release-tag` threshold (see
- * evidence-types.ts's `ApiContractTargetResult.lowerTierDiff`): informational only, deliberately
- * labeled as non-blocking since it never affects the required release level.
+ * Formats changes visible only below the check's `--release-tag` threshold (see
+ * `ApiContractTargetResult.lowerTierDiff` in evidence-types.ts). They never affect the required
+ * release level, so the text labels them non-blocking.
  * @param diff - The changes visible only below the check's `--release-tag` threshold.
  * @returns A human-readable, non-blocking summary of `diff`, or `undefined` when `diff` is empty.
  */

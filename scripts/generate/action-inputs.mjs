@@ -1,7 +1,7 @@
-// The "action-inputs" region: the inputs of the package's root `action.yml`, so a guide never restates them
-// by hand. One row per input, in the file's order: the name, whether it is required, its default, and the
-// first sentence of its description (the rest stays in `action.yml`). A missing or unreadable `action.yml`, or
-// one with no inputs, stops generation.
+// The "action-inputs" region: the inputs of the package's root `action.yml`, so a guide never
+// restates them by hand. One row per input, in the file's order: the name, whether it is required,
+// and its default. Then the first sentence of its description; the rest stays in `action.yml`. A
+// missing or unreadable `action.yml`, or one with no inputs, stops generation.
 
 import { parse } from "yaml"
 import { toTable } from "./entry-points.mjs"

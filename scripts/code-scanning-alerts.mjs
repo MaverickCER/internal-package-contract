@@ -1,25 +1,27 @@
 // The script behind the `CodeScanning` check (checks/code-scanning.ts).
 //
-// It reads the repository's open GitHub code-scanning alerts through `gh api`, page by page. Locally it uses the
-// developer's own `gh` login, the `origin` remote and the checked-out branch. In CI (`CI` or `GITHUB_ACTIONS`) it
-// uses `GH_TOKEN` or `GITHUB_TOKEN`, `GITHUB_REPOSITORY` and `GITHUB_REF`, which for a pull request is its merge
-// ref; the contract job needs `permissions: security-events: read`. Alerts are scoped to that ref, so a branch
-// carrying a fix is judged on its own analysis, and a ref with no analysis yet has none.
+// It reads the repository's open GitHub code-scanning alerts through `gh api`, page by page.
+// Locally it uses the developer's own `gh` login, the `origin` remote and the checked-out branch.
+// In CI (`CI` or `GITHUB_ACTIONS`) it uses `GH_TOKEN` or `GITHUB_TOKEN`, `GITHUB_REPOSITORY` and
+// `GITHUB_REF`. For a pull request that ref is its merge ref. The contract job needs `permissions:
+// security-events: read`. Alerts are scoped to that ref. A branch carrying a fix is judged on its
+// own analysis; a ref with no analysis yet has none.
 //
-// It prints one JSON envelope to stdout. `{ ok: true, data: { repo, alerts } }` is what the policy judges.
-// `{ ok: true, data: { skipped } }` means scanning is not enabled, or there is no GitHub remote; the check records
-// that as `environment:CodeScanning:not-enabled` or `:no-remote`, a warning locally and a failure under `--strict`
-// without a record. `{ ok: false, message, data: { kind } }` means the alerts could not be read (no token in CI, `gh`
-// not installed, not authenticated, no access, unreadable output, or more pages than the safety limit), and the
-// check fails with the steps to fix it. The script itself always exits 0.
+// It prints one JSON envelope to stdout. `{ ok: true, data: { repo, alerts } }` is what the policy
+// judges. `{ ok: true, data: { skipped } }` means scanning is not enabled, or there is no GitHub
+// remote. The check records that as `environment:CodeScanning:not-enabled` or `:no-remote`. Without
+// a record, that is a warning locally and a failure under `--strict`. `{ ok: false, message, data:
+// { kind } }` means the alerts could not be read, and the check fails with the steps to fix it. The
+// causes: no token in CI, `gh` not installed, not authenticated, no access, unreadable output, or
+// more pages than the safety limit. The script always exits 0.
 
 import { sync as spawnSync } from "cross-spawn"
 import path from "node:path"
 import { resolveOwnerRepo } from "./github-repo.mjs"
 
 const PAGE_SIZE = 100
-// A safety valve against a runaway loop, not a limit on the result: reaching it is reported as a
-// failure (`kind: "truncated"`) rather than judging a silently cut-off set of alerts.
+// A safety valve against a runaway loop, not a limit on the result. Reaching it is reported as a
+// failure (`kind: "truncated"`), so a silently cut-off set of alerts is never judged.
 const MAX_PAGES = Number(process.env["CODE_SCANNING_MAX_PAGES"]) || 1000
 
 function emit(envelope) {
@@ -53,8 +55,8 @@ function currentBranch(cwd) {
 }
 
 function readPage(owner, repo, page, ref) {
-  // Alerts are scoped to the ref being worked on, so a branch carrying a fix is judged on its own
-  // analysis rather than on the default branch's still-open alert; with no analysis yet there are none.
+  // Alerts are scoped to the ref being worked on. A branch carrying a fix is judged on its own
+  // analysis, not on the default branch's still-open alert. With no analysis yet there are none.
   const refParam = ref === undefined ? "" : `&ref=${encodeURIComponent(ref)}`
   const result = spawnSync(
     "gh",

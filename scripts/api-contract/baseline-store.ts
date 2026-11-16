@@ -7,16 +7,15 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 
 /**
- * Adapted from repo-contract's own `scripts/api-contract/baseline-store.ts`: namespaced per
- * target (a consumer may have several public entry points, each with its own independent
- * baseline) under `.repo-contract/api-contract/<target>/`, instead of one fixed directory.
+ * Adapted from repo-contract's `scripts/api-contract/baseline-store.ts`. Baselines are kept per
+ * target under `.repo-contract/api-contract/<target>/`, not in one fixed directory, because a
+ * consumer may have several public entry points.
  *
  * The only file that touches `.repo-contract/api-contract/` on disk. The committed baseline is
- * authoritative: `readBaseline` reads it from git `HEAD` via `git show`, never the working tree,
- * so an uncommitted local edit (accidental or deliberate) never affects the historical comparison.
- * `writeBaselineFiles` is the single implementation that ever writes a baseline: shared by
- * check.ts's initial-baseline bootstrap (the only situation the check itself may write one) and
- * the separate, human-invoked update-baseline.ts.
+ * authoritative. `readBaseline` reads it from git `HEAD` via `git show`, never the working tree.
+ * So an uncommitted local edit never affects the historical comparison. `writeBaselineFiles` is
+ * the one writer. check.ts calls it to bootstrap a first baseline, the only write the check makes.
+ * The human-invoked update-baseline.ts calls it for every other write.
  */
 
 interface BaselineMeta {
@@ -58,8 +57,8 @@ export function sha256(content: string): string {
 }
 
 /**
- * Throws the same "corrupted baseline" error this module already throws for a hash mismatch if
- * `value` doesn't have every `BaselineMeta` field with the right primitive type.
+ * Throws the "corrupted baseline" error a hash mismatch throws, when `value` lacks a
+ * `BaselineMeta` field or one has the wrong primitive type.
  * @param value - The parsed `baseline.meta.json` content to validate.
  * @param target - This target's name, for the error message.
  * @throws {Error} If `value` is not an object, or any `BaselineMeta` field is missing or has the wrong type.
@@ -127,7 +126,8 @@ export async function readPackageJson(root: string): Promise<{ name: string; ver
 }
 
 /**
- * Throws if `root` is not inside a git working tree at all: the one case that must fail loudly rather than silently proceeding as "no baseline yet".
+ * Throws if `root` is not inside a git working tree. That case must fail loudly, never read as
+ * "no baseline yet".
  * @param root - Path to the working tree to check.
  */
 async function assertInsideGitWorkTree(root: string): Promise<void> {
@@ -144,9 +144,8 @@ async function assertInsideGitWorkTree(root: string): Promise<void> {
 
 /**
  * Reads one file from git `HEAD`. Returns `undefined` for any reason the read couldn't complete
- * once we already know this is a real git repository. An unborn `HEAD` (no commits yet, e.g. a
- * brand-new repository) and a `HEAD` that exists but doesn't contain this path both mean the same
- * thing here: no baseline is committed yet.
+ * once we already know this is a real git repository. Two cases mean no baseline is committed
+ * yet: an unborn `HEAD` (a repository with no commits), and a `HEAD` without this path.
  * @param root - Path to the git working tree.
  * @param relativePath - Path of the file to read, relative to `root`.
  * @returns The file's content at `HEAD`, or `undefined` if it couldn't be read.
@@ -164,9 +163,9 @@ export async function readFileAtHead(
 
 /**
  * Reads this target's committed baseline from git `HEAD` and verifies its integrity. Returns
- * `undefined` only when no baseline is committed yet (the initial-baseline case): any other
- * failure (not a git repository, a hash mismatch between `baseline.meta.json` and its content
- * files) throws explicitly rather than silently falling back to an untrusted state.
+ * `undefined` only when no baseline is committed yet (the initial-baseline case). Any other
+ * failure throws, so the check never falls back to an untrusted state. Examples: not a git
+ * repository, or a hash mismatch between `baseline.meta.json` and its content files.
  * @param root - Path to the git working tree containing the committed baseline.
  * @param target - This target's name (see targets.ts).
  * @returns The committed baseline's contents and metadata, or `undefined` if none is committed yet.
@@ -219,9 +218,9 @@ interface WriteBaselineInput {
 }
 
 /**
- * Writes `content` to `filePath` such that the final filename never observably holds partial
- * content: written to a sibling temp file first (same directory, so the following `rename` is
- * guaranteed to be same-filesystem and therefore atomic), then renamed into place.
+ * Writes `content` to `filePath` so the final filename never holds partial content. It writes a
+ * sibling temp file first, then renames it into place. The same directory keeps `rename` on one
+ * filesystem, which makes it atomic.
  * @param filePath - Absolute path of the file to write.
  * @param content - The full content to write.
  */
@@ -232,9 +231,9 @@ async function writeFileAtomic(filePath: string, content: string): Promise<void>
 }
 
 /**
- * Writes `.repo-contract/api-contract/<target>/baseline.*` into the working tree. Never called by
- * the check itself except to bootstrap the very first baseline for a target; every other call is
- * from the explicitly human-invoked update-baseline command.
+ * Writes `.repo-contract/api-contract/<target>/baseline.*` into the working tree. The check calls
+ * it only to bootstrap a target's first baseline. Every other call comes from the human-invoked
+ * update-baseline command.
  * @param root - Path to the working tree to write the baseline files into.
  * @param target - This target's name (see targets.ts).
  * @param input - The API JSON/d.ts text and provenance metadata to write and hash.

@@ -1,10 +1,11 @@
 // Which files of a mutation plan Stryker finds no mutant in.
 //
-// Stryker's report has an entry for a file only when it placed a mutant in it, so a module of re-exports or of
-// types is mutated by a run and still absent from its report. A report lacking such a file can still be the complete
-// evidence of a run over this checkout; a report lacking a file with mutants cannot (./adopt.mjs). The question is
-// put to Stryker's own instrumenter over the text on disk, with no ignorer and no excluded mutation: a mutant a run
-// only ignores is still in the report, so it counts. A file that cannot be read or parsed rejects.
+// Stryker's report has an entry for a file only when it placed a mutant in it. So a module of
+// re-exports or of types is mutated by a run and still absent from its report. A report lacking
+// such a file can still be the complete evidence of a run over this checkout. A report lacking a
+// file with mutants cannot (./adopt.mjs). Stryker's own instrumenter answers the question over the
+// text on disk, with no ignorer and no excluded mutation. A mutant a run only ignores is still in
+// the report, so it counts. A file that cannot be read or parsed rejects.
 
 import { readFileSync } from "node:fs"
 import path from "node:path"
