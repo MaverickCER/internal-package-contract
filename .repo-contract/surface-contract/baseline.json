@@ -1,6 +1,6 @@
 {
   "packageName": "internal-package-contract",
-  "packageVersion": "0.20.0",
+  "packageVersion": "0.21.0",
   "surface": {
     "action": null,
     "cli": {
@@ -8,7 +8,7 @@
         "commands": {
           "add": {
             "exitCode": 0,
-            "help": "Usage: internal-package-contract add export <name> [--dry-run] | add check <Name> [--dry-run]\n\n`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check AmbientCapabilities` names the check in package.json, with its settings written out to change.\n\nOptions:\n  --dry-run                print what would be written and change nothing"
+            "help": "Usage: internal-package-contract add export <name> [--dry-run] | add check <Name> [--dry-run]\n\n`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check <Name>` turns on AgentSkill, AmbientCapabilities or QuickStart.\nIt names the check in package.json, with its settings written out to change.\n\nOptions:\n  --dry-run                print what would be written and change nothing"
           },
           "doctor": {
             "exitCode": 0,
