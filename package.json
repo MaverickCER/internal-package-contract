@@ -138,7 +138,7 @@
     "linkinator": "^8.0.4",
     "markdownlint-cli2": "^0.24.0",
     "pa11y": "^10.0.0",
-    "prettier": "3.9.10",
+    "prettier": "3.10.1",
     "publint": "^0.3.24",
     "puppeteer-core": "^25.9.0",
     "repo-contract": "~0.15.0",
