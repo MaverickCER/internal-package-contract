@@ -50,6 +50,8 @@ const surfaceWith = (help: string): Surface => ({
   schemas: {},
   action: null,
   workflows: {},
+  engines: {},
+  peerDependencies: {},
 })
 
 describe("stableStringify", () => {
@@ -405,5 +407,61 @@ describe("main", () => {
     await main(root, { CI: "true" }, (text) => (out += text))
     expect(JSON.parse(out).status).toBe("missing-baseline")
     expect(out.endsWith("}")).toBe(true)
+  })
+})
+
+describe("runSurfaceCheck: engines and peer dependency ranges", () => {
+  const withRanges = (engines: object, peerDependencies: object = {}): void =>
+    write(
+      "package.json",
+      JSON.stringify({
+        name: "@o/demo",
+        version: "0.3.0",
+        bin: { demo: "cli.js" },
+        engines,
+        peerDependencies,
+      }),
+    )
+  // A baseline from before ranges were recorded: the same surface without `engines` or `peerDependencies`.
+  const before = (help: string): Surface => {
+    const { cli, schemas, action } = surfaceWith(help)
+    return { cli, schemas, action, workflows: {} }
+  }
+
+  it("passes a baseline written before ranges were recorded, whatever package.json declares", async () => {
+    withRanges({ node: ">=26" }, { react: "^19" })
+    write("cli.js", "")
+    baseline("0.3.0", before("Usage --a"))
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage --a") })
+    expect(e).toMatchObject({ status: "compared", changes: [], requiredLevel: "none" })
+    expect(e.changesets.satisfied).toBe(true)
+  })
+
+  it("requires a minor below 1.0.0 for a raised engines floor or a dropped peer major", async () => {
+    withRanges({ node: ">=24" }, { react: "^19" })
+    write("cli.js", "")
+    baseline("0.3.0", {
+      ...surfaceWith("Usage --a"),
+      engines: { node: ">=22" },
+      peerDependencies: { react: "^18 || ^19" },
+    })
+    const e = await runSurfaceCheck(root, { runBin: runBin("Usage --a") })
+    expect(e.changes.map((c) => c.kind)).toEqual(["engines-range-narrowed", "peer-range-narrowed"])
+    expect(e.requiredLevel).toBe("minor")
+    expect(e.changesets.satisfied).toBe(false)
+    changeset("minor")
+    expect(
+      (await runSurfaceCheck(root, { runBin: runBin("Usage --a") })).changesets.satisfied,
+    ).toBe(true)
+  })
+
+  it("records the ranges in a new baseline", async () => {
+    withRanges({ node: ">=24" }, { react: "^19" })
+    write("cli.js", "")
+    await runSurfaceCheck(root, { runBin: runBin("Usage --a") })
+    expect((await readSurfaceBaseline(root))?.surface).toMatchObject({
+      engines: { node: ">=24" },
+      peerDependencies: { react: "^19" },
+    })
   })
 })

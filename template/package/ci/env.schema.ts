@@ -23,8 +23,8 @@
 //     },
 //   })
 //
-// To track when one of the standard's own credentials expires, or who owns it in this package, name it again with
-// only what is yours: everything else about it still comes from the standard, so there is nothing to keep in step.
+// To track when one of the standard's own credentials expires, or who owns it here, name it again with only what
+// is yours. Everything else about it still comes from the standard, so there is nothing to keep in step.
 //
 //   const accept = (): true => true
 //   const credentials = { PIN_SYNC_TOKEN: { default: "", validator: accept } }

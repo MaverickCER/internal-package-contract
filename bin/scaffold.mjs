@@ -165,13 +165,15 @@ scaffold("gitignore", ".gitignore")
 scaffold("gitattributes", ".gitattributes")
 scaffold("editorconfig", ".editorconfig")
 scaffold("gitmessage", ".gitmessage")
-scaffold("contract.yml", ".github/workflows/contract.yml")
-if (pins.ipcSha === "") {
-  skipped.push(
-    ".github/workflows/release.yml (it is pinned to a commit of internal-package-contract, and none could be resolved: run `npm install` so the lockfile pins one, then `init` again)",
-  )
-} else {
-  scaffoldRendered("release.yml", ".github/workflows/release.yml")
+// Both call a reusable workflow of this repository, so both wait for a commit to pin it to.
+for (const workflow of ["contract.yml", "release.yml"]) {
+  if (pins.ipcSha === "") {
+    skipped.push(
+      `.github/workflows/${workflow} (it is pinned to a commit of internal-package-contract, and none could be resolved: run \`npm install\` so the lockfile pins one, then \`init\` again)`,
+    )
+  } else {
+    scaffoldRendered(workflow, `.github/workflows/${workflow}`)
+  }
 }
 scaffold("package/.github/workflows/scorecard.yml", ".github/workflows/scorecard.yml")
 if (pins.ipcSha === "") {

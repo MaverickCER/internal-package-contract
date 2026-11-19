@@ -7,7 +7,9 @@ export function runContract(input: {
     config: never,
     options?: { checks: readonly string[] },
   ) => Promise<{ evidence: unknown; verdict: unknown }>
-  config: { checks: Record<string, unknown> }
+  config: { checks: Record<string, unknown>; tier?: unknown }
+  /** What the report's "Compared with the standard" section compares the config with. */
+  baseline?: import("repo-contract/tiers").ExplainBaseline
   cwd: string
   title: string
   argv?: readonly string[]

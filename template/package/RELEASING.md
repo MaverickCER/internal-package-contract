@@ -42,9 +42,8 @@ The loop:
 4. After publishing, the workflow tags the release `v<major>.<minor>.<patch>` on the merged commit. It
    force-updates the floating major tag (`v0` while the package is 0.x, `v1` from 1.0.0). Then it asks npm
    what it now serves. The version must be there and must carry the provenance attestation, or the run goes
-   red. The floating tag tracks the composite Action's interface (`action.yml` inputs and outputs).
-   `uses: {{ownerLower}}/{{repo}}@v0` therefore keeps pointing at the latest compatible build until
-   `action.yml` itself has a breaking change.
+   red. The floating tag moves on every release, a breaking `0.x` minor included. Pin
+   `uses: {{ownerLower}}/{{repo}}@v<major>.<minor>.<patch>` or a commit SHA when a workflow must not change.
 
 `CHANGELOG.md` is generated; never hand-edit it. Fix a wrong entry by correcting the offending changeset
 before the version pull request is merged, or with a follow-up changeset after.

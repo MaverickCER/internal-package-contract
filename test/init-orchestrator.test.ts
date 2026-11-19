@@ -279,7 +279,7 @@ describe("init in an existing package: comprehensive", () => {
     for (const file of [
       "src/index.ts",
       "test/index.test.ts",
-      "benchmarks/suite.mjs",
+      "benchmarks/performance-runtime/suite.mjs",
       "docs/api-report/README.md",
     ]) {
       expect(existsSync(path.join(dir, file)), file).toBe(false)

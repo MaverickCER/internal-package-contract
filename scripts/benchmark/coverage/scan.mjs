@@ -1,8 +1,9 @@
 // What `BenchmarkCoverage` reads from a repository: the public functions, and what each suite covers.
 //
-// The functions come from the committed API baselines (`.repo-contract/api-contract/<entry>/baseline.api.json`,
-// plus `baseline.d.ts` where it exists). What each benchmark covers comes from the suite's current `results.json`
-// (`analysis.coverage`, local or committed). Nothing is built or measured.
+// The functions come from the committed API baselines (`.repo-contract/api-contract/<target>/baseline.api.json`,
+// plus `baseline.d.ts` where it exists). A target name may contain slashes, so a baseline can sit at any depth.
+// What each benchmark covers comes from the suite's current `results.json` (`analysis.coverage`, local or
+// committed). Nothing is built or measured.
 //
 // `no-api`: no baseline, so no public functions, and the check passes. `no-coverage`: a suite's results predate
 // `analysis.coverage` and must be re-rendered with `--render`; the check fails and no finding is judged.
@@ -18,6 +19,24 @@ import { signaturesOf } from "./signatures.mjs"
 export const API_CONTRACT_DIR = ".repo-contract/api-contract"
 
 /**
+ * @param {string} root - the folder the API baselines are committed under.
+ * @param {string} folder - a folder relative to `root`; `""` is `root` itself.
+ * @returns {string[]} every folder under `folder` that holds a `baseline.api.json`, in path order. A target name
+ *   with a slash (`adapters/express`) is committed one level deeper per slash, so the walk has no depth limit.
+ */
+function baselineFolders(root, folder) {
+  // Stryker disable next-line MethodExpression: readdir order is platform-defined; sorting only makes the order stable, which a filesystem that already lists alphabetically cannot show.
+  const children = readdirSync(path.join(root, folder), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(folder, entry.name))
+    .sort()
+  return children.flatMap((child) => [
+    ...(existsSync(path.join(root, child, "baseline.api.json")) ? [child] : []),
+    ...baselineFolders(root, child),
+  ])
+}
+
+/**
  * @param {string} cwd - the repository root.
  * @returns {{ models: object[], declarations: string[] }} every entry point's parsed `baseline.api.json`, and the
  *   text of its rolled-up `baseline.d.ts` where it has one.
@@ -25,10 +44,7 @@ export const API_CONTRACT_DIR = ".repo-contract/api-contract"
 export function readBaselines(cwd) {
   const root = path.join(cwd, API_CONTRACT_DIR)
   if (!existsSync(root)) return { models: [] }
-  // Stryker disable next-line MethodExpression: readdir order is platform-defined; sorting only makes the order stable, which a filesystem that already lists alphabetically cannot show.
-  const entries = readdirSync(root)
-    .sort()
-    .filter((entry) => existsSync(path.join(root, entry, "baseline.api.json")))
+  const entries = baselineFolders(root, "")
   return {
     models: entries.map((entry) =>
       JSON.parse(readFileSync(path.join(root, entry, "baseline.api.json")).toString()),

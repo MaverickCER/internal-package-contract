@@ -21,12 +21,11 @@
 import { sync as spawnSync } from "cross-spawn"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import { loadExceptionRegistry } from "repo-contract/helpers"
-import type { StandardSchemaV1 } from "repo-contract/helpers"
 import {
+  exceptionRegistryStandardSchema,
+  loadExceptionRegistry,
   reconcileAndPersistExceptionRegistry,
-  validateExceptionRegistry,
-} from "../../checks/exception-record.js"
+} from "repo-contract/helpers"
 import type {
   CoderabbitEvidence,
   CoderabbitExceptionRecord,
@@ -56,18 +55,7 @@ type CoderabbitCliResult =
     }
   | { readonly status: "error"; readonly message: string }
 
-const registrySchema: StandardSchemaV1<unknown, readonly CoderabbitExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, CODERABBIT_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(CODERABBIT_EXCEPTION_SCHEMA)
 
 /** The severity values the CLI itself may report: anything else normalizes to `"unknown"`. */
 const SEVERITY_VALUES = new Set(["critical", "major", "minor"])
@@ -177,7 +165,7 @@ function normalizeFinding(raw: Record<string, unknown>): NormalizedFinding | und
  * Parses `coderabbit review --agent`'s newline-delimited JSON event stream. Unrecognized event
  * `type`s are skipped. The protocol is extensible (progress and status events already vary run to
  * run), so a new informational event type must not break this check. A malformed `finding` event,
- * or a line that is not JSON, fails the whole parse closed. `checks/mutation.ts` does the same for
+ * or a line that is not JSON, fails the whole parse closed. repo-contract's Mutation preset does the same for
  * a malformed Stryker report.
  * @param stdout - The CLI's raw captured stdout.
  * @returns The findings observed and whether a terminal `complete` event was seen, or the error message if parsing failed closed.
@@ -466,7 +454,7 @@ function withRegistry<T extends object>(
 /**
  * Runs the CodeRabbit CLI. When a review ran (`reviewed`), it reconciles the consumer's
  * `.repo-contract/exceptions/coderabbit.json` against the findings and writes it back. It does so
- * through `reconcileAndPersistExceptionRegistry` (`checks/exception-record.ts`), the entrypoint
+ * through `reconcileAndPersistExceptionRegistry` (`repo-contract/helpers`), the entrypoint
  * `SecuritySocket` and `SecurityDeps` use for this reconcile -> validate -> persist sequence. On
  * `not-applicable` (CI), `unavailable` or `error`, the registry is validated but not reconciled.
  * @param root - Absolute path to the repository being checked (the consumer's own `process.cwd()`).

@@ -55,29 +55,26 @@ import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type {
   ExceptionClassification,
+  ExceptionMethod,
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
+  ExceptionRegistrySchema,
+  ExceptionType,
+  ExceptionV2Fields,
 } from "repo-contract/helpers"
-import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
-  EXCEPTION_TYPES,
-  EXCEPTION_V2_FIELD_KEYS,
-  SECURITY_EXCEPTION_FIELD_KEYS,
   emptyV2Fields,
   evaluateFindingVerdict,
+  EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
+  exceptionRegistryStandardSchema,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
-  validateExceptionRegistry,
+  SECURITY_EXCEPTION_FIELD_KEYS,
+  validateExceptionPolicyConfig,
   validateSecurityExceptionFields,
-} from "./exception-record.js"
-import type {
-  ExceptionV2Fields,
-  ExceptionRegistrySchema,
-  ExceptionMethod,
-  ExceptionType,
-} from "./exception-record.js"
+} from "repo-contract/helpers"
 import { abnormalTermination } from "./shared.js"
 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/security-deps.json"
@@ -262,18 +259,7 @@ export function evaluateFinding(
   )
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly SecurityDepsExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SECURITY_DEPS_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(SECURITY_DEPS_EXCEPTION_SCHEMA)
 
 /**
  * Normalizes `npm audit --json`'s own `vulnerabilities` object into one finding per package.

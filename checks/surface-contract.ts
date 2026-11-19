@@ -1,10 +1,14 @@
 /**
  * `SurfaceContract`: the CLI, schema, action and workflow surface changed no more than the changesets
- * declare. That surface has three parts. First, the `--help` and exit code of each `bin` and of
+ * declare.
+ *
+ * That surface has three parts. First, the `--help` and exit code of each `bin` and of
  * each command its help lists. Second, the JSON files `exports` serve. Third, the inputs, secrets
  * and outputs of the root `action.yml` and of each reusable workflow. With `surfaceRenderers` in
- * package.json it also holds the headings of generated documents. `ApiContract` guards the types;
- * this guards the rest.
+ * package.json it also holds the headings of generated documents. It also holds the `engines` and
+ * `peerDependencies` ranges in package.json. A range that accepts less is breaking: a raised floor or
+ * a dropped major. A baseline written before ranges were recorded compares none until the next
+ * release refreshes it. `ApiContract` guards the types; this guards the rest.
  *
  * Reads: package.json, the current surface (`scripts/surface-contract/collect.ts`), and the
  * committed `.repo-contract/surface-contract/baseline.json`. Also the pending `.changeset/*.md`,
@@ -27,7 +31,8 @@
  * self-contract baselines this package's own CLI text.
  *
  * Limit: a behaviour change behind an unchanged `--help`, or in the files a CLI writes, is
- * invisible here.
+ * invisible here. A package with no CLI, schema, action or workflow keeps no baseline, so its ranges
+ * are not compared.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

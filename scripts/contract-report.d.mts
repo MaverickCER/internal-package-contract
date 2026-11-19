@@ -1,3 +1,5 @@
+import type { TierExplanation } from "repo-contract/tiers"
+
 export const NOT_EVALUATED_ACCEPTED: "Not evaluated (accepted by"
 export const NOT_EVALUATED_UNEXCEPTED: "Not evaluated (no exception recorded"
 export type ResultClass = "pass" | "warn" | "not-evaluated" | "unexcepted" | "fail" | "skipped"
@@ -21,7 +23,10 @@ export interface ContractReport {
     rationale: string
     durationMs: number
   }[]
+  /** What the contract runs and loosened against the standard; present when the run had a baseline. */
+  explanation?: TierExplanation
 }
+export const OWN_CHECKS_NOTE: string
 export function classifyResult(result: PolicyResultLike): ResultClass
 export function mergeEvidence(
   documents: readonly { startedAt: string; completedAt: string; checks: Record<string, unknown> }[],
@@ -42,6 +47,8 @@ export function buildReport(input: {
   unpromoted?: readonly string[]
 }): ContractReport
 export function renderMarkdown(report: ContractReport, options?: { title?: string }): string
+export const STEP_SUMMARY_MAX_BYTES: 1_000_000
+export function stepSummary(markdown: string, maxBytes?: number): string
 export function writeReportFiles(
   dir: string,
   documents: { evidence: unknown; report: ContractReport; markdown: string },

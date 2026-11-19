@@ -8,27 +8,41 @@
 // (`--scope`, `--base`) is written to `reports/contract/scope.json` before any check runs, and the Tests
 // command is narrowed to the affected test files.
 //
+// The report compares the config with a baseline, the standard itself (`checks/baseline.ts`), and lists every
+// check and setting the config loosened. The exception inventory is repo-contract's.
+//
 // A log per check goes to repo-contract's log directory as each finishes; a failure is printed at once. The
 // engine's working files (`.stryker-tmp`, and `coverage/` and `reports/*` when the run created them) are
 // removed afterwards; `reports/contract` stays.
 
-import { appendFileSync, existsSync, readdirSync, rmSync } from "node:fs"
+import { appendFileSync, existsSync, readdirSync, rmSync, statSync } from "node:fs"
 import path from "node:path"
 import { describeScope, resolveRunScope, withScope, writeScope } from "./affected-scope.mjs"
 import { changedFiles, selectChanged } from "./changed.mjs"
 import { selectChecks } from "./contract-args.mjs"
 import { parseRunOptions } from "./contract-options.mjs"
 import {
+  EXCEPTION_REGISTRY_DIRECTORY,
   onEvidenceSaveToRepoContractLogs,
   onVerdictPrependRepoContractLogs,
+  readExceptionRegistries,
+  renderExceptionInventory,
   REPO_CONTRACT_LOG_DIRECTORY as LOG_DIRECTORY,
   repoContractLogs,
+  summarizeExceptionRegistries,
 } from "repo-contract/helpers"
+import { explainTier } from "repo-contract/tiers"
 import { advisoryFailures, readAdoption, unpromotedChecks } from "./adoption/mode.mjs"
 import { prepare as prepareRun } from "./contract-prepare.mjs"
 import { planPhases } from "./contract-phases.mjs"
-import { collectInventory, renderInventory } from "./exceptions-inventory.mjs"
-import { buildReport, mergeEvidence, renderMarkdown, writeReportFiles } from "./contract-report.mjs"
+import {
+  buildReport,
+  mergeEvidence,
+  renderMarkdown,
+  STEP_SUMMARY_MAX_BYTES,
+  stepSummary,
+  writeReportFiles,
+} from "./contract-report.mjs"
 
 /** Where the durable report is written, relative to the repository root. It survives the cleanup below. */
 export const REPORT_DIR = "reports/contract"
@@ -100,7 +114,8 @@ export function resultText(id, rationale) {
  * Runs the selected checks, prints the verdict, writes the report, sets the exit code.
  * @param {object} input
  * @param {(config: unknown, options?: { checks: readonly string[] }) => Promise<{ evidence: any, verdict: any }>} input.runRepoContract
- * @param {{ checks: Record<string, unknown> }} input.config
+ * @param {{ checks: Record<string, unknown>, tier?: unknown }} input.config
+ * @param {import("repo-contract/tiers").ExplainBaseline} [input.baseline] - what the report's "Compared with the standard" section compares the config with.
  * @param {string} input.cwd - the repository root; the report and cleanup are relative to it.
  * @param {string} input.title - the heading printed above the results.
  * @param {readonly string[]} [input.argv]
@@ -115,6 +130,7 @@ export function resultText(id, rationale) {
 export async function runContract({
   runRepoContract,
   config,
+  baseline,
   cwd,
   title,
   argv = process.argv,
@@ -252,18 +268,22 @@ export async function runContract({
     logs.prependVerdict(check.id, labelOf(check), check.rationale, check.outcome === "pass")
   }
   await logs.flush()
-  const exceptions = collectInventory(cwd)
-  const markdown = renderMarkdown({ ...report, exceptions }, { title })
-  writeReportFiles(path.join(cwd, REPORT_DIR), {
-    evidence,
-    report: { ...report, exceptions },
-    markdown,
-  })
-  if (env["GITHUB_STEP_SUMMARY"]) appendFileSync(env["GITHUB_STEP_SUMMARY"], `${markdown}\n`)
+  const found = await readExceptionRegistries(path.join(cwd, EXCEPTION_REGISTRY_DIRECTORY))
+  const exceptions = summarizeExceptionRegistries(found.registries, new Date(), found.errors)
+  const explanation = explainTier(config, baseline)
+  const full = { ...report, exceptions, explanation }
+  const markdown = renderMarkdown(full, { title })
+  writeReportFiles(path.join(cwd, REPORT_DIR), { evidence, report: full, markdown })
+  const stepFile = env["GITHUB_STEP_SUMMARY"]
+  if (stepFile) {
+    // GitHub's limit covers the whole step summary, so what the step already wrote counts against it.
+    const used = existsSync(stepFile) ? statSync(stepFile).size : 0
+    appendFileSync(stepFile, stepSummary(markdown, STEP_SUMMARY_MAX_BYTES - used))
+  }
 
   process.exitCode = report.passed ? 0 : 1
   if (options.json) {
-    out.write(`${JSON.stringify({ ...report, exceptions }, null, 2)}\n`)
+    out.write(`${JSON.stringify(full, null, 2)}\n`)
     return { passed: report.passed }
   }
 
@@ -285,7 +305,7 @@ export async function runContract({
       "Results with no recorded exception fail the CI gate (--strict); record each in .repo-contract/exceptions/environment.json.\n",
     )
   }
-  if (exceptions.total > 0) out.write(`\n${renderInventory(exceptions)}`)
+  if (exceptions.total > 0) out.write(`\n${renderExceptionInventory(exceptions)}`)
   out.write(`Report: ${path.join(REPORT_DIR, "report.json")}\n`)
   if (logs.count() > 0)
     out.write(

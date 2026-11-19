@@ -20,7 +20,12 @@ export function nestedDependencies(
   standard: string,
   consumer: string,
 ): { name: string; wanted: string; installed: string | undefined }[]
-export function workspaceOf(input: { consumer: string; standard: string | undefined }): string
+export function undeclaredDependencies(standard: string, consumer: string): string[]
+export function workspaceOf(input: {
+  consumer: string
+  standard: string | undefined
+  hoist?: boolean
+}): string
 export function runContract(
   work: string,
   skip: string[],

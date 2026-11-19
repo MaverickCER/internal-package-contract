@@ -24,8 +24,8 @@ set up and what is left.
   check reject a message that breaks either.
 - **Change a generated file through its source.** `dist/` comes from `src/` (`npm run build`).
   `docs/api-report/` and `docs/api/` come from TSDoc (`npm run docs:api:report`, `npm run docs:api`). A region
-  between `<!-- ipc:begin -->` and `<!-- ipc:end -->` comes from `package.json` and `docs/surface.json`
-  (`npx internal-package-contract generate`). `docs/ENVIRONMENT.md` comes from `ci/env.schema.ts`
+  between `<!-- ipc:begin -->` and `<!-- ipc:end -->` comes from `package.json`, `docs/surface.json` or
+  `action.yml` (`npx internal-package-contract generate`). `docs/ENVIRONMENT.md` comes from `ci/env.schema.ts`
   (`npm run docs:env`).
 - **Propose the version bump; the maintainer sets it.** Add a changeset (`.changeset/<name>.md`) at the level
   [VERSIONING.md](VERSIONING.md) gives, and name that level in the pull request. `ApiContract` and

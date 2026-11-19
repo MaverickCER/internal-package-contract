@@ -1,6 +1,7 @@
-# Publishes this package's OpenSSF Scorecard result, which the README badge reads. The ScorecardWorkflow
-# check requires it. Scorecard rejects a publishing workflow with top-level env or defaults. It also limits
-# the job to a few trusted actions, so keep it as it is.
+# Publishes this package's OpenSSF Scorecard result, which the README badge reads.
+# The ScorecardWorkflow check requires this file.
+# Scorecard rejects a publishing workflow with top-level env or defaults.
+# It also allows only a few trusted actions in the job, so keep the file as it is.
 name: Scorecard
 
 on:
@@ -30,8 +31,9 @@ jobs:
           results_format: sarif
           publish_results: true
 
-      # The public Scorecard API keeps each check's score and a one-line reason. Uploading the SARIF puts
-      # the per-check details (which workflow, which line) in code scanning, where a reviewer can read why.
+      # The public Scorecard API keeps only each check's score and a one-line reason.
+      # This upload puts the details, such as the workflow and the line, in code scanning.
+      # There a reviewer can read why a check scored as it did.
       - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: results.sarif

@@ -18,7 +18,8 @@
  * - `CodeScanning`: the open CodeQL alerts of this ref. Default setup is enabled on the repository.
  * - `EnvContract`: `ci/env.schema.ts`.
  * - `GitHooks`: a clone that runs the hooks. Not judged in CI.
- * - `GeneratedRegions`: the README's `supported-versions` region against `package.json`.
+ * - `GeneratedRegions`: the README's `supported-versions`, `thresholds` and `checks` regions against
+ *   `package.json`, the threshold constants and the check headers.
  *
  * What it leaves out of `standardChecks()`, and why (every omission, so nothing is missing by accident):
  * - `Build`, `Packaging`, `TypeResolution`, `NoMinify`, `DistNoUrls`, `Size`, `PackedConsumer`: this package
@@ -28,8 +29,8 @@
  *   declarations API Extractor reads. Those exports are not diffed; README "Stability" says review decides. The
  *   CLI surface is what `SurfaceContract` guards.
  * - `ReadmeStructure`, `LandingPage`, `Accessibility`, `ScorecardWorkflow`, `EngineMatrix`,
- *   `BundledDependencies`: for published packages; this one is private (`"private": true`), so each
- *   would pass vacuously.
+ *   `BundledDependencies`, `QuickStart`: for published packages; this one is private (`"private": true`), so
+ *   each would pass vacuously.
  * - `PinConsistency`, `ManagedFiles`: judge a consumer's pin of this package and the files it manages there;
  *   this repository is the source of both, not a consumer, so each would pass vacuously.
  * - `BenchmarkCoverage`, `BenchmarkComplexity`, `BenchmarkGuides`: the suites under `benchmarks/` are committed,
@@ -53,19 +54,15 @@
 import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import type { CheckDefinitionConfig } from "repo-contract"
-import { format, license, lint, typecheck } from "repo-contract/presets"
+import type { StrictCheckId } from "repo-contract/tiers"
 import { ENTRY_SHELLS, NON_RUNTIME, SCOPE_DIRS } from "./scope.mjs"
 import { architecture } from "./checks/architecture.js"
 import { createBranchProtection } from "./checks/branch-protection.js"
 import { commits } from "./checks/commits.js"
-import { coverage } from "./checks/coverage.js"
-import { crap } from "./checks/crap.js"
 import { deadCode } from "./checks/dead-code.js"
-import { duplication } from "./checks/duplication.js"
 import { docsFragments } from "./checks/docs-fragments.js"
 import { proseCheck } from "./checks/prose.js"
 import { docsLinks } from "./checks/docs-links.js"
-import { docsMarkdown } from "./checks/docs-markdown.js"
 import { cleanCheckoutCheck } from "./checks/clean-checkout.js"
 import { codeScanning } from "./checks/code-scanning.js"
 import { envContractCheck } from "./checks/env-contract.js"
@@ -74,9 +71,9 @@ import { gitHooksCheck } from "./checks/git-hooks.js"
 import { surfaceContract } from "./checks/surface-contract.js"
 import { gitHygiene } from "./checks/git-hygiene.js"
 import { githubActions } from "./checks/github-actions.js"
-import { mutation } from "./checks/mutation.js"
 import { securityDeps } from "./checks/security-deps.js"
 import { securityDevDeps } from "./checks/security-dev-deps.js"
+import { coverageInScope, crapInScope, standardTier } from "./checks/strict.js"
 import { securitySecrets } from "./checks/security-secrets.js"
 import { securitySocket } from "./checks/security-socket.js"
 import { suppressions } from "./checks/suppressions.js"
@@ -119,14 +116,17 @@ function architectureOverScope(check: CheckDefinitionConfig): CheckDefinitionCon
   return { ...check, run: ["depcruise", ...SCOPE_DIRS, ...flagsOf(check)] }
 }
 
+/** repo-contract's `strict` tier with IPC's hardening, as `contract.ts` builds it for a consumer. */
+const tier: Readonly<Record<StrictCheckId, CheckDefinitionConfig>> = standardTier().checks
+
 export default defineRepoContract({
   spawn: crossSpawn,
   env: process.env,
   killProcessTree: crossSpawnSync,
   checks: {
-    Lint: lint(),
-    Format: { ...format, run: ["prettier", "--check", "."] },
-    Typecheck: { ...typecheck, run: ["tsc", "--noEmit", "-p", "tsconfig.self.json"] },
+    Lint: tier.Lint,
+    Format: tier.Format,
+    Typecheck: { ...tier.Typecheck, run: ["tsc", "--noEmit", "-p", "tsconfig.self.json"] },
     // `isolated`: the single heaviest check (Vitest with V8 coverage
     // instrumentation), same reasoning as `contract.ts`'s own `Tests`.
     Tests: { ...tests(), isolated: true },
@@ -135,13 +135,13 @@ export default defineRepoContract({
     GitHygiene: gitHygiene,
     CleanCheckout: cleanCheckoutCheck(),
     BranchProtection: createBranchProtection(),
-    Coverage: { ...coverage, dependsOn: ["Tests"] },
-    Crap: { ...crapOverScope(crap), dependsOn: ["Coverage"] },
-    Duplication: duplicationOverScope(duplication),
+    Coverage: { ...coverageInScope(tier.Coverage), dependsOn: ["Tests"] },
+    Crap: { ...crapInScope(crapOverScope(tier.Crap)), dependsOn: ["Coverage"] },
+    Duplication: duplicationOverScope(tier.Duplication),
     // The preset reads this repo's `.licensee.json` (OSI-approved plus Blue Oak Gold and a short
     // allow-list of public-domain or attribution-only licenses its tooling dependencies carry).
-    Licenses: license,
-    DocsMarkdown: docsMarkdown(),
+    Licenses: tier.Licenses,
+    DocsMarkdown: tier.DocsMarkdown,
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     GeneratedRegions: generatedRegionsCheck(),
@@ -159,6 +159,6 @@ export default defineRepoContract({
     CodeScanning: codeScanning(),
     EnvContract: envContractCheck(),
     GitHooks: gitHooksCheck(),
-    Mutation: { ...mutation(), isolated: true },
+    Mutation: tier.Mutation,
   },
 })

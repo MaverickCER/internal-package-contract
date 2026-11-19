@@ -318,11 +318,7 @@ describe("optional checks", () => {
     writeFileSync(path.join(dir, "package.json"), JSON.stringify(value))
 
   it("offers AmbientCapabilities, which waits for the tests", () => {
-    expect(Object.keys(OPTIONAL_CHECKS)).toEqual([
-      "AgentSkill",
-      "AmbientCapabilities",
-      "QuickStart",
-    ])
+    expect(Object.keys(OPTIONAL_CHECKS)).toEqual(["AgentSkill", "AmbientCapabilities", "Sbom"])
     expect(OPTIONAL_CHECKS["AgentSkill"]?.dependsOn).toEqual([])
     expect(OPTIONAL_CHECKS["AmbientCapabilities"]?.dependsOn).toEqual(["Tests"])
   })
@@ -348,7 +344,7 @@ describe("optional checks", () => {
     try {
       manifest({ "internal-package-contract": { checks: ["Nope"] } })
       expect(() => optionalChecks(dir)).toThrow(
-        "Available: AgentSkill, AmbientCapabilities, QuickStart, Other.",
+        "Available: AgentSkill, AmbientCapabilities, Sbom, Other.",
       )
     } finally {
       delete table["Other"]
@@ -358,7 +354,7 @@ describe("optional checks", () => {
     for (const name of ["Nope", "toString", 3]) {
       manifest({ "internal-package-contract": { checks: [name] } })
       expect(() => optionalChecks(dir)).toThrow(
-        `package.json turns on a check that does not exist: ${String(name)}. Available: AgentSkill, AmbientCapabilities, QuickStart.`,
+        `package.json turns on a check that does not exist: ${String(name)}. Available: AgentSkill, AmbientCapabilities, Sbom.`,
       )
     }
   })
@@ -498,23 +494,28 @@ describe("inspectAmbient and the ambient tool", () => {
     expect(path.basename(into).startsWith("ipc-ambient-")).toBe(true)
     expect(existsSync(into)).toBe(false)
   })
-  it("reads the dependencies of the tarball's manifest, not the working copy's", () => {
-    const forbid = {
-      "internal-package-contract": {
-        ambientCapabilities: { forbiddenDependencies: ["cross-spawn"] },
-      },
-    }
-    manifest({ files: ["a.js"], dependencies: { "cross-spawn": "1" } })
-    put("a.js", "export {}\n")
-    const withIt = npmPack(dir, dir)
-    manifest({ files: ["a.js"], ...forbid })
-    expect(inspectAmbient({ cwd: dir, tarball: withIt }).state).toBe("violations")
-    rmSync(withIt)
-    manifest({ files: ["a.js"] })
-    const without = npmPack(dir, dir)
-    manifest({ files: ["a.js"], dependencies: { "cross-spawn": "1" }, ...forbid })
-    expect(inspectAmbient({ cwd: dir, tarball: without }).state).toBe("clean")
-  })
+  // It packs a real tarball, which can take longer than the 20 s default while other checks run alongside.
+  it(
+    "reads the dependencies of the tarball's manifest, not the working copy's",
+    { timeout: 60_000 },
+    () => {
+      const forbid = {
+        "internal-package-contract": {
+          ambientCapabilities: { forbiddenDependencies: ["cross-spawn"] },
+        },
+      }
+      manifest({ files: ["a.js"], dependencies: { "cross-spawn": "1" } })
+      put("a.js", "export {}\n")
+      const withIt = npmPack(dir, dir)
+      manifest({ files: ["a.js"], ...forbid })
+      expect(inspectAmbient({ cwd: dir, tarball: withIt }).state).toBe("violations")
+      rmSync(withIt)
+      manifest({ files: ["a.js"] })
+      const without = npmPack(dir, dir)
+      manifest({ files: ["a.js"], dependencies: { "cross-spawn": "1" }, ...forbid })
+      expect(inspectAmbient({ cwd: dir, tarball: without }).state).toBe("clean")
+    },
+  )
   it("falls back to the working copy's manifest when the tarball has none", () => {
     manifest({
       dependencies: { "cross-spawn": "1" },

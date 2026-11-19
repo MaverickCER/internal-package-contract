@@ -31,6 +31,8 @@ describe("collectSurface: nothing exposed", () => {
       schemas: {},
       action: null,
       workflows: {},
+      engines: {},
+      peerDependencies: {},
     })
   })
 })
@@ -381,5 +383,27 @@ describe("collectSurface: generated-document headings", () => {
     await expect(collectSurface(root, { runBin: fake({}) })).rejects.toThrow(
       /surfaceRenderers lists src\/gone\.ts, which does not exist/,
     )
+  })
+})
+
+describe("collectSurface: engines and peer dependency ranges", () => {
+  it("records engines and peerDependencies as package.json declares them, sorted", async () => {
+    pkg({ engines: { node: ">=24", npm: ">=10" }, peerDependencies: { z: "^2", a: "^1 || ^2" } })
+    const surface = await collectSurface(root, { runBin: fake({}) })
+    expect(surface.engines).toEqual({ node: ">=24", npm: ">=10" })
+    expect(Object.keys(surface.peerDependencies ?? {})).toEqual(["a", "z"])
+    expect(surface.peerDependencies).toEqual({ a: "^1 || ^2", z: "^2" })
+  })
+
+  it("records empty maps when package.json declares neither, and keeps only string ranges", async () => {
+    pkg({})
+    expect(await collectSurface(root, { runBin: fake({}) })).toMatchObject({
+      engines: {},
+      peerDependencies: {},
+    })
+    pkg({ engines: { node: 24, npm: ">=10" }, peerDependencies: ["a"] })
+    const surface = await collectSurface(root, { runBin: fake({}) })
+    expect(surface.engines).toEqual({ npm: ">=10" })
+    expect(surface.peerDependencies).toEqual({})
   })
 })

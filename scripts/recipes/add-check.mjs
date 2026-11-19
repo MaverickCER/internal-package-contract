@@ -3,15 +3,19 @@
 // they can be seen and changed. Pure: it takes the file's text and returns the new text, or what is
 // wrong. A setting the package already has is kept.
 
-import { OPTIONAL_SETTINGS } from "./optional-settings.mjs"
+import { OPTIONAL_SETTINGS, RETIRED_CHECKS } from "./optional-settings.mjs"
 
 /**
  * @param {object} input
  * @param {string} input.name - the check to turn on.
  * @param {string | undefined} input.packageJson - package.json's text.
- * @returns {{ problems: string[], text?: string, already?: boolean }}
+ * @returns {{ problems: string[], text?: string, already?: boolean, retired?: string }}
  */
 export function planAddCheck({ name, packageJson }) {
+  // A package's text is passed through unchanged, so nothing is written.
+  if (Object.hasOwn(RETIRED_CHECKS, name)) {
+    return { problems: [], text: packageJson, retired: RETIRED_CHECKS[name] }
+  }
   if (!Object.hasOwn(OPTIONAL_SETTINGS, name)) {
     return {
       problems: [

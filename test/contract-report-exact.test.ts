@@ -6,9 +6,11 @@ import type { ContractReport } from "../scripts/contract-report.mjs"
 import {
   NOT_EVALUATED_ACCEPTED,
   NOT_EVALUATED_UNEXCEPTED,
+  STEP_SUMMARY_MAX_BYTES,
   buildReport,
   mergeEvidence,
   renderMarkdown,
+  stepSummary,
   writeReportFiles,
 } from "../scripts/contract-report.mjs"
 
@@ -372,5 +374,99 @@ describe("writeReportFiles()", () => {
     expect(readFileSync(path.join(dir, "summary.md"), "utf8")).toBe("# hi\n")
     writeReportFiles(dir, { evidence: { a: 3 }, report: { b: 4 } as never, markdown: "# again" })
     expect(readFileSync(path.join(dir, "summary.md"), "utf8")).toBe("# again\n")
+  })
+})
+
+describe("stepSummary: what a run appends to the GitHub job summary", () => {
+  const bytes = (text: string): number => Buffer.byteLength(text, "utf8")
+
+  it("stays under GitHub's 1 MiB job-summary limit by default", () => {
+    expect(STEP_SUMMARY_MAX_BYTES).toBe(1_000_000)
+    expect(STEP_SUMMARY_MAX_BYTES).toBeLessThan(1024 * 1024)
+  })
+
+  it("passes a summary that fits through whole, with its final line break", () => {
+    expect(stepSummary("## Gate: passed", 100)).toBe("## Gate: passed\n")
+    // Exactly at the limit still fits: 16 bytes with the line break.
+    expect(stepSummary("## Gate: passed", 16)).toBe("## Gate: passed\n")
+  })
+
+  it("cuts a longer summary at a line, under the limit, and points at the full report", () => {
+    const markdown = Array.from({ length: 400 }, (_, i) => `- line ${String(i)}`).join("\n")
+    expect(bytes(`${markdown}\n`)).toBe(4290)
+    const cut = stepSummary(markdown, 2000)
+    expect(bytes(cut)).toBeLessThanOrEqual(2000)
+    expect(cut.startsWith("- line 0\n- line 1\n")).toBe(true)
+    expect(cut).not.toContain("- line 399")
+    const [head, note] = cut.split("\n\n**")
+    expect(head?.split("\n").every((line) => /^- line \d+$/.test(line))).toBe(true)
+    expect(note).toBe(
+      `Summary cut at ${String(Math.ceil(bytes(`${head}\n`) / 1024))} of 5 KiB.** GitHub rejects a job summary over 1 MiB. The full text is \`reports/contract/summary.md\`. The reusable contract workflow uploads it as the \`contract-report\` artifact.\n`,
+    )
+  })
+
+  it("keeps as many lines as fit: the cut lands within one line and a fence of the limit", () => {
+    const markdown = Array.from({ length: 400 }, (_, i) => `- line ${String(i)}`).join("\n")
+    expect(bytes(stepSummary(markdown, 2000))).toBeGreaterThan(2000 - 20)
+  })
+
+  it("never splits a multi-byte character", () => {
+    const markdown = Array.from({ length: 300 }, () => "é".repeat(7)).join("\n")
+    const cut = stepSummary(markdown, 1000)
+    expect(cut).not.toContain("\uFFFD")
+    expect(bytes(cut)).toBeLessThanOrEqual(1000)
+    expect(
+      cut
+        .split("\n\n**")[0]
+        ?.split("\n")
+        .every((line) => line === "é".repeat(7)),
+    ).toBe(true)
+  })
+
+  it("closes a code block the cut leaves open, so the note renders as text", () => {
+    const markdown = [
+      "#### Lint",
+      "",
+      "```text",
+      ...Array.from({ length: 300 }, () => "x".repeat(20)),
+      "```",
+    ].join("\n")
+    const cut = stepSummary(markdown, 1500)
+    expect(bytes(cut)).toBeLessThanOrEqual(1500)
+    expect(cut).toMatch(/\n```\n\n\*\*Summary cut at /)
+    expect(cut.match(/^```/gm)).toHaveLength(2)
+  })
+
+  it("adds no fence when the cut falls outside a code block", () => {
+    const markdown = [
+      "```text",
+      "a",
+      "```",
+      ...Array.from({ length: 300 }, () => "y".repeat(20)),
+    ].join("\n")
+    const cut = stepSummary(markdown, 1500)
+    expect(cut.match(/^```/gm)).toHaveLength(2)
+    expect(cut).toMatch(/\ny{20}\n\n\*\*Summary cut at /)
+  })
+
+  it("writes only the pointer to the full report when not even the note fits", () => {
+    const pointer =
+      "\n**Summary left out: the job summary is full.** The full text is `reports/contract/summary.md`.\n"
+    expect(stepSummary("z".repeat(5000), 150)).toBe(pointer)
+    expect(stepSummary("z".repeat(5000), 0)).toBe(pointer)
+    expect(stepSummary("z".repeat(5000), -5)).toBe(pointer)
+  })
+
+  it("writes the note, not the pointer, when the note fits exactly with no line beside it", () => {
+    const note = (shown: number): string =>
+      `\n**Summary cut at ${String(shown)} of 5 KiB.** GitHub rejects a job summary over 1 MiB. The full text is \`reports/contract/summary.md\`. The reusable contract workflow uploads it as the \`contract-report\` artifact.\n`
+    // Room for the longest note and a closing fence, and not one byte more.
+    expect(stepSummary("z".repeat(5000), bytes(note(5)) + 4)).toBe(note(0))
+  })
+
+  it("writes only the note when no line fits beside it", () => {
+    const cut = stepSummary("z".repeat(5000), 300)
+    expect(cut.startsWith("\n**Summary cut at 0 of 5 KiB.**")).toBe(true)
+    expect(bytes(cut)).toBeLessThanOrEqual(300)
   })
 })

@@ -1,19 +1,36 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import fsPromises from "node:fs/promises"
+import { syncBuiltinESMExports } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { arethetypeswrong } from "../checks/arethetypeswrong.js"
+import type { CheckDefinitionConfig } from "repo-contract"
+import { typeResolutionCheck } from "../checks/arethetypeswrong.js"
+import { standardTier } from "../checks/strict.js"
 import { makeContext, makeResult } from "./support.js"
 
 let cwd: string
+let arethetypeswrong: CheckDefinitionConfig
 
+// repo-contract's not-applicable rule reads `package.json` relative to the real working directory.
+// `process.chdir` is unsupported in the worker threads Stryker's runner uses, so that one read is
+// redirected into the temp dir instead.
 beforeEach(() => {
   cwd = mkdtempSync(path.join(tmpdir(), "ipc-attw-test-"))
   vi.spyOn(process, "cwd").mockReturnValue(cwd)
+  const realReadFile = fsPromises.readFile.bind(fsPromises)
+  vi.spyOn(fsPromises, "readFile").mockImplementation(((file: unknown, ...rest: unknown[]) =>
+    realReadFile(
+      (file === "package.json" ? path.join(cwd, "package.json") : file) as string,
+      ...(rest as []),
+    )) as typeof fsPromises.readFile)
+  syncBuiltinESMExports()
+  arethetypeswrong = typeResolutionCheck(standardTier({}).checks.TypeResolution)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  syncBuiltinESMExports()
   rmSync(cwd, { recursive: true, force: true })
 })
 
@@ -30,6 +47,24 @@ describe("arethetypeswrong", () => {
       rationale:
         "TypeResolution: @arethetypeswrong/cli did not run to completion (status: timed_out).",
     })
+  })
+
+  it("hands the tier's policy the report as JSON output, and a missing report as a failed parse", async () => {
+    const seen: unknown[] = []
+    const check = typeResolutionCheck({
+      run: ["attw"],
+      policy: (ctx) => {
+        seen.push(ctx.result.output)
+        return { outcome: "pass", rationale: "ok" }
+      },
+    })
+    await check.policy(makeContext(makeResult()))
+    writeReport({ problems: {} })
+    await check.policy(makeContext(makeResult()))
+    expect(seen).toEqual([
+      { format: "json", success: false, error: expect.stringContaining("ENOENT") },
+      { format: "json", success: true, value: { problems: {} } },
+    ])
   })
 
   it("fails when the report file was never produced despite a completed run", async () => {
@@ -174,6 +209,30 @@ describe("arethetypeswrong", () => {
     expect(result.outcome).toBe("fail")
     expect(result.rationale).toContain("found 1 packaged type-resolution problem(s)")
     expect(result.rationale).toContain("resolution=node16-esm")
+  })
+
+  it("passes a private package as not applicable, whatever the run left behind", async () => {
+    writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ private: true }))
+    const result = await arethetypeswrong.policy(makeContext(makeResult()))
+    expect(result).toEqual({
+      outcome: "pass",
+      rationale:
+        'TypeResolution is not applicable: package.json sets "private": true, so the package is never published.',
+    })
+  })
+
+  it("still fails a private package whose run did not finish", async () => {
+    writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ private: true }))
+    const result = await arethetypeswrong.policy(makeContext(makeResult({ status: "timed_out" })))
+    expect(result.outcome).toBe("fail")
+  })
+
+  it("keeps the tier's other fields, but reads the report file instead of stdout", () => {
+    const tier = standardTier({}).checks.TypeResolution
+    const wrapped = typeResolutionCheck({ ...tier, timeoutMs: 5 })
+    expect(wrapped.timeoutMs).toBe(5)
+    expect(wrapped.output).toBeUndefined()
+    expect(wrapped.policy).not.toBe(tier.policy)
   })
 
   it("wires run to the run-attw.mjs wrapper, excluding the schema entrypoint", () => {

@@ -74,13 +74,11 @@ export function commits(options: { readonly from?: string } = {}): CheckDefiniti
       // (passing commits produce no output). Many failing commits in one range
       // is a branch that predates the standard, not a regression.
       //
-      // Stryker disable next-line ArrayDeclaration: an equivalent mutant -- `String.prototype
-      // .match` with a global regex returns `null` (never `undefined`) on zero matches, so this
-      // `?? []` fallback IS reachable, but Stryker's own injected replacement is always a
-      // single-element array (`.length` 1), and `PRE_ADOPTION_THRESHOLD` is 8: no input can ever
-      // make a 0-vs-1 difference cross that threshold, and `failingCommits`' exact value is never
-      // read anywhere else. Hand-verified: forcing the fallback to a 1-element array leaves every
-      // test in commits.test.ts passing unchanged.
+      // Stryker disable next-line ArrayDeclaration: an equivalent mutant. `String.prototype.match`
+      // with a global regex returns `null` on zero matches, so the `?? []` fallback is reachable.
+      // Stryker's replacement is a one-element array, and `PRE_ADOPTION_THRESHOLD` is 8. A 0-vs-1
+      // difference never crosses that threshold, and nothing else reads `failingCommits`.
+      // Hand-verified: a one-element fallback leaves every test in commits.test.ts passing.
       const failingCommits = (printed.match(/⧗\s+--- input ---/g) ?? []).length
       if (ctx.result.exitCode !== 0 && failingCommits >= PRE_ADOPTION_THRESHOLD) {
         return degraded({

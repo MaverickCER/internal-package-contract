@@ -43,11 +43,6 @@ if (unknownCommand(process.argv.slice(2)) !== undefined) {
     },
     { packageRoot },
   )
-} else if (process.argv[2] === "exceptions") {
-  const { runInventory } = await import(
-    pathToFileURL(path.join(packageRoot, "scripts", "exceptions-inventory.mjs")).href
-  )
-  runInventory(process.argv.slice(3), process.cwd(), process.stdout)
 } else if (process.argv[2] === "sync-benchmark-guides") {
   const { syncGuides } = await import(
     pathToFileURL(path.join(packageRoot, "scripts", "benchmark-guides.mjs")).href
@@ -206,11 +201,16 @@ async function runConsumerContract() {
     process.env.PATH = [...binDirs, process.env.PATH ?? ""].join(path.delimiter)
   }
 
-  const config = await loadContractConfig()
+  const [{ default: config }, { standardBaseline }] = await importTypeScript([
+    "contract.ts",
+    "checks/baseline.ts",
+  ])
 
   await runContract({
     runRepoContract,
     config,
+    // The report's "Compared with the standard" section compares the consumer's run with the standard itself.
+    baseline: standardBaseline(),
     cwd: process.cwd(),
     title: "internal-package-contract",
   })
@@ -218,10 +218,21 @@ async function runConsumerContract() {
 
 /** @returns {Promise<{ checks: Record<string, unknown> }>} this package's contract, whose checks a consumer runs. */
 async function loadContractConfig() {
-  const configUrl = pathToFileURL(path.join(packageRoot, "contract.ts")).href
+  const [{ default: config }] = await importTypeScript(["contract.ts"])
+  return config
+}
+
+/**
+ * @param {readonly string[]} files - TypeScript modules of this package, relative to its root.
+ * @returns {Promise<any[]>} each module, in order.
+ */
+async function importTypeScript(files) {
   const { register } = await import("tsx/esm/api")
   const unregister = register()
-  const { default: config } = await import(configUrl)
+  const modules = []
+  for (const file of files) {
+    modules.push(await import(pathToFileURL(path.join(packageRoot, file)).href))
+  }
   await unregister()
-  return config
+  return modules
 }

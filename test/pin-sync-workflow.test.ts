@@ -7,13 +7,21 @@ const read = (rel: string) => readFileSync(path.join(root, rel), "utf8")
 
 describe("the pin-sync workflow", () => {
   const text = read(".github/workflows/dependency-pin-sync.yml")
-  it("accepts an optional token that can push workflow files, and falls back to the default one", () => {
+  it("pushes and merges with the optional token, and dispatches CI with the default one", () => {
     expect(text).toMatch(/secrets:\n {6}PIN_SYNC_TOKEN:[\s\S]*?required: false/)
     expect(text).toContain("token: ${{ secrets.PIN_SYNC_TOKEN || github.token }}")
+    // The pull request step pushes workflow files, which only the optional token may do.
     expect(
       text.match(/GH_TOKEN: \$\{\{ secrets\.PIN_SYNC_TOKEN \|\| github\.token \}\}/g),
-    ).toHaveLength(2)
-    expect(text).not.toContain("GH_TOKEN: ${{ github.token }}")
+    ).toHaveLength(1)
+    // GitHub starts a run for a dispatch sent with GITHUB_TOKEN; a token without Actions write gets 403.
+    const dispatch = text.slice(text.indexOf("- name: Dispatch CI"))
+    expect(dispatch).toContain("GH_TOKEN: ${{ github.token }}")
+    expect(dispatch).toContain("MERGE_TOKEN: ${{ secrets.PIN_SYNC_TOKEN || github.token }}")
+    expect(dispatch).toContain('GH_TOKEN="$MERGE_TOKEN" gh pr merge')
+    expect(dispatch.indexOf('gh workflow run "$WORKFLOW"')).toBeLessThan(
+      dispatch.indexOf('MERGE_TOKEN" gh'),
+    )
   })
   it("moves a git dependency with `upgrade` when the installed release has it, and by hand when it does not", () => {
     expect(text).toContain("npm ci --ignore-scripts")
@@ -37,7 +45,7 @@ describe("the pin-sync workflow", () => {
       return (list ?? "").split(/, | and /).map((name) => name.replaceAll('"', ""))
     }
     const permissions = listed(read("ci/env.schema.ts"))
-    expect(permissions).toEqual(["Contents", "Pull requests", "Workflows", "Actions"])
+    expect(permissions).toEqual(["Contents", "Pull requests", "Workflows"])
     for (const file of ["docs/ENVIRONMENT.md", "scripts/doctor/run.mjs"])
       expect(listed(read(file)), file).toEqual(permissions)
   })

@@ -1,36 +1,30 @@
 #!/usr/bin/env node
 // TypeDoc plugin: gives the default HTML theme's search input a real accessible name.
 //
-// TypeDoc's own bundled default theme renders the search box as
-// `<input id="tsd-search-input" role="combobox" ...>` with no `aria-label`, `title`,
-// or associated `<label>` (a `placeholder` is not a valid accessible name: WCAG
-// 2.1 SC 1.3.1 / 4.1.2). pa11y's WCAG2AA ruleset flags that as two errors (H91,
-// F68) on every generated docs/api/index.html: markup TypeDoc itself generates,
-// not anything hand-authored in a consuming package.
+// TypeDoc's default theme renders the search box as
+// `<input id="tsd-search-input" role="combobox" ...>`. It has no `aria-label`, `title`
+// or associated `<label>`, and a `placeholder` is not a valid accessible name (WCAG
+// 2.1 SC 1.3.1 / 4.1.2). pa11y's WCAG2AA ruleset flags two errors (H91, F68) on every
+// generated docs/api/index.html. TypeDoc generates that markup; no consumer wrote it.
 //
-// docs/api/ is regenerated from scratch on every docs build (never committed), so
-// hand-patching the emitted HTML would be silently undone the next time anyone
-// builds the docs. Fixing it here, as a TypeDoc plugin wired in via `typedoc.json`'s
-// `plugin` array, keeps the fix in the build pipeline instead: it hooks the theme's
-// own `body.end` extension point (the same mechanism the theme uses internally, e.g.
-// for its dark-mode bootstrap script) to inject a one-line script that sets the
-// missing `aria-label` once the page has rendered. pa11y drives a real headless
-// Chromium page via puppeteer, so it evaluates the live DOM after this script runs,
-// not the static markup TypeDoc emitted.
+// docs/api/ is regenerated from scratch on every docs build and never committed.
+// A hand-patch of the emitted HTML would be undone by the next build. So the fix is a
+// TypeDoc plugin, wired in through the `plugin` array of `typedoc.json`. It hooks the
+// theme's own `body.end` extension point, which the theme also uses for its dark-mode
+// script. There it injects a one-line script that sets the missing `aria-label` once
+// the page has rendered. pa11y drives a headless Chromium page through puppeteer, so it
+// evaluates the live DOM after this script runs, not the static markup.
 //
-// Dependency-free (only the `typedoc` peer this plugin runs inside): dev tooling,
-// never shipped. Resolves against whichever consuming repo's own installed
-// `typedoc` is running this plugin (standard Node module resolution walks up from
-// this file's location under the consumer's node_modules/internal-package-contract/,
-// finding the consumer's own node_modules/typedoc): this package deliberately
-// does not declare `typedoc` as its own dependency.
+// Dependency-free apart from the `typedoc` peer it runs inside: dev tooling, never
+// shipped. It resolves the consumer's own installed `typedoc`. Node module resolution
+// walks up from node_modules/internal-package-contract/ to the consumer's
+// node_modules/typedoc. This package deliberately does not declare `typedoc` itself.
 import { JSX } from "typedoc"
 
-// Also turns the permalink icons inside an accordion `<summary>` into inert spans: a link nested in the
-// summary (itself a control) is axe's `nested-interactive` violation (and a negative `tabindex` does
-// not cure it, axe says so explicitly) and TypeDoc's default theme renders one in every section
-// heading. The heading keeps its `id`, so `#section` URLs still work; only the little permalink icon
-// inside the collapsible header stops being a link.
+// Also turns the permalink icons inside an accordion `<summary>` into inert spans. A link nested in
+// the summary, itself a control, is axe's `nested-interactive` violation. A negative `tabindex` does
+// not cure it; axe says so explicitly. TypeDoc's default theme renders one in every section heading.
+// The heading keeps its `id`, so `#section` URLs still work. Only the permalink icon stops being a link.
 const LABEL_SCRIPT = [
   'document.getElementById("tsd-search-input")',
   '?.setAttribute("aria-label", "Search the documentation");',

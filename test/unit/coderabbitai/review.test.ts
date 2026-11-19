@@ -9,11 +9,11 @@ import type { CliDependencies, CliSpawnResult } from "../../../scripts/coderabbi
 import { unavailableReason } from "../../../scripts/coderabbitai/review.js"
 
 /**
- * Fixtures are the real `coderabbit review --agent` event stream shapes repo-contract captured
- * directly from a live, authenticated CLI while designing this check (see its own
- * specs/decisions/0014-coderabbit-as-a-surfaced-check.md): a clean 0-findings run, and a run with
- * real `finding` events (severity/fileName/codegenInstructions, no line, no category, no native
- * id). No CodeRabbit CLI is ever spawned here: `parseAgentStream` is a pure string->result
+ * Fixtures are the real `coderabbit review --agent` event stream shapes. repo-contract captured
+ * them from a live, authenticated CLI while designing this check (see its
+ * specs/decisions/0014-coderabbit-as-a-surfaced-check.md). One is a clean 0-findings run. The
+ * other has real `finding` events: severity, fileName and codegenInstructions, with no line,
+ * category or native id. No CodeRabbit CLI is ever spawned here: `parseAgentStream` is a pure string->result
  * function.
  */
 const REVIEW_CONTEXT = JSON.stringify({

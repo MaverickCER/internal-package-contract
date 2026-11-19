@@ -187,15 +187,32 @@ export function describeScope(doc) {
 const TESTS_CHECK = "Tests"
 /** What runs instead of the test suite when no test file is affected; its policy says so. */
 const NOTHING_TO_RUN = ["node", "--version"]
+/** The check that runs `repo-contract mutation run`, whose `mutate` list is narrowed to the affected sources. */
+const MUTATION_CHECK = "Mutation"
+
+/**
+ * @param {string} id - a check id.
+ * @param {unknown} run - its command.
+ * @param {{ tests: string[], mutate: string[] }} doc - a narrowed run's scope document.
+ * @returns {{ run?: unknown }} the narrowed command, or nothing when the check keeps its own.
+ */
+function narrowedRun(id, run, doc) {
+  if (!Array.isArray(run)) return {}
+  if (id === TESTS_CHECK)
+    return { run: doc.tests.length === 0 ? NOTHING_TO_RUN : [...run, ...doc.tests] }
+  // An empty list is how repo-contract is told there is nothing to mutate: it passes without Stryker.
+  if (id === MUTATION_CHECK) return { run: [...run, `--mutate=${doc.mutate.join(",")}`] }
+  return {}
+}
 
 /**
  * Narrows a narrowed run's checks. Every policy is handed the scope, as `ctx.scope`, so a check
  * that can judge only what the run covered knows what that was. The test command names only the
- * affected test files, or does nothing when there are none. A full run's config is returned as it
- * is: nothing about it changes.
+ * affected test files, or does nothing when there are none. The mutation command mutates only the
+ * affected sources. A full run's config is returned as it is: nothing about it changes.
  * @template {{ checks: Record<string, { run?: unknown, policy: (ctx: any) => unknown }> }} Config
  * @param {Config} config - the contract's configuration.
- * @param {{ scope: string, tests?: string[] }} doc - the scope document.
+ * @param {{ scope: string, tests?: string[], mutate?: string[] }} doc - the scope document.
  * @returns {Config} the configuration the run uses.
  */
 export function withScope(config, doc) {
@@ -207,9 +224,7 @@ export function withScope(config, doc) {
         id,
         {
           ...check,
-          ...(id === TESTS_CHECK && Array.isArray(check.run)
-            ? { run: doc.tests.length === 0 ? NOTHING_TO_RUN : [...check.run, ...doc.tests] }
-            : {}),
+          ...narrowedRun(id, check.run, doc),
           policy: (ctx) => check.policy({ ...ctx, scope: doc }),
         },
       ]),

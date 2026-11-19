@@ -109,7 +109,7 @@ export function renderIndex(site, pkg) {
   ]
   const problemSection = section({
     id: "why",
-    body: `${eyebrow(problem.eyebrow)}${heading(2, "why-heading", problem.heading)}<p class="section-lede">${inline(problem.lede)}</p>${diagram(`${problem.listLabel}: ${problem.items.join(", ")} — ${problem.conclusion}${/[.!?]$/.test(problem.conclusion) ? "" : "."}`, problemLines)}<p>${inline(problem.closing)}</p>`,
+    body: `${eyebrow(problem.eyebrow)}${heading(2, "why-heading", problem.heading)}<p class="section-lede">${inline(problem.lede)}</p>${diagram(`${problem.listLabel}: ${problem.items.join(", ")}; ${problem.conclusion}${/[.!?]$/.test(problem.conclusion) ? "" : "."}`, problemLines)}<p>${inline(problem.closing)}</p>`,
   })
 
   const modelLines = model.flow.map(

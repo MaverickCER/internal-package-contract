@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest"
 import { selectChecks } from "../scripts/contract-args.mjs"
 import { cleanUp, isCi, isStrict, resultText, runContract } from "../scripts/contract-run.mjs"
+import { STEP_SUMMARY_MAX_BYTES } from "../scripts/contract-report.mjs"
 
 const roots: string[] = []
 afterAll(() => {
@@ -468,6 +469,49 @@ describe("runContract()", () => {
       out: capture().out,
     })
     expect(existsSync(path.join(absent, "reports/contract/summary.md"))).toBe(true)
+  })
+
+  it("keeps the step summary under GitHub's limit, counting what the step already wrote", async () => {
+    const root = repo()
+    const summary = path.join(root, "step-summary.md")
+    // Most of the budget is already used, so this summary, with its long reason, has to be cut.
+    writeFileSync(summary, `${"x".repeat(998_999)}\n`)
+    await runContract({
+      runRepoContract: fake([
+        { passed: false, checks: { Lint: { outcome: "fail", rationale: "line\n".repeat(400) } } },
+      ]),
+      config: config("Lint"),
+      cwd: root,
+      title: "Gate",
+      argv: [],
+      env: { GITHUB_STEP_SUMMARY: summary },
+      out: capture().out,
+    })
+    const written = readFileSync(summary, "utf8")
+    expect(Buffer.byteLength(written)).toBeLessThanOrEqual(STEP_SUMMARY_MAX_BYTES)
+    const appended = written.slice(999_000)
+    expect(appended.startsWith("## Gate: FAILED")).toBe(true)
+    expect(appended).toMatch(/\n```\n\n\*\*Summary cut at 1 of 3 KiB\.\*\*/)
+    expect(readFileSync(path.join(root, "reports/contract/summary.md"), "utf8")).not.toContain(
+      "Summary cut at",
+    )
+  })
+
+  it("creates the step summary file when the step has not written one", async () => {
+    const root = repo()
+    const summary = path.join(root, "new-summary.md")
+    await runContract({
+      runRepoContract: fake([{ passed: true, checks: { Lint: pass() } }]),
+      config: config("Lint"),
+      cwd: root,
+      title: "Gate",
+      argv: [],
+      env: { GITHUB_STEP_SUMMARY: summary },
+      out: capture().out,
+    })
+    expect(readFileSync(summary, "utf8")).toBe(
+      readFileSync(path.join(root, "reports/contract/summary.md"), "utf8"),
+    )
   })
 
   it("cleans up what it created, even when a phase throws, and keeps the contract's own report", async () => {

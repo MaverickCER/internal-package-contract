@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 /**
  * `internal-package-contract init` is the one command that brings a package under the standard, and the only
  * way a user reaches the orchestrator in `scripts/init/run.mjs` is through the dispatcher in `bin/contract.mjs`.
- * The orchestrator has its own unit tests with a fake runner; this runs the real command, offline (every case
- * here either stops early or is a dry run), so a mismatch between what the dispatcher passes along and what the
- * orchestrator expects cannot hide.
+ * The orchestrator has its own unit tests with a fake runner. This runs the real command, offline: every case here
+ * either stops early or is a dry run. So a mismatch between what the dispatcher passes and what the orchestrator
+ * expects cannot hide.
  */
 const bin = path.resolve(import.meta.dirname, "../bin/contract.mjs")
 let cwd: string

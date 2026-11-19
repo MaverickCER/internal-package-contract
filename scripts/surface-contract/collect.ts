@@ -5,7 +5,8 @@
  * sorted, so two runs on one commit read the same surface. A CLI that is not built yet, or that
  * prints its help to stderr, is read as it is; classify.ts judges the difference. Each reusable
  * workflow under `.github/workflows/` (one with `on.workflow_call`) is read for its inputs, outputs
- * and secrets.
+ * and secrets. The `engines` and `peerDependencies` ranges in `package.json` are recorded as written;
+ * a value that is not a string is left out.
  *
  * A listed command is a help line indented two spaces. Its first word, optionally after the bin's
  * own name, is a lowercase word followed by two or more spaces (`  init   Scaffold ...`). Each one
@@ -237,6 +238,15 @@ export async function collectSurface(
     }
   }
 
+  const ranges = (field: "engines" | "peerDependencies"): Record<string, string> => {
+    const declared = (pkg as Record<string, unknown>)[field]
+    if (declared === null || typeof declared !== "object" || Array.isArray(declared)) return {}
+    return Object.fromEntries(
+      Object.entries(declared)
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+        .sort(([a], [b]) => a.localeCompare(b)),
+    )
+  }
   const renderers = (pkg as { "internal-package-contract"?: { surfaceRenderers?: unknown } })[
     "internal-package-contract"
   ]?.surfaceRenderers
@@ -245,6 +255,8 @@ export async function collectSurface(
     schemas,
     action: await collectAction(root),
     workflows: await collectWorkflows(root),
+    engines: ranges("engines"),
+    peerDependencies: ranges("peerDependencies"),
     ...(Array.isArray(renderers)
       ? { documents: await collectDocumentHeadings(root, renderers.map(String)) }
       : {}),

@@ -355,7 +355,7 @@ function functionsSection(results, suite) {
   const unknown = Object.entries(analysis.complexity).filter(([, value]) => value.class === null)
   if (unknown.length > 0) {
     lines.push(
-      "> **Could not be determined.** The big-O of these could not be measured, so they are not checked against their documentation:",
+      "> **Could not be determined**. The big-O of these could not be measured. None of them is checked against its documentation:",
       ">",
       ...unknown.map(
         ([group, value]) =>
@@ -516,7 +516,7 @@ function footer(results, docs) {
   return [
     "## Cost model",
     "",
-    `Estimates use two bracketing price shapes. **Low** is CPU-priced compute (${formatUsd(rates.vCpuHourUsd)} per vCPU-hour, billed on CPU time). **High** is duration-and-memory-priced functions (${formatUsd(rates.gbSecondUsd)} per GB-second, billed on wall time, at least ${String(rates.minMemoryMb)} MB reserved). Both are rounded list prices and change over time; override them in \`benchmark.config.json\` → \`costRates\` to match your platform and negotiated pricing.`,
+    `Estimates use two price shapes that bracket the real cost. **Low** is CPU-priced compute: ${formatUsd(rates.vCpuHourUsd)} per vCPU-hour, billed on CPU time. **High** is functions priced by duration and memory: ${formatUsd(rates.gbSecondUsd)} per GB-second, billed on wall time, with at least ${String(rates.minMemoryMb)} MB reserved. Both are rounded list prices, and they change over time. To match your platform and negotiated pricing, override them in \`benchmark.config.json\` → \`costRates\`.`,
     "",
     "## Environment and method",
     "",
@@ -525,7 +525,7 @@ function footer(results, docs) {
     `- Git: \`${metadata.git.gitCommit ?? "unknown"}\` on \`${metadata.git.gitBranch ?? "unknown"}\`${metadata.git.gitDirty ? " (uncommitted changes)" : ""}`,
     `- Sizes: ${metadata.tiers.join(", ")} ${metadata.workload.unit}s: ${metadata.workload.description}`,
     "",
-    `**Do not compare these numbers with another machine's, another day's, or another package's.** They show how _this_ package's cost changes between runs on comparable hardware, and how it scales with size. See [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md).`,
+    `**Do not compare these numbers with another machine's, another day's or another package's**. They show how _this_ package's cost changes between runs on comparable hardware. They also show how it scales with size. See [READING-BENCHMARKS.md](${docs}READING-BENCHMARKS.md).`,
     "",
   ]
 }

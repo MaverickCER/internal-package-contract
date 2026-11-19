@@ -3,5 +3,5 @@ export function run(
   argv: readonly string[],
   cwd: string,
   io: { out: (text: string) => void; err: (text: string) => void },
-  hooks?: { formatOptions?: (file: string) => Promise<object> },
+  hooks?: { formatOptions?: (file: string) => Promise<object>; standardRoot?: string },
 ): Promise<number>

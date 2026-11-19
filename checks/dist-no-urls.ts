@@ -46,30 +46,27 @@
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type {
+  ExceptionMethod,
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
-} from "repo-contract/helpers"
-import { distNoUrls } from "repo-contract/presets"
-import {
-  EXCEPTION_TYPES,
-  EXCEPTION_V2_FIELD_KEYS,
-  SECURITY_EXCEPTION_FIELD_KEYS,
-  emptyV2Fields,
-  evaluateFindingVerdict,
-  isValidNonEmptyStringField,
-  loadAndReconcileExceptionRegistry,
-  validateExceptionRegistry,
-  validateSecurityExceptionFields,
-} from "./exception-record.js"
-import type {
-  ExceptionV2Fields,
-  ExceptionMethod,
   ExceptionRegistrySchema,
   ExceptionType,
+  ExceptionV2Fields,
   PersistedExceptionRegistry,
-} from "./exception-record.js"
+} from "repo-contract/helpers"
+import {
+  emptyV2Fields,
+  evaluateFindingVerdict,
+  EXCEPTION_TYPES,
+  EXCEPTION_V2_FIELD_KEYS,
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadAndReconcileExceptionRegistry,
+  SECURITY_EXCEPTION_FIELD_KEYS,
+  validateSecurityExceptionFields,
+} from "repo-contract/helpers"
+import { distNoUrls } from "repo-contract/presets"
 import { abnormalTermination } from "./shared.js"
 
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/dist-urls.json"
@@ -163,18 +160,7 @@ export const DIST_URL_SCHEMA: ExceptionRegistrySchema<DistUrlRecord> = {
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly DistUrlRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, DIST_URL_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(DIST_URL_SCHEMA)
 
 function isScanReport(value: unknown): value is ScanReport {
   if (typeof value !== "object" || value === null) return false

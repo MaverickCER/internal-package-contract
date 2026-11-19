@@ -3,6 +3,7 @@ dist/
 /coverage/
 reports/
 .stryker-tmp/
+.repo-contract/cache/
 *.log
 .DS_Store
 .eslintcache

@@ -649,6 +649,37 @@ describe("scanCoverage", () => {
     ).toEqual(["y", "x"])
     expect(declarations).toEqual(["declare function y(): void"])
   })
+  it("reads a baseline nested under a target name with a slash, in path order", () => {
+    baseline("b", pkg(fn("x", [["p", "string"]])))
+    baseline("adapters/express", pkg(fn("z", [["p", "string"]])))
+    baseline("adapters", pkg(fn("w", [["p", "string"]])))
+    baseline("a", pkg(fn("y", [["p", "string"]])))
+    mkdirSync(path.join(dir, API_CONTRACT_DIR, "adapters", "empty"))
+    writeFileSync(path.join(dir, API_CONTRACT_DIR, "README.md"), "not a target")
+    writeFileSync(
+      path.join(dir, API_CONTRACT_DIR, "adapters", "express", "baseline.d.ts"),
+      "declare function z(): void",
+    )
+    const { models, declarations } = readBaselines(dir)
+    expect(
+      models.map(
+        (p) => (p as { members: { members: { name: string }[] }[] }).members[0]?.members[0]?.name,
+      ),
+    ).toEqual(["y", "w", "z", "x"])
+    expect(declarations).toEqual(["declare function z(): void"])
+  })
+  it("judges a nested baseline's functions, so a benchmark that covers one is not stale", () => {
+    baseline("adapters/express", api)
+    expect(scanCoverage(dir).findings).toEqual([
+      expect.objectContaining({ kind: "unbenchmarked", function: "load" }),
+    ])
+    put("benchmarks/s/results.json", {
+      analysis: {
+        coverage: { benchmarks: [{ id: "load", covers: { load: { a: "swept", b: "swept" } } }] },
+      },
+    })
+    expect(scanCoverage(dir)).toMatchObject({ state: "checked", functions: 1, findings: [] })
+  })
   it("reports every multi-input function when there are no suites", () => {
     baseline("main", api)
     const scan = scanCoverage(dir)

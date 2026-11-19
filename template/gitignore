@@ -11,11 +11,19 @@ lib/
 coverage/
 reports/
 .stryker-tmp/
+.repo-contract/cache/
 .nyc_output/
+# ApiContract's per-run output; only each target's baseline.* is committed. `**` covers nested target names.
+.repo-contract/api-contract/**/current.api.md
+.repo-contract/api-contract/**/current.api.json
+.repo-contract/api-contract/**/current.d.ts
 
 # Docs generation output (commit the source, not the render)
 api-docs/
 docs/api/
+
+# A benchmark run outside CI is a gate, not a figure: only CI's results are committed.
+/.benchmark-local
 
 # Packaging
 *.tgz

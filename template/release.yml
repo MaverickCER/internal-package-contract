@@ -5,8 +5,8 @@
 # The reusable workflow:
 # https://github.com/MaverickCER/internal-package-contract/blob/main/.github/workflows/release-npm-changesets.yml
 #
-# It needs a `version` script (`changeset version` plus whatever regenerates), and runs `verify`
-# before packing when the package defines it, `build` otherwise. It also needs this repo's own npm
+# It needs a `version` script, `internal-package-contract sync --release` in a scaffolded package. It runs
+# `verify` before packing when the package defines it, `build` otherwise. It also needs this repo's own npm
 # trusted publisher, registered on npmjs.com. `internal-package-contract init` writes
 # `.changeset/config.json`. In an existing package it does not write the `version` script, and it never
 # registers the publisher.
@@ -37,13 +37,13 @@ jobs:
       # itself declares.
       id-token: write
       # The shared workflow dispatches this repo's CI on the release PR's branch and watches it,
-      # which needs `actions: write`. A caller granting less than the called workflow declares makes
-      # GitHub refuse to start the run at all (`startup_failure`), so no release ever runs.
+      # which needs `actions: write`. GitHub refuses to start a run whose caller grants less than the
+      # called workflow declares (`startup_failure`). No release would ever run.
       actions: write
     # Pinned by commit SHA, never a branch: whoever can push to that branch could otherwise publish this
     # package. `dependency-pin-sync` moves the SHA together with the devDependency.
     uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@{{ipcSha}} # {{ipcRef}}
-    # An npm-only package (no action.yml to version) uncomments this, so a successful
-    # release does not push an unwanted floating major tag.
+    # For an npm-only package, with no action.yml to version, uncomment this block.
+    # A successful release then pushes no floating major tag.
     # with:
     #   roll-floating-major-tag: false

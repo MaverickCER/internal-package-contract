@@ -1,6 +1,7 @@
 // What this repository's workflows and scripts read from the environment, written down once. None of it is required:
 // every variable has a default, a missing credential is a warning, and a missing setting takes its default.
 // `internal-package-contract env` reads this file (it never runs it) and writes docs/ENVIRONMENT.md.
+// test/env-schema-coverage.test.ts fails when the code reads an `IPC_*` variable this file does not declare.
 import { createEnv, documentEnv } from "../reexports/env-cap/index.ts"
 
 // Anything is accepted: none of these is required, and a missing one is not an error.
@@ -18,6 +19,14 @@ const toolSettings = {
   SOCKET_SCORE_RETRY_WAIT_MS: { default: "5000", validator: accept },
   CHROME_PATH: { default: "", validator: accept },
   PUPPETEER_EXECUTABLE_PATH: { default: "", validator: accept },
+  IPC_HOOK_FULL: { default: "", validator: accept },
+  IPC_MUTATION_SHARD: { default: "", validator: accept },
+  IPC_MUTATION_REPORT: { default: "", validator: accept },
+  IPC_MUTATION_MEMO: { default: "", validator: accept },
+  IPC_SOCKET_CACHE: { default: "", validator: accept },
+  IPC_SOCKET_CACHE_DIR: { default: "", validator: accept },
+  IPC_SOCKET_CACHE_TTL_HOURS: { default: "24", validator: accept },
+  CI: { default: "", validator: accept },
 }
 
 export const ciSecretsEnv = createEnv(ciSecrets, { name: "ci-secrets" })
@@ -28,9 +37,9 @@ documentEnv(ciSecrets, {
   variables: {
     PIN_SYNC_TOKEN: {
       description:
-        "Optional. Lets the pin-sync workflow change workflow files and start CI on its pull request; without it the workflow cannot push workflow-file changes, and `internal-package-contract upgrade <tag>` does the same by hand.",
+        "Optional. Lets the pin-sync workflow change workflow files and merge its pull request once CI is green. Without it the workflow cannot push workflow-file changes, and `internal-package-contract upgrade <tag>` does the same by hand.",
       refreshInstructions:
-        "Create a fine-grained personal access token for this repository with Contents, Pull requests, Workflows and Actions write access, then replace the repository secret PIN_SYNC_TOKEN (Settings > Secrets and variables > Actions). Then set its `expiresAt` in `ci/env.schema.ts` to the token's expiry, so a weekly check can warn before it lapses.",
+        "Create a fine-grained personal access token for this repository with Contents, Pull requests and Workflows write access. Replace the repository secret PIN_SYNC_TOKEN with it (Settings > Secrets and variables > Actions). Then set its `expiresAt` in `ci/env.schema.ts` to the token's expiry, so a weekly check can warn before it lapses.",
       sensitivity: "secret",
     },
     SOCKET_SECURITY_API_KEY: {
@@ -68,6 +77,38 @@ documentEnv(toolSettings, {
     PUPPETEER_EXECUTABLE_PATH: {
       description:
         "A Chrome or Chromium to use for the accessibility scan, under the name Puppeteer uses. It wins over CHROME_PATH.",
+    },
+    IPC_HOOK_FULL: {
+      description:
+        "Set to 1 by the pre-commit hook. The pre-push hook then runs `--scope affected`, slow analyses included, instead of skipping Coverage, Crap and Mutation.",
+    },
+    IPC_MUTATION_SHARD: {
+      description:
+        "`i/n` makes the Mutation check mutate slice i of n, cut by file. The reusable contract workflow sets it per shard job. Ignored when IPC_MUTATION_REPORT is set.",
+    },
+    IPC_MUTATION_REPORT: {
+      description:
+        "A merged Stryker report for the Mutation check to judge instead of mutating. The reusable contract workflow sets it after merging the shards.",
+    },
+    IPC_MUTATION_MEMO: {
+      description:
+        "Set to 0 so a local run mutates again instead of reusing the last clean run. The memo is off under CI whatever this says.",
+    },
+    IPC_SOCKET_CACHE: {
+      description:
+        "Set to `off` so SecuritySocket asks Socket for every score instead of reading its on-disk cache.",
+    },
+    IPC_SOCKET_CACHE_DIR: {
+      description:
+        "Where SecuritySocket keeps its score cache. Empty means `~/.cache/ipc-socket-score-cache`. On Linux and macOS, a directory another user owns or can write is ignored. Windows checks neither; the per-user home is the boundary there.",
+    },
+    IPC_SOCKET_CACHE_TTL_HOURS: {
+      description:
+        "How many hours a cached Socket score stays valid. A value that is not a positive number means 24.",
+    },
+    CI: {
+      description:
+        "Set by the CI service. Readers disagree on its values. Any value but empty, `false` or `0` makes the run `--strict`, as `GITHUB_ACTIONS=true` does; the git hooks, CodeScanning and SecuritySocket agree. Any value but empty or `false` turns off the mutation memo (IPC_MUTATION_MEMO), so `CI=0` turns it off too. SurfaceContract counts only `true`, and the benchmark results location only `true` or `1`. CodeRabbit and the benchmark records count any non-empty value.",
     },
   },
 })

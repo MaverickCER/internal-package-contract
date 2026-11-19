@@ -522,3 +522,42 @@ describe("withScope: the test command", () => {
     expect(wrapped.checks.Lint.run).toEqual(["eslint", "."])
   })
 })
+
+describe("withScope: the mutation command", () => {
+  const narrow = (mutate: string[]) => ({
+    schemaVersion: 1 as const,
+    scope: "affected" as const,
+    reason: "r",
+    changedFiles: [],
+    tests: [],
+    sources: [],
+    mutate,
+  })
+  const policy = () => ({ outcome: "pass", rationale: "" })
+  const command = ["repo-contract", "mutation", "run", "--json", "--cache", "off"]
+  const config = (run: unknown) => ({
+    checks: { Mutation: { run, policy }, Lint: { run: ["eslint", "."], policy } },
+  })
+
+  it("mutates only the sources the change affects", () => {
+    const wrapped = withScope(config(command), narrow(["src/a.ts", "scripts/b.mjs"]))
+    expect(wrapped.checks.Mutation.run).toEqual([...command, "--mutate=src/a.ts,scripts/b.mjs"])
+    expect(wrapped.checks.Lint.run).toEqual(["eslint", "."])
+  })
+
+  it("hands an empty list when nothing is affected, which repo-contract passes as nothing to mutate", () => {
+    const wrapped = withScope(config(command), narrow([]))
+    expect(wrapped.checks.Mutation.run).toEqual([...command, "--mutate="])
+  })
+
+  it("leaves a mutation command it cannot append to as it is", () => {
+    expect(withScope(config("stryker run"), narrow(["src/a.ts"])).checks.Mutation.run).toBe(
+      "stryker run",
+    )
+  })
+
+  it("leaves the command of a full run as it is", () => {
+    const full = { ...narrow(["src/a.ts"]), scope: "full" as const }
+    expect(withScope(config(command), full).checks.Mutation.run).toBe(command)
+  })
+})

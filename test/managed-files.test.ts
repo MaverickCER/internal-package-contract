@@ -262,11 +262,11 @@ describe("sync (run)", () => {
   it("rejects an unknown flag and --update without --apply", () => {
     expect(sync("--nope")).toMatchObject({ code: 2 })
     expect(sync("--nope").err).toBe(
-      "[sync] unknown argument: --nope\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown argument: --nope\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n",
     )
     expect(sync("--update").code).toBe(2)
     expect(sync("--update").err).toBe(
-      "[sync] --update needs --apply.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] --update needs --apply.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n",
     )
   })
   it("is reachable as `internal-package-contract sync`", () => {
@@ -737,7 +737,7 @@ describe("managed copies of shared code", () => {
     const unknown = sync("--add", "nope")
     expect(unknown.code).toBe(2)
     expect(unknown.err).toBe(
-      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, ci-jobs, ci-jobs-test, vm-bundle, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs, standards-readme, schema-sarif-2.1.0, schema-oscal-assessment-results-1.1.2, schema-cyclonedx-1.6, schema-cyclonedx-spdx, schema-cyclonedx-jsf-0.82.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown managed copy: nope. Available: generated-banner, display-path, glob, typescript, compiler-api, build-fs, resolve-tsconfig-paths, ci-jobs, ci-jobs-test, vm-bundle, code-of-conduct, support, releasing, editorconfig, benchmark-budgets, writing-benchmarks, reading-benchmarks, typedoc-markdown, no-node-fs, standards-readme, schema-sarif-2.1.0, schema-oscal-assessment-results-1.1.2, schema-cyclonedx-1.6, schema-cyclonedx-spdx, schema-cyclonedx-jsf-0.82.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n",
     )
     expect(sync("--add").err).toContain("unknown managed copy: (none given).")
   })
@@ -778,7 +778,7 @@ describe("sync --add with several managed copies", () => {
       ?.copies
   it("lists every copy on offer, comma separated, when the name is unknown", () => {
     expect(sync("--add", "nope").err).toBe(
-      "[sync] unknown managed copy: nope. Available: generated-banner, other-copy.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n",
+      "[sync] unknown managed copy: nope. Available: generated-banner, other-copy.\nUsage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n",
     )
   })
   it("accepts any of the copies on offer", () => {

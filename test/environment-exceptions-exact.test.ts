@@ -8,7 +8,7 @@ import {
   degraded,
   incompleteFields,
 } from "../checks/environment-exceptions.js"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import { NOT_EVALUATED_ACCEPTED, NOT_EVALUATED_UNEXCEPTED } from "../scripts/contract-report.mjs"
 import { COMPLETE_V2 } from "./support.js"
 

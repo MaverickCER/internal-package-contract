@@ -11,6 +11,7 @@
 //   --out           where to write; default: the suite's own directory in CI, `.benchmark-local/<suite>` elsewhere
 //   --config        benchmark.config.json: { costRates?, bundleFiles?, root?, docsPath? }; default: next to the suite
 //
+// A suite placed directly in `benchmarks/` exits 1 before it loads (results-location.mjs says why).
 // A suite that `defineSuite` refuses, or results that depart from the documented shape (kit/results-contract.mjs),
 // exit 1 and write nothing. A measuring run re-launches itself under `node --expose-gc`, so one sample's garbage
 // is not billed to the next. `--render` is what `BenchmarkCoverage` asks for when committed results predate
@@ -24,7 +25,7 @@ import { renderReport } from "./kit/report.mjs"
 import { analyze, runSuite } from "./kit/run.mjs"
 import { validateResults } from "./kit/results-contract.mjs"
 import { SuiteDefinitionError } from "./kit/define.mjs"
-import { defaultOutput } from "./results-location.mjs"
+import { defaultOutput, suiteLayoutProblem } from "./results-location.mjs"
 
 function parse(argv) {
   const options = {
@@ -56,6 +57,13 @@ async function main() {
     console.error(
       "Usage: node run-suite.mjs <suite.mjs> [--quick] [--check] [--only a,b] [--typical-only] [--out <dir>] [--config <file>]",
     )
+    process.exitCode = 1
+    return
+  }
+
+  const layoutProblem = suiteLayoutProblem(path.dirname(path.resolve(options.suite)))
+  if (layoutProblem !== undefined) {
+    console.error(layoutProblem)
     process.exitCode = 1
     return
   }

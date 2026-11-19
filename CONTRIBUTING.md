@@ -2,11 +2,10 @@
 
 ## Before you start
 
-- `npm ci`, then `npm run contract`: the full gate CI runs on a push to `main` (`.github/workflows/ci.yml`,
-  `npm run contract -- --scope auto`). Pre-push runs it without Coverage, Crap and Mutation. A pull request runs
-  the subset the change can reach (`--scope auto`), and Coverage is "not evaluated" there. The full run is the
-  push to `main` after the merge. A pull request whose change touches no mutated file can therefore merge and go
-  red on `main`.
+- `npm ci`, then `npm run contract`: the full gate. This repository's `ci.yml` runs it on every pull request and
+  every push to `main` through the reusable `.github/workflows/contract.yml`, with Mutation split into shards and
+  merged. A consumer's run is sharded only once its `contract.yml` is the caller this release's `init` writes. The `contract`
+  check passes only when that whole run passes. Pre-push runs the contract without Coverage, Crap and Mutation.
 - The hooks are this repository's own `hooks/` directory, pointed at by `core.hooksPath`; a fresh clone sets
   that with `node bin/contract.mjs install-hooks`. They are a convenience: CI is the gate.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) and carry no
@@ -16,7 +15,8 @@
   pull request with resolved review threads and zero approvals, and the `contract`, `self-check` and
   `windows-smoke` status checks, strict. `self-check` is a transitional duplicate of `contract`.
   `windows-smoke` runs `npm run check`, `npm test` and the scaffold smoke on Windows, not the full contract.
-  `typescript-7` is advisory. The admin role can bypass by pull request. The ruleset itself lives in GitHub's
+  `typescript-7` is advisory. `standard` is gated through `contract`: it calls the reusable workflow
+  `.github/workflows/contract.yml`, and `contract` passes only when it does. The admin role can bypass by pull request. The ruleset itself lives in GitHub's
   settings. `test/readme-self-contract-counts.test.ts` fails when this list, `SECURITY.md` and the jobs in
   `ci.yml` disagree.
 - Changes meant to ship in the next version need a changeset: `npx changeset` (see "Releasing").

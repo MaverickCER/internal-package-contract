@@ -1,0 +1,206 @@
+# Reusable contract workflow: one contract job, with mutation testing split into parallel shards first.
+# This repository's ci.yml calls it by local path. A consumer calls it pinned by commit SHA, and
+# dependency-pin-sync.yml moves that SHA with the devDependency:
+#
+#   jobs:
+#     standard:
+#       uses: MaverickCER/internal-package-contract/.github/workflows/contract.yml@<sha> # v<version>
+#       permissions:
+#         contents: read
+#         security-events: read
+#       secrets:
+#         SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+#     contract:
+#       needs: standard
+#       if: always()
+#       runs-on: ubuntu-latest
+#       steps:
+#         - run: test "${{ needs.standard.result }}" = success
+#
+# GitHub names a called job "<caller job> / <job>". So the caller keeps a bare `contract` job: the
+# status check BranchProtection and the ruleset require.
+#
+# Three jobs:
+#   plan      `repo-contract mutation plan --json` sizes the matrix: one shard per 64 KiB of mutated
+#             source, at most 256. It reads the package's own Stryker config, else the bundled one.
+#   mutation  Each shard runs the Mutation check on its slice (IPC_MUTATION_SHARD) and uploads its report.
+#   contract  Merges the shard reports with `repo-contract merge-mutation`, then runs every check once.
+#             Mutation judges the merged report (IPC_MUTATION_REPORT) instead of mutating again.
+#
+# With shards the contract run is never narrowed. A `--scope affected` run would hand Mutation only the
+# affected files, and the full merged report would then be refused as evidence of a different plan.
+# Pass `mutation-shards: false` to run Mutation inside the contract job, where `--scope auto` works.
+name: Contract (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: The Node.js version every job runs on.
+        type: string
+        default: "24.x"
+      mutation-shards:
+        description: >-
+          Split mutation testing into parallel shard jobs and judge their merged report. False runs
+          Mutation inside the contract job instead, in one process.
+        type: boolean
+        default: true
+      contract-args:
+        description: >-
+          Arguments for `npm run contract`, such as `--scope auto`. A `--scope` is refused while
+          mutation-shards is true.
+        type: string
+        default: ""
+    secrets:
+      SOCKET_SECURITY_API_KEY:
+        description: >-
+          SecuritySocket scores the package on Socket.dev with it. Without it the check warns locally
+          and fails under `--strict`, the CI default, unless an environment record accepts it.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: inputs.mutation-shards
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      total: ${{ steps.plan.outputs.total }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - run: npm ci
+      # The Mutation check falls back to the bundled config the same way, so both cut the same slices.
+      # The names are STRYKER_CONFIGS in checks/strict.ts; test/contract-workflow.test.ts keeps them equal.
+      # Exits 1 when the config cannot be read or selects no file.
+      - id: plan
+        run: |
+          config=(--config node_modules/internal-package-contract/config/stryker.config.mjs)
+          for name in stryker.config.mjs stryker.config.js stryker.config.cjs stryker.config.json stryker.conf.mjs stryker.conf.js stryker.conf.cjs stryker.conf.json .stryker.conf.json; do
+            if [ -f "$name" ]; then
+              config=()
+              break
+            fi
+          done
+          plan="$(npx --no-install repo-contract mutation plan --json "${config[@]}")"
+          echo "matrix=$(jq -c '.matrix' <<<"$plan")" >> "$GITHUB_OUTPUT"
+          echo "total=$(jq '.count' <<<"$plan")" >> "$GITHUB_OUTPUT"
+
+  mutation:
+    needs: plan
+    if: inputs.mutation-shards
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # Every shard must report, or the merge refuses to merge.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - run: npm ci
+      # The full contract builds before it mutates, and the tests may read what the build wrote.
+      - run: npm run build --if-present
+      # The runner deletes reports/ after the run unless the directory existed before it started.
+      - run: mkdir -p reports coverage
+      # Cold: the cache is off under CI, and every run deletes Stryker's incremental file.
+      - run: npm run contract -- --checks Mutation
+        env:
+          IPC_MUTATION_SHARD: ${{ matrix.spec }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutation-shard-${{ matrix.shard }}
+          path: reports/mutation/mutation.json
+          retention-days: 5
+          if-no-files-found: error
+
+  contract:
+    needs: [plan, mutation]
+    # Always runs: GitHub counts a skipped required job as passing. The first step fails it instead.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # CodeScanning reads this ref's code-scanning alerts with the workflow token.
+      security-events: read
+    steps:
+      - name: Every mutation shard passed
+        if: inputs.mutation-shards && needs.mutation.result != 'success'
+        env:
+          PLAN: ${{ needs.plan.result }}
+          SHARDS: ${{ needs.mutation.result }}
+        run: |
+          echo "::error::A mutation shard did not pass (plan=$PLAN, shards=$SHARDS); the Mutation check cannot be judged."
+          exit 1
+      - name: No narrowed scope with shards
+        if: inputs.mutation-shards && contains(inputs.contract-args, '--scope')
+        run: |
+          echo "::error::contract-args has a --scope, which cannot judge the full merged mutation report. Drop it, or set mutation-shards: false."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Commits lints every commit on the branch against the base branch.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+      - run: npm ci
+      # The runner keeps reports/ and coverage/ only when they existed before it started.
+      - run: mkdir -p reports coverage
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: inputs.mutation-shards
+        with:
+          pattern: mutation-shard-*
+          path: reports/shards
+      # Writes nothing and fails when a shard is missing, repeated, unreadable or overlaps another.
+      # The merged report lands where Stryker writes its own, so the upload below keeps what was judged.
+      - name: Merge the mutation shards
+        if: inputs.mutation-shards
+        env:
+          TOTAL: ${{ needs.plan.outputs.total }}
+        run: |
+          args=()
+          for i in $(seq 1 "$TOTAL"); do args+=("$i=reports/shards/mutation-shard-$i/mutation.json"); done
+          npx --no-install repo-contract merge-mutation --total "$TOTAL" --out reports/mutation/mutation.json "${args[@]}"
+      # In CI the contract runs `--strict`: a check that could not run fails unless
+      # .repo-contract/exceptions/environment.json records an exception.
+      - name: Run the contract
+        env:
+          CONTRACT_ARGS: ${{ inputs.contract-args }}
+          IPC_MUTATION_REPORT: ${{ inputs.mutation-shards && 'reports/mutation/mutation.json' || '' }}
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -ra args <<<"$CONTRACT_ARGS"
+          npm run contract -- "${args[@]}"
+      # The contract's own record: evidence.json, report.json and summary.md.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: contract-report
+          path: reports/contract
+          if-no-files-found: ignore
+          retention-days: 30
+      # Each mutant's file, mutator, place and status, to check a CI-only survivor by hand.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/mutation.json
+          if-no-files-found: ignore
+          retention-days: 5

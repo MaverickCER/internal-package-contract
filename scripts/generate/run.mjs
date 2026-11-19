@@ -7,7 +7,8 @@
 // result is formatted with the package's own Prettier settings, so a rerun changes nothing and `Format` still
 // passes. The regions are `action-inputs` (from `action.yml`), `dependencies`, `entry-points`, `standards` and
 // `supported-versions` (from `package.json`). `dependencies`, `entry-points` and `standards` also read
-// `docs/surface.json`, for what only a person can say. A region that cannot be generated is reported as
+// `docs/surface.json`, for what only a person can say. `checks` and `thresholds` state the standard itself:
+// they read this package's check headers and constants, not the consumer's files. A region that cannot be generated is reported as
 // `file:line: message`, nothing is written, and the exit code is 1. That covers bad markers, an unknown name, a missing or inconsistent source,
 // and a cited test outside the package. An unknown argument exits 2. With no region anywhere the command does
 // nothing and exits 0; the `GeneratedRegions` check, which runs `--check`, then passes as "absent".
@@ -16,11 +17,13 @@ import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 
 import path from "node:path"
 import { format, resolveConfig } from "prettier"
 import { actionInputsRegion } from "./action-inputs.mjs"
+import { checksRegion } from "./checks.mjs"
 import { DOCUMENTS } from "./documents.mjs"
 import { dependencyRegion } from "./dependencies.mjs"
 import { entryPointRows, toTable } from "./entry-points.mjs"
 import { standardsRegion } from "./standards.mjs"
 import { supportedVersionsRegion } from "./supported-versions.mjs"
+import { STANDARD_ROOT, thresholdsRegion } from "./thresholds.mjs"
 import { findRegions, replaceRegions } from "./regions.mjs"
 
 export { DOCUMENTS }
@@ -30,11 +33,12 @@ const USAGE = "Usage: internal-package-contract generate [--check]\n"
 /**
  * The generator for each region name. What only a person can say lives once in `docs/surface.json`; everything
  * derivable comes from the package itself.
- * @type {Record<string, (sources: { pkg: any, surface: unknown, action: string | undefined }, exists: (file: string) => boolean) => { problems: string[], markdown: string }>}
+ * @type {Record<string, (sources: { pkg: any, surface: unknown, action: string | undefined }, exists: (file: string) => boolean, standardRoot: string) => { problems: string[], markdown: string }>}
  */
 // Listed alphabetically: the order is the one an unknown-region problem names them in.
 const GENERATORS = {
   "action-inputs": ({ action }) => actionInputsRegion(action),
+  checks: (_sources, _exists, standardRoot) => checksRegion(standardRoot),
   dependencies: ({ pkg, surface }) => dependencyRegion(pkg, surface),
   "entry-points": ({ pkg, surface }) => {
     const { problems, rows } = entryPointRows(pkg, surface)
@@ -43,10 +47,11 @@ const GENERATORS = {
   },
   standards: ({ surface }, exists) => standardsRegion(surface, exists),
   "supported-versions": ({ pkg }) => supportedVersionsRegion(pkg),
+  thresholds: (_sources, _exists, standardRoot) => thresholdsRegion(standardRoot),
 }
 
-/** The regions that read only the package's own files, never `docs/surface.json`. */
-const SURFACE_FREE = new Set(["action-inputs", "supported-versions"])
+/** The regions that never read `docs/surface.json`. */
+const SURFACE_FREE = new Set(["action-inputs", "checks", "supported-versions", "thresholds"])
 
 /**
  * @param {string} cwd - the package root.
@@ -92,8 +97,10 @@ function readSources(cwd, needs) {
  * @param {readonly string[]} argv
  * @param {string} cwd - the package root.
  * @param {{ out: (text: string) => void, err: (text: string) => void }} io
- * @param {{ formatOptions?: (file: string) => Promise<object> }} [hooks] - where the Prettier options come from;
- *   `init` passes the defaults, because the package's own configuration imports this one, which is not installed yet.
+ * @param {{ formatOptions?: (file: string) => Promise<object>, standardRoot?: string }} [hooks] - where the Prettier
+ *   options come from; `init` passes the defaults, because the package's own configuration imports this one, which
+ *   is not installed yet. `standardRoot` is where the `checks` and `thresholds` regions read the standard; this
+ *   package by default.
  * @returns {Promise<number>} the exit code.
  */
 export async function run(argv, cwd, io, hooks = {}) {
@@ -148,7 +155,11 @@ export async function run(argv, cwd, io, hooks = {}) {
         return real.startsWith(root + path.sep) && statSync(real).isFile()
       }
       for (const name of known) {
-        const { problems: found, markdown } = GENERATORS[name](sources, exists)
+        const { problems: found, markdown } = GENERATORS[name](
+          sources,
+          exists,
+          hooks.standardRoot ?? STANDARD_ROOT,
+        )
         problems.push(...found)
         bodies[name] = markdown
       }

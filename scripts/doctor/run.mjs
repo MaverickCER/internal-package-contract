@@ -298,7 +298,7 @@ export async function diagnose({ cwd, packageRoot, git = gitIn(cwd) }) {
       id: "apps",
       state: "manual",
       what: "Review and scanning services are installed on the repository, not in it.",
-      fix: "Install the CodeRabbit and Socket apps on the repository. Add a SOCKET_SECURITY_API_KEY secret for the Socket scan. Optionally add a PIN_SYNC_TOKEN secret (a fine-grained token with Contents, Pull requests, Workflows and Actions write access) so pin-sync pull requests can change workflow files.",
+      fix: "Install the CodeRabbit and Socket apps on the repository. Add a SOCKET_SECURITY_API_KEY secret for the Socket scan. Optionally add a PIN_SYNC_TOKEN secret (a fine-grained token with Contents, Pull requests and Workflows write access) so pin-sync pull requests can change workflow files.",
     },
   )
   return items

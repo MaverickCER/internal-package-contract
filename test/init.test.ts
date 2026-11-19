@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -14,9 +22,18 @@ import {
   validatePackageName,
 } from "../scripts/init-lib.mjs"
 import { inspectManaged } from "../scripts/managed-files/inspect.mjs"
+import {
+  currentResults,
+  defaultOutput,
+  LOCAL_DIRECTORY,
+  suiteDirectories,
+  suiteLayoutProblem,
+} from "../scripts/benchmark/results-location.mjs"
 
 const initScript = path.resolve(__dirname, "../bin/scaffold.mjs")
 const packageTemplate = path.resolve(__dirname, "../template/package")
+/** Where `init --name` puts the benchmark suite: its own folder, the layout the benchmark checks read. */
+const SUITE = "benchmarks/performance-runtime"
 
 describe("parseInitArgs()", () => {
   it("parses flags in both `--flag value` and `--flag=value` forms", () => {
@@ -238,19 +255,44 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
 
   it("scaffolds a documented benchmark suite, its guides and its scripts", () => {
     init("--name", "demo")
-    for (const file of [
-      "suite.mjs",
-      "benchmark.config.json",
-      "README.md",
-      "WRITING-BENCHMARKS.md",
-      "READING-BENCHMARKS.md",
-    ]) {
+    for (const file of ["README.md", "WRITING-BENCHMARKS.md", "READING-BENCHMARKS.md"]) {
       expect(existsSync(path.join(cwd, "benchmarks", file)), file).toBe(true)
     }
+    for (const file of ["suite.mjs", "benchmark.config.json"]) {
+      expect(existsSync(path.join(cwd, SUITE, file)), file).toBe(true)
+      expect(existsSync(path.join(cwd, "benchmarks", file)), `flat ${file}`).toBe(false)
+    }
     const scripts = JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")).scripts
-    expect(scripts.benchmark).toContain("scripts/benchmark/run-suite.mjs benchmarks/suite.mjs")
-    expect(scripts["benchmark:check"]).toContain("--check")
-    expect(readFileSync(path.join(cwd, "benchmarks/suite.mjs"), "utf8")).toContain('name: "demo"')
+    expect(scripts.benchmark).toContain(`scripts/benchmark/run-suite.mjs ${SUITE}/suite.mjs`)
+    expect(scripts["benchmark:check"]).toContain(`${SUITE}/suite.mjs --check`)
+    const suite = readFileSync(path.join(cwd, SUITE, "suite.mjs"), "utf8")
+    expect(suite).toContain('name: "demo"')
+    expect(suite).toContain('from "../../dist/index.js"')
+  })
+
+  it("scaffolds a suite the benchmark checks find, with results that stay inside the repository", () => {
+    init("--name", "demo")
+    const suiteDirectory = path.join(cwd, SUITE)
+    expect(suiteLayoutProblem(suiteDirectory)).toBeUndefined()
+    const config = JSON.parse(
+      readFileSync(path.join(suiteDirectory, "benchmark.config.json"), "utf8"),
+    )
+    expect(path.resolve(suiteDirectory, config.root)).toBe(cwd)
+    expect(path.resolve(suiteDirectory, config.docsPath)).toBe(path.join(cwd, "benchmarks"))
+    expect(defaultOutput(suiteDirectory, {})).toBe(
+      path.join(cwd, LOCAL_DIRECTORY, "performance-runtime"),
+    )
+    for (const output of [
+      defaultOutput(suiteDirectory, {}),
+      defaultOutput(suiteDirectory, { CI: "true" }),
+    ]) {
+      mkdirSync(output, { recursive: true })
+      writeFileSync(path.join(output, "results.json"), "{}")
+      expect(suiteDirectories(cwd)).toEqual(["performance-runtime"])
+      expect(currentResults(cwd, "performance-runtime")).toBe(path.join(output, "results.json"))
+      rmSync(path.join(output, "results.json"))
+    }
+    expect(readFileSync(path.join(cwd, ".gitignore"), "utf8")).toMatch(/^\/\.benchmark-local$/m)
   })
 
   it("never ships minification or URL-bearing build config by default", () => {
@@ -262,6 +304,16 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     expect(
       JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf8")).scripts,
     ).not.toHaveProperty("prepare")
+  })
+
+  it("writes a README whose marked quick start installs the package, as QuickStart requires", () => {
+    init("--name", "demo")
+    const readme = readFileSync(path.join(cwd, "README.md"), "utf8")
+    const block =
+      /<!-- quick-start:begin -->\n\n```sh\n([\s\S]*?)```\n\n<!-- quick-start:end -->/.exec(readme)
+    expect(block, "the quick-start markers around one sh block").not.toBeNull()
+    expect(block?.[1]).toMatch(/^npm install demo$/m)
+    expect(readme.match(/quick-start:begin/g)).toHaveLength(1)
   })
 
   it("is non-destructive: an existing file is kept and reported, --force overwrites it", () => {
@@ -281,7 +333,7 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     for (const guide of ["README.md", "WRITING-BENCHMARKS.md", "READING-BENCHMARKS.md"]) {
       expect(existsSync(path.join(cwd, "benchmarks", guide)), guide).toBe(true)
     }
-    expect(existsSync(path.join(cwd, "benchmarks", "suite.mjs"))).toBe(false)
+    expect(existsSync(path.join(cwd, SUITE))).toBe(false)
     expect(existsSync(path.join(cwd, "src"))).toBe(false)
     expect(existsSync(path.join(cwd, "tsup.config.ts"))).toBe(false)
   })
@@ -330,12 +382,21 @@ describe("internal-package-contract init (real run)", { timeout: 120_000 }, () =
     expect(workflow).toContain(`node-version: ${String(floor)}.x`)
   })
 
+  it("writes contract.yml calling the reusable contract workflow at the commit the lockfile pins", () => {
+    expect(init().status).toBe(0)
+    const workflow = readFileSync(path.join(cwd, ".github/workflows/contract.yml"), "utf8")
+    expect(workflow).toMatch(
+      /uses: MaverickCER\/internal-package-contract\/\.github\/workflows\/contract\.yml@[0-9a-f]{40} # v\d+\.\d+\.\d+\n/,
+    )
+    expect(workflow).not.toMatch(/\{\{(ipcSha|ipcRef)\}\}/)
+  })
+
   it("scaffolds a `required` job that stands for every other job, so a skipped or cancelled one cannot pass", () => {
     init()
     const workflow = readFileSync(path.join(cwd, ".github/workflows/contract.yml"), "utf8")
     const required = workflow.slice(workflow.indexOf("\n  required:\n"))
     expect(required).toContain("if: always()")
-    expect(required).toContain("needs: [node-floor, typescript-7]")
+    expect(required).toContain("needs: [standard, node-floor, typescript-7]")
     expect(required).toContain("n.result !== 'success'")
     // Every other job id in the file, except contract, is in that needs list.
     const jobsSection = workflow.slice(workflow.indexOf("\njobs:\n"))

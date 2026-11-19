@@ -6,3 +6,4 @@ export function defaultOutput(
 ): string
 export function currentResults(cwd: string, suite: string): string | undefined
 export function suiteDirectories(cwd: string): string[]
+export function suiteLayoutProblem(suiteDirectory: string): string | undefined

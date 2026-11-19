@@ -4,6 +4,9 @@
 // `.benchmark-local/<suite>/`, which is never committed. `BenchmarkComplexity` and `BenchmarkCoverage` prefer
 // the local results when both copies exist. So a local run can change what a local contract run judges, while
 // CI sees only what is committed. A suite counts only when one of the two holds a `results.json`.
+//
+// Every suite has its own folder, `benchmarks/<suite>/`, because both copies are keyed by that folder's name.
+// A suite placed directly in `benchmarks/` has no name to key by, so `run-suite` refuses it.
 
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
@@ -17,6 +20,21 @@ export const LOCAL_DIRECTORY = ".benchmark-local"
  */
 export function isCi(env) {
   return env.CI === "true" || env.CI === "1"
+}
+
+/**
+ * @param {string} suiteDirectory - the folder that holds a suite's `suite.mjs`.
+ * @returns {string | undefined} why the checks would never find this suite's results, or nothing when the suite
+ *   has its own folder under `benchmarks/`.
+ */
+export function suiteLayoutProblem(suiteDirectory) {
+  if (path.basename(suiteDirectory) !== "benchmarks") return undefined
+  return [
+    `The suite in ${suiteDirectory} must sit in its own folder, benchmarks/<suite>/.`,
+    "The benchmark checks read results only from benchmarks/<suite>/ and .benchmark-local/<suite>/.",
+    "Move suite.mjs and benchmark.config.json into a folder such as benchmarks/performance-runtime/.",
+    'Then add one "../" to the suite\'s relative imports, and set "root": "../.." and "docsPath": ".." in the config.',
+  ].join("\n")
 }
 
 /**

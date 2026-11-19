@@ -9,7 +9,7 @@ import {
   suppressions,
   whyUnacceptable,
 } from "../checks/suppressions.js"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import type { Suppression } from "../scripts/suppressions-scan.mjs"
 import { COMPLETE_V2, makeContext, makeJsonResult, makeResult } from "./support.js"
 

@@ -10,7 +10,7 @@ import {
   incompleteFields,
 } from "../checks/environment-exceptions.js"
 import type { EnvironmentExceptionRecord } from "../checks/environment-exceptions.js"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import { COMPLETE_V2, unexcepted } from "./support.js"
 
 let cwd: string

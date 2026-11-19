@@ -5,6 +5,7 @@
 //   internal-package-contract sync --apply          also write the files that are missing
 //   internal-package-contract sync --apply --update also replace files that have drifted (shown first)
 //   internal-package-contract sync --add <name>     start carrying a managed copy of shared code, and write it
+//   internal-package-contract sync --release        a release's version script (release.mjs); nothing else
 //
 // Nothing here runs at install time, and nothing outside the managed list is touched. A drifted
 // file is overwritten only under `--update`, so a deliberate customization survives. A workflow is
@@ -18,8 +19,10 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { shaFromLockfile } from "../init-lib.mjs"
 import { COPIES, enrolledCopies, inspectManaged, withRequired } from "./inspect.mjs"
+import { runRelease } from "./release.mjs"
 
-const USAGE = "Usage: internal-package-contract sync [--apply [--update]] [--add <copy>]\n"
+const USAGE =
+  "Usage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n"
 
 /**
  * @param {string} wanted
@@ -51,19 +54,29 @@ export function unifiedDiff(wanted, have) {
  * @param {string} packageRoot - this package's root.
  * @param {{ out: (text: string) => void, err: (text: string) => void }} io
  * @param {readonly { name: string, requires?: readonly string[] }[]} [copies] - the managed copies on offer; a test seam, defaulting to the real ones.
+ * @param {{ spawn?: (command: string, args: string[], cwd: string) => number | null }} [hooks] - how `--release` runs a command; a test seam.
  * @returns {number} the exit code.
  */
-export function run(argv, cwd, packageRoot, io, copies = COPIES) {
+export function run(argv, cwd, packageRoot, io, copies = COPIES, hooks = {}) {
   let apply = false
   let update = false
+  let release = false
   let add
   const unknown = []
   const items = argv[Symbol.iterator]()
   for (const arg of items) {
     if (arg === "--apply") apply = true
     else if (arg === "--update") update = true
+    else if (arg === "--release") release = true
     else if (arg === "--add") add = items.next().value ?? ""
     else unknown.push(arg)
+  }
+  // A release writes versions and baselines; mixing in a managed-file update would hide one inside the other.
+  if (release && (apply || update || add !== undefined)) {
+    io.err(
+      `[sync] --release runs alone: it cannot be combined with --apply, --update or --add.\n${USAGE}`,
+    )
+    return 2
   }
   if (add !== undefined && !copies.some(({ name }) => name === add)) {
     io.err(
@@ -83,6 +96,7 @@ export function run(argv, cwd, packageRoot, io, copies = COPIES) {
     io.err("[sync] there is no package.json here; run it from the package's root.\n")
     return 2
   }
+  if (release) return runRelease(cwd, packageRoot, io, hooks.spawn)
   if (add !== undefined) {
     // Starting to carry a copy is an explicit act: it is recorded, then the file is written.
     const file = path.join(cwd, "package.json")

@@ -270,7 +270,7 @@ describe("securityDeps()", () => {
     expect(securityDeps().output).toEqual({ format: "json" })
   })
 
-  it("fails with the persisted-write rationale when the registry path is a symlink", async () => {
+  it("fails without writing when the registry path is a symlink, and says so", async () => {
     const target = path.join(cwd, "real-registry.json")
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
     mkdirSync(path.dirname(registryPath()), { recursive: true })
@@ -280,7 +280,9 @@ describe("securityDeps()", () => {
       makeContext(auditResult({ vitest: { severity: "moderate", range: "3.0.0 - 3.2.7" } })),
     )
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("is a symlink")
+    expect(result.rationale).toMatch(
+      /failed to load and was left unchanged:\n- .* is a symbolic link\./,
+    )
   })
 
   it("fails when npm audit's own output.success is true but output.value is a non-object", async () => {

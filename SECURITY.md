@@ -70,7 +70,7 @@ This repository runs 30 checks on itself through `npm run contract` (`scripts/ru
 - branch protection on `main`;
 - the open alerts of GitHub's default CodeQL setup (`CodeScanning`).
 
-The config lists each of the 26 standard checks it leaves out and why. Every consumer gets the full standard
+The config lists each of the 27 standard checks it leaves out and why. Every consumer gets the full standard
 through `contract.ts` (README, "The checks"). The secrets the workflows here read are `PIN_SYNC_TOKEN` (pin
 sync) and `SOCKET_SECURITY_API_KEY` (the `socket` CLI during the contract); shipped code reads neither.
 

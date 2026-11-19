@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -9,6 +10,7 @@ import {
   isCi,
   LOCAL_DIRECTORY,
   suiteDirectories,
+  suiteLayoutProblem,
 } from "../scripts/benchmark/results-location.mjs"
 
 let dir: string
@@ -41,6 +43,37 @@ describe("defaultOutput", () => {
     expect(path.normalize(defaultOutput(suite, {}))).toBe(
       path.join("repo", LOCAL_DIRECTORY, "performance-runtime"),
     )
+  })
+})
+
+describe("suiteLayoutProblem", () => {
+  it("accepts a suite in its own folder under benchmarks/", () => {
+    expect(
+      suiteLayoutProblem(path.join("repo", "benchmarks", "performance-runtime")),
+    ).toBeUndefined()
+  })
+  it("refuses a suite directly in benchmarks/, and says where to move it", () => {
+    expect(suiteLayoutProblem(path.join("repo", "benchmarks"))).toBe(
+      [
+        `The suite in ${path.join("repo", "benchmarks")} must sit in its own folder, benchmarks/<suite>/.`,
+        "The benchmark checks read results only from benchmarks/<suite>/ and .benchmark-local/<suite>/.",
+        "Move suite.mjs and benchmark.config.json into a folder such as benchmarks/performance-runtime/.",
+        'Then add one "../" to the suite\'s relative imports, and set "root": "../.." and "docsPath": ".." in the config.',
+      ].join("\n"),
+    )
+  })
+  it("stops run-suite before it loads the suite, in CI and out of it", () => {
+    put("benchmarks/benchmark.config.json", { root: ".." })
+    const script = path.resolve(import.meta.dirname, "../scripts/benchmark/run-suite.mjs")
+    for (const CI of ["true", ""]) {
+      const run = spawnSync(process.execPath, [script, "benchmarks/suite.mjs", "--check"], {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...process.env, CI },
+      })
+      expect(run.status).toBe(1)
+      expect(run.stderr).toContain("must sit in its own folder")
+    }
   })
 })
 

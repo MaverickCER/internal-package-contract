@@ -47,10 +47,11 @@ on:
     secrets:
       PIN_SYNC_TOKEN:
         description: >-
-          Optional. A token that can push workflow files and start CI on the pull request. Its permissions
-          and refresh steps are in the calling repository's `docs/ENVIRONMENT.md#ci-secrets-pin_sync_token`,
-          which `internal-package-contract env` generates. Without it the run uses GITHUB_TOKEN, which
-          cannot change `.github/workflows/*` or start CI.
+          Optional. A token that can push workflow files and merge the pull request once CI is green.
+          Its permissions and refresh steps are in the calling repository's `docs/ENVIRONMENT.md#ci-secrets-pin_sync_token`,
+          which `internal-package-contract env` generates.
+          Without it the run uses GITHUB_TOKEN, which cannot change `.github/workflows/*`. CI on the pull
+          request always starts with GITHUB_TOKEN.
         required: false
 
 jobs:
@@ -193,10 +194,15 @@ jobs:
       # A red run here leaves the PR open for a human instead of failing the job. A real dependency
       # bump, unlike a generated version bump, can surface a failure that a person should look at.
       # That holds when add-changeset is true too, since the engine coupling can break the same way.
+      # The dispatch and the polling use GITHUB_TOKEN: GitHub starts a run for a workflow_dispatch it
+      # sends, and the caller grants it `actions: write`. PIN_SYNC_TOKEN, when set, is used only for
+      # the merge, so the merge's push to main still starts the release workflow. A token without
+      # Actions write made every dispatch fail with HTTP 403.
       - name: Dispatch CI, then merge only if it comes back green
         if: steps.pr.outputs.branch
         env:
-          GH_TOKEN: ${{ secrets.PIN_SYNC_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_TOKEN: ${{ secrets.PIN_SYNC_TOKEN || github.token }}
           BRANCH: ${{ steps.pr.outputs.branch }}
         run: |
           SHA=$(git rev-parse HEAD)
@@ -217,7 +223,7 @@ jobs:
           fi
           if gh run watch "$RUN_ID" --exit-status; then
             PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number')
-            gh pr merge "$PR_NUMBER" --squash --delete-branch
+            GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" --squash --delete-branch
           else
             echo "::warning::CI failed on the dependency-bump branch; leaving PR open for a human, not force-merging."
           fi

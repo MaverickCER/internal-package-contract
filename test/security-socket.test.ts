@@ -26,7 +26,7 @@ import {
   securitySocket,
   SOCKET_EXCEPTION_SCHEMA,
 } from "../checks/security-socket.js"
-import { SOCKET_EXCEPTION_TYPES } from "../checks/exception-record.js"
+import { SOCKET_EXCEPTION_TYPES } from "../checks/security-socket.js"
 import { makeContext, makeResult, BLANK_V2 } from "./support.js"
 
 // The guidance builder asks git for this repository's remote, running it with the (temp) working
@@ -352,7 +352,7 @@ describe("securitySocket()", () => {
     })
   })
 
-  it("fails with the persisted-write rationale when the registry path is a symlink", async () => {
+  it("fails without writing when the registry path is a symlink, and says so", async () => {
     const target = path.join(cwd, "real-registry.json")
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
     mkdirSync(path.dirname(registryPath()), { recursive: true })
@@ -360,7 +360,9 @@ describe("securitySocket()", () => {
     try {
       const result = await securitySocket().policy(makeContext(scriptOutput(okScore([alert]))))
       expect(result.outcome).toBe("fail")
-      expect(result.rationale).toContain("is a symlink")
+      expect(result.rationale).toMatch(
+        /failed to load and was left unchanged:\n- .* is a symbolic link\./,
+      )
     } finally {
       // Windows cannot remove a dangling file symlink during the recursive cleanup, so drop it first.
       unlinkSync(registryPath())

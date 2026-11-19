@@ -30,11 +30,15 @@
 
 ## Install and verify
 
+<!-- quick-start:begin -->
+
 ```sh
 npm install {{name}}
 ```
 
-<!-- ipc:prompt: prerequisites, the fastest path to a working result, the smallest usage example, and how to verify it works. -->
+<!-- quick-start:end -->
+
+<!-- ipc:prompt: prerequisites, the fastest path to a working result, the smallest usage example, and how to verify it works. Keep the first commands between the quick-start markers: the QuickStart check runs them against the packed tarball. -->
 
 ## Fit and capabilities
 

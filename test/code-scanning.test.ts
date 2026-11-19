@@ -506,7 +506,7 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
     expect(readFileSync(registryPath(), "utf8")).toBe(before)
   })
 
-  it("fails with the persisted-write rationale when the registry path is a symlink", async () => {
+  it("fails without writing when the registry path is a symlink, and says so", async () => {
     mkdirSync(path.dirname(registryPath()), { recursive: true })
     const target = path.join(cwd, "real-registry.json")
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
@@ -514,7 +514,9 @@ describe("codeScanning() -- policy: reviewing alerts", () => {
     try {
       const result = await policy(alerts(alert()))
       expect(result.outcome).toBe("fail")
-      expect(result.rationale).toContain("is a symlink")
+      expect(result.rationale).toMatch(
+        /failed to load and was left unchanged:\n- .* is a symbolic link\./,
+      )
     } finally {
       // Windows cannot remove a dangling file symlink during the recursive cleanup, so drop it first.
       unlinkSync(registryPath())
