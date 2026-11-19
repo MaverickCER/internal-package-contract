@@ -43,13 +43,12 @@ describe("globToRegExp", () => {
     expect(re.test("env.schema.ts")).toBe(true)
   })
 
-  // Exact `.source` assertions isolating each clause of the `**` detection
-  // (`char === "*" && pattern[i + 1] === "*"`) and the `(?:.*/)?` vs plain
-  // `.*` branch's own guard (`precededBySlashOrStart && followedBySlash`):
-  // a bare `.test()` on a hand-picked string can't distinguish every
-  // sub-clause, since several inputs happen to produce the same match result
-  // through a differently-shaped (but still-matching) regex. Same fixture
-  // set as this file's deliberately-duplicated `eslint-plugin/glob.ts` copy.
+  // Exact `.source` assertions isolate each clause of the `**` detection
+  // (`char === "*" && pattern[i + 1] === "*"`). They also isolate the guard
+  // that picks `(?:.*/)?` over plain `.*` (`precededBySlashOrStart && followedBySlash`).
+  // A bare `.test()` on a hand-picked string cannot tell every sub-clause
+  // apart: a differently shaped regex can still give the same match. Same
+  // fixture set as the deliberately duplicated `eslint-plugin/glob.ts` copy.
   it.each<[string, string]>([
     // Leading "**/ ": i === 0 (the OR's first operand) AND followed by slash.
     ["**/x", "^(?:.*\\/)?x$"],
@@ -64,11 +63,10 @@ describe("globToRegExp", () => {
     // `precededBySlashOrStart`, and proves the guard is `&&`, not `||`
     // (with `||` this would wrongly also produce the `(?:.*/)?` form).
     ["x**/y", "^x.*\\/y$"],
-    // Neither preceded nor followed by a slash: the baseline "no special
-    // form at all" case, and the one that most sharply exposes the `i + 1`
-    // "is the NEXT char also a `*`" detection itself being corrupted (a
-    // corrupted detection drops the trailing character entirely instead of
-    // emitting `.*` in the middle).
+    // Neither preceded nor followed by a slash: the "no special form" case.
+    // It most sharply exposes a corrupted `i + 1` "is the NEXT char also a
+    // `*`" detection. A corrupted detection drops the trailing character
+    // instead of emitting `.*` in the middle.
     ["a**b", "^a.*b$"],
   ])("globToRegExp(%j) produces exactly %s", (pattern, expectedSource) => {
     expect(globToRegExp(pattern).source).toBe(expectedSource)

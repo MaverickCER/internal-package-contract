@@ -7,6 +7,7 @@ import { run as apiReport } from "./api-report.mjs"
 import { run as badges } from "./badges.mjs"
 import { run as cjsInterop } from "./cjs-interop.mjs"
 import { run as compilerIsolation } from "./compiler-isolation.mjs"
+import { run as sbom } from "./sbom.mjs"
 import { run as size } from "./size.mjs"
 
 /** The tools, by the name a package runs them under, with what each does. */
@@ -31,6 +32,10 @@ export const TOOLS = Object.freeze({
   "compiler-isolation": {
     run: compilerIsolation,
     summary: "fail when a client entry can reach the bundled compiler",
+  },
+  sbom: {
+    run: sbom,
+    summary: "write the CycloneDX 1.6 SBOMs in docs/ from package-lock.json",
   },
   size: {
     run: size,

@@ -38,17 +38,20 @@
  * ```
  */
 import path from "node:path"
-import { loadExceptionRegistry } from "repo-contract/helpers"
-import type { ExceptionRecordCore, StandardSchemaV1 } from "repo-contract/helpers"
-import type { PolicyResult } from "repo-contract"
-import { NOT_EVALUATED_ACCEPTED, NOT_EVALUATED_UNEXCEPTED } from "../scripts/contract-report.mjs"
+import type {
+  ExceptionRecordCore,
+  ExceptionRegistrySchema,
+  ExceptionV2Fields,
+} from "repo-contract/helpers"
 import {
   EXCEPTION_V2_FIELD_KEYS,
+  exceptionRegistryStandardSchema,
   isExpired,
   isValidNonEmptyStringField,
-  validateExceptionRegistry,
-} from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
+  loadExceptionRegistry,
+} from "repo-contract/helpers"
+import type { PolicyResult } from "repo-contract"
+import { NOT_EVALUATED_ACCEPTED, NOT_EVALUATED_UNEXCEPTED } from "../scripts/contract-report.mjs"
 
 /** Where a repository records the degradations it accepts. */
 export const ENVIRONMENT_REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/environment.json"
@@ -93,18 +96,7 @@ export const ENVIRONMENT_EXCEPTION_SCHEMA: ExceptionRegistrySchema<EnvironmentEx
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly EnvironmentExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, ENVIRONMENT_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(ENVIRONMENT_EXCEPTION_SCHEMA)
 
 /**
  * What is missing from `record` for it to count as an accepted exception: an empty list means it

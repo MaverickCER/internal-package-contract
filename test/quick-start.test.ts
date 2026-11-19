@@ -1,9 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
+import { quickStart } from "repo-contract/presets"
 import { OPTIONAL_CHECKS, optionalChecks } from "../checks/optional.js"
 import { quickStartCheck } from "../checks/quick-start.js"
+import { standardChecks } from "../checks/standard.js"
+import { RETIRED_CHECKS } from "../scripts/recipes/optional-settings.mjs"
 import { COMPLETE_V2, makeContext, makeJsonResult, makeResult, unexcepted } from "./support.js"
 
 const INSTALL = "npm install --save-dev ../tarball/p-1.0.0.tgz"
@@ -152,25 +156,110 @@ describe("quickStartCheck", () => {
   })
 })
 
-describe("QuickStart, the optional check", () => {
+describe("quickStartCheck around another QuickStart check", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "quick-start-wrap-"))
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+  const around = (verdict: PolicyResult): CheckDefinitionConfig => ({
+    ...quickStart(),
+    policy: () => verdict,
+  })
+
+  it("keeps the given check's command and judges with its policy", async () => {
+    const check = quickStartCheck({
+      cwd: dir,
+      check: around({ outcome: "pass", rationale: "fine." }),
+    })
+    expect(check.run).toEqual(quickStart().run)
+    expect(await check.policy(makeContext(makeResult()))).toEqual({
+      outcome: "pass",
+      rationale: "QuickStart: fine.",
+    })
+  })
+
+  it("still reads a network failure of the given check as a degradation", async () => {
+    const failed = { outcome: "fail" as const, rationale: "it exited 1. npm error code ENOTFOUND" }
+    const verdict = await quickStartCheck({ cwd: dir, check: around(failed) }).policy(
+      makeContext(makeResult()),
+    )
+    expect(verdict.rationale).toContain("environment:QuickStart:network")
+  })
+})
+
+describe("QuickStart in the standard", () => {
+  // Built inside each test: mutation testing credits a test only with the code that runs during it.
+  let checks: Record<string, CheckDefinitionConfig & { dependsOn?: readonly string[] }>
+  beforeEach(() => {
+    checks = standardChecks()
+  })
+
+  it("runs the tier's QuickStart, after the tests and before Mutation", () => {
+    const ids = Object.keys(checks)
+    expect(ids).toContain("QuickStart")
+    expect(ids.indexOf("QuickStart")).toBeLessThan(ids.indexOf("Mutation"))
+    expect(checks["QuickStart"]?.dependsOn).toEqual(["Tests"])
+    expect(checks["QuickStart"]?.run).toEqual(quickStart().run)
+  })
+
+  it("passes as not applicable on a private package, whatever the quick start did", async () => {
+    // This repository's own package.json sets "private": true, and the tier reads the working directory's.
+    const verdict = await checks["QuickStart"]?.policy(
+      makeContext(makeJsonResult(failedInstall("npm error code E404"))),
+    )
+    expect(verdict?.outcome).toBe("pass")
+    expect(verdict?.rationale).toContain("QuickStart is not applicable")
+  })
+})
+
+describe("QuickStart, no longer optional", () => {
   let dir: string
   beforeEach(() => {
     dir = mkdtempSync(path.join(tmpdir(), "quick-start-optional-"))
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-  it("waits for the tests, because it packs the build they follow", () => {
-    expect(OPTIONAL_CHECKS["QuickStart"]?.dependsOn).toEqual(["Tests"])
+  it("is not an optional check", () => {
+    expect(OPTIONAL_CHECKS).not.toHaveProperty("QuickStart")
   })
 
-  it("is turned on by naming it in package.json", () => {
+  it("ignores a package.json that still names it, instead of adding it twice or throwing", () => {
     writeFileSync(
       path.join(dir, "package.json"),
-      JSON.stringify({ "internal-package-contract": { checks: ["QuickStart"] } }),
+      JSON.stringify({ "internal-package-contract": { checks: ["QuickStart", "Sbom"] } }),
     )
-    const checks = optionalChecks(dir)
-    expect(Object.keys(checks)).toEqual(["QuickStart"])
-    expect(checks["QuickStart"]?.dependsOn).toEqual(["Tests"])
-    expect(checks["QuickStart"]?.run).toEqual(quickStartCheck().run)
+    const said: string[] = []
+    expect(Object.keys(optionalChecks(dir, (line) => said.push(line)))).toEqual(["Sbom"])
+    expect(said).toEqual([`${RETIRED_CHECKS["QuickStart"] ?? ""}\n`])
+  })
+
+  it("says why it ignores the entry, on stderr by default, and says nothing without one", () => {
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    try {
+      writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ "internal-package-contract": { checks: ["QuickStart"] } }),
+      )
+      expect(optionalChecks(dir)).toEqual({})
+      expect(write.mock.calls).toEqual([[`${RETIRED_CHECKS["QuickStart"] ?? ""}\n`]])
+      write.mockClear()
+      writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ "internal-package-contract": { checks: ["Sbom"] } }),
+      )
+      optionalChecks(dir)
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      write.mockRestore()
+    }
+  })
+
+  it("still throws on a name that never was a check", () => {
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ "internal-package-contract": { checks: ["QuickStrat"] } }),
+    )
+    expect(() => optionalChecks(dir)).toThrow("QuickStrat")
   })
 })

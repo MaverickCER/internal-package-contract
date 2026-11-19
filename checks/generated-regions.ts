@@ -3,7 +3,8 @@
  * produce.
  *
  * Reads: the documents that carry `<!-- ipc:begin name -->` ... `<!-- ipc:end name -->` markers,
- * and the `package.json` and `docs/surface.json` they are generated from.
+ * and the sources they are generated from: `package.json`, `action.yml`, `docs/surface.json`, and
+ * this package's own check headers and threshold constants.
  * `scripts/check-generated-regions.mjs` runs `generate --check` in-process.
  *
  * Fails when a region is stale, or when its markers are malformed. Fails when a region's source is
@@ -13,7 +14,7 @@
  * Exceptions: none. Run `internal-package-contract generate` and commit the result.
  *
  * Runs in the consumer `contract` job and in both git hooks. IPC's own self-contract runs it too,
- * on the `supported-versions` region in its README.
+ * on the `supported-versions`, `thresholds` and `checks` regions in its README.
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"

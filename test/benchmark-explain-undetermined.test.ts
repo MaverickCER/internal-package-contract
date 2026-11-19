@@ -49,12 +49,12 @@ describe("explainUndetermined", () => {
         variable: "item",
       }),
     ).toBe(
-      "over the largest 5 item sizes the timings do not follow one growth rate (R² 0.42, and a fit below 0.8 is not trusted; fitted exponent 1.57). The cost probably changes regime between sizes (a cache, a threshold, a batch size) or run-to-run noise outweighs the growth",
+      "over the largest 5 item sizes, the timings follow no single growth rate. The fit has R² 0.42, and one below 0.8 is not trusted; the fitted exponent is 1.57. The cost probably changes regime between sizes, such as at a cache, a threshold or a batch size. Or run-to-run noise outweighs the growth",
     )
     expect(
       explainUndetermined({ reason: "poor-fit", points: 1, rSquared: null, exponent: null }),
     ).toBe(
-      "over the largest 1 size the timings do not follow one growth rate (R² n/a, and a fit below 0.8 is not trusted; fitted exponent n/a). The cost probably changes regime between sizes (a cache, a threshold, a batch size) or run-to-run noise outweighs the growth",
+      "over the largest 1 size, the timings follow no single growth rate. The fit has R² n/a, and one below 0.8 is not trusted; the fitted exponent is n/a. The cost probably changes regime between sizes, such as at a cache, a threshold or a batch size. Or run-to-run noise outweighs the growth",
     )
     expect(explainUndetermined({ reason: "poor-fit" })).toContain("over the largest 0 sizes")
   })

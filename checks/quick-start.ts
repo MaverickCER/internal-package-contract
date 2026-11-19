@@ -16,10 +16,11 @@
  * warns locally. Under `--strict`, the CI default, it fails unless
  * `.repo-contract/exceptions/environment.json` holds a complete record. The record id is
  * `environment:QuickStart:network`. Any other failed install is a finding. A broken first install is
- * what this check exists to catch, so `PackedConsumer:install`'s wider rule is not copied.
+ * what this check exists to catch, so PackedConsumer's wider install rule is not copied.
  *
- * Not in the standard set: a package turns it on by name (`add check QuickStart`). It then waits on
- * `Tests`, so the build it packs is done and two packs never race.
+ * In the standard set, from repo-contract's tier: a `private: true` package passes it as not
+ * applicable, though the command still runs. It waits on `Tests`, so the build it packs is done and
+ * two packs never race.
  */
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { quickStart } from "repo-contract/presets"
@@ -29,12 +30,15 @@ import { degraded } from "./environment-exceptions.js"
 const NETWORK_ERROR = /\b(?:ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\b/
 
 /**
- * @param input - Test seam: where the environment-exception registry is read from.
+ * @param input - What to wrap, and where the environment-exception registry is read from.
  * @param input.cwd - The repository root; defaults to the working directory.
+ * @param input.check - The QuickStart check to wrap; the standard passes the tier's. Defaults to the bare preset.
  * @returns the `QuickStart` check.
  */
-export function quickStartCheck(input: { readonly cwd?: string } = {}): CheckDefinitionConfig {
-  const preset = quickStart()
+export function quickStartCheck(
+  input: { readonly cwd?: string; readonly check?: CheckDefinitionConfig } = {},
+): CheckDefinitionConfig {
+  const preset = input.check ?? quickStart()
   return {
     ...preset,
     policy: async (context): Promise<PolicyResult> => {

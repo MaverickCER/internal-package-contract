@@ -6,7 +6,11 @@
 //
 //   reports/contract/evidence.json   the evidence of every phase, merged into one version-1 document
 //   reports/contract/report.json     the verdict plus per-check class, timing and run totals
-//   reports/contract/summary.md      the same as Markdown; contract-run.mjs appends it to $GITHUB_STEP_SUMMARY
+//   reports/contract/summary.md      the same as Markdown; contract-run.mjs appends it to $GITHUB_STEP_SUMMARY,
+//                                    cut under GitHub's 1 MiB limit (see `stepSummary`)
+//
+// The report also says what the contract loosened against the standard (`checks/baseline.ts`), with
+// repo-contract's `explainTier` and `renderExplain`.
 //
 // `warn` is overloaded: "a real but non-blocking finding" and "this could not be evaluated here" read the same.
 // Each result is therefore also given a class (see `classifyResult`), read from how its rationale starts. A run
@@ -16,11 +20,19 @@
 
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { renderExplain } from "repo-contract/tiers"
 
 /** Starts a rationale whose check could not run here and that an exception record has accepted. */
 export const NOT_EVALUATED_ACCEPTED = "Not evaluated (accepted by"
 /** Starts a rationale whose check could not run here and that no exception record covers. */
 export const NOT_EVALUATED_UNEXCEPTED = "Not evaluated (no exception recorded"
+
+/**
+ * Follows the "Compared with the standard" section, which compares settings and check ids only. A reader
+ * would otherwise take the verdicts of these replaced checks for repo-contract's.
+ */
+export const OWN_CHECKS_NOTE =
+  "IPC runs its own version of seven tier checks: `Tests`, `SecuritySecrets`, `SecurityDeps`, `DeadCode`, `DocsLinks`, `DistNoUrls` and `Commits`. Their verdicts are not repo-contract's. `checks/standard.ts` says how each one differs."
 
 /**
  * @typedef {"pass" | "warn" | "not-evaluated" | "unexcepted" | "fail" | "skipped"} ResultClass
@@ -148,7 +160,8 @@ function firstLine(text) {
 
 /**
  * Renders the report as Markdown. Totals come first. Then everything that needs attention, most
- * urgent first, with each result's reason. Then the slowest checks (the contract's own cost).
+ * urgent first, with each result's reason. Then the exceptions in force, then the checks and settings
+ * compared with the standard. The slowest checks (the contract's own cost) come last.
  * @param {ReturnType<typeof buildReport>} report
  * @param {{ title?: string }} [options]
  */
@@ -207,6 +220,21 @@ export function renderMarkdown(report, options = {}) {
       "",
     )
   }
+  // A run with no baseline and no tier metadata has nothing to compare, so it gets no section.
+  const explanation = /** @type {any} */ (report).explanation
+  if (explanation?.baseline !== undefined) {
+    lines.push(
+      "### Compared with the standard",
+      "",
+      // renderExplain heads its parts with `###`. One level down, they read as parts of this one section.
+      renderExplain(explanation, { format: "markdown", heading: "Loosened" }).replaceAll(
+        "\n### ",
+        "\n#### ",
+      ),
+      OWN_CHECKS_NOTE,
+      "",
+    )
+  }
   const slowest = [...report.checks].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5)
   if (slowest.some((c) => c.durationMs > 0)) {
     lines.push("### Slowest checks", "", "| Check | Time |", "| --- | ---: |")
@@ -214,6 +242,43 @@ export function renderMarkdown(report, options = {}) {
     lines.push("", `Total check time: ${seconds(report.totalDurationMs)}.`, "")
   }
   return lines.join("\n")
+}
+
+/**
+ * The most a run appends to `$GITHUB_STEP_SUMMARY`, in UTF-8 bytes. GitHub rejects a job summary over 1 MiB
+ * (1,048,576 bytes); this leaves room below it.
+ */
+export const STEP_SUMMARY_MAX_BYTES = 1_000_000
+
+/** Fence lines open and close a code block; an odd count means the cut left one open. */
+const FENCE = /^```/gm
+
+/** What a run appends when the job summary has no room left for even the cut note. */
+const NO_ROOM =
+  "\n**Summary left out: the job summary is full.** The full text is `reports/contract/summary.md`.\n"
+
+/**
+ * What a run appends to the GitHub job summary. A summary that fits is passed through whole. A longer one is
+ * cut at a line break and ends with a note naming the full report. A code block left open at the cut is
+ * closed first, so the note renders as text. With no room for the note, only a one-line pointer is written.
+ * `STEP_SUMMARY_MAX_BYTES` sits about 47 KiB under GitHub's limit, which leaves room for it.
+ * @param {string} markdown - the whole summary, as `summary.md` holds it.
+ * @param {number} [maxBytes] - the most it may write, in UTF-8 bytes.
+ * @returns {string} the text to append, ending in a line break.
+ */
+export function stepSummary(markdown, maxBytes = STEP_SUMMARY_MAX_BYTES) {
+  const bytes = Buffer.from(`${markdown}\n`)
+  if (bytes.length <= maxBytes) return `${markdown}\n`
+  const note = (/** @type {number} */ shown) =>
+    `\n**Summary cut at ${String(Math.ceil(shown / 1024))} of ${String(Math.ceil(bytes.length / 1024))} KiB.** GitHub rejects a job summary over 1 MiB. The full text is \`reports/contract/summary.md\`. The reusable contract workflow uploads it as the \`contract-report\` artifact.\n`
+  // The note for the whole length is the longest note, so the room it leaves fits any shorter one.
+  const room = maxBytes - Buffer.byteLength(note(bytes.length)) - Buffer.byteLength("```\n")
+  // Not even the note fits. The pointer alone still tells a reader where the summary went.
+  if (room < 0) return NO_ROOM
+  // Cutting just after a line break never splits a multi-byte character.
+  const head = bytes.subarray(0, bytes.subarray(0, room).lastIndexOf(0x0a) + 1).toString("utf8")
+  const open = (head.match(FENCE) ?? []).length % 2 === 1
+  return `${head}${open ? "```\n" : ""}${note(Buffer.byteLength(head))}`
 }
 
 /**

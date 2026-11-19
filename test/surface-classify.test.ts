@@ -374,3 +374,114 @@ describe("classifySurface: generated-document headings", () => {
     ])
   })
 })
+
+describe("classifySurface: engines and peer dependency ranges", () => {
+  const ranges = (
+    engines: Record<string, string>,
+    peerDependencies: Record<string, string> = {},
+  ): Surface => ({ ...empty, engines, peerDependencies })
+
+  it("compares nothing against a baseline written before ranges were recorded", () => {
+    expect(classifySurface(empty, ranges({ node: ">=26" }, { react: "^19" }))).toEqual([])
+  })
+
+  it("treats a raised floor as breaking", () => {
+    expect(classifySurface(ranges({ node: ">=22" }), ranges({ node: ">=24" }))).toEqual([
+      {
+        id: "engines:node",
+        kind: "engines-range-narrowed",
+        impact: "breaking",
+        widens: false,
+        explanation:
+          'engines.node narrowed from ">=22" to ">=24": some versions it accepted are now refused.',
+      },
+    ])
+  })
+
+  it("treats a dropped peer major as breaking", () => {
+    expect(
+      classifySurface(ranges({}, { react: "^18 || ^19" }), ranges({}, { react: "^19" })),
+    ).toEqual([
+      {
+        id: "peerDependencies:react",
+        kind: "peer-range-narrowed",
+        impact: "breaking",
+        widens: false,
+        explanation:
+          'peerDependencies.react narrowed from "^18 || ^19" to "^19": some versions it accepted are now refused.',
+      },
+    ])
+  })
+
+  it("treats a widened range as compatible and widening", () => {
+    expect(kinds(ranges({}, { react: "^19" }), ranges({}, { react: "^18 || ^19" }))).toEqual([
+      "peer-range-widened:compatible",
+    ])
+    const [change] = classifySurface(ranges({ node: ">=24" }), ranges({ node: ">=22" }))
+    expect(change).toMatchObject({ widens: true, id: "engines:node" })
+    expect(change?.explanation).toBe('engines.node widened from ">=24" to ">=22".')
+  })
+
+  it("treats the same range written another way as compatible, not widening", () => {
+    const [change] = classifySurface(ranges({ node: ">=24" }), ranges({ node: ">=24.0.0" }))
+    expect(change).toEqual({
+      id: "engines:node",
+      kind: "engines-range-rewritten",
+      impact: "compatible",
+      widens: false,
+      explanation:
+        'engines.node was rewritten from ">=24" to ">=24.0.0" and accepts the same versions.',
+    })
+  })
+
+  it("reads a new requirement as narrowing from any version, and a dropped one as widening", () => {
+    expect(kinds(ranges({}), ranges({ node: ">=24" }, { react: "^19" }))).toEqual([
+      "engines-range-narrowed:breaking",
+      "peer-range-narrowed:breaking",
+    ])
+    expect(kinds(ranges({ node: ">=24" }, { react: "^19" }), ranges({}))).toEqual([
+      "engines-range-widened:compatible",
+      "peer-range-widened:compatible",
+    ])
+    expect(classifySurface(ranges({}), ranges({ node: ">=24" }))[0]?.explanation).toBe(
+      'engines.node narrowed from "*" to ">=24": some versions it accepted are now refused.',
+    )
+    expect(classifySurface(ranges({ node: ">=24" }), ranges({}))[0]?.explanation).toBe(
+      'engines.node widened from ">=24" to "*".',
+    )
+  })
+
+  it("treats a range it cannot read as breaking, rather than guessing", () => {
+    expect(classifySurface(ranges({}, { a: "^1" }), ranges({}, { a: "workspace:*" }))).toEqual([
+      {
+        id: "peerDependencies:a",
+        kind: "peer-range-unreadable",
+        impact: "breaking",
+        widens: false,
+        explanation:
+          'peerDependencies.a changed from "^1" to "workspace:*", which cannot be compared as semver ranges.',
+      },
+    ])
+    expect(kinds(ranges({}, { a: "nonsense" }), ranges({}, { a: "^1" }))).toEqual([
+      "peer-range-unreadable:breaking",
+    ])
+  })
+
+  it("leaves an unchanged range alone, and judges each field only once it is baselined", () => {
+    expect(
+      classifySurface(ranges({ node: ">=24" }, { a: "^1" }), ranges({ node: ">=24" }, { a: "^1" })),
+    ).toEqual([])
+    const enginesOnly: Surface = { ...empty, engines: { node: ">=22" } }
+    expect(kinds(enginesOnly, ranges({ node: ">=24" }, { a: "^1" }))).toEqual([
+      "engines-range-narrowed:breaking",
+    ])
+    const peersOnly: Surface = { ...empty, peerDependencies: { a: "^1" } }
+    expect(kinds(peersOnly, ranges({ node: ">=24" }, { a: "^2" }))).toEqual([
+      "peer-range-narrowed:breaking",
+    ])
+  })
+
+  it("reads a current surface without ranges as one that requires nothing", () => {
+    expect(kinds(ranges({ node: ">=24" }), empty)).toEqual(["engines-range-widened:compatible"])
+  })
+})

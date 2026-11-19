@@ -58,9 +58,12 @@
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type { ExceptionClassification } from "repo-contract/helpers"
-import { validateExceptionPolicyConfig } from "repo-contract/helpers"
+import {
+  evaluateFindingVerdict,
+  validateExceptionPolicyConfig,
+  validateExceptionRegistry,
+} from "repo-contract/helpers"
 import { degraded } from "./environment-exceptions.js"
-import { evaluateFindingVerdict, validateExceptionRegistry } from "./exception-record.js"
 import { abnormalTermination, combinedOutput, packageRoot } from "./shared.js"
 import type {
   CoderabbitEvidence,
@@ -79,7 +82,7 @@ const reviewScript = path.join(packageRoot, "scripts", "coderabbitai", "review.t
 /**
  * Evaluates one finding against `CODERABBIT_POLICY`, classified purely on its `severity`. The
  * `record === undefined -> "unmatched"` short-circuit and the flat string-field accessor both come
- * from `checks/exception-record.ts`'s shared {@link evaluateFindingVerdict}, exactly as
+ * from `repo-contract/helpers`' shared {@link evaluateFindingVerdict}, exactly as
  * `SecuritySocket`'s own `evaluateAlert` does.
  * @param finding - The finding.
  * @param record - The reconciled live record for it, or `undefined` if the bijection broke.

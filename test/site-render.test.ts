@@ -151,9 +151,10 @@ describe("renderIndex: content", () => {
   })
   it("ends the problem diagram's description with one full stop, whether or not the conclusion has punctuation", () => {
     const plain = page()
-    expect(plain).toContain("CI files, scripts — no single place answers what is acceptable.</p>")
+    expect(plain).toContain("CI files, scripts; no single place answers what is acceptable.</p>")
+    expect(plain).not.toContain("\u2014")
     const asked = page((s) => (s["problem"].conclusion = "what does acceptable mean here?"))
-    expect(asked).toContain("CI files, scripts — what does acceptable mean here?</p>")
+    expect(asked).toContain("CI files, scripts; what does acceptable mean here?</p>")
     expect(asked).not.toContain("here?.")
   })
   it("makes every code block keyboard-focusable, so one that scrolls sideways can still be read", () => {

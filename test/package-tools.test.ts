@@ -68,6 +68,7 @@ describe("tool dispatcher", () => {
       "badges",
       "cjs-interop",
       "compiler-isolation",
+      "sbom",
       "size",
     ])
   })

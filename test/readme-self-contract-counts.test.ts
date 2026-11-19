@@ -51,12 +51,14 @@ describe("CONTRIBUTING.md: the main ruleset's required checks", () => {
 
   it("names every job of this repository's CI workflow, as required or as advisory", () => {
     const advisory = names(/(`[a-z0-9-]+`) is advisory/.exec(contributing)?.[1] ?? "")
+    // A job that calls a reusable workflow reports as "<job> / <called job>"; a bare job stands for it.
+    const gated = names(/(`[a-z0-9-]+`) is gated through `contract`/.exec(contributing)?.[1] ?? "")
     const ci = readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8")
     const jobs = [...(ci.split(/^jobs:$/m)[1] ?? "").matchAll(/^ {2}([a-z0-9-]+):$/gm)].map(
       (match) => match[1] as string,
     )
     expect(required(contributing)).toContain("contract")
-    expect([...required(contributing), ...advisory].sort()).toEqual(jobs.sort())
+    expect([...required(contributing), ...advisory, ...gated].sort()).toEqual(jobs.sort())
   })
 
   it("matches the required checks SECURITY.md lists for the same ruleset", () => {

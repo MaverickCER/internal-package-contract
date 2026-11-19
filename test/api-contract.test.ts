@@ -626,13 +626,11 @@ describe("evaluateApiContractPolicy", () => {
 })
 
 /**
- * This package's own `scripts/api-contract/check.ts` (the same absolute path
- * `checks/api-contract.ts`'s own `checkScript` constant resolves to (computed there from
- * `import.meta.url` one level up, in `checks/`; computed here from this test file's own
- * `import.meta.url` one level up, in `test/`) both siblings of the repo root). Asserted as an
- * exact value (not a suffix match) so a mutant that drops the `".."` segment (which would
- * resolve to a nonexistent `checks/scripts/api-contract/check.ts` instead) still fails: a suffix
- * match alone can't tell the two apart.
+ * This package's own `scripts/api-contract/check.ts`: the absolute path that the `checkScript`
+ * constant in `checks/api-contract.ts` resolves to. Both are computed from `import.meta.url` one
+ * level up, from `checks/` there and `test/` here, which are siblings under the repo root. It is
+ * asserted as an exact value, not a suffix match. A mutant that drops the `".."` segment resolves
+ * to a nonexistent `checks/scripts/api-contract/check.ts`, and a suffix match cannot tell them apart.
  */
 const expectedCheckScript = fileURLToPath(
   new URL("../scripts/api-contract/check.ts", import.meta.url),

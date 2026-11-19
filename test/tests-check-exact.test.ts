@@ -4,7 +4,7 @@ import { syncBuiltinESMExports } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import {
   SKIPPED_TESTS_SCHEMA,
   VITEST_RESULTS_PATH,

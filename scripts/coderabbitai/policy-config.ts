@@ -1,5 +1,5 @@
-import { EXCEPTION_V2_FIELD_KEYS } from "../../checks/exception-record.js"
 import type { ExceptionPolicy, ExceptionPolicyConfig } from "repo-contract/helpers"
+import { EXCEPTION_V2_FIELD_KEYS } from "repo-contract/helpers"
 
 /**
  * The `CodeRabbit` check's own instantiation of `repo-contract/helpers`' classification-neutral

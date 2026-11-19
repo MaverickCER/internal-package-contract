@@ -3,7 +3,7 @@
 A finding is excused only by a committed record that the owning check reads back every run. The run's exit
 code is pass or fail. Two checks warn by design and never fail (`GitHooks`, and `CodeRabbit` except on broken
 evidence). `EnvContract` warns on credential dates and fails only on a stale generated document. Nothing is allowed by a comment, a flag or a dismissed alert alone
-(`checks/exception-record.ts`; `test/exception-record.test.ts`).
+(`validateExceptionRegistry` in `repo-contract/helpers`; `test/checks-misc-exact.test.ts`).
 
 Three kinds of thing end up in a registry:
 
@@ -32,7 +32,7 @@ record, the shape every new record takes, also carries the elements that make an
 A blank field is an incomplete record: the check that owns the registry fails and names what is missing
 (`test/environment-exceptions.test.ts`; `test/security-socket.test.ts`). A freshly scaffolded stub is all blanks
 on purpose. The legacy `version: 1` shape (only `justification`) is still read, so a registry can migrate record
-by record; `internal-package-contract exceptions` counts what is left. Two limits: `expires: ""` is accepted, so
+by record; `npx repo-contract exceptions` counts what is left. Two limits: `expires: ""` is accepted, so
 a record can be permanent, and the fields are required to be non-blank, not judged for quality.
 
 The security-family registries add `alternatives`, `remediation`, `method` and `exceptionType`:
@@ -71,7 +71,7 @@ record shape with a complete example.
 | `skipped-tests.json`        | `Tests`               | `skipped-test:<file>`                         | a test file that skips in the contract job            |
 
 Staleness is checked both ways: a finding with no complete record fails, and a record whose finding is gone
-fails as stale (`test/security-socket.test.ts`; `test/dist-no-urls.test.ts`; `checks/mutation.ts`). Two
+fails as stale (`test/security-socket.test.ts`; `test/dist-no-urls.test.ts`; repo-contract's Mutation preset). Two
 limits:
 
 - `skipped-tests.json`: a suite that skips only on Windows has no skip on Linux, so an unused record there is
@@ -120,9 +120,10 @@ There is no side channel: a dismissed GitHub alert, a `// eslint-disable`, a `/*
 ## What is in force
 
 ```sh
-npx internal-package-contract exceptions          # per registry: count, by type, legacy, expired, incomplete
-npx internal-package-contract exceptions --json
+npx repo-contract exceptions          # per registry: count, by type, legacy, expired, incomplete
+npx repo-contract exceptions --json
 ```
 
-The same inventory is attached to every contract run's `report.json` and step summary
-(`test/exceptions-inventory-exact.test.ts`).
+The inventory is repo-contract's; this package has no `exceptions` command of its own. The same inventory is
+attached to every contract run's `report.json` (`test/contract-run-loosened.test.ts`). When any record exists,
+`summary.md` and the step summary list it too (`test/contract-report-exact.test.ts`).

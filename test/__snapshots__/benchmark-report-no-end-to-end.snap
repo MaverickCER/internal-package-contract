@@ -40,7 +40,7 @@ Every function the package exposes is measured on its own across the full size l
 >
 > - `sum` (varying item): documented O(n), measured O(1) (exponent 0.00)
 
-> **Could not be determined.** The big-O of these could not be measured, so they are not checked against their documentation:
+> **Could not be determined**. The big-O of these could not be measured. None of them is checked against its documentation:
 >
 > - `end-to-end:baseline` (varying item): only 0 item sizes gave a usable measurement and a growth rate needs at least 2; lost: n20 failed (no); n40 failed (no); n80 failed (no); n160 failed (no)
 > - `end-to-end:with-package` (varying item): only 0 item sizes gave a usable measurement and a growth rate needs at least 2; lost: n20 failed (no); n40 failed (no); n80 failed (no); n160 failed (no)
@@ -112,7 +112,7 @@ Each function's measured cost is multiplied by how many times one end-to-end ope
 
 ## Cost model
 
-Estimates use two bracketing price shapes. **Low** is CPU-priced compute ($0.040 per vCPU-hour, billed on CPU time). **High** is duration-and-memory-priced functions ($0.000017 per GB-second, billed on wall time, at least 128 MB reserved). Both are rounded list prices and change over time; override them in `benchmark.config.json` → `costRates` to match your platform and negotiated pricing.
+Estimates use two price shapes that bracket the real cost. **Low** is CPU-priced compute: $0.040 per vCPU-hour, billed on CPU time. **High** is functions priced by duration and memory: $0.000017 per GB-second, billed on wall time, with at least 128 MB reserved. Both are rounded list prices, and they change over time. To match your platform and negotiated pricing, override them in `benchmark.config.json` → `costRates`.
 
 ## Environment and method
 
@@ -121,4 +121,4 @@ Estimates use two bracketing price shapes. **Low** is CPU-priced compute ($0.040
 - Git: `abc1234` on `main`
 - Sizes: 20, 40, 80, 160 items: One item processed per unit of n.
 
-**Do not compare these numbers with another machine's, another day's, or another package's.** They show how _this_ package's cost changes between runs on comparable hardware, and how it scales with size. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).
+**Do not compare these numbers with another machine's, another day's or another package's**. They show how _this_ package's cost changes between runs on comparable hardware. They also show how it scales with size. See [READING-BENCHMARKS.md](READING-BENCHMARKS.md).

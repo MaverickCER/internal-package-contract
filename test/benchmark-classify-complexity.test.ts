@@ -106,12 +106,11 @@ describe("estimateGrowthExponent + snapExponentToClass (ground-truth synthetic s
 
   it("a realistic O(log n) series (medianMs = ln(size) across a 10/100/1000 ladder) classifies as logarithmic", () => {
     // Ground truth: medianMs is *defined* as ln(size), independent of the
-    // classifier under test. Regression slope computed independently
-    // (see the PR description) is ~0.2386, closer to the logarithmic
-    // anchor (0.3, distance 0.061) than the constant anchor (0, distance
-    // 0.239): see the module's own documented "constant vs logarithmic
-    // is the weakest distinction" limitation for why the margin here is
-    // real but not huge.
+    // classifier under test. The regression slope, computed independently
+    // (see the PR description), is ~0.2386. That is closer to the logarithmic
+    // anchor (0.3, distance 0.061) than the constant anchor (0, distance 0.239).
+    // The margin is real but not huge: the module documents "constant vs
+    // logarithmic" as its weakest distinction.
     const sizes = [10, 100, 1000]
     const series = sizes.map((size) => ({ size, medianMs: Math.log(size) }))
     const exponent = estimateGrowthExponent(series)

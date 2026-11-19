@@ -12,15 +12,22 @@
 //
 // The consumer's own working tree and node_modules are never touched: the copies share its installed packages
 // through symbolic links and replace only the standard.
+//
+// `--compare` asks a stricter question: is every verdict the same? It reports each check's verdict both ways and
+// fails on any change a recorded decision does not explain (./compare.mjs). Its second copy also hoists the
+// standard's own copy of every package the consumer does not declare, as an install would. Otherwise a rebuilt
+// dependency with an unchanged version number would be shared from the consumer, and the old one would run.
 
 import { spawnSync } from "node:child_process"
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -29,6 +36,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { filesOf } from "../checkout-files.mjs"
+import { compareVerdicts, renderComparison } from "./compare.mjs"
 
 /** The package whose installed copy is swapped. */
 export const STANDARD = "internal-package-contract"
@@ -141,10 +149,29 @@ export function nestedDependencies(standard, consumer) {
  * @param {object} input
  * @param {string} input.consumer - the checkout.
  * @param {string | undefined} input.standard - the standard to install in the copy; the consumer's own when undefined.
+ * @param {boolean} [input.hoist] - also put the standard's copy of each package it depends on and the consumer does
+ *   not declare at the top of node_modules, as an install of the standard would.
  * @returns {string} the copy's directory.
  */
-export function workspaceOf({ consumer, standard }) {
+export function workspaceOf({ consumer, standard, hoist = false }) {
   const work = mkdtempSync(path.join(tmpdir(), "ipc-verify-consumers-"))
+  try {
+    fill(work, consumer, standard, hoist)
+  } catch (error) {
+    rmSync(work, { recursive: true })
+    throw error
+  }
+  return work
+}
+
+/**
+ * Builds {@link workspaceOf}'s copy in `work`.
+ * @param {string} work - the empty copy.
+ * @param {string} consumer - the checkout.
+ * @param {string | undefined} standard - the standard to install in the copy.
+ * @param {boolean} hoist - whether to hoist the standard's dependencies.
+ */
+function fill(work, consumer, standard, hoist) {
   for (const file of filesOf(consumer)) {
     // Installed packages are shared, not copied, even in a checkout that forgot to ignore them. A file git lists
     // may also have been deleted from the working tree and not yet committed.
@@ -159,10 +186,82 @@ export function workspaceOf({ consumer, standard }) {
     if (entry === STANDARD && standard !== undefined) continue
     symlinkSync(realpathSync(path.join(consumer, "node_modules", entry)), path.join(modules, entry))
   }
+  const hoisted = hoist && standard !== undefined ? undeclaredDependencies(standard, consumer) : []
+  if (hoisted.length > 0) hoistInto(modules, consumer, standard, hoisted)
   if (standard !== undefined) {
-    installStandard(standard, path.join(modules, STANDARD), nestedDependencies(standard, consumer))
+    const nested = nestedDependencies(standard, consumer).filter(
+      ({ name }) => !hoisted.includes(name),
+    )
+    installStandard(standard, path.join(modules, STANDARD), nested)
   }
-  return work
+}
+
+/**
+ * @param {string} standard - the standard's checkout.
+ * @param {string} consumer - the consumer's checkout.
+ * @returns {string[]} the standard's dependencies the consumer does not declare itself, which an install of the
+ *   standard would therefore choose.
+ */
+export function undeclaredDependencies(standard, consumer) {
+  const read = (/** @type {string} */ dir) =>
+    JSON.parse(readFileSync(path.join(dir, "package.json")).toString())
+  const own = read(consumer)
+  const declared = new Set(
+    ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].flatMap(
+      (field) => Object.keys(own[field] ?? {}),
+    ),
+  )
+  return Object.keys(read(standard).dependencies ?? {}).filter(
+    (name) => !declared.has(name) && existsSync(path.join(standard, "node_modules", name)),
+  )
+}
+
+/**
+ * Replaces the shared links of the hoisted packages with links to the standard's copies. A scope directory that
+ * holds one becomes a real directory, and so does `.bin`, whose relative links then resolve inside the copy.
+ * @param {string} modules - the copy's node_modules.
+ * @param {string} consumer - the consumer's checkout.
+ * @param {string} standard - the standard's checkout.
+ * @param {readonly string[]} names - the packages to hoist.
+ */
+function hoistInto(modules, consumer, standard, names) {
+  /** @param {string} dir - a directory under the copy's node_modules that is a link to the consumer's. */
+  const unshare = (dir) => {
+    const target = path.join(modules, dir)
+    const source = path.join(consumer, "node_modules", dir)
+    if (existsSync(target) && !lstatSync(target).isSymbolicLink()) return
+    rmSync(target, { force: true })
+    mkdirSync(target)
+    if (!existsSync(source)) return
+    for (const entry of readdirSync(source)) {
+      const from = path.join(source, entry)
+      symlinkSync(dir === ".bin" ? binTarget(from) : realpathSync(from), path.join(target, entry))
+    }
+  }
+  unshare(".bin")
+  for (const name of names) {
+    if (name.startsWith("@")) unshare(name.split("/")[0])
+    rmSync(path.join(modules, name), { force: true })
+    symlinkSync(realpathSync(path.join(standard, "node_modules", name)), path.join(modules, name))
+  }
+  const bins = path.join(standard, "node_modules", ".bin")
+  if (!existsSync(bins)) return
+  for (const entry of readdirSync(bins)) {
+    const link = path.join(modules, ".bin", entry)
+    // lstat, not existsSync: a dangling link the checkout has still takes the name.
+    if (lstatSync(link, { throwIfNoEntry: false }) === undefined) {
+      symlinkSync(binTarget(path.join(bins, entry)), link)
+    }
+  }
+}
+
+/**
+ * @param {string} from - an entry in a `.bin` folder.
+ * @returns {string} what the copy's entry links to. A link keeps its own target, which may be relative and resolve
+ *   inside the copy. A regular file, such as a Windows shim, has no target to read, so the copy links to the file.
+ */
+function binTarget(from) {
+  return lstatSync(from).isSymbolicLink() ? readlinkSync(from) : realpathSync(from)
 }
 
 /**
@@ -189,12 +288,14 @@ function installStandard(root, into, nested) {
 /**
  * @param {string} work - a copy made by {@link workspaceOf}.
  * @param {string[]} skip - the checks to leave out.
+ * @param {string[]} [only] - the checks to run instead, when given; `skip` is then not passed.
  * @returns {{ report: string | undefined, status: number | null }} where it wrote its report (if it got that far),
  *   and how it exited.
  */
-export function runContract(work, skip) {
+export function runContract(work, skip, only) {
   const bin = path.join(work, "node_modules", STANDARD, "bin", "contract.mjs")
-  const run = spawnSync(process.execPath, [bin, "--skip", skip.join(",")], {
+  const select = only === undefined ? ["--skip", skip.join(",")] : ["--checks", only.join(",")]
+  const run = spawnSync(process.execPath, [bin, ...select], {
     cwd: work,
     maxBuffer: 1 << 28,
     timeout: 20 * 60 * 1000,
@@ -208,11 +309,21 @@ export function runContract(work, skip) {
  * @param {string} input.consumer - a checkout.
  * @param {string} input.standard - this standard's checkout.
  * @param {string[]} input.skip - the checks to leave out.
+ * @param {string[]} [input.only] - the checks to run instead of all but `skip`.
+ * @param {boolean} [input.compare] - compare every verdict (./compare.mjs) instead of looking for regressions.
  * @param {boolean} input.keep - leave the copies in place, to look at.
  * @param {{ out: (text: string) => void }} input.io
- * @returns {{ regressions: { id: string, from: string, to: string, rationale: string }[], problem?: string }}
+ * @returns {{ regressions: { id: string, from: string, to: string, rationale: string }[], rows?: import("./compare.mjs").ComparisonRow[], problem?: string }}
  */
-export function verifyConsumer({ consumer, standard, skip, keep, io }) {
+export function verifyConsumer({
+  consumer,
+  standard,
+  skip,
+  only,
+  compare: verdicts = false,
+  keep,
+  io,
+}) {
   if (!existsSync(path.join(consumer, "node_modules"))) {
     return { regressions: [], problem: "it has no node_modules; run `npm install` there first" }
   }
@@ -221,20 +332,34 @@ export function verifyConsumer({ consumer, standard, skip, keep, io }) {
       `  note: this standard wants ${name} ${wanted}; the checkout has ${installed ?? "no copy"}, so an install would add its own.\n`,
     )
   }
-  const copies = [
-    workspaceOf({ consumer, standard: undefined }),
-    workspaceOf({ consumer, standard }),
-  ]
+  /** @type {string[]} */
+  const copies = []
   try {
+    // Built inside the try, so a copy that throws partway still removes the one before it.
+    copies.push(workspaceOf({ consumer, standard: undefined }))
+    copies.push(workspaceOf({ consumer, standard, hoist: verdicts }))
     io.out(`  running its contract with the installed standard...\n`)
-    const before = runContract(copies[0], skip)
+    const before = runContract(copies[0], skip, only)
     io.out(`  running its contract with this one...\n`)
-    const after = runContract(copies[1], skip)
+    const after = runContract(copies[1], skip, only)
     if (before.report === undefined || after.report === undefined) {
       return {
         regressions: [],
         problem: `the contract did not write a report (${before.report === undefined ? "installed" : "this"} standard)`,
       }
+    }
+    if (verdicts) {
+      const rows = compareVerdicts(outcomesOf(before.report), outcomesOf(after.report))
+      const regressions = rows
+        .filter((row) => row.status === "changed")
+        // compareVerdicts gives every changed row the rationale of the side that has the check.
+        .map(({ id, before: from, after: to, rationale }) => ({
+          id,
+          from,
+          to,
+          rationale: /** @type {string} */ (rationale),
+        }))
+      return { regressions, rows }
     }
     return compare(outcomesOf(before.report), outcomesOf(after.report))
   } finally {
@@ -244,7 +369,7 @@ export function verifyConsumer({ consumer, standard, skip, keep, io }) {
 }
 
 const USAGE =
-  "Usage: internal-package-contract verify-consumers <checkout>... [--skip a,b] [--keep]\n"
+  "Usage: internal-package-contract verify-consumers <checkout>... [--compare] [--checks a,b] [--skip a,b] [--keep]\n"
 
 /**
  * @param {string[]} argv - the arguments after the command: checkouts of the packages that depend on this standard.
@@ -257,12 +382,24 @@ export function run(argv, cwd, io) {
   /** @type {string[]} */
   let extra = []
   let keep = false
+  let verdicts = false
+  /** @type {string[] | undefined} */
+  let only
   let skipping = false
   for (const [index, arg] of argv.entries()) {
     if (skipping) {
       skipping = false
     } else if (arg === "--keep") {
       keep = true
+    } else if (arg === "--compare") {
+      verdicts = true
+    } else if (arg === "--checks") {
+      only = (argv[index + 1] ?? "").split(",").filter(Boolean)
+      if (only.length === 0) {
+        io.err(`verify-consumers: --checks needs a list of check ids.\n${USAGE}`)
+        return 1
+      }
+      skipping = true
     } else if (arg === "--skip") {
       extra = (argv[index + 1] ?? "").split(",").filter(Boolean)
       skipping = true
@@ -278,15 +415,32 @@ export function run(argv, cwd, io) {
     return 1
   }
   const skip = [...new Set([...NOT_RUN, ...extra])]
+  const selected = only?.filter((id) => !extra.includes(id))
+  // An empty selection would compare nothing and report that nothing changed.
+  if (selected?.length === 0) {
+    io.err(
+      `verify-consumers: --skip leaves out every check --checks names, so nothing would be compared.\n${USAGE}`,
+    )
+    return 1
+  }
   let failed = false
   for (const consumer of consumers) {
     io.out(`${path.basename(consumer)}\n`)
-    const result = verifyConsumer({ consumer, standard: cwd, skip, keep, io })
+    const result = verifyConsumer({
+      consumer,
+      standard: cwd,
+      skip,
+      only: selected,
+      compare: verdicts,
+      keep,
+      io,
+    })
+    if (result.rows !== undefined) io.out(`\n${renderComparison(result.rows)}\n`)
     if (result.problem !== undefined) {
       io.err(`  could not be checked: ${result.problem}.\n`)
       failed = true
     } else if (result.regressions.length === 0) {
-      io.out(`  no check got worse.\n`)
+      io.out(verdicts ? `  no verdict changed.\n` : `  no check got worse.\n`)
     } else {
       failed = true
       for (const { id, from, to, rationale } of result.regressions) {
@@ -294,6 +448,14 @@ export function run(argv, cwd, io) {
       }
     }
   }
-  io.out(failed ? "A consumer got worse or could not be checked.\n" : "No consumer got worse.\n")
+  if (verdicts) {
+    io.out(
+      failed
+        ? "A verdict changed beyond the allowed differences, or a consumer could not be checked.\n"
+        : "No verdict changed beyond the allowed differences.\n",
+    )
+  } else {
+    io.out(failed ? "A consumer got worse or could not be checked.\n" : "No consumer got worse.\n")
+  }
   return failed ? 1 : 0
 }

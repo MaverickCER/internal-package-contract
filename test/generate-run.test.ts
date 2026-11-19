@@ -363,7 +363,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toBe(
-      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: action-inputs, dependencies, entry-points, standards, supported-versions.\n- AGENTS.md: region "other" has no generator. Available: action-inputs, dependencies, entry-points, standards, supported-versions.\n',
+      '[generate] nothing was written:\n- README.md: region "mystery" has no generator. Available: action-inputs, checks, dependencies, entry-points, standards, supported-versions, thresholds.\n- AGENTS.md: region "other" has no generator. Available: action-inputs, checks, dependencies, entry-points, standards, supported-versions, thresholds.\n',
     )
   })
   it("writes nothing, naming file and line, when a marker is malformed", async () => {
@@ -381,7 +381,7 @@ describe("generate", () => {
     const h = io()
     expect(await run([], dir, h.io)).toBe(1)
     expect(h.err.join("")).toContain(
-      '- AGENTS.md: region "mystery" has no generator. Available: action-inputs, dependencies, entry-points, standards, supported-versions.',
+      '- AGENTS.md: region "mystery" has no generator. Available: action-inputs, checks, dependencies, entry-points, standards, supported-versions, thresholds.',
     )
   })
   it("says what is missing or wrong with the sources", async () => {

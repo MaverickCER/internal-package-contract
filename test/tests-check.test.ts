@@ -11,7 +11,7 @@ import {
   tests,
   VITEST_RESULTS_PATH,
 } from "../checks/tests.js"
-import { validateExceptionRegistry } from "../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import { COMPLETE_V2, makeContext, makeResult } from "./support.js"
 
 let cwd: string
@@ -311,6 +311,13 @@ describe("tests -- a narrowed run", () => {
       ...narrowed(["t"]),
     } as never)
     expect(terminated.outcome).toBe("fail")
+  })
+
+  it("judges a run whose scope document says full as a full run, even with no test file named", async () => {
+    const full = { scope: { ...narrowed([]).scope, scope: "full" as const } }
+    const result = await tests().policy({ ...makeContext(makeResult()), ...full } as never)
+    expect(result.outcome).toBe("fail")
+    expect(result.rationale).toContain(`Vitest did not produce ${VITEST_RESULTS_PATH}`)
   })
 
   it("still wants results from a full run that has no test file at all named", async () => {

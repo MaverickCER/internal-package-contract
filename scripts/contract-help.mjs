@@ -120,12 +120,14 @@ export const COMMANDS = [
   {
     name: "verify-consumers",
     group: "Maintain",
-    usage: "verify-consumers <checkout>... [--skip a,b] [--keep]",
+    usage: "verify-consumers <checkout>... [--compare] [--checks a,b] [--skip a,b] [--keep]",
     summary:
       "check that this version of the standard does not make a package that depends on it worse",
     details:
-      "For each checkout, runs its contract's fast offline checks twice in throwaway copies, once with the standard it has\ninstalled and once with this one, and reports every check that got worse. A check that fails both ways was already failing\nand is not blamed on the change. The checkout itself is never touched.",
+      "For each checkout, runs its contract's fast offline checks twice in throwaway copies, once with the standard it has\ninstalled and once with this one, and reports every check that got worse. A check that fails both ways was already failing\nand is not blamed on the change. The checkout itself is never touched.\n--compare prints every check's verdict both ways and fails on any change, better or worse, that no recorded decision\nexplains. Its second copy also takes the standard's own copy of each package the checkout does not declare.",
     options: [
+      ["--compare", "compare every verdict, not only what got worse"],
+      ["--checks a,b", "run only these checks"],
       ["--skip a,b", "also leave these checks out"],
       ["--keep", "keep the throwaway copies, to look at what ran"],
     ],
@@ -150,9 +152,9 @@ export const COMMANDS = [
     group: "Daily",
     usage: "tool <name> [args]",
     summary:
-      "run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation, ambient",
+      "run a build or release helper: size, badges, api-report, cjs-interop, compiler-isolation, ambient, sbom",
     details:
-      "The helpers every package used to copy: `size` checks the gzip budgets in ci/size-budgets.mjs, `badges` writes the coverage and size badges,\n`api-report` fails when docs/api-report/ is out of date, `cjs-interop` makes require() of the ESLint plugin return the plugin,\n`compiler-isolation` fails when a client entry can reach the bundled compiler, and `ambient` gives the\nAmbientCapabilities answer without running the contract. Run one from the package's root.",
+      "The helpers every package used to copy: `size` checks the gzip budgets in ci/size-budgets.mjs, `badges` writes the coverage and size badges,\n`api-report` fails when docs/api-report/ is out of date, `cjs-interop` makes require() of the ESLint plugin return the plugin,\n`compiler-isolation` fails when a client entry can reach the bundled compiler, `ambient` gives the\nAmbientCapabilities answer without running the contract, and `sbom` writes the CycloneDX SBOMs the Sbom check reads.\nRun one from the package's root.",
     options: [["size --json <file>", "also write the measured sizes, which `badges` reads"]],
   },
   {
@@ -162,7 +164,7 @@ export const COMMANDS = [
     summary:
       "wire a new subpath export into every place that lists one, or turn on an optional check",
     details:
-      "`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check <Name>` turns on AgentSkill, AmbientCapabilities or QuickStart.\nIt names the check in package.json, with its settings written out to change.",
+      "`add export` edits package.json exports, the bundler entry, the declaration shim, the documentation entry points, the\ndead-code entry and docs/surface.json, and creates the module, its test and a draft changeset.\n`add check <Name>` turns on AgentSkill, AmbientCapabilities or Sbom. QuickStart is standard now.\nIt names the check in package.json, with its settings written out to change.",
     options: [["--dry-run", "print what would be written and change nothing"]],
   },
   {
@@ -192,14 +194,16 @@ export const COMMANDS = [
   {
     name: "sync",
     group: "Maintain",
-    usage: "sync [--apply [--update]] [--add <copy>]",
-    summary: "report the files the standard owns here that are missing or drifted",
+    usage: "sync [--apply [--update]] [--add <copy>] | sync --release",
+    summary:
+      "report the files the standard owns here that are missing or drifted; --release versions the package",
     details:
-      "Compares the files the standard owns here (workflows, the Changesets config, shared code and documents) with\nthe standard's, and shows what differs.",
+      "Compares the files the standard owns here (workflows, the Changesets config, shared code and documents) with\nthe standard's, and shows what differs.\n--release is the whole `version` script: changeset version, the lockfile, the build, the API and surface\nbaselines, then the example goldens, SBOMs, agent skill and landing page where the package has them. It refuses\nto start on uncommitted changes other than pending changesets, and stops at the first step that fails.",
     options: [
       ["--apply", "write the files that are missing"],
       ["--update", "with --apply, also replace the files that drifted"],
       ["--add <copy>", "start carrying a managed copy of shared code or a shared document"],
+      ["--release", "run the release steps instead; it takes no other option"],
     ],
   },
   {
@@ -209,13 +213,6 @@ export const COMMANDS = [
     summary: "generate the landing page and one-page brief from docs/site.json",
     details: "Writes index.html, brief.html, styles.css and script.js from docs/site.json.",
     options: [["--check", "write nothing; fail and name what is stale"]],
-  },
-  {
-    name: "exceptions",
-    group: "Maintain",
-    usage: "exceptions",
-    summary: "list every exception registry: counts by type, legacy, expired",
-    details: "Read-only inventory of the records in .repo-contract/exceptions.",
   },
   {
     name: "update-baseline",
@@ -240,6 +237,9 @@ export const COMMANDS = [
     details: "Sets core.hooksPath to the standard's hooks. Never run by an install script.",
   },
 ]
+
+/** Commands this CLI no longer has, and where each went, so a script that still calls one learns the new name. */
+const MOVED = { exceptions: "repo-contract exceptions" }
 
 /**
  * @param {readonly string[]} argv - the arguments after the script name.
@@ -343,6 +343,9 @@ export function nearest(word, names) {
 export function unknownCommand(argv) {
   const word = argv[0]
   if (word === undefined || word.startsWith("-")) return undefined
+  if (Object.hasOwn(MOVED, word)) {
+    return `internal-package-contract: \`${word}\` moved to repo-contract. Run \`npx ${MOVED[word]}\` instead.\n`
+  }
   const names = COMMANDS.map((item) => item.name).filter((name) => name !== "(none)")
   if (names.includes(word)) return undefined
   const closest = nearest(word, names)

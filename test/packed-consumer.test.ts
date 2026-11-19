@@ -227,129 +227,137 @@ describe("packedConsumerCheck (policy)", () => {
   })
 })
 
-describe("check-packed-consumer (script, against a real pack and install)", () => {
-  let dir: string
-  beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "ipc-packed-"))
-  })
-  afterEach(() => rmSync(dir, { recursive: true, force: true }))
-  const script = path.resolve(import.meta.dirname, "../scripts/check-packed-consumer.mjs")
-  const put = (file: string, text: string) => {
-    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
-    writeFileSync(path.join(dir, file), text)
-  }
-  const manifest = (value: Record<string, unknown>) =>
-    put("package.json", JSON.stringify({ name: "fixture-pkg", version: "1.0.0", ...value }))
-  const run = (...args: string[]) => {
-    const result = spawnSync(process.execPath, [script, ...args], {
-      cwd: dir,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        npm_config_fetch_retries: "0",
-        npm_config_fetch_retry_mintimeout: "100",
-        npm_config_fetch_retry_maxtimeout: "100",
-      },
+// Each test here packs and installs a real tarball. While the contract runs its other checks alongside, one can
+// take longer than the 20 s default, so these get their own budget.
+describe(
+  "check-packed-consumer (script, against a real pack and install)",
+  { timeout: 60_000 },
+  () => {
+    let dir: string
+    beforeEach(() => {
+      dir = mkdtempSync(path.join(tmpdir(), "ipc-packed-"))
     })
-    return { status: result.status, report: JSON.parse(result.stdout) as Record<string, unknown> }
-  }
-  const dual = () => {
-    manifest({
-      type: "module",
-      exports: {
-        ".": { import: "./index.js", require: "./index.cjs" },
-        "./data": "./data.json",
-      },
-      files: ["index.js", "index.cjs", "data.json"],
-    })
-    put("index.js", "export const x = 1\n")
-    put("index.cjs", "exports.x = 1\n")
-    put("data.json", '{"a":1}')
-  }
+    afterEach(() => rmSync(dir, { recursive: true, force: true }))
+    const script = path.resolve(import.meta.dirname, "../scripts/check-packed-consumer.mjs")
+    const put = (file: string, text: string) => {
+      mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
+      writeFileSync(path.join(dir, file), text)
+    }
+    const manifest = (value: Record<string, unknown>) =>
+      put("package.json", JSON.stringify({ name: "fixture-pkg", version: "1.0.0", ...value }))
+    const run = (...args: string[]) => {
+      const result = spawnSync(process.execPath, [script, ...args], {
+        cwd: dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          npm_config_fetch_retries: "0",
+          npm_config_fetch_retry_mintimeout: "100",
+          npm_config_fetch_retry_maxtimeout: "100",
+        },
+      })
+      return { status: result.status, report: JSON.parse(result.stdout) as Record<string, unknown> }
+    }
+    const dual = () => {
+      manifest({
+        type: "module",
+        exports: {
+          ".": { import: "./index.js", require: "./index.cjs" },
+          "./data": "./data.json",
+        },
+        files: ["index.js", "index.cjs", "data.json"],
+      })
+      put("index.js", "export const x = 1\n")
+      put("index.cjs", "exports.x = 1\n")
+      put("data.json", '{"a":1}')
+    }
 
-  it("exempts a private package and a package with no entry points", () => {
-    manifest({ private: true })
-    expect(run().report).toEqual({ ok: true, state: "exempt" })
-    manifest({})
-    expect(run().report).toEqual({ ok: true, state: "none" })
-  })
-  it("verifies a package whose entry points all import, including a JSON export", () => {
-    dual()
-    const { report, status } = run()
-    expect(report).toEqual({ ok: true, state: "verified", checked: 2, problems: [], skipped: [] })
-    expect(status).toBe(0)
-  })
-  it("fails an entry point that throws when imported, and exits non-zero only under --strict", () => {
-    dual()
-    put("index.js", 'throw new Error("boom at import")\n')
-    const loose = run()
-    expect(loose.report["state"]).toBe("problem")
-    expect(loose.report["problems"]).toEqual(["fixture-pkg (import) failed: Error: boom at import"])
-    expect(loose.status).toBe(0)
-    expect(run("--strict").status).toBe(1)
-  })
-  it("fails a CommonJS entry that cannot be required", () => {
-    dual()
-    put("index.cjs", 'throw new Error("cjs boom")\n')
-    expect(run().report["problems"]).toEqual(["fixture-pkg (require) failed: Error: cjs boom"])
-  })
-  it("reports a file the manifest promises that the tarball lacks", () => {
-    dual()
-    manifest({
-      type: "module",
-      exports: { ".": "./index.js", "./gone": "./gone.js" },
-      files: ["index.js"],
+    it("exempts a private package and a package with no entry points", () => {
+      manifest({ private: true })
+      expect(run().report).toEqual({ ok: true, state: "exempt" })
+      manifest({})
+      expect(run().report).toEqual({ ok: true, state: "none" })
     })
-    const problems = run().report["problems"] as string[]
-    expect(problems).toContain("gone.js is promised by package.json but is not in the tarball.")
-  })
-  it("skips an entry that needs a declared peer dependency", () => {
-    dual()
-    manifest({
-      type: "module",
-      exports: { ".": "./index.js", "./plugin": "./plugin.js" },
-      files: ["index.js", "plugin.js"],
-      peerDependencies: { "not-installed-peer": "^1" },
-      peerDependenciesMeta: { "not-installed-peer": { optional: true } },
+    it("verifies a package whose entry points all import, including a JSON export", () => {
+      dual()
+      const { report, status } = run()
+      expect(report).toEqual({ ok: true, state: "verified", checked: 2, problems: [], skipped: [] })
+      expect(status).toBe(0)
     })
-    put("plugin.js", 'import "not-installed-peer"\n')
-    const { report } = run()
-    expect(report["state"]).toBe("verified")
-    expect(report["skipped"]).toEqual([
-      "fixture-pkg/plugin (import) needs the peer dependency not-installed-peer.",
-    ])
-  })
-  it("checks the tarball it is given instead of packing one", () => {
-    dual()
-    const packed = spawnSync("npm", ["pack", "--ignore-scripts", "--pack-destination", dir], {
-      cwd: dir,
-      encoding: "utf8",
-      // Windows cannot start npm.cmd without a shell.
-      shell: process.platform === "win32",
+    it("fails an entry point that throws when imported, and exits non-zero only under --strict", () => {
+      dual()
+      put("index.js", 'throw new Error("boom at import")\n')
+      const loose = run()
+      expect(loose.report["state"]).toBe("problem")
+      expect(loose.report["problems"]).toEqual([
+        "fixture-pkg (import) failed: Error: boom at import",
+      ])
+      expect(loose.status).toBe(0)
+      expect(run("--strict").status).toBe(1)
     })
-    const tarball = packed.stdout.trim().split("\n").at(-1) ?? ""
-    put("index.js", 'throw new Error("changed after packing")\n')
-    expect(run("--tarball", path.join(dir, tarball)).report["state"]).toBe("verified")
-    expect(run("--tarball", path.join(dir, "absent.tgz")).report).toMatchObject({
-      state: "problem",
-      problems: [`no tarball to check at ${path.join(dir, "absent.tgz")}.`],
+    it("fails a CommonJS entry that cannot be required", () => {
+      dual()
+      put("index.cjs", 'throw new Error("cjs boom")\n')
+      expect(run().report["problems"]).toEqual(["fixture-pkg (require) failed: Error: cjs boom"])
     })
-  })
-  it("says the install failed when a dependency cannot be fetched", () => {
-    dual()
-    manifest({
-      type: "module",
-      exports: { ".": "./index.js" },
-      files: ["index.js"],
-      dependencies: { "ipc-test-package-that-does-not-exist-9f3a": "1.0.0" },
+    it("reports a file the manifest promises that the tarball lacks", () => {
+      dual()
+      manifest({
+        type: "module",
+        exports: { ".": "./index.js", "./gone": "./gone.js" },
+        files: ["index.js"],
+      })
+      const problems = run().report["problems"] as string[]
+      expect(problems).toContain("gone.js is promised by package.json but is not in the tarball.")
     })
-    const { report } = run()
-    expect(report["state"]).toBe("install-failed")
-    expect(typeof report["message"]).toBe("string")
-    // The release build job runs this with --strict: a tarball nobody can install must not be published.
-    expect(run("--strict").status).toBe(1)
-  })
-})
+    it("skips an entry that needs a declared peer dependency", () => {
+      dual()
+      manifest({
+        type: "module",
+        exports: { ".": "./index.js", "./plugin": "./plugin.js" },
+        files: ["index.js", "plugin.js"],
+        peerDependencies: { "not-installed-peer": "^1" },
+        peerDependenciesMeta: { "not-installed-peer": { optional: true } },
+      })
+      put("plugin.js", 'import "not-installed-peer"\n')
+      const { report } = run()
+      expect(report["state"]).toBe("verified")
+      expect(report["skipped"]).toEqual([
+        "fixture-pkg/plugin (import) needs the peer dependency not-installed-peer.",
+      ])
+    })
+    it("checks the tarball it is given instead of packing one", () => {
+      dual()
+      const packed = spawnSync("npm", ["pack", "--ignore-scripts", "--pack-destination", dir], {
+        cwd: dir,
+        encoding: "utf8",
+        // Windows cannot start npm.cmd without a shell.
+        shell: process.platform === "win32",
+      })
+      const tarball = packed.stdout.trim().split("\n").at(-1) ?? ""
+      put("index.js", 'throw new Error("changed after packing")\n')
+      expect(run("--tarball", path.join(dir, tarball)).report["state"]).toBe("verified")
+      expect(run("--tarball", path.join(dir, "absent.tgz")).report).toMatchObject({
+        state: "problem",
+        problems: [`no tarball to check at ${path.join(dir, "absent.tgz")}.`],
+      })
+    })
+    it("says the install failed when a dependency cannot be fetched", () => {
+      dual()
+      manifest({
+        type: "module",
+        exports: { ".": "./index.js" },
+        files: ["index.js"],
+        dependencies: { "ipc-test-package-that-does-not-exist-9f3a": "1.0.0" },
+      })
+      const { report } = run()
+      expect(report["state"]).toBe("install-failed")
+      expect(typeof report["message"]).toBe("string")
+      // The release build job runs this with --strict: a tarball nobody can install must not be published.
+      expect(run("--strict").status).toBe(1)
+    })
+  },
+)
 
 const reasonOf = (output: string) => {
   const verdict = classifyFailure(output, {})

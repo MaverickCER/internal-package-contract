@@ -5,8 +5,8 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 /**
- * The script behind the `BranchProtection` check, run for real against a fake `gh` on PATH, so the
- * JSON the policy reads is proven to carry what the policy judges: which rules a covering ruleset has,
+ * The script behind the `BranchProtection` check, run for real against a fake `gh` on PATH. This proves
+ * the JSON the policy reads carries what the policy judges. That is which rules a covering ruleset has,
  * which contexts it requires, and whether those checks are strict.
  */
 const script = path.resolve(__dirname, "../scripts/check-branch-protection.mjs")

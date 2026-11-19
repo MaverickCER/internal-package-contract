@@ -29,6 +29,7 @@
     "@danibram/crap4ts",
     "@secretlint/secretlint-rule-preset-recommend",
     "@socketsecurity/cli",
+    "@stryker-mutator/instrumenter",
     "github-actionlint",
     "jscpd",
     "licensee",

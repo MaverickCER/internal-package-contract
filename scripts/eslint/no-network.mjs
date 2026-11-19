@@ -3,10 +3,10 @@
 // environment, and the network is the capability a reviewer most wants to see absent. This rule is the
 // gate that promise stands on, next to the tarball scan. A hit fails the `Lint` check.
 //
-// A rule of its own rather than a `no-restricted-imports` entry, because flat config keeps one options
-// object per rule per file: a consumer's own `no-restricted-imports` block would replace the baseline's
-// entry, and the ban would be gone with no error anywhere. A rule under its own name cannot be displaced
-// that way; a consumer can only turn it off, which is visible.
+// A rule of its own rather than a `no-restricted-imports` entry. Flat config keeps one options object
+// per rule per file, so a consumer's own `no-restricted-imports` block would replace the baseline's
+// entry. The ban would then be gone with no error anywhere. A rule under its own name cannot be
+// displaced that way; a consumer can only turn it off, which is visible.
 //
 // What it reports, in a file it applies to:
 // - importing, re-exporting, `require()`-ing or `import()`-ing a module whose purpose is a connection:

@@ -61,36 +61,47 @@ import path from "node:path"
 import type { CheckDefinitionConfig, CheckEvidence, PolicyResult } from "repo-contract"
 import type {
   ExceptionClassification,
+  ExceptionMethod,
   ExceptionPolicy,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
+  ExceptionRegistrySchema,
+  ExceptionType,
+  ExceptionV2Fields,
+  PersistedExceptionRegistry,
 } from "repo-contract/helpers"
-import { validateExceptionPolicyConfig } from "repo-contract/helpers"
 import {
-  SOCKET_EXCEPTION_TYPES,
-  EXCEPTION_V2_FIELD_KEYS,
-  SECURITY_EXCEPTION_FIELD_KEYS,
   emptyV2Fields,
   evaluateFindingVerdict,
+  EXCEPTION_V2_FIELD_KEYS,
+  exceptionRegistryStandardSchema,
   isValidNonEmptyStringField,
   loadAndReconcileExceptionRegistry,
-  validateExceptionRegistry,
+  SECURITY_EXCEPTION_FIELD_KEYS,
+  validateExceptionPolicyConfig,
   validateSecurityExceptionFields,
-} from "./exception-record.js"
-import type {
-  ExceptionV2Fields,
-  ExceptionRegistrySchema,
-  ExceptionMethod,
-  ExceptionType,
-  PersistedExceptionRegistry,
-} from "./exception-record.js"
+} from "repo-contract/helpers"
 import { degraded } from "./environment-exceptions.js"
 import { abnormalTermination, packageRoot } from "./shared.js"
 import { socketGuidance } from "./socket-guidance.js"
 import type { SocketProblem } from "./socket-guidance.js"
 
 const SCRIPT_PATH = path.join(packageRoot, "scripts", "socket-package-score.mjs")
+
+/**
+ * The exception types `SecuritySocket` accepts. Critical and high alerts are never waivable at
+ * all (policy, not type). For everything else the type must say what is true. The four choices:
+ * - `validated-false-positive`: a heuristic that does not apply, re-verified mechanically.
+ * - `tooling-limitation`: an artifact of the scanner.
+ * - `accepted-risk`: a real but tolerated property.
+ * - `required-for-package-to-exist`: the dependency is why the package exists.
+ */
+export const SOCKET_EXCEPTION_TYPES: readonly ExceptionType[] = [
+  "validated-false-positive",
+  "tooling-limitation",
+  "accepted-risk",
+  "required-for-package-to-exist",
+]
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/socket.json"
 
 /** Socket's own recognized severity tiers: what a *raw alert* may report. Anything else normalizes to `"unknown"` (never a value Socket itself sends). */
@@ -109,7 +120,7 @@ interface NormalizedSocketAlert {
   readonly category: string
 }
 
-/** One `.repo-contract/exceptions/socket.json` record: the shared security-family fields (`./exception-record.js`) plus this registry's own identity fields. */
+/** One `.repo-contract/exceptions/socket.json` record: the shared security-family fields (`repo-contract/helpers`) plus this registry's own identity fields. */
 interface SocketExceptionRecord extends Partial<ExceptionV2Fields> {
   readonly id: string
   readonly version: 1 | 2
@@ -382,18 +393,7 @@ export function evaluateAlert(
   )
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly SocketExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SOCKET_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(SOCKET_EXCEPTION_SCHEMA)
 
 /** The outcome of running and interpreting the score script itself, before any registry work. */
 type SocketRunOutcome =

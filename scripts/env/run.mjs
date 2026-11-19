@@ -90,8 +90,8 @@ function shared(cwd, envCap) {
 const STAMP = /^_Generated .*_$/m
 /**
  * The section env-cap fills by comparing the contract with the document already on disk. It says what changed since
- * that document was written, so right after writing it reads "No changes." and before that it lists what was added:
- * it differs between two runs over the same contract, and says nothing the rest of the document does not.
+ * that document was written. Right after writing it reads "No changes."; before that it lists what was added. So it
+ * differs between two runs over the same contract, and says nothing the rest of the document does not.
  */
 const CHANGES = /^## Changes since last report\n[\s\S]*?(?=^## )/m
 
@@ -100,9 +100,9 @@ const CHANGES = /^## Changes since last report\n[\s\S]*?(?=^## )/m
 const settled = (text) => text.replace(STAMP, "").replace(CHANGES, "")
 
 /**
- * env-cap's document as it is breaks two of the rules the standard's own Markdown check applies (a blank line between
- * two quoted paragraphs, and a URL that is not a link), so the same text is rewritten to say the same thing without
- * them. Text inside a code span is left exactly as it is.
+ * env-cap's document breaks two rules of the standard's own Markdown check: a blank line between two quoted
+ * paragraphs, and a URL that is not a link. So the text is rewritten to say the same thing without them. Text inside
+ * a code span is left exactly as it is.
  * @param {string} text - the document env-cap rendered.
  * @returns {string} the document, as it should be written.
  */

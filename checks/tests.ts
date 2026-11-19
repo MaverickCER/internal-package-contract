@@ -45,12 +45,18 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import type { ExceptionRecordCore, StandardSchemaV1 } from "repo-contract/helpers"
-import { loadExceptionRegistry } from "repo-contract/helpers"
+import type {
+  ExceptionRecordCore,
+  ExceptionRegistrySchema,
+  ExceptionV2Fields,
+} from "repo-contract/helpers"
+import {
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadExceptionRegistry,
+} from "repo-contract/helpers"
 import { test as testPreset } from "repo-contract/presets"
 import { incompleteFields } from "./environment-exceptions.js"
-import { isValidNonEmptyStringField, validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
 import { narrowedScope } from "./scope.js"
 import { abnormalTermination, combinedOutput } from "./shared.js"
 
@@ -95,18 +101,7 @@ export const SKIPPED_TESTS_SCHEMA: ExceptionRegistrySchema<SkippedTestsRecord> =
   },
 }
 
-const skippedRegistrySchema: StandardSchemaV1<unknown, readonly SkippedTestsRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SKIPPED_TESTS_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const skippedRegistrySchema = exceptionRegistryStandardSchema(SKIPPED_TESTS_SCHEMA)
 
 interface VitestReport {
   readonly numTotalTests?: number

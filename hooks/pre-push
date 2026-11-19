@@ -1,53 +1,25 @@
 #!/bin/sh
-# internal-package-contract managed hook. Medium gate before publishing history --
-# every check except the slow analyses (Coverage, Crap, Mutation), which CI runs. The skip list is
-# the only thing named here: a check added to the contract later is in the pre-push set by default.
-# This hook is a convenience; CI runs the same contract and is the gate.
+# internal-package-contract managed hook. A push runs every check except the slow analyses (Coverage,
+# Crap, Mutation), which CI runs. Only the skip list is named, so a check added to the contract later runs
+# here by default. The hook is a convenience; CI runs the same contract and is the gate. With
+# IPC_HOOK_FULL=1, which pre-commit sets, it runs `--scope affected` instead, slow analyses included.
 #
-# This same hooks/ directory does double duty: `internal-package-contract init`
-# installs it verbatim into a CONSUMER's repo (env-cap, data-cap, ...) via
-# node_modules/internal-package-contract/hooks, *and* this repository's own
-# self-hosting setup points core.hooksPath at this exact copy of itself. The two
-# contexts need different commands: a consumer is validated through
-# bin/contract.mjs, the published CLI, against contract.ts's consumer-facing
-# checks (Build/Packaging/TypeResolution and friends assume a consumer's own
-# `src/` layout and build step). This repository has neither -- flat
-# `checks/`/`bin/`/`scripts/`/`template/`, no build step -- and validates itself
-# instead through scripts/run-contract.mjs against repo-contract.config.ts, this
-# repo's own self-hosting entrypoint (see that file's own doc comment).
+# The same hooks/ directory serves two repositories. `init` installs it in a consumer, which runs
+# bin/contract.mjs against contract.ts. This repository has no build and no src/, so it runs its own
+# self-contract: scripts/run-contract.mjs against repo-contract.config.ts.
 #
-# Detected by whether repo-contract.config.ts sits next to this hooks/ directory
-# AND that directory is physically inside the repo being pushed (not merely
-# reachable through a symlink into it). repo-contract.config.ts is part of this
-# repository's own git history but deliberately excluded from package.json's
-# `files` allowlist, so plan A ("never inside a consumer's installed
-# node_modules copy") holds for any consumer that gets a real, packed copy
-# (a git-range dependency, e.g. env-cap/data-cap's own
-# `internal-package-contract: "github:MaverickCER/internal-package-contract#v<version>"`).
-# It does NOT hold for the README's own documented local-dev alternative,
-# `file:../internal-package-contract` (or any other absolute-path `file:`
-# dependency): npm installs those as a live symlink straight into that
-# checkout, so a consumer's node_modules/internal-package-contract/hooks is
-# reachable through a symlink to this exact hooks/ directory, and
-# repo-contract.config.ts leaks through with it -- confirmed by hand: a fresh
-# scratch consumer installed via `file:` with an absolute path had its `git
-# push` run this repository's own 472 self-tests instead of the consumer's,
-# purely because the file existed at the far end of the symlink. Resolving
-# `$DIR` with `cd -P` (physical, symlinks followed) and requiring it to sit
-# inside `git rev-parse --show-toplevel`'s own physical toplevel rules that
-# out: a symlinked-in copy resolves to wherever the real checkout lives, which
-# is never inside the *pushing* repo's own working tree.
-# A push skips the slow analyses (CI runs them); the pre-commit hook sets IPC_HOOK_FULL=1 and instead
-# narrows to the checks the change can reach (`--scope affected`), slow analyses included.
+# This repository is recognized by repo-contract.config.ts next to hooks/, with hooks/ physically inside the
+# repository being pushed. The file is not in package.json `files`, so a packed install lacks it. A `file:`
+# dependency is a symlink to this checkout, though, and the file is reachable through it. Resolving $DIR
+# with `cd -P` and requiring it under the physical toplevel rules that case out.
 #
-# Git exports the repository's own location (GIT_INDEX_FILE, GIT_DIR, ...) to a hook. The contract's tests build
-# throwaway repositories with `git`, and those commands would act on THIS repository's index instead of their own
-# (staging deletions of its files). Nothing the contract does wants them, so they are dropped before it runs.
+# Git exports the repository's own location (GIT_INDEX_FILE, GIT_DIR, ...) to a hook. The contract's tests
+# build throwaway repositories with `git`, and those commands would act on this repository's index instead
+# of their own. Nothing the contract does wants them, so they are dropped before it runs.
 unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR
 SKIP="--skip Coverage,Crap,Mutation"
 if [ "${IPC_HOOK_FULL:-}" = "1" ]; then
-  # A commit runs everything the change can affect (see `--scope` in the README); where the analysis cannot be sure,
-  # it says so and everything runs. CI and a release still run all of it.
+  # Where the analysis cannot be sure what a change affects, it says so and everything runs.
   SKIP="--scope affected"
 fi
 DIR=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd)
@@ -60,14 +32,10 @@ case "$DIR" in
   *) inside_toplevel=0 ;;
 esac
 if [ "$inside_toplevel" = "1" ] && [ -f "$DIR/../repo-contract.config.ts" ]; then
-  # `npm run`, not a bare `node scripts/run-contract.mjs`: repo-contract.config.ts's
-  # own checks (unlike bin/contract.mjs's, which resolve each binary explicitly)
-  # spawn plain command names (`eslint`, `vitest`, ...) that only resolve via PATH,
-  # and only `npm run` -- not a bare `node` invocation, and not a git hook's own
-  # inherited shell PATH -- prepends node_modules/.bin to PATH. Confirmed: a bare
-  # `node scripts/run-contract.mjs` fails every spawned check with ENOENT even
-  # though `npm run contract` (this same command) passes clean.
-  # shellcheck disable=SC2086 -- $SKIP is deliberately word-split into the flag and its value (or nothing)
+  # Through `npm run`, because the self-contract spawns plain command names (`eslint`, `vitest`, ...) that
+  # resolve only on the PATH npm builds. A bare `node scripts/run-contract.mjs` fails every check with ENOENT.
+  # $SKIP is split on purpose into the flag and its value.
+  # shellcheck disable=SC2086
   exec npm --prefix "$DIR/.." run contract -- $SKIP
 else
   # shellcheck disable=SC2086

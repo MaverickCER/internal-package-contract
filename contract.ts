@@ -6,9 +6,9 @@
  * consuming package. Where repo-contract wires a check to one of its own private
  * `scripts/*`, a generic equivalent lives in `./checks/`; every other check is a
  * `repo-contract/presets` preset. Every tool that needs a config file gets one
- * from `./config/` when the consumer has not written its own, so the contract
- * enforces real rules out of the box; a consumer only writes a config to add
- * package-specific rules, and can `init` to scaffold the repo files + git hooks.
+ * from `./config/` when the consumer has not written its own. So the contract
+ * enforces real rules from the first run. A consumer writes a config only to add
+ * package-specific rules, and can `init` to scaffold the repo files and git hooks.
  *
  * Read-only against the consumer's source tree. `Build`/`Coverage`/`Mutation`
  * write only build/coverage/report artifacts, which `bin/contract.mjs` cleans up.
@@ -40,14 +40,14 @@ import crossSpawn, { sync as crossSpawnSync } from "cross-spawn"
 import { defineRepoContract } from "repo-contract"
 import { optionalChecks, withOptionalChecks } from "./checks/optional.js"
 import { standardChecks } from "./checks/standard.js"
+import { standardTier } from "./checks/strict.js"
 
 export default defineRepoContract({
   // repo-contract never spawns a process or reads process.env itself (v0.2.0+,
-  // ADR 0011 upstream): cross-spawn (already a dependency, used by
-  // bin/scaffold.mjs too) resolves Windows .cmd/.bat shims the same way every
-  // check here already relies on; killProcessTree lets a timed-out/aborted
-  // check's full process tree get cleaned up there too. See repo-contract's
-  // README "Supplying spawn/env" section.
+  // ADR 0011 upstream). cross-spawn, already a dependency of bin/scaffold.mjs,
+  // resolves Windows .cmd/.bat shims the way every check here relies on.
+  // killProcessTree cleans up a timed-out or aborted check's whole process tree.
+  // See repo-contract's README "Supplying spawn/env" section.
   spawn: crossSpawn,
   env: process.env,
   killProcessTree: crossSpawnSync,
@@ -55,4 +55,7 @@ export default defineRepoContract({
   checks: withOptionalChecks(standardChecks(), optionalChecks(process.cwd())) as ReturnType<
     typeof standardChecks
   >,
+  // The tier metadata that `explain` and the report's "Compared with the standard" section read back.
+  // Spread, as `...strict()` spreads it: the config type names only the keys the engine reads.
+  ...{ tier: standardTier().tier },
 })

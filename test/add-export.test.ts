@@ -9,7 +9,7 @@ import {
   validateExportName,
 } from "../scripts/recipes/add-export.mjs"
 import { planAddCheck } from "../scripts/recipes/add-check.mjs"
-import { OPTIONAL_SETTINGS } from "../scripts/recipes/optional-settings.mjs"
+import { OPTIONAL_SETTINGS, RETIRED_CHECKS } from "../scripts/recipes/optional-settings.mjs"
 import { run } from "../scripts/recipes/apply.mjs"
 
 const template = path.resolve(import.meta.dirname, "../template/package")
@@ -700,7 +700,7 @@ describe("planAddCheck", () => {
     table["Other"] = {}
     try {
       expect(planAddCheck({ name: "Nope", packageJson: "{}" }).problems).toEqual([
-        "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart, Other.",
+        "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, Sbom, Other.",
       ])
     } finally {
       delete table["Other"]
@@ -739,7 +739,7 @@ describe("planAddCheck", () => {
     const plan = (name: string, packageJson: string | undefined) =>
       planAddCheck({ name, packageJson }).problems
     expect(plan("Nope", manifest())).toEqual([
-      "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart.",
+      "unknown check: Nope. Available: AgentSkill, AmbientCapabilities, Sbom.",
     ])
     expect(plan("toString", manifest())).toHaveLength(1)
     expect(plan("AmbientCapabilities", undefined)).toEqual(["package.json does not exist here."])
@@ -753,11 +753,20 @@ describe("planAddCheck", () => {
       plan("AmbientCapabilities", manifest({ "internal-package-contract": { checks: "x" } })),
     ).toEqual(['"internal-package-contract"."checks" must be a list of check names.'])
   })
-  it("turns on QuickStart with its name alone, since it reads no settings", () => {
-    const result = planAddCheck({ name: "QuickStart", packageJson: manifest({}) })
+  it("writes nothing for QuickStart, which the standard runs, and says why", () => {
+    const text = manifest({ "internal-package-contract": { checks: ["QuickStart"] } })
+    expect(planAddCheck({ name: "QuickStart", packageJson: text })).toEqual({
+      problems: [],
+      text,
+      retired: RETIRED_CHECKS["QuickStart"],
+    })
+    expect(RETIRED_CHECKS["QuickStart"]).toContain("standard")
+  })
+  it("turns on Sbom with its name alone, since it reads no settings", () => {
+    const result = planAddCheck({ name: "Sbom", packageJson: manifest({}) })
     expect(result.problems).toEqual([])
     expect(JSON.parse(result.text ?? "")["internal-package-contract"]).toEqual({
-      checks: ["QuickStart"],
+      checks: ["Sbom"],
     })
   })
 })
@@ -807,7 +816,7 @@ describe("add check (run)", () => {
     })
     put("{}")
     expect(add(["check", "Nope"]).err).toBe(
-      "[add] nothing was written:\n- unknown check: Nope. Available: AgentSkill, AmbientCapabilities, QuickStart.\n",
+      "[add] nothing was written:\n- unknown check: Nope. Available: AgentSkill, AmbientCapabilities, Sbom.\n",
     )
     expect(read()).toBe("{}")
   })
@@ -830,6 +839,18 @@ describe("add check (run)", () => {
     )
     expect(JSON.parse(read())["internal-package-contract"].checks).toEqual(["AmbientCapabilities"])
     expect(formatted).toEqual([["package.json"]])
+  })
+  it("turns on nothing for QuickStart, which the standard already runs, and leaves package.json alone", () => {
+    put(JSON.stringify({ "internal-package-contract": { checks: ["QuickStart"] } }))
+    const before = read()
+    const formatted: string[][] = []
+    expect(add(["check", "QuickStart"], formatted)).toEqual({
+      code: 0,
+      out: `${RETIRED_CHECKS["QuickStart"] ?? ""}\n`,
+      err: "",
+    })
+    expect(read()).toBe(before)
+    expect(formatted).toEqual([])
   })
   it("says so when the check is already on, without formatting anything", () => {
     put(JSON.stringify({ "internal-package-contract": { checks: ["AmbientCapabilities"] } }))

@@ -37,7 +37,6 @@ describe("helpText", () => {
     for (const word of [
       "init",
       "doctor",
-      "exceptions",
       "sync-benchmark-guides",
       "update-baseline",
       "install-hooks",
@@ -158,6 +157,27 @@ describe("unknownCommand", () => {
     expect(message).toContain('"(none)" is not a command.')
     expect(message).not.toContain("`(none)`")
     expect(unknownCommand(["(non"]) ?? "").not.toContain("`(none)`")
+  })
+})
+
+describe("sync's page", () => {
+  it("offers --release, the whole version script, on its own", () => {
+    const page = commandHelp("sync") ?? ""
+    expect(page).toContain(
+      "Usage: internal-package-contract sync [--apply [--update]] [--add <copy>] | sync --release\n",
+    )
+    expect(page).toContain("--release")
+    expect(page).toContain("changeset version")
+  })
+})
+
+describe("a removed command", () => {
+  it("names the repo-contract command that replaced `exceptions`, and is no command here", () => {
+    expect(COMMANDS.some((command) => command.name === "exceptions")).toBe(false)
+    expect(helpText()).not.toMatch(/^ {2}exceptions /m)
+    expect(unknownCommand(["exceptions", "--json"])).toBe(
+      "internal-package-contract: `exceptions` moved to repo-contract. Run `npx repo-contract exceptions` instead.\n",
+    )
   })
 })
 

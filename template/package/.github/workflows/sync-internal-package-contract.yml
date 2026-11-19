@@ -2,8 +2,8 @@
 # re-resolves the pin from this repository. Reading the newest internal-package-contract release needs
 # no token. The pull request it opens re-pins the workflow SHAs too. GitHub does not let GITHUB_TOKEN
 # push a change to .github/workflows/*, so that push needs the optional PIN_SYNC_TOKEN secret below.
-# It is this repository's own fine-grained token, with Contents, Pull requests, Workflows and Actions
-# write. It expires like any token.
+# It is this repository's own fine-grained token, with Contents, Pull requests and Workflows write.
+# CI on the pull request starts with GITHUB_TOKEN. The token expires like any token.
 name: Sync internal-package-contract version
 
 on:

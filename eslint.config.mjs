@@ -31,7 +31,9 @@ import tseslint from "typescript-eslint"
 import { noNetwork } from "./scripts/eslint/no-network.mjs"
 
 export default tseslint.config(
-  { ignores: ["dist/", "coverage/", "node_modules/", "template/package/"] },
+  // `.stryker-tmp/` is Stryker's sandbox, a full copy of the package that exists while Mutation runs. Lint runs
+  // at the same time and would otherwise lint that copy.
+  { ignores: ["dist/", "coverage/", "node_modules/", ".stryker-tmp/", "template/package/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -46,10 +48,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
     rules: { "@typescript-eslint/no-unused-vars": ["error", { caughtErrors: "none" }] },
   },
-  // Suppression hygiene. An `eslint-disable` is an exception to a rule, so it has to say why, name
-  // exactly what it disables, close itself, and still be needed: a blanket or undocumented one, or one
-  // left behind after the code it excused changed, is how a standard erodes without a record. (The
-  // contract's `Suppressions` check then makes every surviving suppression visible evidence.)
+  // Suppression hygiene. An `eslint-disable` is an exception to a rule. So it says why, names exactly
+  // what it disables, closes itself, and is still needed. A blanket, undocumented or leftover one is
+  // how a standard erodes without a record. The contract's `Suppressions` check then makes every
+  // surviving suppression visible evidence.
   {
     plugins: { "eslint-comments": eslintComments },
     linterOptions: { reportUnusedDisableDirectives: "error" },

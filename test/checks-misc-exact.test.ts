@@ -7,7 +7,7 @@ import { codeScanning } from "../checks/code-scanning.js"
 import { commits } from "../checks/commits.js"
 import { docsLinks } from "../checks/docs-links.js"
 import { ENVIRONMENT_EXCEPTION_SCHEMA } from "../checks/environment-exceptions.js"
-import { isExpired, validateExceptionRegistry } from "../checks/exception-record.js"
+import { isExpired, validateExceptionRegistry } from "repo-contract/helpers"
 import { packageRoot } from "../checks/shared.js"
 import { COMPLETE_V2, makeContext, makeJsonResult, makeResult } from "./support.js"
 
@@ -171,12 +171,14 @@ describe("version 2 record validation", () => {
     ])
   })
 
-  it("does not go on to judge the registry's own fields while a structured one is wrong", () => {
+  // repo-contract's validator names every problem of a record in one pass.
+  it("names a wrong structured field and the registry's own field together", () => {
     const result = validate(record({ constraint: undefined, check: "" }))
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error("valid")
     expect(result.errors).toEqual([
       "exceptions[0].constraint must be a string (a version 2 record carries it).",
+      "exceptions[0].check must be a non-empty string.",
     ])
   })
 
@@ -201,7 +203,10 @@ describe("version 2 record validation", () => {
     if (withBadField.ok) throw new Error("valid")
     expect(withBadField.errors).toEqual([
       'exceptions[0].expires must be "" or a YYYY-MM-DD date (got "soon").',
+      "exceptions[0].check must be a non-empty string.",
     ])
+    // A date that does not exist on the calendar is refused too.
+    expect(validate(record({ expires: "2027-02-30" })).ok).toBe(false)
     expect(validate(record({ expires: "" })).ok).toBe(true)
     expect(validate(record({ expires: "2030-01-01" })).ok).toBe(true)
   })

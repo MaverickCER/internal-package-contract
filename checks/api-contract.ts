@@ -238,10 +238,10 @@ export function evaluateApiContractPolicy({
 // API Extractor stays inside scripts/api-contract/. check.ts extracts, diffs and classifies the
 // contract, then compares the required level with the branch's changesets. The policy above only
 // interprets that evidence; it never reads TypeScript, source or Git itself.
-// A consumer with no typedoc.json documents no public entry points this way, so targets.ts has no
-// targets and this check has nothing to compare. contract.ts is evaluated with the consumer repo as
-// cwd, so this is decided once at assembly, as `resolveConfig` does. Otherwise check.ts would throw
-// at run time and surface as an opaque JSON-parse failure.
+// A consumer with no typedoc.json documents no public entry points this way. Then targets.ts has
+// no targets, and this check has nothing to compare. contract.ts is evaluated with the consumer
+// repo as cwd, so this is decided once at assembly, as `resolveConfig` does. Otherwise check.ts
+// would throw at run time and surface as an opaque JSON-parse failure.
 const hasTypedocConfig = existsSync(path.join(process.cwd(), "typedoc.json"))
 
 export const apiContract: CheckDefinitionConfig = hasTypedocConfig

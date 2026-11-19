@@ -8,14 +8,14 @@
  * be any shared type except `validated-false-positive`, for the same reason.
  */
 import { createHash } from "node:crypto"
+import type { ExceptionRegistrySchema, ExceptionType } from "repo-contract/helpers"
 import {
-  EXCEPTION_TYPES,
-  SECURITY_EXCEPTION_FIELD_KEYS,
   emptyV2Fields,
+  EXCEPTION_TYPES,
   isValidNonEmptyStringField,
+  SECURITY_EXCEPTION_FIELD_KEYS,
   validateSecurityExceptionFields,
-} from "../../checks/exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionType } from "../../checks/exception-record.js"
+} from "repo-contract/helpers"
 import type { CoderabbitExceptionRecord, NormalizedFinding } from "./evidence-types.js"
 
 /** Every value a stored record's `severity` may hold: `"unknown"` included, since a record mirrors whatever `normalizeFinding` assigned. */

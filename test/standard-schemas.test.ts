@@ -7,7 +7,7 @@ import { COPIES, withRequired } from "../scripts/managed-files/inspect.mjs"
 /**
  * The official schemas a package's tests validate its standard-format output against (SARIF, OSCAL, CycloneDX)
  * are kept once, here, and carried into each package that enrols them. They are only worth anything byte for
- * byte as published, so each file's SHA-256 is pinned in the README next to the release URL it came from: an
+ * byte as published. So each file's SHA-256 is pinned in the README next to the release URL it came from. An
  * edit, a reformat, or a silent swap to a different version fails this test.
  */
 const root = path.resolve(import.meta.dirname, "..")

@@ -7,5 +7,14 @@ import { DEFAULT_CONFIG } from "../ambient/scan.mjs"
 export const OPTIONAL_SETTINGS = {
   AgentSkill: {},
   AmbientCapabilities: { ambientCapabilities: DEFAULT_CONFIG },
-  QuickStart: {},
+  Sbom: {},
+}
+
+/**
+ * Checks that were optional and are now in the standard set, each with what `add check` says about it.
+ * A package that still lists one under "checks" loses nothing: the listing is ignored.
+ */
+export const RETIRED_CHECKS = {
+  QuickStart:
+    'QuickStart is in the standard set now, so there is nothing to turn on. A "checks" entry naming it is ignored; delete it when convenient.',
 }

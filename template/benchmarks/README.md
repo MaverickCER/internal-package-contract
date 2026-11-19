@@ -9,13 +9,13 @@ default), measures it, checks the big-O and prices it**. It then writes a **repo
 
 ## Read first
 
-| File                                           | For whom     | What it is                                                                               |
-| ---------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
-| [BENCHMARKS.md](BENCHMARKS.md)                 | Everyone     | The generated report: cost at a glance, end-to-end, per function, attribution.           |
-| [READING-BENCHMARKS.md](READING-BENCHMARKS.md) | Readers      | Why we benchmark, how to read the numbers, and why they are not comparable between runs. |
-| [WRITING-BENCHMARKS.md](WRITING-BENCHMARKS.md) | Contributors | What to test, how, why, and how to document it.                                          |
-| [suite.mjs](suite.mjs)                         | Contributors | The input: what this package runs.                                                       |
-| `results.json`                                 | Tools        | The output: every measurement and analysis, in a documented shape.                       |
+| File                                               | For whom     | What it is                                                                               |
+| -------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
+| [BENCHMARKS.md](performance-runtime/BENCHMARKS.md) | Everyone     | The generated report: cost at a glance, end-to-end, per function, attribution.           |
+| [READING-BENCHMARKS.md](READING-BENCHMARKS.md)     | Readers      | Why we benchmark, how to read the numbers, and why they are not comparable between runs. |
+| [WRITING-BENCHMARKS.md](WRITING-BENCHMARKS.md)     | Contributors | What to test, how, why, and how to document it.                                          |
+| [suite.mjs](performance-runtime/suite.mjs)         | Contributors | The input: what this package runs.                                                       |
+| `performance-runtime/results.json`                 | Tools        | The output: every measurement and analysis, in a documented shape.                       |
 
 The history page on the project website and the pull-request summaries link back here.
 
@@ -38,9 +38,13 @@ npm run benchmark:check             # validate the suite's documentation; measur
 A suite is plain data plus the functions to run. Import the package's real functions and describe
 the arguments to give them at size `n`; the contract does the rest.
 
+Each suite has its own folder here, such as `performance-runtime/`, with its `benchmark.config.json` beside it.
+The checks find a suite's results by that folder's name, so `run-suite` refuses a `suite.mjs` placed directly
+in `benchmarks/`.
+
 ```js
 import { defineSuite } from "internal-package-contract/benchmark"
-import { parse, validate } from "../dist/index.js"
+import { parse, validate } from "../../dist/index.js"
 
 export default defineSuite({
   package: { name: "my-package", bundleFiles: ["dist/index.js"] },

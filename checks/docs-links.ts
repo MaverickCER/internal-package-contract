@@ -77,11 +77,11 @@ export const docsLinks: CheckDefinitionConfig = {
     // even though every git host renders it. Treat any local link that exists
     // on disk (file or dir), after stripping a `#anchor`/`?query`, as fine.
     const existsLocally = (url: string): boolean => {
-      // Stryker disable Regex: two of this line's mutants are equivalent, hand-verified (one at a
-      // time, every test in docs-links.test.ts still passes unchanged): Stryker's per-line
-      // disable can't separate them from a third, genuinely-killable mutant on this same regex
-      // literal (dropping the leading `^` anchor from `/^\.?\//`, covered by the "strips only a
-      // LEADING './' or '/'" test above), so that one loses its mutation-score credit too:
+      // Stryker disable Regex: two of this line's mutants are equivalent. Each was hand-verified:
+      // applied alone, every test in docs-links.test.ts still passes. A per-line disable cannot
+      // separate them from a third, killable mutant on the same literal. That one drops the `^`
+      // from `/^\.?\//`, which the "strips only a LEADING './' or '/'" test above covers. It
+      // loses its mutation-score credit too. The two equivalent mutants:
       //  - dropping the `$` anchor from `/[#?].*$/` is unobservable for any url this check will
       //    ever see. Every realistic and every tested url has no embedded newline. There `.*`
       //    already consumes to the end of the string, so `$` adds no constraint. An embedded
@@ -96,13 +96,11 @@ export const docsLinks: CheckDefinitionConfig = {
     }
     const broken = links.filter((l) => l.state === "BROKEN" && !existsLocally(l.url))
     const brokenLocal = broken.filter((l) => !isExternal(l.url))
-    // Stryker disable next-line MethodExpression: an equivalent mutant -- this line only ever
-    // executes inside the `brokenLocal.length === 0` branch below, at which point `broken` is
-    // ALREADY entirely external links by construction (`brokenLocal`/`brokenExternal` partition
-    // `broken` by `isExternal`, and the local partition being empty means nothing was excluded
-    // from the external one), so `broken.filter(isExternal)` and `broken` are content-identical
-    // whenever this value is actually read. Hand-verified: forcing this to `broken` (dropping the
-    // filter) leaves every test in docs-links.test.ts passing unchanged.
+    // Stryker disable next-line MethodExpression: an equivalent mutant. This value is only read
+    // inside the `brokenLocal.length === 0` branch below. `brokenLocal` and `brokenExternal`
+    // partition `broken` by `isExternal`. With the local part empty, `broken` is all external,
+    // so `broken.filter(isExternal)` equals `broken`. Hand-verified: dropping the filter leaves
+    // every test in docs-links.test.ts passing.
     const brokenExternal = broken.filter((l) => isExternal(l.url))
 
     if (brokenLocal.length === 0) {

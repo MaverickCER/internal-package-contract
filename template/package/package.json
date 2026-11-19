@@ -53,10 +53,10 @@
     "docs:api:report": "typedoc --options typedoc.markdown.json",
     "docs:env": "internal-package-contract env",
     "contract": "internal-package-contract",
-    "version": "changeset version && npm install --package-lock-only --ignore-scripts && npm run build && internal-package-contract update-baseline",
+    "version": "internal-package-contract sync --release",
     "release": "changeset publish",
-    "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
-    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check",
+    "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/performance-runtime/suite.mjs",
+    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/performance-runtime/suite.mjs --check",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run build && npm run test:coverage",
     "prepublishOnly": "npm run verify"
   },

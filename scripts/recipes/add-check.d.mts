@@ -2,4 +2,5 @@ export function planAddCheck(input: { name: string; packageJson: string | undefi
   problems: string[]
   text?: string
   already?: boolean
+  retired?: string
 }

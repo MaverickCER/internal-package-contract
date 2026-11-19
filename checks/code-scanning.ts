@@ -61,29 +61,28 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import type {
+  ExceptionMethod,
   ExceptionPolicyConfig,
   ExceptionRecordCore,
-  StandardSchemaV1,
-} from "repo-contract/helpers"
-import {
-  CODE_SCANNING_EXCEPTION_TYPES,
-  EXCEPTION_V2_FIELD_KEYS,
-  SECURITY_EXCEPTION_FIELD_KEYS,
-  emptyV2Fields,
-  evaluateFindingVerdict,
-  isValidNonEmptyStringField,
-  loadAndReconcileExceptionRegistry,
-  validateExceptionRegistry,
-  validateSecurityExceptionFields,
-} from "./exception-record.js"
-import { degraded } from "./environment-exceptions.js"
-import type {
-  ExceptionMethod,
   ExceptionRegistrySchema,
   ExceptionType,
   ExceptionV2Fields,
-} from "./exception-record.js"
+} from "repo-contract/helpers"
+import {
+  emptyV2Fields,
+  evaluateFindingVerdict,
+  EXCEPTION_V2_FIELD_KEYS,
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadAndReconcileExceptionRegistry,
+  SECURITY_EXCEPTION_FIELD_KEYS,
+  validateSecurityExceptionFields,
+} from "repo-contract/helpers"
+import { degraded } from "./environment-exceptions.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
+
+/** The only exception type `CodeScanning` accepts: the finding is in code that is never shipped. */
+const CODE_SCANNING_EXCEPTION_TYPES: readonly ExceptionType[] = ["dev-only-not-shipped"]
 
 const scriptPath = path.join(packageRoot, "scripts", "code-scanning-alerts.mjs")
 const REGISTRY_RELATIVE_PATH = ".repo-contract/exceptions/code-scanning.json"
@@ -248,18 +247,7 @@ export const CODE_SCANNING_SCHEMA: ExceptionRegistrySchema<CodeScanningRecord> =
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly CodeScanningRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, CODE_SCANNING_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(CODE_SCANNING_SCHEMA)
 
 const REQUIREMENTS = [
   "justification",

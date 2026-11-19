@@ -1,10 +1,11 @@
 /**
  * The checks a package turns on by name instead of getting by default: `AgentSkill`,
- * `AmbientCapabilities` and `QuickStart`.
+ * `AmbientCapabilities` and `Sbom`.
  *
  * Reads: package.json `"internal-package-contract"."checks"`. A name that is not an optional check
  * throws when the contract is assembled, naming the ones that exist. A typo therefore never runs
- * nothing in silence.
+ * nothing in silence. A retired name, such as `QuickStart`, is ignored with one line on stderr: the
+ * standard runs it now.
  *
  * An optional check is placed before `Mutation`, which must stay last and isolated. It waits on
  * what `OPTIONAL_CHECKS` says it depends on. `add check <Name>` writes the entry.
@@ -14,7 +15,8 @@ import path from "node:path"
 import type { CheckDefinitionConfig } from "repo-contract"
 import { agentSkillCheck } from "./agent-skill.js"
 import { ambientCapabilitiesCheck } from "./ambient-capabilities.js"
-import { quickStartCheck } from "./quick-start.js"
+import { sbomCheck } from "./sbom.js"
+import { RETIRED_CHECKS } from "../scripts/recipes/optional-settings.mjs"
 
 /** The checks a package may turn on, by the name it lists them under, and where each one waits. */
 export const OPTIONAL_CHECKS: Readonly<
@@ -27,17 +29,19 @@ export const OPTIONAL_CHECKS: Readonly<
   AgentSkill: { check: agentSkillCheck, dependsOn: [] },
   // The packed tarball is what is read, so the build it packs must be done: `Tests` runs after `Build`.
   AmbientCapabilities: { check: ambientCapabilitiesCheck, dependsOn: ["Tests"] },
-  // Packs the build too. Waiting on `Tests` also keeps its pack from racing a test that packs.
-  QuickStart: { check: quickStartCheck, dependsOn: ["Tests"] },
+  // Reads the lockfile and the committed documents only, so it waits for nothing.
+  Sbom: { check: sbomCheck, dependsOn: [] },
 }
 
 /**
  * @param cwd - the package's root.
+ * @param say - where the line about a retired name goes; stderr by default.
  * @returns the optional checks its package.json turns on, as the contract's check definitions.
  * @throws if it names a check that does not exist, naming the ones that do.
  */
 export function optionalChecks(
   cwd: string,
+  say: (line: string) => void = (line) => process.stderr.write(line),
 ): Record<string, CheckDefinitionConfig & { readonly dependsOn: readonly string[] }> {
   const file = path.join(cwd, "package.json")
   if (!existsSync(file)) return {}
@@ -48,18 +52,24 @@ export function optionalChecks(
   )["internal-package-contract"]?.checks
   if (!Array.isArray(named)) return {}
   return Object.fromEntries(
-    named.map((name: unknown) => {
-      const found = Object.hasOwn(OPTIONAL_CHECKS, String(name))
-        ? OPTIONAL_CHECKS[String(name)]
-        : undefined
-      if (found === undefined) {
-        throw new Error(
-          `package.json turns on a check that does not exist: ${String(name)}. Available: ${Object.keys(OPTIONAL_CHECKS).join(", ")}.`,
-        )
-      }
-      const { check, dependsOn } = found
-      return [String(name), { ...check(), dependsOn }]
-    }),
+    named
+      .filter((name: unknown) => {
+        const retired = Object.hasOwn(RETIRED_CHECKS, String(name))
+        if (retired) say(`${String(RETIRED_CHECKS[String(name)])}\n`)
+        return !retired
+      })
+      .map((name: unknown) => {
+        const found = Object.hasOwn(OPTIONAL_CHECKS, String(name))
+          ? OPTIONAL_CHECKS[String(name)]
+          : undefined
+        if (found === undefined) {
+          throw new Error(
+            `package.json turns on a check that does not exist: ${String(name)}. Available: ${Object.keys(OPTIONAL_CHECKS).join(", ")}.`,
+          )
+        }
+        const { check, dependsOn } = found
+        return [String(name), { ...check(), dependsOn }]
+      }),
   )
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { validateExceptionRegistry } from "../../../checks/exception-record.js"
+import { validateExceptionRegistry } from "repo-contract/helpers"
 import {
   CODERABBIT_EXCEPTION_SCHEMA,
   CODERABBIT_EXCEPTION_TYPES,

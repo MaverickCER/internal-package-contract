@@ -35,6 +35,7 @@ export const DOCUMENTATION = [
   "BenchmarkGuides",
   "ReadmeExample",
   "QuickStart",
+  "Sbom",
 ]
 /** What a change to a workflow or other GitHub configuration can affect. */
 export const WORKFLOWS = [

@@ -2,18 +2,21 @@
  * How a change to a package's non-TypeScript surface is judged for SemVer. That surface is the `--help`
  * text and exit code of each CLI and of each command it lists, and the JSON Schemas it exports. It is
  * also the inputs and outputs of its GitHub Action and of each reusable workflow it hosts, and the
- * Markdown headings its generators write. `ApiContract` covers the types; `SurfaceContract`
- * (checks/surface-contract.ts) covers this.
+ * Markdown headings its generators write. It also holds the `engines` and `peerDependencies` ranges in
+ * `package.json`. `ApiContract` covers the types; `SurfaceContract` (checks/surface-contract.ts) covers
+ * this.
  *
  * Breaking:
  * - a removed CLI, command, flag, schema, reusable workflow or generated-document heading;
  * - a removed action or workflow input, secret or output;
  * - a changed exit code, a new required input or a changed input default;
- * - any schema constraint that accepts less.
+ * - any schema constraint that accepts less;
+ * - an `engines` or `peerDependencies` range that accepts less: a raised floor, a dropped major, a new
+ *   requirement, or a range that is not valid semver.
  *
  * Compatible: an addition, a schema constraint relaxed to accept more, a documentation keyword. So
- * is a change to help prose that leaves every command and flag in place. A rename reads as a
- * removal plus an addition, so it is breaking.
+ * is a change to help prose that leaves every command and flag in place, and a range that accepts more.
+ * A rename reads as a removal plus an addition, so it is breaking.
  *
  * Limit: help prose is read for commands and flags only. A behaviour change behind unchanged help,
  * such as a flag that now means something else, is invisible here.
@@ -60,6 +63,13 @@ export interface Surface {
    * taken before headings were collected.
    */
   readonly documents?: readonly string[]
+  /**
+   * `package.json` `engines`, by name. Absent in a baseline taken before ranges were collected; such a
+   * baseline compares no ranges until the next release's `update-baseline` writes them.
+   */
+  readonly engines?: Readonly<Record<string, string>>
+  /** `package.json` `peerDependencies`, by name. Absent in a baseline taken before ranges were collected. */
+  readonly peerDependencies?: Readonly<Record<string, string>>
 }
 
 /** One difference between the released surface and the current one. */
@@ -71,6 +81,8 @@ export interface SurfaceChange {
   readonly widens: boolean
   readonly explanation: string
 }
+
+import { compareRanges } from "./ranges.mjs"
 
 /** Keywords that only describe a schema; changing them cannot change what validates. */
 const DOC_KEYS = new Set(["description", "title", "$comment", "examples", "default"])
@@ -463,6 +475,50 @@ function classifyDocuments(baseline: Surface, current: Surface): SurfaceChange[]
 }
 
 /**
+ * The ranges of one `package.json` field. A name missing on one side is read as `*`, so a new requirement
+ * narrows and a dropped one widens. A baseline taken before ranges were collected compares nothing.
+ */
+function classifyRanges(
+  field: "engines" | "peerDependencies",
+  kind: string,
+  baseline: Surface,
+  current: Surface,
+): SurfaceChange[] {
+  const was = baseline[field]
+  if (was === undefined) return []
+  const now = current[field] ?? {}
+  const changes: SurfaceChange[] = []
+  for (const name of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    const before = was[name] ?? "*"
+    const after = now[name] ?? "*"
+    const label = `${field}.${name}`
+    const from = `from ${JSON.stringify(before)} to ${JSON.stringify(after)}`
+    const verdict = compareRanges(before, after)
+    if (verdict === "same") continue
+    const change = {
+      narrowed: {
+        impact: "breaking",
+        widens: false,
+        explanation: `${label} narrowed ${from}: some versions it accepted are now refused.`,
+      },
+      unreadable: {
+        impact: "breaking",
+        widens: false,
+        explanation: `${label} changed ${from}, which cannot be compared as semver ranges.`,
+      },
+      widened: { impact: "compatible", widens: true, explanation: `${label} widened ${from}.` },
+      rewritten: {
+        impact: "compatible",
+        widens: false,
+        explanation: `${label} was rewritten ${from} and accepts the same versions.`,
+      },
+    }[verdict] as Pick<SurfaceChange, "impact" | "widens" | "explanation">
+    changes.push({ id: `${field}:${name}`, kind: `${kind}-range-${verdict}`, ...change })
+  }
+  return changes
+}
+
+/**
  * @param baseline - The surface of the last release.
  * @param current - The surface now.
  * @returns Every difference, sorted by id; empty when nothing a consumer can see changed.
@@ -511,6 +567,11 @@ export function classifySurface(baseline: Surface, current: Surface): SurfaceCha
       current.action !== null,
       "The GitHub Action",
     )
-  changes.push(...classifyWorkflows(baseline, current), ...classifyDocuments(baseline, current))
+  changes.push(
+    ...classifyWorkflows(baseline, current),
+    ...classifyDocuments(baseline, current),
+    ...classifyRanges("engines", "engines", baseline, current),
+    ...classifyRanges("peerDependencies", "peer", baseline, current),
+  )
   return changes.sort((x, y) => x.id.localeCompare(y.id))
 }

@@ -305,13 +305,15 @@ describe("distNoUrlsCheck() -- policy", () => {
     )
   })
 
-  it("fails with the write rationale when the registry path is a symlink", async () => {
+  it("fails without writing when the registry path is a symlink, and says so", async () => {
     const target = path.join(cwd, "real.json")
     writeFileSync(target, JSON.stringify({ exceptions: [] }), "utf8")
     mkdirSync(path.dirname(registryPath()), { recursive: true })
     symlinkSync(target, registryPath())
     const result = await policy(report([finding(URL_A)]))
     expect(result.outcome).toBe("fail")
-    expect(result.rationale).toContain("is a symlink")
+    expect(result.rationale).toMatch(
+      /failed to load and was left unchanged:\n- .* is a symbolic link\./,
+    )
   })
 })

@@ -1,6 +1,6 @@
 # CI for internal-package-contract itself. It runs the package's own contract
-# (repo-contract.config.ts, via `npm run contract` -> scripts/run-contract.mjs).
-# A consumer such as env-cap or data-cap runs `npm run contract` the same way.
+# (repo-contract.config.ts, via `npm run contract` -> scripts/run-contract.mjs) through
+# contract.yml, the reusable workflow a consumer calls pinned by SHA.
 # template/contract.yml is the workflow `internal-package-contract init`
 # writes into a consuming package.
 name: CI
@@ -18,32 +18,25 @@ permissions:
   contents: read
 
 jobs:
-  contract:
-    runs-on: ubuntu-latest
+  # The contract, with mutation split into parallel shards: the reusable workflow consumers pin by SHA.
+  standard:
+    uses: ./.github/workflows/contract.yml
     permissions:
       contents: read
       security-events: read
+    secrets:
+      SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+
+  # GitHub names a called job "standard / contract". The ruleset and release.yml look for a check named
+  # `contract`, so this job stands for the whole run. It runs always: a skipped required job counts as passing.
+  contract:
+    needs: standard
+    if: always()
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.x
-      - run: npm ci
-      # A pull request runs what its changes can affect; a push to main and a release run everything.
-      - run: npm run contract -- --scope auto
-        env:
-          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
-          GH_TOKEN: ${{ github.token }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: contract-report
-          path: reports/contract
-          if-no-files-found: ignore
-          retention-days: 30
+      - env:
+          RESULT: ${{ needs.standard.result }}
+        run: test "$RESULT" = success
 
   # Transitional: the default branch's ruleset still lists `self-check` as a required status check.
   # That was this job's name before it became the standard `contract`. This job passes exactly when
@@ -53,7 +46,9 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.contract.result }}" = "success"
+      - env:
+          RESULT: ${{ needs.contract.result }}
+        run: test "$RESULT" = success
 
   # The development toolchain stays on TypeScript 6, the last line with the classic compiler API.
   # Both typescript-eslint and API Extractor load that API; the native TypeScript 7 compiler has none.

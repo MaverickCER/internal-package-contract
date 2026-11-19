@@ -43,8 +43,16 @@
  * ```
  */
 import path from "node:path"
-import { loadExceptionRegistry } from "repo-contract/helpers"
-import type { ExceptionRecordCore, StandardSchemaV1 } from "repo-contract/helpers"
+import type {
+  ExceptionRecordCore,
+  ExceptionRegistrySchema,
+  ExceptionV2Fields,
+} from "repo-contract/helpers"
+import {
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadExceptionRegistry,
+} from "repo-contract/helpers"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import {
   classRank,
@@ -54,8 +62,6 @@ import {
   REGISTRY_RELATIVE_PATH,
 } from "../scripts/benchmark/complexity-gain.mjs"
 import type { Gain } from "../scripts/benchmark/complexity-gain.mjs"
-import { isValidNonEmptyStringField, validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const scriptPath = path.join(packageRoot, "scripts", "check-benchmark-complexity.mjs")
@@ -96,18 +102,7 @@ export const BENCHMARK_COMPLEXITY_SCHEMA: ExceptionRegistrySchema<BenchmarkCompl
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly BenchmarkComplexityRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, BENCHMARK_COMPLEXITY_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(BENCHMARK_COMPLEXITY_SCHEMA)
 
 interface ScanReport {
   readonly ok: boolean

@@ -32,7 +32,7 @@ export function explainUndetermined(value) {
     case "no-size-variation":
       return `every usable measurement is at the same ${unit} (${String(value.size)}), so there is no growth to measure`
     case "poor-fit":
-      return `over the largest ${counted(value.points ?? 0, unit)} the timings do not follow one growth rate (R² ${value.rSquared?.toFixed(2) ?? "n/a"}, and a fit below ${String(value.minRSquared ?? 0.8)} is not trusted; fitted exponent ${value.exponent?.toFixed(2) ?? "n/a"}). The cost probably changes regime between sizes (a cache, a threshold, a batch size) or run-to-run noise outweighs the growth`
+      return `over the largest ${counted(value.points ?? 0, unit)}, the timings follow no single growth rate. The fit has R² ${value.rSquared?.toFixed(2) ?? "n/a"}, and one below ${String(value.minRSquared ?? 0.8)} is not trusted; the fitted exponent is ${value.exponent?.toFixed(2) ?? "n/a"}. The cost probably changes regime between sizes, such as at a cache, a threshold or a batch size. Or run-to-run noise outweighs the growth`
     default:
       return "the results record no reason (they were written before reasons were recorded); run the benchmark again to get one"
   }

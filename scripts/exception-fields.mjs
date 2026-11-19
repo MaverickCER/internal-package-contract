@@ -1,5 +1,5 @@
 // What it takes for an exception record to count as accepted outside the registry validators of
-// checks/exception-record.ts. Every structured field is written, and `expires` is not in the past.
+// `repo-contract/helpers`. Every structured field is written, and `expires` is not in the past.
 // Shared by the `ManagedFiles` check and the benchmark complexity gate, which runs in a workflow
 // outside the contract engine.
 

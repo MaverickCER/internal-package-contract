@@ -10,10 +10,10 @@
  * the wording changes, which is when a person should re-confirm the record.
  *
  * The four authoring fields a record carries (`alternatives`, `remediation`, `method`, `exceptionType`) come
- * from this package's own `checks/exception-record.ts`; repo-contract does not publish its equivalent.
+ * from `repo-contract/helpers`, which publishes the version 2 record.
  */
 
-import type { ExceptionV2Fields, SecurityExceptionFields } from "../../checks/exception-record.js"
+import type { ExceptionV2Fields, SecurityExceptionFields } from "repo-contract/helpers"
 
 export interface NormalizedFinding {
   /** `coderabbit:<file>:<severity>:<hash>`: see `deriveCoderabbitExceptionId`. */

@@ -59,13 +59,19 @@
  */
 import path from "node:path"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
-import type { ExceptionRecordCore, StandardSchemaV1 } from "repo-contract/helpers"
-import { loadExceptionRegistry } from "repo-contract/helpers"
+import type {
+  ExceptionRecordCore,
+  ExceptionRegistrySchema,
+  ExceptionV2Fields,
+} from "repo-contract/helpers"
+import {
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadExceptionRegistry,
+} from "repo-contract/helpers"
 import type { Suppression } from "../scripts/suppressions-scan.mjs"
 import { MIN_BLOCK_REASON_LENGTH, MIN_REASON_LENGTH } from "../scripts/suppressions-scan.mjs"
 import { incompleteFields } from "./environment-exceptions.js"
-import { isValidNonEmptyStringField, validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 export { MIN_BLOCK_REASON_LENGTH, MIN_REASON_LENGTH }
@@ -124,18 +130,7 @@ export const SUPPRESSION_EXCEPTION_SCHEMA: ExceptionRegistrySchema<SuppressionEx
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly SuppressionExceptionRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, SUPPRESSION_EXCEPTION_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(SUPPRESSION_EXCEPTION_SCHEMA)
 
 type ToolResult =
   | { readonly ok: true; readonly files: number; readonly suppressions: readonly Suppression[] }

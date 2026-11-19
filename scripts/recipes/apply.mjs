@@ -162,6 +162,10 @@ function addCheck({ name, flags, cwd, io, hooks }) {
     io.err(refusal(plan.problems))
     return 1
   }
+  if (plan.retired !== undefined) {
+    io.out(`${plan.retired}\n`)
+    return 0
+  }
   if (plan.already === true) {
     io.out(`${name} is already turned on in package.json.\n`)
     return 0

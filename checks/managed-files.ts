@@ -42,12 +42,18 @@
  * ```
  */
 import path from "node:path"
-import { loadExceptionRegistry } from "repo-contract/helpers"
-import type { ExceptionRecordCore, StandardSchemaV1 } from "repo-contract/helpers"
+import type {
+  ExceptionRecordCore,
+  ExceptionRegistrySchema,
+  ExceptionV2Fields,
+} from "repo-contract/helpers"
+import {
+  exceptionRegistryStandardSchema,
+  isValidNonEmptyStringField,
+  loadExceptionRegistry,
+} from "repo-contract/helpers"
 import type { CheckDefinitionConfig, PolicyResult } from "repo-contract"
 import { missingFields } from "../scripts/exception-fields.mjs"
-import { isValidNonEmptyStringField, validateExceptionRegistry } from "./exception-record.js"
-import type { ExceptionRegistrySchema, ExceptionV2Fields } from "./exception-record.js"
 import { packageRoot, parseToolEnvelope } from "./shared.js"
 
 const scriptPath = path.join(packageRoot, "scripts", "check-managed-files.mjs")
@@ -87,18 +93,7 @@ export const MANAGED_FILE_SCHEMA: ExceptionRegistrySchema<ManagedFileRecord> = {
   },
 }
 
-const registrySchema: StandardSchemaV1<unknown, readonly ManagedFileRecord[]> = {
-  "~standard": {
-    version: 1,
-    vendor: "internal-package-contract",
-    validate: (value: unknown) => {
-      const result = validateExceptionRegistry(value, MANAGED_FILE_SCHEMA)
-      return result.ok
-        ? { value: result.records }
-        : { issues: result.errors.map((message) => ({ message })) }
-    },
-  },
-}
+const registrySchema = exceptionRegistryStandardSchema(MANAGED_FILE_SCHEMA)
 
 interface ManagedReport {
   readonly ok: boolean
