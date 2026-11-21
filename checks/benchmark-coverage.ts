@@ -1,15 +1,17 @@
 /**
  * `BenchmarkCoverage`: every public function with several inputs is benchmarked across all of them.
  *
- * Reads: the committed API baselines under `.repo-contract/api-contract/`, which list the public
- * functions and their signatures. Then each suite's committed `results.json`, whose
+ * Reads: the API the branch ships, which lists the public functions and their signatures. Each
+ * target under `.repo-contract/api-contract/`, at any depth, comes from the `current.*` files
+ * ApiContract writes on every run. A target with no `current.*` falls back to its committed
+ * `baseline.*`. So it runs after `ApiContract`. Then each suite's committed `results.json`, whose
  * `analysis.coverage` says what the benchmark swept, varied, held fixed or left out, and why. Both
  * through `scripts/check-benchmark-coverage.mjs` and `scripts/benchmark/coverage/scan.mjs`. Nothing
  * is measured and no build is needed.
  *
  * Fails on a function, or one of its inputs, that no benchmark accounts for. Fails when a suite's
  * results predate `analysis.coverage`; `benchmark --render` rewrites them without measuring. Never
- * warns. Passes with no API baseline: there are no public functions to cover.
+ * warns. Passes with no API target: there are no public functions to cover.
  *
  * Exceptions: none in a registry. A function is listed under the suite's `notBenchmarked` with the
  * reason.
@@ -48,7 +50,7 @@ export function benchmarkCoverageCheck(): CheckDefinitionConfig {
         return {
           outcome: "pass",
           rationale:
-            "BenchmarkCoverage: this package commits no API baseline, so it has no public functions to cover.",
+            "BenchmarkCoverage: this package has no API under `.repo-contract/api-contract/`, so it has no public functions to cover.",
         }
       }
       if (state === "no-coverage") {
