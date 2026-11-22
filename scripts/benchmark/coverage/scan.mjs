@@ -15,7 +15,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { currentResults, suiteDirectories } from "../results-location.mjs"
 import { coverageFindings } from "./findings.mjs"
-import { signaturesOf } from "./signatures.mjs"
+import { signaturesOfTargets } from "./signatures.mjs"
 
 /** Where ApiContract keeps each target's API: the committed baseline and the current extraction. */
 export const API_CONTRACT_DIR = ".repo-contract/api-contract"
@@ -39,23 +39,24 @@ function directoriesUnder(dir) {
 
 /**
  * @param {string} cwd - the repository root.
- * @returns {{ models: object[], declarations: string[] }} every target's parsed API model, and the text of its
- *   rolled-up declarations where it has them. Each target is read from `current.*` when it has a
+ * @returns {{ targets: { model: object, declaration?: string }[] }} every target's parsed API model, with the text
+ *   of its rolled-up declarations where it has them. Each target is read from `current.*` when it has a
  *   `current.api.json`, else from `baseline.*`.
  */
 export function readApi(cwd) {
   const root = path.join(cwd, API_CONTRACT_DIR)
-  const models = []
-  const declarations = []
-  if (!existsSync(root)) return { models, declarations }
+  const targets = []
+  if (!existsSync(root)) return { targets }
   for (const dir of directoriesUnder(root)) {
     const source = SOURCES.find((stem) => existsSync(path.join(dir, `${stem}.api.json`)))
     if (source === undefined) continue
-    models.push(JSON.parse(readFileSync(path.join(dir, `${source}.api.json`)).toString()))
+    const model = JSON.parse(readFileSync(path.join(dir, `${source}.api.json`)).toString())
     const rollup = path.join(dir, `${source}.d.ts`)
-    if (existsSync(rollup)) declarations.push(readFileSync(rollup).toString())
+    targets.push(
+      existsSync(rollup) ? { model, declaration: readFileSync(rollup).toString() } : { model },
+    )
   }
-  return { models, declarations }
+  return { targets }
 }
 
 /**
@@ -65,10 +66,10 @@ export function readApi(cwd) {
  *   committed results predate `analysis.coverage` (they must be re-rendered); otherwise the findings.
  */
 export function scanCoverage(cwd) {
-  const { models, declarations } = readApi(cwd)
-  if (models.length === 0)
+  const { targets } = readApi(cwd)
+  if (targets.length === 0)
     return { state: "no-api", suites: [], functions: 0, findings: [], stale: [] }
-  const signatures = signaturesOf(models, declarations)
+  const signatures = signaturesOfTargets(targets)
   const suites = suiteDirectories(cwd)
   const benchmarks = []
   const notBenchmarked = {}

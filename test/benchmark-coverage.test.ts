@@ -12,6 +12,7 @@ import {
   literalKeys,
   parametersOf,
   signaturesOf,
+  signaturesOfTargets,
 } from "../scripts/benchmark/coverage/signatures.mjs"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
@@ -265,6 +266,45 @@ describe("signaturesOf", () => {
   it("resolves a parameter's type across entry points", () => {
     const merged = signaturesOf([pkg(iface("Shared", ["x", "y"])), pkg(fn("f", [["o", "Shared"]]))])
     expect(merged.get("f")?.paths).toEqual(["o.x", "o.y"])
+  })
+})
+
+describe("signaturesOfTargets", () => {
+  // Two targets each declare their own `Options`: one in its rolled-up `.d.ts`, one in its model.
+  const express = {
+    model: pkg(fn("express", [["options", "Options"]])),
+    declaration: "declare interface Options {\n  app: string;\n  path: string;\n}\n",
+  }
+  const memory = {
+    model: pkg(iface("Options", ["limit", "ttl"]), fn("memory", [["options", "Options"]])),
+  }
+  it("resolves each function's types in its own target, in either order", () => {
+    for (const targets of [
+      [express, memory],
+      [memory, express],
+    ]) {
+      const signatures = signaturesOfTargets(targets)
+      expect(signatures.get("express")).toEqual({
+        paths: ["options.app", "options.path"],
+        multiInput: true,
+      })
+      expect(signatures.get("memory")).toEqual({
+        paths: ["options.limit", "options.ttl"],
+        multiInput: true,
+      })
+    }
+  })
+  it("merges a function two targets both export, as overloads are merged", () => {
+    const one = { model: pkg(fn("shared", [["a", "string"]])) }
+    const other = { model: pkg(fn("shared", [["b", "string"]])) }
+    expect(signaturesOfTargets([one, other]).get("shared")).toEqual({
+      paths: ["a", "b"],
+      multiInput: true,
+    })
+    expect(signaturesOfTargets([one]).get("shared")).toEqual({ paths: ["a"], multiInput: false })
+  })
+  it("has nothing for no targets", () => {
+    expect(signaturesOfTargets([]).size).toBe(0)
   })
 })
 
@@ -638,13 +678,17 @@ describe("scanCoverage", () => {
       path.join(dir, API_CONTRACT_DIR, "a", "baseline.d.ts"),
       "declare function y(): void",
     )
-    const { models, declarations } = readApi(dir)
+    const { targets } = readApi(dir)
     expect(
-      models.map(
-        (p) => (p as { members: { members: { name: string }[] }[] }).members[0]?.members[0]?.name,
+      targets.map(
+        ({ model }) =>
+          (model as { members: { members: { name: string }[] }[] }).members[0]?.members[0]?.name,
       ),
     ).toEqual(["y", "x"])
-    expect(declarations).toEqual(["declare function y(): void"])
+    expect(targets.map((target) => target.declaration)).toEqual([
+      "declare function y(): void",
+      undefined,
+    ])
   })
   const current = (entry: string, api: object) =>
     put(`${API_CONTRACT_DIR}/${entry}/current.api.json`, api)
@@ -652,9 +696,9 @@ describe("scanCoverage", () => {
     mkdirSync(path.dirname(path.join(dir, API_CONTRACT_DIR, file)), { recursive: true })
     writeFileSync(path.join(dir, API_CONTRACT_DIR, file), value)
   }
-  /** The name of every function each model declares, model by model. */
-  const names = (models: object[]) =>
-    models.map((model) =>
+  /** The name of every function each target's model declares, target by target. */
+  const names = (targets: { model: object }[]) =>
+    targets.map(({ model }) =>
       (model as { members: { members: { name: string }[] }[] }).members.flatMap((entry) =>
         entry.members.map((member) => member.name),
       ),
@@ -707,19 +751,41 @@ describe("scanCoverage", () => {
     baseline("runtime/cache", pkg(fn("cache", [])))
     mkdirSync(path.join(dir, API_CONTRACT_DIR, "empty", "deeper"), { recursive: true })
     text("notes.txt", "a file beside the targets")
-    const { models, declarations } = readApi(dir)
-    expect(names(models)).toEqual([["express"], ["index"], ["runtime"], ["cache"], ["memory"]])
-    expect(declarations).toEqual(["E", "I", "M"])
+    const { targets } = readApi(dir)
+    expect(names(targets)).toEqual([["express"], ["index"], ["runtime"], ["cache"], ["memory"]])
+    expect(targets.map((target) => target.declaration)).toEqual([
+      "E",
+      "I",
+      undefined,
+      undefined,
+      "M",
+    ])
   })
   it("falls back to the baseline where a target has no current API", () => {
     baseline("index", pkg(load))
     text("index/baseline.d.ts", "B")
     text("index/current.d.ts", "a current.d.ts without its current.api.json")
-    const { models, declarations } = readApi(dir)
-    expect(names(models)).toEqual([["load"]])
-    expect(declarations).toEqual(["B"])
+    const { targets } = readApi(dir)
+    expect(names(targets)).toEqual([["load"]])
+    expect(targets.map((target) => target.declaration)).toEqual(["B"])
     covering({ load: { a: "swept", b: "swept" } })
     expect(scanCoverage(dir)).toMatchObject({ state: "checked", functions: 1, findings: [] })
+  })
+  it("resolves each function's parameter types in its own target, when two targets name a type alike", () => {
+    current("adapters/express", pkg(fn("express", [["options", "Options"]])))
+    text(
+      "adapters/express/current.d.ts",
+      "declare interface Options {\n  app: string;\n  path: string;\n}\n",
+    )
+    current(
+      "store/memory",
+      pkg(iface("Options", ["limit", "ttl", "clock"]), fn("memory", [["options", "Options"]])),
+    )
+    const scan = scanCoverage(dir)
+    expect(scan.findings.map((finding: { message: string }) => finding.message)).toEqual([
+      "`express` takes 2 inputs (options.app, options.path) and no benchmark exercises it. Benchmark it, or say why not under `notBenchmarked`.",
+      "`memory` takes 3 inputs (options.limit, options.ttl, options.clock) and no benchmark exercises it. Benchmark it, or say why not under `notBenchmarked`.",
+    ])
   })
   it("does not follow a symbolic link, so a link back up the tree cannot loop", () => {
     baseline("index", pkg(load))
@@ -729,7 +795,7 @@ describe("scanCoverage", () => {
       path.join(dir, API_CONTRACT_DIR, "index", "loop"),
       "junction",
     )
-    expect(names(readApi(dir).models)).toEqual([["load"]])
+    expect(names(readApi(dir).targets)).toEqual([["load"]])
   })
   it("reports every multi-input function when there are no suites", () => {
     baseline("main", api)

@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { runApiExtractorForTarget } from "../scripts/api-contract/extractor-adapter.js"
+import { readApi } from "../scripts/benchmark/coverage/scan.mjs"
 
 const tsc = path.join(
   path.dirname(createRequire(import.meta.url).resolve("typescript/package.json")),
@@ -97,5 +98,35 @@ describe("runApiExtractorForTarget()", { timeout: 120_000 }, () => {
     const second = runApiExtractorForTarget(root, target)
     expect(second.succeeded).toBe(true)
     expect(second.errorCount).toBe(0)
+  })
+
+  it("removes the last run's current.api.json and current.d.ts first, so a failed run leaves the baseline to read", () => {
+    const { root } = makeRoot("/** @public */\nexport function f(): void {}\n")
+    const outDir = path.join(root, ".repo-contract", "api-contract", "index")
+    mkdirSync(outDir, { recursive: true })
+    const baseline = { kind: "Package", members: [{ kind: "EntryPoint", members: [] }] }
+    writeFileSync(path.join(outDir, "baseline.api.json"), JSON.stringify(baseline))
+    for (const file of ["current.api.json", "current.d.ts"])
+      writeFileSync(path.join(outDir, file), "stale")
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    const missing = { name: "index", mainEntryPointFilePath: "dist/.dts/missing.d.ts" }
+    expect(() => runApiExtractorForTarget(root, missing)).toThrow()
+    for (const file of ["current.api.json", "current.d.ts"])
+      expect(existsSync(path.join(outDir, file)), file).toBe(false)
+    expect(readApi(root).targets).toEqual([{ model: baseline }])
+  })
+
+  it("writes the same files again on a second run of unchanged code, so a committed current.* stays unchanged", () => {
+    const { root } = makeRoot("/** @public */\nexport function f(a: string, b: number): void {}\n")
+    const outDir = path.join(root, ".repo-contract", "api-contract", "index")
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    const read = () =>
+      ["current.api.json", "current.d.ts"].map((file) =>
+        readFileSync(path.join(outDir, file), "utf8"),
+      )
+    runApiExtractorForTarget(root, target)
+    const first = read()
+    expect(runApiExtractorForTarget(root, target).succeeded).toBe(true)
+    expect(read()).toEqual(first)
   })
 })

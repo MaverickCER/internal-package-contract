@@ -178,8 +178,9 @@ function declaredTypes(declarations) {
 }
 
 /**
- * @param {object[]} packages - parsed `current.api.json` or `baseline.api.json` files, one per target.
- * @param {string[]} [declarations] - each target's rolled-up `.d.ts` (`current.d.ts` or `baseline.d.ts`). It also
+ * @param {object[]} packages - parsed API models (`current.api.json` or `baseline.api.json`) whose types resolve
+ *   against each other; {@link signaturesOfTargets} passes one target's.
+ * @param {string[]} [declarations] - the matching rolled-up `.d.ts` (`current.d.ts` or `baseline.d.ts`). It also
  *   declares the functions a public object holds (`export const validators: { range: typeof range }`), which the
  *   model leaves out.
  * @returns {Map<string, { paths: string[], multiInput: boolean }>} every public function by name (a function held by
@@ -229,4 +230,22 @@ export function signaturesOf(packages, declarations = []) {
     }
   }
   return signatures
+}
+
+/**
+ * @param {{ model: object, declaration?: string }[]} targets - each target's API model and rolled-up `.d.ts`.
+ * @returns {Map<string, { paths: string[], multiInput: boolean }>} what {@link signaturesOf} returns, over every
+ *   target. A function's types are resolved in its own target only, since two targets may each declare an `Options`.
+ *   A function two targets both export is merged, as overloads are.
+ */
+export function signaturesOfTargets(targets) {
+  const merged = new Map()
+  for (const { model, declaration } of targets) {
+    const own = signaturesOf([model], declaration === undefined ? undefined : [declaration])
+    for (const [name, { paths }] of own) {
+      const all = [...new Set([...(merged.get(name)?.paths ?? []), ...paths])]
+      merged.set(name, { paths: all, multiInput: all.length > 1 })
+    }
+  }
+  return merged
 }
