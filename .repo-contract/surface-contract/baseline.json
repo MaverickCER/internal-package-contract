@@ -1,6 +1,6 @@
 {
   "packageName": "internal-package-contract",
-  "packageVersion": "0.21.0",
+  "packageVersion": "0.21.1",
   "surface": {
     "action": null,
     "cli": {
