@@ -1,10 +1,13 @@
 // What `BenchmarkCoverage` reads from a repository: the public functions, and what each suite covers.
 //
-// The functions come from the committed API baselines (`.repo-contract/api-contract/<entry>/baseline.api.json`,
-// plus `baseline.d.ts` where it exists). What each benchmark covers comes from the suite's current `results.json`
-// (`analysis.coverage`, local or committed). Nothing is built or measured.
+// The functions come from the API the branch ships. Each target under `.repo-contract/api-contract/`, at any depth
+// (`index/`, `adapters/express/`), is read from `current.api.json`, plus `current.d.ts` where it exists. ApiContract
+// writes both on every run, and the `BenchmarkCoverage` check runs after it. A target with no `current.api.json` is
+// read from its committed `baseline.api.json` and `baseline.d.ts`. The baseline alone would be wrong on a branch: it
+// moves only with a release, so a function added since would read as stale. What each benchmark covers comes from
+// the suite's current `results.json` (`analysis.coverage`, local or committed). Nothing is built or measured.
 //
-// `no-api`: no baseline, so no public functions, and the check passes. `no-coverage`: a suite's results predate
+// `no-api`: no target, so no public functions, and the check passes. `no-coverage`: a suite's results predate
 // `analysis.coverage` and must be re-rendered with `--render`; the check fails and no finding is judged.
 // `checked`: the findings are what the check reports.
 
@@ -12,44 +15,61 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { currentResults, suiteDirectories } from "../results-location.mjs"
 import { coverageFindings } from "./findings.mjs"
-import { signaturesOf } from "./signatures.mjs"
+import { signaturesOfTargets } from "./signatures.mjs"
 
-/** Where the API baselines are committed. */
+/** Where ApiContract keeps each target's API: the committed baseline and the current extraction. */
 export const API_CONTRACT_DIR = ".repo-contract/api-contract"
+
+/** The file stems a target's API is read from, in order of preference: the branch's own API, then the release's. */
+const SOURCES = ["current", "baseline"]
+
+/**
+ * @param {string} dir - a directory.
+ * @returns {string[]} the directory and every directory below it, depth first in name order. A symbolic link is not
+ *   followed, so a link back up the tree cannot loop.
+ */
+function directoriesUnder(dir) {
+  // Stryker disable next-line MethodExpression: readdir order is platform-defined; sorting only makes the order stable, which a filesystem that already lists alphabetically cannot show.
+  const children = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+  return [dir, ...children.flatMap((name) => directoriesUnder(path.join(dir, name)))]
+}
 
 /**
  * @param {string} cwd - the repository root.
- * @returns {{ models: object[], declarations: string[] }} every entry point's parsed `baseline.api.json`, and the
- *   text of its rolled-up `baseline.d.ts` where it has one.
+ * @returns {{ targets: { model: object, declaration?: string }[] }} every target's parsed API model, with the text
+ *   of its rolled-up declarations where it has them. Each target is read from `current.*` when it has a
+ *   `current.api.json`, else from `baseline.*`.
  */
-export function readBaselines(cwd) {
+export function readApi(cwd) {
   const root = path.join(cwd, API_CONTRACT_DIR)
-  if (!existsSync(root)) return { models: [] }
-  // Stryker disable next-line MethodExpression: readdir order is platform-defined; sorting only makes the order stable, which a filesystem that already lists alphabetically cannot show.
-  const entries = readdirSync(root)
-    .sort()
-    .filter((entry) => existsSync(path.join(root, entry, "baseline.api.json")))
-  return {
-    models: entries.map((entry) =>
-      JSON.parse(readFileSync(path.join(root, entry, "baseline.api.json")).toString()),
-    ),
-    declarations: entries
-      .filter((entry) => existsSync(path.join(root, entry, "baseline.d.ts")))
-      .map((entry) => readFileSync(path.join(root, entry, "baseline.d.ts")).toString()),
+  const targets = []
+  if (!existsSync(root)) return { targets }
+  for (const dir of directoriesUnder(root)) {
+    const source = SOURCES.find((stem) => existsSync(path.join(dir, `${stem}.api.json`)))
+    if (source === undefined) continue
+    const model = JSON.parse(readFileSync(path.join(dir, `${source}.api.json`)).toString())
+    const rollup = path.join(dir, `${source}.d.ts`)
+    targets.push(
+      existsSync(rollup) ? { model, declaration: readFileSync(rollup).toString() } : { model },
+    )
   }
+  return { targets }
 }
 
 /**
  * @param {string} cwd - the repository root.
  * @returns {{ state: "no-api" | "no-coverage" | "checked", suites: string[], functions: number, findings: object[], stale: string[] }}
- *   `no-api` when the package commits no API baseline (nothing public to cover); `no-coverage` lists the suites whose
+ *   `no-api` when the package has no API target (nothing public to cover); `no-coverage` lists the suites whose
  *   committed results predate `analysis.coverage` (they must be re-rendered); otherwise the findings.
  */
 export function scanCoverage(cwd) {
-  const { models, declarations } = readBaselines(cwd)
-  if (models.length === 0)
+  const { targets } = readApi(cwd)
+  if (targets.length === 0)
     return { state: "no-api", suites: [], functions: 0, findings: [], stale: [] }
-  const signatures = signaturesOf(models, declarations)
+  const signatures = signaturesOfTargets(targets)
   const suites = suiteDirectories(cwd)
   const benchmarks = []
   const notBenchmarked = {}

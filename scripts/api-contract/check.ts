@@ -53,6 +53,7 @@ import type {
 import {
   getApiExtractorVersion,
   loadApiModel,
+  removeCurrentApi,
   runApiExtractorForTarget,
 } from "./extractor-adapter.js"
 import type { ReleaseTagLevel } from "./model-normalizer.js"
@@ -340,6 +341,9 @@ export async function runApiContractCheck(
   // mutates shared compiler-host state, so two runs in one process are unsafe. The
   // report-targets.ts script in repo-contract looped its multi-target extraction for the same
   // reason.
+  // Every target's last `current.*` goes first: a target that throws stops the loop, and a later
+  // target's old file would otherwise be what BenchmarkCoverage reads.
+  for (const target of targets) removeCurrentApi(root, target)
   for (const target of targets) {
     targetResults.push(await runSingleTargetCheck(root, releaseTag, target, packageJson))
   }

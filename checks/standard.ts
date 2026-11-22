@@ -142,7 +142,9 @@ export function standardChecks() {
     DocsMarkdown: docsMarkdown(),
     BenchmarkGuides: benchmarkGuides(),
     BenchmarkComplexity: benchmarkComplexityCheck(),
-    BenchmarkCoverage: benchmarkCoverageCheck(),
+    // `dependsOn`: it reads the `current.*` API files ApiContract rewrites, so it waits for them. Ordering only:
+    // it still runs when ApiContract fails, and builds nothing itself.
+    BenchmarkCoverage: { ...benchmarkCoverageCheck(), dependsOn: ["ApiContract"] as const },
     DocsLinks: docsLinks,
     DocsFragments: docsFragments,
     Prose: proseCheck(),

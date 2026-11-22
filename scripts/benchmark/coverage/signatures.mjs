@@ -1,13 +1,13 @@
-// What a package's public functions accept, read from its committed API baselines, so no build and no
-// TypeScript is needed.
+// What a package's public functions accept, read from the API models ApiContract writes (see scan.mjs), so no
+// build and no TypeScript is needed.
 //
 // A function that takes several parameters, or an object with several keys, has several things that can
 // change its cost. Each is a path a benchmark must account for. Only `Public` and `Beta` members count, and
 // overloads are merged. A function held by a public object (`validators: { range: typeof range }`) is missing
-// from the model. It is read from the rolled-up `baseline.d.ts` instead. Wrapped (`Readonly<...>`),
+// from the model. It is read from the target's rolled-up `.d.ts` instead. Wrapped (`Readonly<...>`),
 // aliased and inherited object types are followed. A scalar, union, function or foreign type has no keys.
 //
-// A baseline is what api-extractor writes from code that compiled, so its shape is trusted as it is. Nothing
+// A model is what api-extractor writes from code that compiled, so its shape is trusted as it is. Nothing
 // here guards against a file that is not one.
 
 const WRAPPERS = /^(?:Readonly|Partial|Required)<([\s\S]*)>$/
@@ -178,9 +178,11 @@ function declaredTypes(declarations) {
 }
 
 /**
- * @param {object[]} packages - parsed `baseline.api.json` files, one per entry point.
- * @param {string[]} [declarations] - each entry point's rolled-up `.d.ts` (`baseline.d.ts`), which also declares the
- *   functions a public object holds (`export const validators: { range: typeof range }`) that the model leaves out.
+ * @param {object[]} packages - parsed API models (`current.api.json` or `baseline.api.json`) whose types resolve
+ *   against each other; {@link signaturesOfTargets} passes one target's.
+ * @param {string[]} [declarations] - the matching rolled-up `.d.ts` (`current.d.ts` or `baseline.d.ts`). It also
+ *   declares the functions a public object holds (`export const validators: { range: typeof range }`), which the
+ *   model leaves out.
  * @returns {Map<string, { paths: string[], multiInput: boolean }>} every public function by name (a function held by
  *   a public object is `object.member`): the things that have to be accounted for (a parameter, or each key of an
  *   object parameter that has several), and whether there is more than one of them. Overloads are merged.
@@ -228,4 +230,22 @@ export function signaturesOf(packages, declarations = []) {
     }
   }
   return signatures
+}
+
+/**
+ * @param {{ model: object, declaration?: string }[]} targets - each target's API model and rolled-up `.d.ts`.
+ * @returns {Map<string, { paths: string[], multiInput: boolean }>} what {@link signaturesOf} returns, over every
+ *   target. A function's types are resolved in its own target only, since two targets may each declare an `Options`.
+ *   A function two targets both export is merged, as overloads are.
+ */
+export function signaturesOfTargets(targets) {
+  const merged = new Map()
+  for (const { model, declaration } of targets) {
+    const own = signaturesOf([model], declaration === undefined ? undefined : [declaration])
+    for (const [name, { paths }] of own) {
+      const all = [...new Set([...(merged.get(name)?.paths ?? []), ...paths])]
+      merged.set(name, { paths: all, multiInput: all.length > 1 })
+    }
+  }
+  return merged
 }

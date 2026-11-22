@@ -1,20 +1,18 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { benchmarkCoverageCheck } from "../checks/benchmark-coverage.js"
 import { MIN_REASON, parseAccounting } from "../scripts/benchmark/coverage/accounting.mjs"
 import { coverageFindings } from "../scripts/benchmark/coverage/findings.mjs"
-import {
-  API_CONTRACT_DIR,
-  readBaselines,
-  scanCoverage,
-} from "../scripts/benchmark/coverage/scan.mjs"
+import { API_CONTRACT_DIR, readApi, scanCoverage } from "../scripts/benchmark/coverage/scan.mjs"
+import { standardChecks } from "../checks/standard.js"
 import {
   keysOf,
   literalKeys,
   parametersOf,
   signaturesOf,
+  signaturesOfTargets,
 } from "../scripts/benchmark/coverage/signatures.mjs"
 import { makeContext, makeJsonResult, makeResult } from "./support.js"
 
@@ -268,6 +266,45 @@ describe("signaturesOf", () => {
   it("resolves a parameter's type across entry points", () => {
     const merged = signaturesOf([pkg(iface("Shared", ["x", "y"])), pkg(fn("f", [["o", "Shared"]]))])
     expect(merged.get("f")?.paths).toEqual(["o.x", "o.y"])
+  })
+})
+
+describe("signaturesOfTargets", () => {
+  // Two targets each declare their own `Options`: one in its rolled-up `.d.ts`, one in its model.
+  const express = {
+    model: pkg(fn("express", [["options", "Options"]])),
+    declaration: "declare interface Options {\n  app: string;\n  path: string;\n}\n",
+  }
+  const memory = {
+    model: pkg(iface("Options", ["limit", "ttl"]), fn("memory", [["options", "Options"]])),
+  }
+  it("resolves each function's types in its own target, in either order", () => {
+    for (const targets of [
+      [express, memory],
+      [memory, express],
+    ]) {
+      const signatures = signaturesOfTargets(targets)
+      expect(signatures.get("express")).toEqual({
+        paths: ["options.app", "options.path"],
+        multiInput: true,
+      })
+      expect(signatures.get("memory")).toEqual({
+        paths: ["options.limit", "options.ttl"],
+        multiInput: true,
+      })
+    }
+  })
+  it("merges a function two targets both export, as overloads are merged", () => {
+    const one = { model: pkg(fn("shared", [["a", "string"]])) }
+    const other = { model: pkg(fn("shared", [["b", "string"]])) }
+    expect(signaturesOfTargets([one, other]).get("shared")).toEqual({
+      paths: ["a", "b"],
+      multiInput: true,
+    })
+    expect(signaturesOfTargets([one]).get("shared")).toEqual({ paths: ["a"], multiInput: false })
+  })
+  it("has nothing for no targets", () => {
+    expect(signaturesOfTargets([]).size).toBe(0)
   })
 })
 
@@ -622,7 +659,7 @@ describe("scanCoverage", () => {
     fn("solo", [["a", "string"]]),
   )
 
-  it("has nothing to cover without an API baseline", () => {
+  it("has nothing to cover without an API target", () => {
     expect(scanCoverage(dir)).toEqual({
       state: "no-api",
       suites: [],
@@ -641,13 +678,124 @@ describe("scanCoverage", () => {
       path.join(dir, API_CONTRACT_DIR, "a", "baseline.d.ts"),
       "declare function y(): void",
     )
-    const { models, declarations } = readBaselines(dir)
+    const { targets } = readApi(dir)
     expect(
-      models.map(
-        (p) => (p as { members: { members: { name: string }[] }[] }).members[0]?.members[0]?.name,
+      targets.map(
+        ({ model }) =>
+          (model as { members: { members: { name: string }[] }[] }).members[0]?.members[0]?.name,
       ),
     ).toEqual(["y", "x"])
-    expect(declarations).toEqual(["declare function y(): void"])
+    expect(targets.map((target) => target.declaration)).toEqual([
+      "declare function y(): void",
+      undefined,
+    ])
+  })
+  const current = (entry: string, api: object) =>
+    put(`${API_CONTRACT_DIR}/${entry}/current.api.json`, api)
+  const text = (file: string, value: string) => {
+    mkdirSync(path.dirname(path.join(dir, API_CONTRACT_DIR, file)), { recursive: true })
+    writeFileSync(path.join(dir, API_CONTRACT_DIR, file), value)
+  }
+  /** The name of every function each target's model declares, target by target. */
+  const names = (targets: { model: object }[]) =>
+    targets.map(({ model }) =>
+      (model as { members: { members: { name: string }[] }[] }).members.flatMap((entry) =>
+        entry.members.map((member) => member.name),
+      ),
+    )
+  const covering = (covers: Record<string, Record<string, string>>) =>
+    put("benchmarks/s/results.json", {
+      analysis: { coverage: { benchmarks: [{ id: "b", covers }] } },
+    })
+  const load = fn("load", [
+    ["a", "string"],
+    ["b", "number"],
+  ])
+  const solo = fn("solo", [["a", "string"]])
+  const createAuth = fn("createAuth", [
+    ["store", "string"],
+    ["policy", "string"],
+  ])
+
+  it("judges a function the branch adds, which only the current API lists", () => {
+    baseline("index", pkg(load, solo))
+    current("index", pkg(load, solo, createAuth))
+    covering({
+      load: { a: "swept", b: "swept" },
+      createAuth: { store: "swept", policy: "fixed: one policy is enough" },
+    })
+    expect(scanCoverage(dir)).toMatchObject({ state: "checked", functions: 2, findings: [] })
+  })
+  it("reports a function the branch removes as stale while a benchmark still covers it", () => {
+    baseline("index", pkg(load, solo))
+    current("index", pkg(solo))
+    covering({ load: { a: "swept", b: "swept" } })
+    expect(scanCoverage(dir).findings).toEqual([
+      {
+        kind: "stale",
+        function: "load",
+        message: "s / b covers `load`, which is not a public function of this package.",
+      },
+    ])
+  })
+  it("reads targets at any depth, in sorted order, each from its current API where it has one", () => {
+    baseline("store/memory", pkg(fn("memory", [])))
+    text("store/memory/baseline.d.ts", "M")
+    current("adapters/express", pkg(fn("express", [])))
+    text("adapters/express/current.d.ts", "E")
+    baseline("index", pkg(fn("old", [])))
+    text("index/baseline.d.ts", "old I")
+    current("index", pkg(fn("index", [])))
+    text("index/current.d.ts", "I")
+    baseline("runtime", pkg(fn("runtime", [])))
+    baseline("runtime/cache", pkg(fn("cache", [])))
+    mkdirSync(path.join(dir, API_CONTRACT_DIR, "empty", "deeper"), { recursive: true })
+    text("notes.txt", "a file beside the targets")
+    const { targets } = readApi(dir)
+    expect(names(targets)).toEqual([["express"], ["index"], ["runtime"], ["cache"], ["memory"]])
+    expect(targets.map((target) => target.declaration)).toEqual([
+      "E",
+      "I",
+      undefined,
+      undefined,
+      "M",
+    ])
+  })
+  it("falls back to the baseline where a target has no current API", () => {
+    baseline("index", pkg(load))
+    text("index/baseline.d.ts", "B")
+    text("index/current.d.ts", "a current.d.ts without its current.api.json")
+    const { targets } = readApi(dir)
+    expect(names(targets)).toEqual([["load"]])
+    expect(targets.map((target) => target.declaration)).toEqual(["B"])
+    covering({ load: { a: "swept", b: "swept" } })
+    expect(scanCoverage(dir)).toMatchObject({ state: "checked", functions: 1, findings: [] })
+  })
+  it("resolves each function's parameter types in its own target, when two targets name a type alike", () => {
+    current("adapters/express", pkg(fn("express", [["options", "Options"]])))
+    text(
+      "adapters/express/current.d.ts",
+      "declare interface Options {\n  app: string;\n  path: string;\n}\n",
+    )
+    current(
+      "store/memory",
+      pkg(iface("Options", ["limit", "ttl", "clock"]), fn("memory", [["options", "Options"]])),
+    )
+    const scan = scanCoverage(dir)
+    expect(scan.findings.map((finding: { message: string }) => finding.message)).toEqual([
+      "`express` takes 2 inputs (options.app, options.path) and no benchmark exercises it. Benchmark it, or say why not under `notBenchmarked`.",
+      "`memory` takes 3 inputs (options.limit, options.ttl, options.clock) and no benchmark exercises it. Benchmark it, or say why not under `notBenchmarked`.",
+    ])
+  })
+  it("does not follow a symbolic link, so a link back up the tree cannot loop", () => {
+    baseline("index", pkg(load))
+    // A junction on Windows needs no privilege; elsewhere the type is ignored.
+    symlinkSync(
+      path.join(dir, API_CONTRACT_DIR),
+      path.join(dir, API_CONTRACT_DIR, "index", "loop"),
+      "junction",
+    )
+    expect(names(readApi(dir).targets)).toEqual([["load"]])
   })
   it("reports every multi-input function when there are no suites", () => {
     baseline("main", api)
@@ -728,11 +876,17 @@ describe("benchmarkCoverageCheck (policy)", () => {
     expect(command[1]).toMatch(/scripts[\\/]check-benchmark-coverage\.mjs$/)
     expect(check.output).toEqual({ format: "json" })
   })
-  it("passes a package with no API baseline", async () => {
+  // Built while the file is collected, as test/parts.test.ts does: calling it inside a test would cover every
+  // line of the standard here, and only this one line is asserted.
+  const wired = standardChecks().BenchmarkCoverage
+  it("runs after ApiContract, which writes the current API it reads", () => {
+    expect(wired.dependsOn).toEqual(["ApiContract"])
+  })
+  it("passes a package with no API target", async () => {
     expect(await judge({ ok: true, state: "no-api" })).toEqual({
       outcome: "pass",
       rationale:
-        "BenchmarkCoverage: this package commits no API baseline, so it has no public functions to cover.",
+        "BenchmarkCoverage: this package has no API under `.repo-contract/api-contract/`, so it has no public functions to cover.",
     })
   })
   it("fails, naming the suites to re-render", async () => {

@@ -5,3 +5,6 @@ export function signaturesOf(
   packages: object[],
   declarations?: string[],
 ): Map<string, { paths: string[]; multiInput: boolean }>
+export function signaturesOfTargets(
+  targets: { model: object; declaration?: string }[],
+): Map<string, { paths: string[]; multiInput: boolean }>
