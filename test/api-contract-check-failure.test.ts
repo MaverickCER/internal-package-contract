@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterAll, describe, expect, it, vi } from "vitest"
 
 vi.mock("../scripts/api-contract/extractor-adapter.js", () => ({
+  removeCurrentApi: () => undefined,
   runApiExtractorForTarget: () => ({
     succeeded: false,
     errorCount: 3,

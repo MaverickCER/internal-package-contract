@@ -113,11 +113,23 @@ export function runApiExtractor(options: RunExtractorOptions): RunExtractorResul
 }
 
 /**
+ * Removes a target's `current.api.json` and `current.d.ts`. `BenchmarkCoverage` reads them
+ * (scripts/benchmark/coverage/scan.mjs), so only a successful extraction may leave them.
+ * @param root - Absolute path to the consumer's project root.
+ * @param target - The target whose current API is removed (see targets.ts).
+ */
+export function removeCurrentApi(root: string, target: ApiContractTarget): void {
+  const outDir = path.join(root, ".repo-contract", "api-contract", target.name)
+  for (const file of ["current.api.json", "current.d.ts"])
+    rmSync(path.join(outDir, file), { force: true })
+}
+
+/**
  * Runs `runApiExtractor` on one target's entry point, writing scratch output under
  * `<root>/.repo-contract/api-contract/<target.name>/`. `check.ts` and `update-baseline.ts` both
- * call it, so both extract the same "current" snapshot of a target. The last run's `current.api.json`
- * and `current.d.ts` are removed first. `BenchmarkCoverage` reads them (scripts/benchmark/coverage/scan.mjs),
- * so a failed run must leave none for it to judge.
+ * call it, so both extract the same "current" snapshot of a target. The last run's
+ * `current.api.json` and `current.d.ts` are removed first, and this run's are removed again
+ * unless it succeeds, whether it reports errors or throws.
  * @param root - Absolute path to the consumer's project root; must contain a built `dist/` and `tsconfig.json`.
  * @param target - The entry point to extract (see targets.ts).
  * @returns The same result `runApiExtractor` returns.
@@ -127,18 +139,23 @@ export function runApiExtractorForTarget(
   target: ApiContractTarget,
 ): RunExtractorResult {
   const outDir = path.join(root, ".repo-contract", "api-contract", target.name)
-  const apiJsonFilePath = path.join(outDir, "current.api.json")
-  const dtsRollupFilePath = path.join(outDir, "current.d.ts")
-  for (const file of [apiJsonFilePath, dtsRollupFilePath]) rmSync(file, { force: true })
-  return runApiExtractor({
-    projectFolder: root,
-    mainEntryPointFilePath: target.mainEntryPointFilePath,
-    tsconfigFilePath: path.join(root, "tsconfig.json"),
-    apiJsonFilePath,
-    dtsRollupFilePath,
-    apiReportFolder: outDir,
-    apiReportFileName: "current",
-  })
+  removeCurrentApi(root, target)
+  let succeeded = false
+  try {
+    const result = runApiExtractor({
+      projectFolder: root,
+      mainEntryPointFilePath: target.mainEntryPointFilePath,
+      tsconfigFilePath: path.join(root, "tsconfig.json"),
+      apiJsonFilePath: path.join(outDir, "current.api.json"),
+      dtsRollupFilePath: path.join(outDir, "current.d.ts"),
+      apiReportFolder: outDir,
+      apiReportFileName: "current",
+    })
+    succeeded = result.succeeded
+    return result
+  } finally {
+    if (!succeeded) removeCurrentApi(root, target)
+  }
 }
 
 /**

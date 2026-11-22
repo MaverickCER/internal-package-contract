@@ -9,5 +9,6 @@ writes, else from its `baseline.*`, and `BenchmarkCoverage` runs after `ApiContr
 `.repo-contract/api-contract/`, such as `adapters/express/`, are read too; before, only the top level was.
 
 Each function's parameter types are resolved in its own target, so two targets that each declare an `Options`
-no longer overwrite each other. `ApiContract` removes a target's `current.api.json` and `current.d.ts` before it
-extracts, so a failed extraction leaves the baseline for `BenchmarkCoverage` to read, not the last run's API.
+no longer overwrite each other. `ApiContract` removes every target's `current.api.json` and
+`current.d.ts` before it extracts any. It removes a target's again when that extraction reports errors or
+throws. So after a failed run `BenchmarkCoverage` reads each baseline, never an old or partial API.

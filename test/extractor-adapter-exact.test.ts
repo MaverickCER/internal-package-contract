@@ -4,6 +4,7 @@ import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
+import { Extractor } from "@microsoft/api-extractor"
 import { runApiExtractorForTarget } from "../scripts/api-contract/extractor-adapter.js"
 import { readApi } from "../scripts/benchmark/coverage/scan.mjs"
 
@@ -114,6 +115,54 @@ describe("runApiExtractorForTarget()", { timeout: 120_000 }, () => {
     for (const file of ["current.api.json", "current.d.ts"])
       expect(existsSync(path.join(outDir, file)), file).toBe(false)
     expect(readApi(root).targets).toEqual([{ model: baseline }])
+  })
+
+  it("removes what a run wrote when it reports errors, or throws after writing", () => {
+    const { root } = makeRoot("/** @public */\nexport function f(): void {}\n")
+    const outDir = path.join(root, ".repo-contract", "api-contract", "index")
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    const writeOutputs = () => {
+      mkdirSync(outDir, { recursive: true })
+      for (const file of ["current.api.json", "current.d.ts"])
+        writeFileSync(path.join(outDir, file), "written by this run")
+    }
+    const invoke = vi.spyOn(Extractor, "invoke")
+    invoke.mockImplementation(() => {
+      writeOutputs()
+      return { succeeded: false, errorCount: 1, warningCount: 0 } as ReturnType<
+        typeof Extractor.invoke
+      >
+    })
+    expect(runApiExtractorForTarget(root, target)).toMatchObject({
+      succeeded: false,
+      errorCount: 1,
+    })
+    for (const file of ["current.api.json", "current.d.ts"])
+      expect(existsSync(path.join(outDir, file)), `reported errors: ${file}`).toBe(false)
+    invoke.mockImplementation(() => {
+      writeOutputs()
+      throw new Error("failed after writing")
+    })
+    expect(() => runApiExtractorForTarget(root, target)).toThrow("failed after writing")
+    for (const file of ["current.api.json", "current.d.ts"])
+      expect(existsSync(path.join(outDir, file)), `threw: ${file}`).toBe(false)
+  })
+
+  it("keeps nothing an earlier run left, even from a successful run that writes nothing itself", () => {
+    const { root } = makeRoot("/** @public */\nexport function f(): void {}\n")
+    const outDir = path.join(root, ".repo-contract", "api-contract", "index")
+    mkdirSync(outDir, { recursive: true })
+    for (const file of ["current.api.json", "current.d.ts"])
+      writeFileSync(path.join(outDir, file), "left by an earlier run")
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+    vi.spyOn(Extractor, "invoke").mockReturnValue({
+      succeeded: true,
+      errorCount: 0,
+      warningCount: 0,
+    } as ReturnType<typeof Extractor.invoke>)
+    expect(runApiExtractorForTarget(root, target).succeeded).toBe(true)
+    for (const file of ["current.api.json", "current.d.ts"])
+      expect(existsSync(path.join(outDir, file)), file).toBe(false)
   })
 
   it("writes the same files again on a second run of unchanged code, so a committed current.* stays unchanged", () => {
