@@ -1,5 +1,21 @@
 # internal-package-contract
 
+## 0.21.1
+
+### Patch Changes
+
+- ab0f846: `BenchmarkCoverage` judges the API the branch ships. It read only the committed baselines, which move only with a
+  release, so a benchmark for a function added on a branch was reported stale. Clearing that meant editing a baseline,
+  which `ApiContract` forbids outside a release. Each target is now read from the `current.*` files `ApiContract`
+  writes, else from its `baseline.*`, and `BenchmarkCoverage` runs after `ApiContract`. Targets nested below
+  `.repo-contract/api-contract/`, such as `adapters/express/`, are read too; before, only the top level was.
+
+  Each function's parameter types are resolved in its own target, so two targets that each declare an `Options`
+  no longer overwrite each other. `ApiContract` removes every target's `current.api.json` and
+  `current.d.ts` before it extracts any. It removes a target's again when that extraction reports errors or
+  throws. So after a failed run, a target that extracted before the failure is read from its new `current.*` files,
+  and every other target from its `baseline.*`. No target is read from an old or partial API.
+
 ## 0.21.0
 
 ### Minor Changes
