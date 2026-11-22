@@ -11,4 +11,5 @@ writes, else from its `baseline.*`, and `BenchmarkCoverage` runs after `ApiContr
 Each function's parameter types are resolved in its own target, so two targets that each declare an `Options`
 no longer overwrite each other. `ApiContract` removes every target's `current.api.json` and
 `current.d.ts` before it extracts any. It removes a target's again when that extraction reports errors or
-throws. So after a failed run `BenchmarkCoverage` reads each baseline, never an old or partial API.
+throws. So after a failed run, a target that extracted before the failure is read from its new `current.*` files,
+and every other target from its `baseline.*`. No target is read from an old or partial API.
